@@ -1,0 +1,77 @@
+/** Contour de carte selon la rareté (uni, jauge or, chromatique, divin). */
+import { LinearGradient } from 'expo-linear-gradient';
+import { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
+import Animated, {
+  Easing,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
+
+import type { Rarity } from '../../game/rarity';
+
+const CHROMA = ['#FF6FA8', '#FFB86B', '#FFE66B', '#7CFFB2', '#6ED8FF', '#8C8CFF', '#D58CFF', '#FF6FA8'];
+const DIVINE = ['#FFF4CF', '#D9DCE6', '#F5CF63', '#FFFFFF', '#BFC5D2', '#FFE08A', '#F0F0F5', '#FFF4CF'];
+
+export function Frame({ rarity, width, height, animated }: { rarity: Rarity; width: number; height: number; animated: boolean }) {
+  switch (rarity.frameStyle) {
+    case 'chromatic':
+      return <Spinning colors={CHROMA} width={width} height={height} animated={animated} duration={5000} />;
+    case 'divine':
+      return <Spinning colors={DIVINE} width={width} height={height} animated={animated} duration={7000} />;
+    case 'gold':
+      return (
+        <View style={StyleSheet.absoluteFill}>
+          <LinearGradient colors={rarity.frame as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          {animated ? <Sweep width={width} height={height} /> : null}
+        </View>
+      );
+    default:
+      return (
+        <LinearGradient colors={rarity.frame as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      );
+  }
+}
+
+/** Grand dégradé en rotation derrière la carte : donne un contour qui « tourne ». */
+function Spinning({ colors, width, height, animated, duration }: { colors: string[]; width: number; height: number; animated: boolean; duration: number }) {
+  const rot = useSharedValue(25);
+  useEffect(() => {
+    if (!animated) return;
+    rot.value = withRepeat(withTiming(385, { duration, easing: Easing.linear }), -1, false);
+    return () => cancelAnimation(rot);
+  }, [animated, duration, rot]);
+  const d = Math.sqrt(width * width + height * height) * 1.05;
+  const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot.value}deg` }] }));
+  return (
+    <Animated.View style={[{ position: 'absolute', width: d, height: d, left: (width - d) / 2, top: (height - d) / 2 }, style]}>
+      <LinearGradient colors={colors as [string, string, ...string[]]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+    </Animated.View>
+  );
+}
+
+/** Reflet lumineux qui balaie la jauge dorée. */
+export function Sweep({ width, height, duration = 2600, intensity = 0.75 }: { width: number; height: number; duration?: number; intensity?: number }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    p.value = withRepeat(withTiming(1, { duration, easing: Easing.inOut(Easing.quad) }), -1, false);
+    return () => cancelAnimation(p);
+  }, [p, duration]);
+  const band = width * 0.55;
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateX: -band * 1.5 + p.value * (width + band * 3) }, { rotate: '20deg' }],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: -height * 0.25, height: height * 1.5, width: band }, style]}>
+      <LinearGradient
+        colors={['rgba(255,255,255,0)', `rgba(255,255,255,${intensity})`, 'rgba(255,255,255,0)']}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={StyleSheet.absoluteFill}
+      />
+    </Animated.View>
+  );
+}

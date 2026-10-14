@@ -1,0 +1,107 @@
+import { File } from 'expo-file-system';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import {
+  Asset,
+  AssetField,
+  MediaType,
+  Query,
+  getPermissionsAsync,
+  presentPermissionsPicker,
+  requestPermissionsAsync,
+} from 'expo-media-library';
+import { Platform } from 'react-native';
+
+export type GalleryAccess = 'granted' | 'limited' | 'denied' | 'undetermined';
+
+function toAccess(p: { granted: boolean; canAskAgain: boolean; accessPrivileges?: string; status: string }): GalleryAccess {
+  if (p.granted) return p.accessPrivileges === 'limited' ? 'limited' : 'granted';
+  return p.status === 'undetermined' || p.canAskAgain ? 'undetermined' : 'denied';
+}
+
+export async function getGalleryAccess(): Promise<GalleryAccess> {
+  return toAccess(await getPermissionsAsync(false, ['photo']));
+}
+
+export async function requestGalleryAccess(): Promise<GalleryAccess> {
+  return toAccess(await requestPermissionsAsync(false, ['photo']));
+}
+
+export async function openLimitedPicker() {
+  try {
+    await presentPermissionsPicker(['photo']);
+  } catch {}
+}
+
+/** Identifiants de toutes les photos (lecture rapide des métadonnées seulement). */
+export async function listPhotoIds(): Promise<string[]> {
+  const metas = await new Query().eq(AssetField.MEDIA_TYPE, MediaType.IMAGE).exeForMetadata();
+  return metas.map((m) => m.id);
+}
+
+export interface ProcessedPhoto {
+  assetId: string;
+  hash: string;
+  imageUri: string;
+  thumbUri: string;
+  width: number;
+  height: number;
+}
+
+const IMAGE_SHORT_SIDE = 1080;
+const THUMB_SHORT_SIDE = 360;
+
+function md5Of(uri: string): string | null {
+  try {
+    return new File(uri).info({ md5: true }).md5 ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function resizeTo(uri: string, w: number, h: number, shortSide: number, compress: number) {
+  const ctx = ImageManipulator.manipulate(uri);
+  if (w > 0 && h > 0 && Math.min(w, h) > shortSide) {
+    ctx.resize(w <= h ? { width: shortSide } : { height: shortSide });
+  }
+  const ref = await ctx.renderAsync();
+  return ref.saveAsync({ format: SaveFormat.JPEG, compress });
+}
+
+export type PhotoCheck = (hash: string) => boolean;
+
+/**
+ * Prépare une photo de la galerie pour devenir une carte.
+ * Retourne `{ duplicate: true }` si son empreinte est déjà connue.
+ */
+export async function processPhoto(
+  assetId: string,
+  isKnownHash: PhotoCheck,
+): Promise<ProcessedPhoto | { duplicate: true } | null> {
+  const asset = new Asset(assetId);
+  if (Platform.OS === 'ios') {
+    try {
+      if (await asset.getIsInCloud()) return null; // pas disponible hors ligne
+    } catch {}
+  }
+  const uri = await asset.getUri();
+  let hash = md5Of(uri);
+  if (hash && isKnownHash(hash)) return { duplicate: true };
+
+  let w = 0;
+  let h = 0;
+  try {
+    const shape = await asset.getShape();
+    w = shape?.width ?? 0;
+    h = shape?.height ?? 0;
+  } catch {}
+
+  const image = await resizeTo(uri, w, h, IMAGE_SHORT_SIDE, 0.86);
+  if (!hash) {
+    // Empreinte de secours : calculée sur l'image normalisée.
+    hash = md5Of(image.uri);
+    if (!hash) return null;
+    if (isKnownHash(hash)) return { duplicate: true };
+  }
+  const thumb = await resizeTo(image.uri, image.width, image.height, THUMB_SHORT_SIDE, 0.72);
+  return { assetId, hash, imageUri: image.uri, thumbUri: thumb.uri, width: image.width, height: image.height };
+}

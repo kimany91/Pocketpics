@@ -1,0 +1,172 @@
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { useEffect } from 'react';
+import { Linking, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+
+import { AppText } from '../../components/AppText';
+import { Button } from '../../components/Button';
+import { Glow } from '../../components/fx';
+import { PACK_RATIO, PackArt } from '../../components/PackArt';
+import { Screen } from '../../components/Screen';
+import { DRAW_INTERVAL_MS, MAX_STORED_DRAWS, formatCountdown } from '../../game/draws';
+import { openLimitedPicker } from '../../game/gallery';
+import { RARITIES, getRarity } from '../../game/rarity';
+import { useGame } from '../../state/game';
+import { useDrawStatus } from '../../state/useDrawStatus';
+import { useGalleryAccess } from '../../state/useGalleryAccess';
+import { colors, fonts } from '../../theme';
+import { haptic } from '../../utils/haptics';
+
+export default function DrawScreen() {
+  const { width, height } = useWindowDimensions();
+  const cards = useGame((s) => s.cards);
+  const { charges, nextAt, now } = useDrawStatus();
+  const { access, request } = useGalleryAccess();
+  const packW = Math.min(width * 0.5, (height * 0.36) / PACK_RATIO, 240);
+  const canOpen = charges > 0 && (access === 'granted' || access === 'limited');
+  const best = RARITIES[cards.reduce((m, c) => Math.max(m, getRarity(c.rarity).rank), -1)];
+
+  const float = useSharedValue(0);
+  const press = useSharedValue(1);
+  useEffect(() => {
+    float.value = withRepeat(withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.sin) }), -1, true);
+  }, [float]);
+  const packStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: (float.value - 0.5) * 14 },
+      { rotate: `${(float.value - 0.5) * 3}deg` },
+      { scale: press.value },
+    ],
+  }));
+  const glowOpacity = useSharedValue(0.5);
+  useEffect(() => {
+    glowOpacity.value = withTiming(canOpen ? 0.55 : 0.12, { duration: 500 });
+  }, [canOpen, glowOpacity]);
+
+  const open = () => {
+    if (!canOpen) return;
+    haptic.medium();
+    router.push('/open');
+  };
+
+  const cycle = nextAt ? 1 - (nextAt - now) / DRAW_INTERVAL_MS : 1;
+
+  return (
+    <Screen>
+      <View style={styles.header}>
+        <View>
+          <AppText variant="display">PocketPics</AppText>
+          <AppText variant="caption" style={{ marginTop: 2 }}>
+            {cards.length === 0
+              ? 'Ta galerie est un jeu de cartes.'
+              : `${cards.length} carte${cards.length > 1 ? 's' : ''}${best ? ` · meilleure : ${best.label}` : ''}`}
+          </AppText>
+        </View>
+        <Pressable hitSlop={12} onPress={() => router.push('/rates')} style={styles.iconBtn} accessibilityLabel="Taux d'obtention">
+          <Ionicons name="stats-chart" size={18} color={colors.textDim} />
+        </Pressable>
+      </View>
+
+      <View style={styles.stage}>
+        <Glow color={canOpen ? '#B99CFF' : '#FFFFFF'} size={packW * 3} opacity={glowOpacity} />
+        <Pressable
+          onPress={open}
+          onPressIn={() => (press.value = withSpring(0.95))}
+          onPressOut={() => (press.value = withSpring(1))}
+          disabled={!canOpen}
+        >
+          <Animated.View style={[packStyle, !canOpen && { opacity: 0.45 }]}>
+            <PackArt width={packW} />
+          </Animated.View>
+        </Pressable>
+      </View>
+
+      <View style={styles.bottom}>
+        <View style={styles.charges}>
+          {Array.from({ length: MAX_STORED_DRAWS }).map((_, i) => (
+            <ChargePip key={i} filled={i < charges} progress={i === charges ? cycle : i < charges ? 1 : 0} />
+          ))}
+        </View>
+        <AppText variant="heading" style={{ textAlign: 'center' }}>
+          {charges === 0 ? 'Plus de tirage pour le moment' : charges === 1 ? '1 tirage disponible' : `${charges} tirages disponibles`}
+        </AppText>
+        <AppText variant="caption" style={styles.timer}>
+          {nextAt ? `Prochain tirage dans ${formatCountdown(nextAt - now)}` : 'Réserve pleine — ouvre un paquet !'}
+        </AppText>
+
+        {access === 'denied' ? (
+          <Permission
+            text="PocketPics a besoin de ta galerie pour créer tes cartes."
+            action="Ouvrir les réglages"
+            onPress={() => Linking.openSettings()}
+          />
+        ) : access === 'undetermined' ? (
+          <Permission text="Chaque carte est une photo de ta galerie, tirée au hasard." action="Autoriser l'accès aux photos" onPress={request} />
+        ) : (
+          <>
+            <Button label="Ouvrir un paquet" icon="sparkles" size="lg" disabled={!canOpen} onPress={open} />
+            {access === 'limited' ? (
+              <Pressable onPress={openLimitedPicker} style={styles.limited}>
+                <AppText variant="caption">Accès limité à certaines photos · </AppText>
+                <AppText variant="caption" style={{ color: colors.text }}>
+                  Modifier
+                </AppText>
+              </Pressable>
+            ) : null}
+          </>
+        )}
+      </View>
+    </Screen>
+  );
+}
+
+function ChargePip({ filled, progress }: { filled: boolean; progress: number }) {
+  const style = useAnimatedStyle(() => ({ width: withTiming(`${Math.round(progress * 100)}%`, { duration: 600 }) }));
+  return (
+    <View style={[styles.pip, filled && styles.pipFilled]}>
+      {!filled ? <Animated.View style={[styles.pipFill, style]} /> : null}
+    </View>
+  );
+}
+
+function Permission({ text, action, onPress }: { text: string; action: string; onPress(): void }) {
+  return (
+    <View style={{ gap: 12 }}>
+      <AppText variant="caption" style={{ textAlign: 'center' }}>
+        {text}
+      </AppText>
+      <Button label={action} icon="images" size="lg" onPress={onPress} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 12 },
+  iconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  stage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  bottom: { paddingHorizontal: 20, paddingBottom: 18, gap: 6 },
+  charges: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 12 },
+  pip: { width: 44, height: 6, borderRadius: 3, backgroundColor: colors.surface2, overflow: 'hidden' },
+  pipFilled: { backgroundColor: colors.gold },
+  pipFill: { height: '100%', backgroundColor: 'rgba(247,201,72,0.35)' },
+  timer: { textAlign: 'center', marginBottom: 14, fontFamily: fonts.medium, fontVariant: ['tabular-nums'] },
+  limited: { flexDirection: 'row', justifyContent: 'center', marginTop: 10 },
+});
