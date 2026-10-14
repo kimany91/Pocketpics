@@ -7,6 +7,7 @@ import { AppText } from '../../components/AppText';
 import { CardFace } from '../../components/card/CardFace';
 import { Screen } from '../../components/Screen';
 import { RARITIES, getRarity } from '../../game/rarity';
+import { useCollectionView } from '../../state/collectionView';
 import { useGame } from '../../state/game';
 import type { Card } from '../../storage/model';
 import { colors, fonts } from '../../theme';
@@ -87,20 +88,21 @@ export default function CollectionScreen() {
           columnWrapperStyle={{ gap }}
           initialNumToRender={18}
           windowSize={7}
-          renderItem={({ item }) => <Thumb card={item} width={cardW} />}
+          renderItem={({ item }) => <Thumb card={item} width={cardW} order={data} />}
         />
       )}
     </Screen>
   );
 }
 
-function Thumb({ card, width }: { card: Card; width: number }) {
+function Thumb({ card, width, order }: { card: Card; width: number; order: Card[] }) {
   const r = getRarity(card.rarity);
   return (
     <Animated.View entering={FadeIn.duration(250)}>
       <Pressable
         onPress={() => {
           haptic.tick();
+          useCollectionView.getState().setIds(order.map((c) => c.id));
           router.push(`/card/${card.id}`);
         }}
         style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.96 : 1 }] })}

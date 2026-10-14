@@ -1,4 +1,8 @@
-/** Une carte face cachée : toucher pour la retourner, glisser pour passer à la suivante. */
+/**
+ * Une carte face cachée. Chaque toucher la fait monter d'un niveau de rareté
+ * (son, couleur, petite secousse) jusqu'à sa vraie rareté ; le toucher suivant
+ * la retourne. Une fois révélée, on la glisse pour passer à la suivante.
+ */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -15,7 +19,7 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { playSfx } from '../../audio/sfx';
-import { getRarity } from '../../game/rarity';
+import { RARITIES, getRarity } from '../../game/rarity';
 import type { Card } from '../../storage/model';
 import { CARD_RATIO } from '../../theme';
 import { haptic } from '../../utils/haptics';
@@ -23,31 +27,38 @@ import { CardBack } from '../card/CardBack';
 import { CardFace } from '../card/CardFace';
 
 export interface RevealCardHandle {
+  /** Retourne la carte (appelé quand elle a atteint sa vraie rareté). */
+  flip(): void;
   dismiss(): void;
 }
 
 interface Props {
   card: Card;
   width: number;
-  /** Début de la révélation (avec durée du suspense en ms). */
+  /** Niveau affiché au dos (0 = Commune … rang de la vraie rareté). */
+  level: number;
+  /** Toucher sur la carte encore cachée : le parent décide (monter d'un niveau ou retourner). */
+  onHiddenTap(): void;
+  /** Début du retournement (avec durée du suspense en ms). */
   onRevealStart(suspenseMs: number): void;
   onRevealed(): void;
   onDismissed(): void;
 }
 
+/** Court suspense avant de retourner les plus grosses cartes (la montée de niveau a déjà fait la hype). */
 export function suspenseFor(hype: number) {
-  if (hype >= 7) return 2300;
-  if (hype >= 6) return 1700;
-  if (hype >= 5) return 1150;
-  if (hype >= 3) return 260;
+  if (hype >= 7) return 1000;
+  if (hype >= 6) return 800;
+  if (hype >= 5) return 650;
   return 0;
 }
 
 export const RevealCard = forwardRef<RevealCardHandle, Props>(function RevealCard(
-  { card, width, onRevealStart, onRevealed, onDismissed },
+  { card, width, level, onHiddenTap, onRevealStart, onRevealed, onDismissed },
   ref,
 ) {
   const rarity = getRarity(card.rarity);
+  const shown = RARITIES[Math.min(level, RARITIES.length - 1)];
   const height = width * CARD_RATIO;
   const [state, setState] = useState<'hidden' | 'revealing' | 'revealed' | 'leaving'>('hidden');
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -69,6 +80,20 @@ export const RevealCard = forwardRef<RevealCardHandle, Props>(function RevealCar
   }, [rim]);
 
   const later = (fn: () => void, ms: number) => timers.current.push(setTimeout(fn, ms));
+
+  // Montée de niveau : la carte bondit et tremble, d'autant plus fort que le niveau est haut.
+  useEffect(() => {
+    if (level === 0) return;
+    const amp = 2 + level * 1.2;
+    scale.value = withSequence(withTiming(1.1 + level * 0.012, { duration: 110 }), withSpring(1 + level * 0.008, { damping: 8, stiffness: 180 }));
+    shake.value = withSequence(
+      withTiming(amp, { duration: 35 }),
+      withTiming(-amp, { duration: 45 }),
+      withTiming(amp * 0.5, { duration: 45 }),
+      withTiming(0, { duration: 50 }),
+    );
+    rim.value = withSequence(withTiming(1, { duration: 80 }), withRepeat(withTiming(0.4, { duration: 700, easing: Easing.inOut(Easing.sin) }), -1, true));
+  }, [level, scale, shake, rim]);
 
   const doFlip = () => {
     cancelAnimation(shake);
@@ -97,7 +122,7 @@ export const RevealCard = forwardRef<RevealCardHandle, Props>(function RevealCar
       return;
     }
     // Suspense : la carte se soulève et tremble de plus en plus fort.
-    scale.value = withTiming(1.07, { duration: suspense, easing: Easing.in(Easing.quad) });
+    scale.value = withTiming(1.09, { duration: suspense, easing: Easing.in(Easing.quad) });
     const amp = rarity.hype >= 5 ? 3.5 : 2;
     shake.value = withRepeat(withSequence(withTiming(-amp, { duration: 45 }), withTiming(amp, { duration: 45 })), -1, true);
     const ticks = Math.floor(suspense / 140);
@@ -123,11 +148,11 @@ export const RevealCard = forwardRef<RevealCardHandle, Props>(function RevealCar
     });
   };
 
-  useImperativeHandle(ref, () => ({ dismiss: () => flyOut(0.4, -1) }));
+  useImperativeHandle(ref, () => ({ flip: startReveal, dismiss: () => flyOut(0.4, -1) }));
 
   const dismissUp = () => flyOut(0.35, -1);
   const noop = () => {};
-  const onTap = state === 'hidden' ? startReveal : state === 'revealed' ? dismissUp : noop;
+  const onTap = state === 'hidden' ? onHiddenTap : state === 'revealed' ? dismissUp : noop;
   const tap = Gesture.Tap()
     .maxDuration(400)
     .maxDistance(14)
@@ -176,7 +201,7 @@ export const RevealCard = forwardRef<RevealCardHandle, Props>(function RevealCar
     opacity: Math.abs(Math.cos(flip.value * Math.PI)),
     transform: [{ perspective: 1200 }, { rotateY: `${flip.value < 0.5 ? flip.value * 180 : flip.value * 180 - 180}deg` }],
   }));
-  const rimStyle = useAnimatedStyle(() => ({ opacity: 0.25 + rim.value * 0.6 * Math.min(1, 0.3 + rarity.hype / 5) }));
+  const rimStyle = useAnimatedStyle(() => ({ opacity: 0.3 + rim.value * 0.7 }));
 
   return (
     <GestureDetector gesture={Gesture.Race(pan, tap)}>
@@ -185,13 +210,11 @@ export const RevealCard = forwardRef<RevealCardHandle, Props>(function RevealCar
       <Animated.View style={[{ width, height }, containerStyle]}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.shadow, { borderRadius: width * 0.07 }, shadowStyle]} />
         <Animated.View style={[StyleSheet.absoluteFill, styles.face, backStyle]}>
-          <CardBack width={width} />
-          {rarity.hype >= 1 ? (
-            <Animated.View
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, { borderRadius: width * 0.07, borderWidth: 2, borderColor: rarity.color }, rimStyle]}
-            />
-          ) : null}
+          <CardBack width={width} accent={level > 0 ? shown.color : undefined} />
+          <Animated.View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { borderRadius: width * 0.07, borderWidth: 2 + level * 0.5, borderColor: shown.color }, rimStyle]}
+          />
         </Animated.View>
         <Animated.View style={[StyleSheet.absoluteFill, styles.face, frontStyle]}>
           <CardFace card={card} width={width} tilt={tilt} />

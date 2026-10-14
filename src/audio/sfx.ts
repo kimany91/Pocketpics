@@ -13,6 +13,15 @@ const SOURCES = {
   legendary: require('../../assets/sfx/legendary.wav'),
   ultra: require('../../assets/sfx/ultra.wav'),
   riser: require('../../assets/sfx/riser.wav'),
+  up1: require('../../assets/sfx/up1.wav'),
+  up2: require('../../assets/sfx/up2.wav'),
+  up3: require('../../assets/sfx/up3.wav'),
+  up4: require('../../assets/sfx/up4.wav'),
+  up5: require('../../assets/sfx/up5.wav'),
+  up6: require('../../assets/sfx/up6.wav'),
+  up7: require('../../assets/sfx/up7.wav'),
+  lighter: require('../../assets/sfx/lighter.wav'),
+  burn: require('../../assets/sfx/burn.wav'),
 } as const;
 
 export type Sfx = keyof typeof SOURCES;
@@ -66,6 +75,20 @@ export function stopSfx(name: Sfx) {
 /** Suspense : le son monte et se termine pile au moment où la carte se retourne. */
 export function playRiser(suspenseMs: number) {
   playSfx('riser', { volume: 0.8, from: Math.max(0, RISER_SECONDS - suspenseMs / 1000 - 0.15) });
+}
+
+/** La carte face cachée monte d'un niveau (1 = Rare … 7 = Divine). */
+export function playLevelUp(level: number) {
+  const l = Math.max(1, Math.min(7, level));
+  playSfx(`up${l}` as Sfx, { volume: 0.75 + l * 0.035 });
+}
+
+/** Son propre à une rareté, sans le suspense (ex. carte qu'on fait tourner vite). */
+export function playRaritySound(hype: number, volume = 1) {
+  if (hype >= 6) playSfx('ultra', { volume });
+  else if (hype >= 5) playSfx('legendary', { volume });
+  else if (hype >= 3) playSfx('epic', { volume });
+  else if (hype >= 1) playSfx('reveal', { volume });
 }
 
 /** Son de révélation selon la rareté (hype 0 → 7). */

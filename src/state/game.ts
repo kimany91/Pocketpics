@@ -25,6 +25,11 @@ interface GameStore {
   addCards(cards: Card[]): void;
   /** Retire des cartes données lors d'un échange. */
   removeCards(ids: string[]): void;
+  /**
+   * Supprime définitivement une carte (choix du joueur). Sa photo redevient
+   * tirable : elle sort du registre anti-doublon.
+   */
+  destroyCard(id: string): void;
   /** Démo navigateur uniquement : remet la réserve de tirages au maximum. */
   refillDrawsForDemo(): void;
 }
@@ -163,6 +168,27 @@ export const useGame = create<GameStore>((set, get) => ({
     for (const id of ids) disk.deleteCard(id);
     const cards = get().cards.filter((c) => !remove.has(c.id));
     disk.saveIndex(cards);
+    set({ cards });
+  },
+
+  destroyCard(id) {
+    const card = get().cards.find((c) => c.id === id);
+    if (!card) return;
+    disk.deleteCard(id);
+    const cards = get().cards.filter((c) => c.id !== id);
+    disk.saveIndex(cards);
+    const save = get().save;
+    if (save) {
+      // Une autre carte peut venir de la même photo (ex. reçue par échange) : on garde alors l'empreinte.
+      const hashStillOwned = cards.some((c) => c.hash === card.hash);
+      const next: SaveState = {
+        ...save,
+        drawnHashes: hashStillOwned ? save.drawnHashes : save.drawnHashes.filter((h) => h !== card.hash),
+        drawnAssetIds: card.sourceId ? save.drawnAssetIds.filter((a) => a !== card.sourceId) : save.drawnAssetIds,
+      };
+      persistState(next);
+      set({ save: next });
+    }
     set({ cards });
   },
 

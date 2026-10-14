@@ -1,5 +1,5 @@
 /** Mise en scène des révélations : halo, rayons, étincelles, flash, tremblement, sons selon la rareté. */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
@@ -15,16 +15,16 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { playReveal, playRiser } from '../../audio/sfx';
-import { getRarity, type Rarity } from '../../game/rarity';
+import { playLevelUp, playReveal, playRiser } from '../../audio/sfx';
+import { RARITIES, getRarity, type Rarity } from '../../game/rarity';
 import type { Card } from '../../storage/model';
 import { CARD_RATIO, colors, fonts } from '../../theme';
-import { revealHaptics } from '../../utils/haptics';
+import { haptic, revealHaptics } from '../../utils/haptics';
 import { AppText } from '../AppText';
 import { CardBack } from '../card/CardBack';
 import { Burst, Flash, Glow, LightPillar, Rays, Shockwave } from '../fx';
 import { REVEAL_CAPTION_H, revealCardWidth } from './layout';
-import { RevealCard } from './RevealCard';
+import { RevealCard, type RevealCardHandle } from './RevealCard';
 
 const GOLD = ['#F7C948', '#FFF1B8', '#E0A526'];
 const CHROMA = ['#FF7EB3', '#FFD36E', '#8CFFB4', '#6EC8FF', '#B48CFF'];
@@ -57,6 +57,11 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
   const [revealed, setRevealed] = useState(false);
   const [fx, setFx] = useState(0);
   const [seen, setSeen] = useState<string[]>([]);
+  /** Niveau affiché au dos de la carte cachée : il monte d'un cran à chaque toucher. */
+  const [level, setLevel] = useState(0);
+  const [upFx, setUpFx] = useState(0);
+  const lastUp = useRef(0);
+  const cardRef = useRef<RevealCardHandle>(null);
 
   // Carte qui débloque une rareté jamais obtenue : seulement sa première apparition dans le paquet.
   const firstIndexes = useMemo(() => {
@@ -75,6 +80,7 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
   const card = cards[index];
   const rarity = getRarity(card?.rarity ?? 'common');
   const hype = rarity.hype;
+  const shown = RARITIES[Math.min(level, RARITIES.length - 1)];
 
   const dim = useSharedValue(0);
   const glow = useSharedValue(0);
@@ -82,14 +88,36 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
   const punch = useSharedValue(1);
   const tint = useSharedValue(0);
 
-  // Halo « indice » derrière la carte cachée : plus la carte est rare, plus il pulse.
+  // Nouvelle carte : elle repart du niveau Commune, avec un halo neutre (aucun indice sur sa rareté).
   useEffect(() => {
     setRevealed(false);
-    const base = 0.25 + Math.min(hype, 5) * 0.08;
+    setLevel(0);
+    const base = 0.3;
     glow.value = withRepeat(withSequence(withTiming(base + 0.15, { duration: 900 }), withTiming(base, { duration: 900 })), -1, true);
     dim.value = withTiming(0, { duration: 300 });
     tint.value = withTiming(0, { duration: 400 });
   }, [index, hype, glow, dim, tint]);
+
+  /** Toucher sur la carte cachée : on monte d'un niveau tant qu'on n'a pas atteint sa vraie rareté, sinon on la retourne. */
+  const onHiddenTap = () => {
+    if (level < rarity.rank) {
+      const now = Date.now();
+      if (now - lastUp.current < 250) return; // laisse chaque palier se voir
+      lastUp.current = now;
+      const next = level + 1;
+      setLevel(next);
+      setUpFx((n) => n + 1);
+      playLevelUp(next);
+      if (next >= 5) haptic.sequence(['heavy', 'heavy', 'medium'], 70);
+      else if (next >= 3) haptic.sequence(['heavy', 'medium'], 70);
+      else haptic.medium();
+      glow.value = withSequence(withTiming(0.95, { duration: 90 }), withTiming(0.4 + next * 0.07, { duration: 600 }));
+      tint.value = withSequence(withTiming(0.1 + next * 0.03, { duration: 80 }), withTiming(0.03 + next * 0.01, { duration: 700 }));
+      if (next >= 4) punch.value = withSequence(withTiming(1.03, { duration: 80 }), withSpring(1, { damping: 10 }));
+    } else {
+      cardRef.current?.flip();
+    }
+  };
 
   const onRevealStart = (suspense: number) => {
     if (suspense > 0) {
@@ -138,16 +166,22 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: rarity.color }, tintStyle]} />
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: revealed ? rarity.color : shown.color }, tintStyle]} />
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }, dimStyle]} />
 
-      <Progress count={cards.length} index={index} seen={seen} revealed={revealed} />
+      <Progress count={cards.length} index={index} seen={seen} revealed={revealed} currentColor={level > 0 ? shown.color : null} />
 
       <Animated.View style={[styles.stage, stageStyle]}>
         <View style={[styles.center, { width: sw, height: cardW * CARD_RATIO + 40 }]}>
           {hype >= 5 ? <Rays colors={raysFor(rarity)} size={sw * 1.7} visible={revealed} /> : null}
           {hype >= 5 ? <LightPillar trigger={revealed ? fx : 0} color={rarity.color} width={cardW * 1.1} height={sh * 1.3} /> : null}
-          <Glow color={hype === 0 ? '#FFFFFF' : rarity.color} size={cardW * 2.6} opacity={glow} />
+          <Glow color={revealed ? (hype === 0 ? '#FFFFFF' : rarity.color) : level === 0 ? '#FFFFFF' : shown.color} size={cardW * 2.6} opacity={glow} />
+          {!revealed && level > 0 ? (
+            <>
+              <Shockwave key={`u-${upFx}`} trigger={upFx} color={shown.color} size={cardW * (0.9 + level * 0.06)} />
+              <Burst trigger={upFx} colors={[shown.color, '#FFFFFF']} count={6 + level * 5} radius={cardW * (0.75 + level * 0.07)} />
+            </>
+          ) : null}
           {revealed ? (
             <>
               <Shockwave key={`w1-${fx}`} trigger={hype >= 1 ? fx : 0} color={rarity.color} size={cardW * 1.1} />
@@ -170,17 +204,29 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
                 </View>
               ))
               .reverse()}
-            <RevealCard key={card.id} card={card} width={cardW} onRevealStart={onRevealStart} onRevealed={onRevealed} onDismissed={onDismissed} />
+            <RevealCard
+              key={card.id}
+              ref={cardRef}
+              card={card}
+              width={cardW}
+              level={level}
+              onHiddenTap={onHiddenTap}
+              onRevealStart={onRevealStart}
+              onRevealed={onRevealed}
+              onDismissed={onDismissed}
+            />
           </View>
         </View>
 
         <View style={styles.caption}>
           {revealed ? (
             <RarityBanner key={`b-${index}`} rarity={rarity} first={firstIndexes.has(index)} />
+          ) : level > 0 ? (
+            <LevelLabel key={`l-${index}-${level}`} rarity={shown} />
           ) : (
             <Animated.View entering={FadeIn.delay(300)}>
               <AppText variant="label" style={{ color: colors.textDim }}>
-                Touche la carte pour la retourner
+                Touche la carte
               </AppText>
             </Animated.View>
           )}
@@ -188,19 +234,20 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
       </Animated.View>
 
       {hype >= 4 ? <Flash trigger={revealed ? fx : 0} color={hype >= 5 ? '#FFFFFF' : rarity.color} peak={hype >= 5 ? 0.9 : 0.35} /> : null}
+      {!revealed && level >= 4 ? <Flash trigger={upFx} color={shown.color} peak={0.12 + (level - 4) * 0.06} /> : null}
       {hype >= 7 ? <Flash trigger={revealed ? fx : 0} color="#FFE7A0" peak={0.5} /> : null}
     </View>
   );
 }
 
 /** Jauge du paquet : une pastille par carte, colorée par sa rareté une fois révélée. */
-function Progress({ count, index, seen, revealed }: { count: number; index: number; seen: string[]; revealed: boolean }) {
+function Progress({ count, index, seen, revealed, currentColor }: { count: number; index: number; seen: string[]; revealed: boolean; currentColor: string | null }) {
   return (
     <View pointerEvents="none" style={styles.progress}>
       {Array.from({ length: count }).map((_, i) => {
         const r = seen[i] ? getRarity(seen[i]) : null;
         const current = i === index && !revealed;
-        return <Pip key={i} color={r ? r.color : null} current={current} big={!!r && r.rank >= 5} />;
+        return <Pip key={i} color={r ? r.color : current ? currentColor : null} current={current} big={!!r && r.rank >= 5} />;
       })}
     </View>
   );
@@ -222,6 +269,28 @@ function Pip({ color, current, big }: { color: string | null; current: boolean; 
         style,
       ]}
     />
+  );
+}
+
+/** Niveau atteint par la carte encore cachée : il « claque » à chaque montée. */
+function LevelLabel({ rarity }: { rarity: Rarity }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    p.value = withSpring(1, { damping: 9, stiffness: 200 });
+  }, [p]);
+  const style = useAnimatedStyle(() => ({
+    opacity: Math.min(1, p.value * 2),
+    transform: [{ scale: 1.7 - p.value * 0.7 }, { translateY: (1 - p.value) * 10 }],
+  }));
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Animated.Text style={[styles.level, { color: rarity.color, textShadowColor: rarity.color }, style]}>
+        {`▲ ${rarity.label.toUpperCase()}`}
+      </Animated.Text>
+      <AppText variant="caption" style={{ marginTop: 8 }}>
+        Touche encore
+      </AppText>
+    </View>
   );
 }
 
@@ -273,6 +342,7 @@ const styles = StyleSheet.create({
   banner: { fontFamily: fonts.bold, fontSize: 20, letterSpacing: 0.5, textShadowOffset: { width: 0, height: 0 } },
   bannerBig: { fontFamily: fonts.black, fontSize: 30, letterSpacing: 5 },
   bannerLong: { fontSize: 24, letterSpacing: 2.5 },
+  level: { fontFamily: fonts.black, fontSize: 22, letterSpacing: 3, textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
   first: { marginTop: 10, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
   firstText: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1.5 },
 });

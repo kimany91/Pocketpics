@@ -71,6 +71,7 @@ export async function generatePack(opts: {
           origin: 'draw',
           width: res.width,
           height: res.height,
+          sourceId: res.assetId,
         },
       });
     } catch {

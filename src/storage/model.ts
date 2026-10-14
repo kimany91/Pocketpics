@@ -30,6 +30,11 @@ export interface Card {
   origin: CardOrigin;
   width: number;
   height: number;
+  /**
+   * Photo de la galerie d'où vient la carte (ajouté après la v1, `null` si inconnue
+   * ou reçue par échange). Sert à pouvoir la retirer après une suppression.
+   */
+  sourceId: string | null;
   [extra: string]: unknown;
 }
 
@@ -84,6 +89,7 @@ export function migrateCard(input: unknown, now = Date.now()): Card | null {
     origin: c.origin === 'trade' ? 'trade' : 'draw',
     width: num(c.width, 0),
     height: num(c.height, 0),
+    sourceId: typeof c.sourceId === 'string' ? c.sourceId : null,
   };
 }
 

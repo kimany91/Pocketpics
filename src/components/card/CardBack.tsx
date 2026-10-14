@@ -4,8 +4,11 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { CARD_RATIO, fonts } from '../../theme';
 
-/** Dos de carte commun à toutes les cartes. `children` permet d'y afficher des infos. */
-export function CardBack({ width, children }: { width: number; children?: ReactNode }) {
+/**
+ * Dos de carte commun à toutes les cartes. `children` permet d'y afficher des infos.
+ * `accent` colore l'emblème et un liseré (niveau atteint pendant la révélation).
+ */
+export function CardBack({ width, children, accent }: { width: number; children?: ReactNode; accent?: string }) {
   const height = width * CARD_RATIO;
   const radius = width * 0.07;
   const border = Math.max(3, width * 0.042);
@@ -20,11 +23,17 @@ export function CardBack({ width, children }: { width: number; children?: ReactN
         {Array.from({ length: 9 }).map((_, i) => (
           <View key={i} style={[styles.stripe, { top: (i - 2) * height * 0.16, width: width * 2, left: -width * 0.5 }]} />
         ))}
-        <View style={[styles.ring, { width: width * 0.62, height: width * 0.62, borderRadius: width }]} />
+        <View style={[styles.ring, { width: width * 0.62, height: width * 0.62, borderRadius: width }, accent ? { borderColor: accent, opacity: 0.5 } : null]} />
+        {accent ? (
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { borderRadius: radius - border * 0.7, borderWidth: Math.max(1.5, width * 0.012), borderColor: accent, opacity: 0.85 }]}
+          />
+        ) : null}
         {children ?? (
           <View style={styles.center}>
-            <View style={[styles.mark, { width: mark, height: mark, borderRadius: mark * 0.14 }]}>
-              <View style={[styles.markInner, { width: mark * 0.42, height: mark * 0.42, borderRadius: mark * 0.06 }]} />
+            <View style={[styles.mark, { width: mark, height: mark, borderRadius: mark * 0.14 }, accent ? { borderColor: accent } : null]}>
+              <View style={[styles.markInner, { width: mark * 0.42, height: mark * 0.42, borderRadius: mark * 0.06 }, accent ? { backgroundColor: accent } : null]} />
             </View>
             <Text style={[styles.word, { fontSize: Math.max(8, width * 0.062), letterSpacing: width * 0.012, marginTop: width * 0.09 }]}>
               POCKETPICS

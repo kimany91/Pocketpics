@@ -272,7 +272,62 @@ def make_riser():
     return reverb(x, 0.2, tail=0.2)
 
 
+# --- Montée de niveau de la carte face cachée (1 = Rare … 7 = Divine) : de plus en plus haut et fort
+def make_level_up(level):
+    dur = 0.55 + level * 0.12
+    buf = np.zeros(int(SR * dur))
+    base = 72 + level * 2  # chaque palier monte d'un ton
+    chord = (0, 4, 7, 12) if level < 5 else (0, 4, 7, 11, 14, 19)
+    for i, n in enumerate(chord):
+        place(buf, bell(note(base + n), 0.7 + level * 0.05, 0.4, bright=0.6 + level * 0.06), 0.03 + i * (0.045 - level * 0.003))
+    place(buf, whoosh(0.3 + level * 0.03, 500, 3500 + level * 400, 1800, 0.25 + level * 0.03), 0)
+    if level >= 3:
+        place(buf, boom(0.5 + level * 0.08, 120, 55, 0.3 + level * 0.08), 0)
+    if level >= 5:
+        place(buf, sparkles(dur * 0.8, 6 + level * 2, 3000, 6500, 0.1), 0.1)
+    return reverb(buf, 0.22 + level * 0.02, size=1 + level * 0.04, tail=0.5 + level * 0.08)
+
+
+# --- Briquet : clic de la pierre, étincelles, puis la flamme qui prend
+def make_lighter():
+    dur = 0.9
+    buf = np.zeros(int(SR * dur))
+    click = biquad(noise(0.008), "hp", 2500) * np.hanning(int(SR * 0.008)) * 0.9
+    place(buf, click, 0.0)
+    place(buf, click * 0.6, 0.012)
+    for _ in range(14):
+        g = 0.003
+        place(buf, biquad(noise(g), "hp", 5000) * np.hanning(int(SR * g)) * rng.uniform(0.2, 0.5), 0.02 + rng.uniform(0, 0.12))
+    t = t_axis(0.7)
+    flame = biquad(noise(0.7), "bp", 900 + 400 * np.exp(-t * 6), q=0.7) * np.clip(t / 0.05, 0, 1) * np.exp(-t * 2.2) * 0.9
+    place(buf, flame, 0.16)
+    place(buf, boom(0.4, 90, 60, 0.3), 0.16)
+    return reverb(buf, 0.12, tail=0.3)
+
+
+# --- Carte qui brûle : grondement du feu + crépitements, puis s'éteint en fumée
+def make_burn():
+    dur = 2.6
+    t = t_axis(dur)
+    roar = biquad(noise(dur), "lp", 700) * 0.9
+    roar += biquad(noise(dur), "bp", 1600 + 300 * np.sin(t * 7), q=0.8) * 0.35
+    env_ = np.clip(t / 0.25, 0, 1) * np.clip((dur - t) / 0.9, 0, 1)
+    buf = roar * env_
+    for _ in range(90):
+        at = rng.uniform(0.05, dur - 0.5)
+        g = rng.uniform(0.002, 0.006)
+        crack = biquad(noise(g), "hp", rng.uniform(2000, 5000)) * np.hanning(int(SR * g))
+        place(buf, crack * rng.uniform(0.3, 1.0) * 1.4, at)
+    puff = whoosh(0.7, 300, 900, 200, 0.4, q=0.6)
+    place(buf, puff, dur - 0.75)
+    return reverb(buf, 0.15, tail=0.4)
+
+
 if __name__ == "__main__":
+    for lvl in range(1, 8):
+        save(f"up{lvl}", make_level_up(lvl))
+    save("lighter", make_lighter())
+    save("burn", make_burn())
     for name, fn in (
         ("tear", make_tear),
         ("fan", make_fan),

@@ -1,108 +1,164 @@
-/** Carte agrandie en semi-3D : on la fait tourner au doigt, on la retourne, on la renomme. */
+/**
+ * Carte agrandie : on la fait tourner au doigt (semi-3D), on la retourne, on la
+ * renomme. On glisse à côté de la carte pour passer à la voisine dans la
+ * collection, et on peut la brûler pour la supprimer.
+ */
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
-  Easing,
   FadeIn,
   FadeInDown,
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
-  withDecay,
-  withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { scheduleOnRN } from 'react-native-worklets';
 
+import { playRaritySound, playSfx } from '../../audio/sfx';
 import { AppText } from '../../components/AppText';
-import { CardBack } from '../../components/card/CardBack';
-import { CardFace } from '../../components/card/CardFace';
 import { ViewerEnvironment, hasEnvironment } from '../../components/card/ViewerEnvironment';
 import { Glow } from '../../components/fx';
+import { CardStage } from '../../components/viewer/CardStage';
+import { ConfirmDelete } from '../../components/viewer/ConfirmDelete';
+import { SpinFx, spinCooldown } from '../../components/viewer/SpinFx';
 import { getRarity } from '../../game/rarity';
+import { useCollectionView } from '../../state/collectionView';
 import { useGame } from '../../state/game';
 import { CARD_RATIO, colors, fonts } from '../../theme';
-import { cardSerial, formatDate } from '../../utils/format';
-import { haptic } from '../../utils/haptics';
+import { haptic, revealHaptics } from '../../utils/haptics';
 
 export default function CardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const card = useGame((s) => s.cards.find((c) => c.id === id));
+  const cards = useGame((s) => s.cards);
   const renameCard = useGame((s) => s.renameCard);
+  const destroyCard = useGame((s) => s.destroyCard);
+  const orderIds = useCollectionView((s) => s.ids);
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const divine = getRarity(card?.rarity ?? 'common').frameStyle === 'divine';
+
+  const [currentId, setCurrentId] = useState(id);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [burning, setBurning] = useState(false);
+  const [spin, setSpin] = useState(0);
+  const lastSpin = useRef(0);
+
+  // Ordre de défilement : celui de la grille si la carte y figure, sinon les plus récentes d'abord.
+  const list = useMemo(() => {
+    const byId = new Map(cards.map((c) => [c.id, c]));
+    const ordered = orderIds.filter((x) => byId.has(x));
+    if (ordered.includes(currentId)) return ordered;
+    return [...cards].sort((a, b) => b.obtainedAt - a.obtainedAt).map((c) => c.id);
+  }, [cards, orderIds, currentId]);
+  const index = list.indexOf(currentId);
+  const card = cards.find((c) => c.id === currentId);
+  const hasPrev = index > 0;
+  const hasNext = index >= 0 && index < list.length - 1;
+
+  const r = getRarity(card?.rarity ?? 'common');
+  const divine = r.frameStyle === 'divine';
   // La Divine est un peu plus petite pour laisser la place à ses ornements.
   const cardW = Math.min(width * 0.78, (height * 0.56) / CARD_RATIO, 380) * (divine ? 0.84 : 1);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(card?.name ?? '');
 
   const rotY = useSharedValue(0);
   const rotX = useSharedValue(0);
-  const scale = useSharedValue(0.85);
-  const glow = useSharedValue(0);
-
-  useEffect(() => {
-    // Petite entrée en tournoyant
-    scale.value = withSpring(1, { damping: 13 });
-    rotY.value = withSequence(withTiming(-25, { duration: 0 }), withSpring(0, { damping: 9, stiffness: 70 }));
-    glow.value = withTiming(0.5, { duration: 600 });
-  }, [rotY, scale, glow]);
-
-  const pan = Gesture.Pan()
-    .onChange((e) => {
-      rotY.value += e.changeX * 0.45;
-      rotX.value = Math.max(-28, Math.min(28, rotX.value - e.changeY * 0.25));
-    })
-    .onEnd((e) => {
-      rotX.value = withSpring(0, { damping: 12 });
-      rotY.value = withDecay({ velocity: e.velocityX * 0.35, deceleration: 0.994 }, (finished) => {
-        if (finished) rotY.value = withSpring(Math.round(rotY.value / 180) * 180, { damping: 14 });
-      });
-    });
-
-  const doubleTap = Gesture.Tap()
-    .numberOfTaps(2)
-    .onEnd(() => {
-      rotY.value = withTiming(Math.round(rotY.value / 180) * 180 + 180, { duration: 520, easing: Easing.out(Easing.cubic) });
-    });
-
-  /** -1 → 1 selon l'angle, pour le reflet holographique. */
+  const pageX = useSharedValue(0);
+  /** -1 → 1 selon l'angle, pour le reflet holographique et la parallaxe du décor. */
   const tilt = useDerivedValue(() => Math.sin((rotY.value * Math.PI) / 180) * 1.2 + rotX.value / 40);
 
-  const isFront = (a: number) => {
-    'worklet';
-    const n = ((((a + 180) % 360) + 360) % 360) - 180;
-    return Math.abs(n) < 90;
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/collection'));
+
+  /** Remplace la carte affichée ; la nouvelle arrive du côté `from` (1 = droite, -1 = gauche). */
+  const show = (nextId: string, from: number) => {
+    setEditing(false);
+    rotY.value = 0;
+    rotX.value = 0;
+    pageX.value = from * width;
+    setCurrentId(nextId);
+    pageX.value = withSpring(0, { damping: 18, stiffness: 170 });
   };
-  const frontStyle = useAnimatedStyle(() => ({
-    opacity: isFront(rotY.value) ? 1 : 0,
-    transform: [{ perspective: 1100 }, { rotateX: `${rotX.value}deg` }, { rotateY: `${rotY.value}deg` }, { scale: scale.value }],
+
+  const go = (dir: number) => {
+    const next = list[index + dir];
+    if (!next || burning) return;
+    playSfx('swipe', { volume: 0.6 });
+    haptic.tick();
+    pageX.value = withTiming(-dir * width, { duration: 170 }, (fin) => {
+      if (fin) scheduleOnRN(show, next, dir);
+    });
+  };
+
+  // Glisser à côté de la carte : la carte suit le doigt, puis passe à la voisine.
+  const pagePan = Gesture.Pan()
+    .enabled(!burning && !confirming)
+    .activeOffsetX([-14, 14])
+    .failOffsetY([-24, 24])
+    .onChange((e) => {
+      const blocked = (e.translationX > 0 && !hasPrev) || (e.translationX < 0 && !hasNext);
+      pageX.value = blocked ? e.translationX * 0.25 : e.translationX;
+    })
+    .onEnd((e) => {
+      const dir = e.translationX < 0 ? 1 : -1;
+      const far = Math.abs(e.translationX) > width * 0.22 || Math.abs(e.velocityX) > 700;
+      const allowed = dir === 1 ? hasNext : hasPrev;
+      if (far && allowed) scheduleOnRN(go, dir);
+      else pageX.value = withSpring(0, { damping: 16 });
+    });
+  // Déclarée avant le geste : un geste capture ses variables à sa création.
+  const onBackdropTap = () => (editing ? setEditing(false) : close());
+  const backdropTap = Gesture.Tap()
+    .enabled(!burning && !confirming)
+    .maxDistance(10)
+    .onEnd(() => {
+      scheduleOnRN(onBackdropTap);
+    });
+
+  const pageStyle = useAnimatedStyle(() => ({
+    opacity: 1 - Math.min(0.6, Math.abs(pageX.value) / width),
+    transform: [{ translateX: pageX.value }, { rotate: `${(pageX.value / width) * 6}deg` }],
   }));
-  const backStyle = useAnimatedStyle(() => ({
-    opacity: isFront(rotY.value) ? 0 : 1,
-    transform: [{ perspective: 1100 }, { rotateX: `${rotX.value}deg` }, { rotateY: `${rotY.value + 180}deg` }, { scale: scale.value }],
-  }));
+
+  // Rotation rapide : effet + son de la rareté (rien pour une Commune).
+  const onSpin = () => {
+    if (!card || r.rank < 1) return;
+    const now = Date.now();
+    if (now - lastSpin.current < spinCooldown(r.rank)) return;
+    lastSpin.current = now;
+    setSpin((n) => n + 1);
+    playRaritySound(r.hype, 0.9);
+    revealHaptics(r.hype);
+  };
+
+  const onBurnt = () => {
+    if (!card) return;
+    const neighbor = list[index + 1] ?? list[index - 1];
+    destroyCard(card.id);
+    haptic.success();
+    setBurning(false);
+    if (neighbor) show(neighbor, 1);
+    else close();
+  };
 
   if (!card) {
     return (
-      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.root, styles.empty]}>
         <AppText variant="heading">Cette carte n'est plus dans ta collection.</AppText>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/collection'))} style={{ marginTop: 16 }}>
+        <Pressable onPress={close} style={{ marginTop: 16 }}>
           <AppText variant="label">Fermer</AppText>
         </Pressable>
       </View>
     );
   }
-  const r = getRarity(card.rarity);
-  const env = hasEnvironment(r);
-  const close = () => (router.canGoBack() ? router.back() : router.replace('/collection'));
 
+  const env = hasEnvironment(r);
   const save = () => {
     renameCard(card.id, draft);
     setEditing(false);
@@ -112,95 +168,127 @@ export default function CardScreen() {
   return (
     <View style={styles.root}>
       <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
-      {env ? <ViewerEnvironment rarity={r} width={width} height={height} tilt={tilt} /> : null}
-      <Pressable style={[StyleSheet.absoluteFill, !env && styles.backdrop]} onPress={() => (editing ? setEditing(false) : close())} />
-      <View style={{ height: insets.top + 56 }} />
+      {env ? <ViewerEnvironment key={r.id} rarity={r} width={width} height={height} tilt={tilt} /> : null}
+      <GestureDetector gesture={Gesture.Race(pagePan, backdropTap)}>
+        <View style={[StyleSheet.absoluteFill, !env && styles.backdrop]} />
+      </GestureDetector>
+      <View style={{ height: insets.top + 56 }} pointerEvents="none" />
+
+      <SpinFx trigger={spin} rarity={r} cardW={cardW} screenW={width} screenH={height} />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.center} pointerEvents="box-none">
-        <View style={{ alignItems: 'center', justifyContent: 'center' }} pointerEvents="box-none">
-          <Glow color={r.color} size={cardW * 2.4} opacity={glow} />
-          <GestureDetector gesture={Gesture.Race(pan, doubleTap)}>
-            <View style={{ width: cardW, height: cardW * CARD_RATIO }}>
-              <Animated.View style={[StyleSheet.absoluteFill, styles.face, frontStyle]}>
-                <CardFace card={card} width={cardW} tilt={tilt} />
-              </Animated.View>
-              <Animated.View style={[StyleSheet.absoluteFill, styles.face, backStyle]}>
-                <CardBack width={cardW}>
-                  <View style={styles.backInfo}>
-                    <View style={[styles.backGem, { backgroundColor: r.color }]} />
-                    <AppText style={[styles.backRarity, { color: r.color }]}>{r.label.toUpperCase()}</AppText>
-                    <AppText style={styles.backName} numberOfLines={2}>
-                      {card.name ?? 'Sans nom'}
-                    </AppText>
-                    <View style={styles.backDivider} />
-                    <AppText variant="caption">{`${card.origin === 'trade' ? 'Reçue par échange' : 'Tirée'} le ${formatDate(card.obtainedAt)}`}</AppText>
-                    {card.origin === 'trade' ? <AppText variant="caption">{`Créée le ${formatDate(card.createdAt)}`}</AppText> : null}
-                    <AppText style={styles.serial}>{cardSerial(card.id)}</AppText>
-                  </View>
-                </CardBack>
-              </Animated.View>
-            </View>
-          </GestureDetector>
-        </View>
+        <Animated.View style={[styles.page, pageStyle]} pointerEvents="box-none">
+          <View style={{ alignItems: 'center', justifyContent: 'center' }} pointerEvents="box-none">
+            <Glow color={r.color} size={cardW * 2.4} style={{ opacity: burning ? 0.25 : 0.5 }} />
+            <CardStage key={card.id} card={card} width={cardW} rotY={rotY} rotX={rotX} tilt={tilt} burning={burning} onBurnt={onBurnt} onSpin={onSpin} />
+          </View>
 
-        <Animated.View entering={FadeInDown.delay(150)} style={[styles.meta, divine && { marginTop: 28 + cardW * 0.12 }]}>
-          {editing ? (
-            <View style={styles.editRow}>
-              <TextInput
-                value={draft}
-                onChangeText={setDraft}
-                autoFocus
-                maxLength={28}
-                placeholder="Nom de la carte"
-                placeholderTextColor={colors.textFaint}
-                style={styles.input}
-                returnKeyType="done"
-                onSubmitEditing={save}
-                selectionColor={r.color}
-              />
-              <Pressable onPress={save} style={[styles.round, { backgroundColor: colors.text }]} accessibilityLabel="Valider le nom">
-                <Ionicons name="checkmark" size={22} color="#0B0B0D" />
+          <Animated.View key={`meta-${card.id}`} entering={FadeInDown.delay(150)} style={[styles.meta, divine && { marginTop: 28 + cardW * 0.12 }]} pointerEvents="box-none">
+            {editing ? (
+              <View style={styles.editRow}>
+                <TextInput
+                  value={draft}
+                  onChangeText={setDraft}
+                  autoFocus
+                  maxLength={28}
+                  placeholder="Nom de la carte"
+                  placeholderTextColor={colors.textFaint}
+                  style={styles.input}
+                  returnKeyType="done"
+                  onSubmitEditing={save}
+                  selectionColor={r.color}
+                />
+                <Pressable onPress={save} style={[styles.round, { backgroundColor: colors.text }]} accessibilityLabel="Valider le nom">
+                  <Ionicons name="checkmark" size={22} color="#0B0B0D" />
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={styles.nameRow}
+                disabled={burning}
+                onPress={() => {
+                  setDraft(card.name ?? '');
+                  setEditing(true);
+                }}
+              >
+                <AppText variant="title" numberOfLines={1} style={{ flexShrink: 1, color: card.name ? colors.text : colors.textDim }}>
+                  {card.name ?? 'Nommer la carte'}
+                </AppText>
+                <Ionicons name="pencil" size={16} color={colors.textDim} />
               </Pressable>
-            </View>
-          ) : (
-            <Pressable
-              style={styles.nameRow}
-              onPress={() => {
-                setDraft(card.name ?? '');
-                setEditing(true);
-              }}
-            >
-              <AppText variant="title" numberOfLines={1} style={{ flexShrink: 1, color: card.name ? colors.text : colors.textDim }}>
-                {card.name ?? 'Nommer la carte'}
-              </AppText>
-              <Ionicons name="pencil" size={16} color={colors.textDim} />
-            </Pressable>
-          )}
-          <AppText variant="label" style={{ color: r.color, marginTop: 4 }}>
-            {r.label}
-          </AppText>
-          <Animated.View entering={FadeIn.delay(900)}>
-            <AppText variant="caption" style={{ marginTop: 14, textAlign: 'center' }}>
-              Fais tourner la carte au doigt · double-tape pour la retourner
+            )}
+            <AppText variant="label" style={{ color: r.color, marginTop: 4 }}>
+              {r.label}
             </AppText>
+            <Animated.View entering={FadeIn.delay(900)}>
+              <AppText variant="caption" style={{ marginTop: 14, textAlign: 'center' }}>
+                {list.length > 1
+                  ? 'Tourne la carte au doigt · glisse à côté pour changer de carte'
+                  : 'Fais tourner la carte au doigt · double-tape pour la retourner'}
+              </AppText>
+            </Animated.View>
           </Animated.View>
         </Animated.View>
       </KeyboardAvoidingView>
 
-      {/* Rendu en dernier : rien ne peut recouvrir le bouton de fermeture. */}
-      <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-        <Pressable onPress={close} hitSlop={12} style={styles.round} accessibilityLabel="Fermer" accessibilityRole="button">
-          <Ionicons name="close" size={22} color={colors.text} />
+      {/* Flèches : changer de carte d'un toucher */}
+      {!burning && hasPrev ? (
+        <Pressable onPress={() => go(-1)} style={[styles.arrow, { left: 6 }]} hitSlop={10} accessibilityLabel="Carte précédente">
+          <Ionicons name="chevron-back" size={22} color="rgba(255,255,255,0.7)" />
         </Pressable>
-      </View>
+      ) : null}
+      {!burning && hasNext ? (
+        <Pressable onPress={() => go(1)} style={[styles.arrow, { right: 6 }]} hitSlop={10} accessibilityLabel="Carte suivante">
+          <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.7)" />
+        </Pressable>
+      ) : null}
+
+      {/* Rendu en dernier : rien ne peut recouvrir ces boutons. */}
+      {!burning ? (
+        <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+          <Pressable onPress={() => setConfirming(true)} hitSlop={12} style={styles.round} accessibilityLabel="Brûler la carte" accessibilityRole="button">
+            <Ionicons name="trash-outline" size={19} color={colors.text} />
+          </Pressable>
+          {list.length > 1 ? (
+            <AppText variant="caption" style={styles.position}>{`${index + 1} / ${list.length}`}</AppText>
+          ) : null}
+          <Pressable onPress={close} hitSlop={12} style={styles.round} accessibilityLabel="Fermer" accessibilityRole="button">
+            <Ionicons name="close" size={22} color={colors.text} />
+          </Pressable>
+        </View>
+      ) : null}
+
+      {confirming ? (
+        <ConfirmDelete
+          cardName={card.name}
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => {
+            setConfirming(false);
+            setEditing(false);
+            setBurning(true);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  empty: { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg },
   backdrop: { backgroundColor: 'rgba(5,5,7,0.72)' },
-  top: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16 },
+  top: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  position: { fontVariant: ['tabular-nums'], color: colors.textDim },
   round: {
     width: 40,
     height: 40,
@@ -209,8 +297,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  arrow: {
+    position: 'absolute',
+    top: '42%',
+    zIndex: 5,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  face: { backfaceVisibility: 'hidden' },
+  page: { alignItems: 'center', justifyContent: 'center' },
   meta: { alignItems: 'center', marginTop: 28, paddingHorizontal: 24, minHeight: 110 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '100%' },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -224,10 +323,4 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semibold,
     fontSize: 17,
   },
-  backInfo: { alignItems: 'center', paddingHorizontal: 18, gap: 4 },
-  backGem: { width: 14, height: 14, transform: [{ rotate: '45deg' }], borderRadius: 2, marginBottom: 10 },
-  backRarity: { fontFamily: fonts.bold, fontSize: 12, letterSpacing: 3 },
-  backName: { fontFamily: fonts.bold, fontSize: 20, color: colors.text, textAlign: 'center', marginTop: 4 },
-  backDivider: { width: 40, height: 1, backgroundColor: colors.borderStrong, marginVertical: 12 },
-  serial: { fontFamily: fonts.medium, fontSize: 11, color: colors.textFaint, marginTop: 12, letterSpacing: 1 },
 });

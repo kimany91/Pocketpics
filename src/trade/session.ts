@@ -146,7 +146,8 @@ export const useTrade = create<TradeStore>((set, get) => {
       if (!base || typeof tc.image !== 'string' || typeof tc.thumb !== 'string' || tc.image.length > MAX_IMAGE_B64) continue;
       // L'identité de la carte voyage avec elle ; nouvel id seulement en cas de collision.
       const id = owned.has(base.id) || cardExists(base.id) ? randomUUID() : base.id;
-      const card: Card = { ...base, id, origin: 'trade', obtainedAt: now };
+      // La photo d'origine appartient à l'autre joueur : elle ne concerne pas notre galerie.
+      const card: Card = { ...base, id, origin: 'trade', obtainedAt: now, sourceId: null };
       writeNewCard(card, { image: { base64: tc.image }, thumb: { base64: tc.thumb || tc.image } });
       stored.push(card);
     }

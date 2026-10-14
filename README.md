@@ -19,14 +19,20 @@ PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie ph
 1. On déchire le sachet au doigt le long des pointillés. Une lumière filtre par la déchirure, le sachet tremble sous le doigt, et un retour haptique se fait sentir à chaque cran.
 2. Le paquet s'ouvre dans un flash et une gerbe d'étincelles. Les cartes jaillissent en éventail, puis se rassemblent en pile.
 3. Une jauge en haut de l'écran compte les cartes du paquet et prend la couleur de chaque rareté révélée.
-4. Le halo derrière chaque carte cachée trahit déjà sa rareté. On touche la carte pour la retourner. Pour les cartes Légendaires et au-dessus, il y a d'abord un suspense : l'écran s'assombrit, la carte tremble, et un son monte.
+4. **Montée en puissance** : chaque carte arrive de dos, au niveau Commune. À chaque toucher, si elle vaut plus, elle monte d'un niveau (Rare, Super Rare, Épique… jusqu'à sa vraie rareté) : son de plus en plus aigu, couleur du dos, onde et étincelles, secousse. Quand elle a atteint sa rareté, le toucher suivant la retourne. Une Commune se retourne donc au premier toucher, une Mythique après 4 montées. Avant de retourner une Légendaire ou mieux, l'écran s'assombrit et un son monte.
 5. La révélation dépend de la rareté : ondes de choc, étincelles, tremblement et zoom de l'écran, flash, rayons, colonne de lumière, bannière et vibrations de plus en plus fortes. Une rareté obtenue pour la première fois affiche « Première … ! ».
 6. On glisse la carte pour passer à la suivante. La meilleure arrive en dernier.
 7. Le récapitulatif retourne les cartes une à une et fait briller la meilleure. S'il reste des tirages, « Paquet suivant » enchaîne directement.
 
-**Sons** (synthétisés par `scripts/generate-sounds.py`, coupables sur l'accueil) : déchirure, éventail, glissement de carte, révélation (Commune à Super Rare), son spécial Épique/Mythique, son spécial Légendaire, son spécial Ultra Légendaire/Divine, et un son de suspense.
+**Sons** (synthétisés par `scripts/generate-sounds.py`, coupables sur l'accueil) : déchirure, éventail, glissement de carte, 7 paliers de montée de niveau, révélation (Commune à Super Rare), son spécial Épique/Mythique, son spécial Légendaire, son spécial Ultra Légendaire/Divine, suspense, briquet et feu.
 
-**Carte agrandie** : on la fait tourner au doigt en semi-3D, avec de l'inertie. Un double-tap retourne la carte, et son dos affiche ses infos. On peut aussi la renommer. Le nom s'affiche sur la carte et la suit lors d'un échange. Chaque rareté haute a sa mise en scène :
+**Carte agrandie** : on la fait tourner au doigt en semi-3D, avec de l'inertie. Un double-tap retourne la carte, et son dos affiche ses infos. On peut aussi la renommer. Le nom s'affiche sur la carte et la suit lors d'un échange.
+
+- **Changer de carte** : glisser à côté de la carte (au-dessus, en dessous, sur les côtés), ou toucher les flèches. L'ordre suit celui de la collection (tri et filtre compris).
+- **Rotation rapide** : faire tourner vite la carte déclenche un effet et le son de sa rareté, de plus en plus grandiose (rien pour une Commune).
+- **Brûler une carte** : la corbeille demande confirmation (action irréversible). Un briquet s'allume, la carte brûle du bas vers le haut puis part en fumée. Sa photo redevient tirable dans un prochain paquet.
+
+Chaque rareté haute a sa mise en scène :
 
 | Rareté | Effets sur la carte | Décor |
 | --- | --- | --- |

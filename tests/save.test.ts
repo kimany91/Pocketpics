@@ -55,3 +55,8 @@ test('réglage du son : activé par défaut, conservé s’il est coupé', () =>
   assert.equal(migrateState({ v: 1 }).soundOn, true);
   assert.equal(migrateState({ v: 1, soundOn: false }).soundOn, false);
 });
+
+test('photo d’origine : conservée si présente, nulle sinon (anciennes cartes)', () => {
+  assert.equal(migrateCard({ id: 'a', sourceId: 'asset-42' })!.sourceId, 'asset-42');
+  assert.equal(migrateCard({ id: 'b' })!.sourceId, null);
+});
