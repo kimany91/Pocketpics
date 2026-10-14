@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 
-import { type GalleryAccess, type GallerySource, chooseDemoPhotos, getGalleryAccess, requestGalleryAccess } from '../game/gallery';
+import { type GalleryAccess, type GallerySource, chooseDemoPhotos, getGalleryAccess, onGalleryChange, requestGalleryAccess } from '../game/gallery';
 
 export function useGalleryAccess() {
   const [access, setAccess] = useState<GalleryAccess | null>(null);
@@ -15,7 +15,11 @@ export function useGalleryAccess() {
   useEffect(() => {
     refresh();
     const sub = AppState.addEventListener('change', (s) => s === 'active' && refresh());
-    return () => sub.remove();
+    const unsubGallery = onGalleryChange(refresh);
+    return () => {
+      sub.remove();
+      unsubGallery();
+    };
   }, [refresh]);
 
   const request = useCallback(async (source?: GallerySource) => {

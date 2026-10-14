@@ -25,6 +25,15 @@ export type PhotoCheck = (hash: string) => boolean;
 const picked = new Map<string, Blob>();
 let demoMode = false;
 let loading: Promise<void> | null = null;
+const changeListeners = new Set<() => void>();
+
+/** Préviens l'écran quand la galerie change (import, collage, glisser-déposer). */
+export function onGalleryChange(cb: () => void): () => void {
+  changeListeners.add(cb);
+  return () => {
+    changeListeners.delete(cb);
+  };
+}
 
 function ensureLoaded() {
   if (!loading) {
@@ -44,18 +53,34 @@ export async function getGalleryAccess(): Promise<GalleryAccess> {
   return accessNow();
 }
 
-/** Ouvre le sélecteur de photos (ou de dossier) et ajoute les images choisies à la galerie de jeu. */
-export async function requestGalleryAccess(source: GallerySource = 'photos'): Promise<GalleryAccess> {
-  await ensureLoaded();
-  const files = await pickFiles(source);
+const isImage = (f: File) => f.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i.test(f.name);
+
+function addFiles(files: File[]): number {
+  let added = 0;
   for (const f of files) {
-    if (!f.type.startsWith('image/') && !/\.(jpe?g|png|webp|gif|heic|heif|avif)$/i.test(f.name)) continue;
+    if (!isImage(f)) continue;
     const id = `${f.name}-${f.size}-${f.lastModified}`;
     if (picked.has(id)) continue;
     picked.set(id, f);
     void idbPut('gallery', id, f);
+    added++;
   }
-  return accessNow();
+  if (added > 0) changeListeners.forEach((cb) => cb());
+  return added;
+}
+
+/**
+ * Ouvre le sélecteur de photos (ou de dossier). Le sélecteur doit s'ouvrir
+ * pendant le tap : les navigateurs mobiles (Safari, webviews) le bloquent s'il
+ * part après un `await`, donc rien n'est attendu avant `pickFiles`.
+ */
+export function requestGalleryAccess(source: GallerySource = 'photos'): Promise<GalleryAccess> {
+  const chosen = pickFiles(source);
+  return (async () => {
+    await ensureLoaded();
+    addFiles(await chosen);
+    return accessNow();
+  })();
 }
 
 function pickFiles(source: GallerySource): Promise<File[]> {
@@ -63,21 +88,47 @@ function pickFiles(source: GallerySource): Promise<File[]> {
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = true;
+    input.style.display = 'none';
     if (source === 'folder') input.setAttribute('webkitdirectory', '');
     else input.accept = 'image/*';
     let done = false;
     const finish = () => {
       if (done) return;
       done = true;
-      resolve(Array.from(input.files ?? []));
+      const files = Array.from(input.files ?? []);
+      input.remove();
+      resolve(files);
     };
     input.addEventListener('change', finish);
     input.addEventListener('cancel', finish);
+    // Attaché au document : certains navigateurs ignorent le clic sur un input détaché.
+    document.body.appendChild(input);
     input.click();
   });
 }
 
+/* Coller (Ctrl+V) ou glisser-déposer des photos sur la page : marche aussi
+   là où le sélecteur de fichiers est bloqué (fenêtres intégrées, webviews). */
+if (typeof window !== 'undefined') {
+  window.addEventListener('paste', (e) => {
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (files.length > 0) {
+      e.preventDefault();
+      addFiles(files);
+    }
+  });
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop', (e) => {
+    const files = Array.from(e.dataTransfer?.files ?? []);
+    if (files.length > 0) {
+      e.preventDefault();
+      addFiles(files);
+    }
+  });
+}
+
 export async function chooseDemoPhotos(): Promise<GalleryAccess> {
+  await ensureLoaded();
   demoMode = true;
   void idbPut('kv', 'demoPhotos', true);
   return 'granted';

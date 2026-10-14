@@ -112,3 +112,6 @@ export async function processPhoto(
   const thumb = await resizeTo(image.uri, image.width, image.height, THUMB_SHORT_SIDE, 0.72);
   return { assetId, hash, imageUri: image.uri, thumbUri: thumb.uri, width: image.width, height: image.height };
 }
+
+/** Sur mobile la galerie est lue directement : elle ne change pas sous l'app. */
+export const onGalleryChange = (_cb: () => void): (() => void) => () => {};

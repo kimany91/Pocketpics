@@ -53,7 +53,7 @@ npm start                     # puis ouvrir l'app de dev sur le téléphone
 ```
 
 Version navigateur de test (sans échange) : `npm run web`, ou `node scripts/build-web-demo.mjs` pour obtenir un seul fichier `dist-demo/pocketpics.html` à héberger n'importe où.
-- **Galerie** : un navigateur ne laisse aucun site lire la galerie tout seul. « Ouvrir ma galerie » ouvre le sélecteur de photos de l'appareil, où l'on peut tout sélectionner. Sur ordinateur, « Importer un dossier » ajoute un dossier entier. Des photos de démo générées sont aussi disponibles.
+- **Galerie** : un navigateur ne laisse aucun site lire la galerie tout seul. « Ouvrir ma galerie » ouvre le sélecteur de photos de l'appareil, où l'on peut tout sélectionner. Sur ordinateur, « Importer un dossier » ajoute un dossier entier. Des photos de démo générées sont aussi disponibles. Si le sélecteur est bloqué (fenêtre intégrée, webview), on peut aussi coller des photos (Ctrl+V) ou les glisser sur la page.
 - **Sauvegarde** : les photos importées, la collection et les tirages restent dans le navigateur (IndexedDB) d'une visite à l'autre. L'écran des taux d'obtention permet de tout effacer.
 - **Tests** : un lien « Recharger les tirages (test) » évite d'attendre 12 h.
 

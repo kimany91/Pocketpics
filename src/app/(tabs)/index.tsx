@@ -113,7 +113,7 @@ export default function DrawScreen() {
         ) : access === 'undetermined' && isWeb ? (
           <View style={{ gap: 12 }}>
             <AppText variant="caption" style={{ textAlign: 'center' }}>
-              Ton navigateur ne laisse pas un site lire ta galerie seul : ouvre-la et sélectionne les photos à mettre en jeu (tu peux tout sélectionner). Elles restent mémorisées pour la prochaine fois.
+              Ton navigateur ne laisse pas un site lire ta galerie seul : ouvre-la et sélectionne les photos à mettre en jeu (tu peux tout sélectionner). Elles restent mémorisées pour la prochaine fois. Tu peux aussi glisser des photos sur cette page ou les coller (Ctrl+V).
             </AppText>
             <Button label="Ouvrir ma galerie" icon="images" size="lg" onPress={() => request('photos')} />
             <View style={styles.limited}>
