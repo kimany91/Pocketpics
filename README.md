@@ -53,7 +53,8 @@ npm start                     # puis ouvrir l'app de dev sur le téléphone
 ```
 
 Version navigateur de test (sans échange) : `npm run web`, ou `node scripts/build-web-demo.mjs` pour obtenir un seul fichier `dist-demo/pocketpics.html` à héberger n'importe où.
-- **Fenêtre d'import** : à chaque arrivée sur la version navigateur, une fenêtre propose d'ajouter tes photos (bouton « Choisir mes photos »). Le sélecteur ne peut s'ouvrir que sur un tap, d'où ce bouton. « Rouvrir la fenêtre d'import » sur l'accueil la fait revenir.
+- **Fenêtre d'import** : à chaque arrivée sur la version navigateur, une fenêtre propose d'ajouter tes photos. Sur ordinateur (Chrome, Edge, Safari, Firefox), on importe un dossier entier, sous-dossiers compris, sans choisir les photos une par une. Sur téléphone, le navigateur ne donne pas accès à la galerie entière : on sélectionne les photos avec le sélecteur. « Rouvrir la fenêtre d'import » sur l'accueil la fait revenir.
+- **Limite** : une page web ne peut pas lire la galerie seule. La version navigateur reste donc un test ; le jeu complet sur téléphone (`expo run`, ou build de développement EAS) lit toute la galerie automatiquement, sans choix.
 - **Galerie** : un navigateur ne laisse aucun site lire la galerie tout seul. « Ouvrir ma galerie » ouvre le sélecteur de photos de l'appareil, où l'on peut tout sélectionner. Sur ordinateur, « Importer un dossier » ajoute un dossier entier. Des photos de démo générées sont aussi disponibles. Si le sélecteur est bloqué (fenêtre intégrée, webview), on peut aussi coller des photos (Ctrl+V) ou les glisser sur la page.
 - **Sauvegarde** : les photos importées, la collection et les tirages restent dans le navigateur (IndexedDB) d'une visite à l'autre. L'écran des taux d'obtention permet de tout effacer.
 - **Tests** : un lien « Recharger les tirages (test) » évite d'attendre 12 h.

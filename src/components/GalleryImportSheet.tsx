@@ -16,7 +16,9 @@ import { Button } from './Button';
 interface Props {
   open: boolean;
   onClose(): void;
+  /** Téléphone : chaque photo se choisit une par une (le navigateur ne donne pas la galerie entière). */
   onPick(): void;
+  /** Ordinateur : tout un dossier est importé d'un coup, sans choix de photo. */
   onFolder?: () => void;
   onDemo(): void;
 }
@@ -40,7 +42,9 @@ export function GalleryImportSheet({ open, onClose, onPick, onFolder, onDemo }: 
         <View style={styles.grab} />
         <AppText variant="title">Ajoute tes photos</AppText>
         <AppText variant="caption" style={{ lineHeight: 19 }}>
-          PocketPics tire ses cartes dans tes photos. Ton navigateur ne peut pas les lire tout seul : sélectionne-les ici, tu peux tout prendre d'un coup.
+          {onFolder
+            ? 'PocketPics tire ses cartes au hasard dans toutes les photos du dossier que tu choisis. Tu ne choisis pas les cartes une par une.'
+            : "PocketPics tire ses cartes au hasard dans tes photos. Ton navigateur ne donne pas accès à toute la galerie : sélectionne tout ce que tu veux mettre en jeu."}
         </AppText>
 
         {count > 0 ? (
@@ -49,11 +53,16 @@ export function GalleryImportSheet({ open, onClose, onPick, onFolder, onDemo }: 
           </AppText>
         ) : null}
 
-        <Button label="Choisir mes photos" icon="images" size="lg" onPress={onPick} />
-        {onFolder ? <Button label="Importer un dossier entier" icon="folder-open" kind="secondary" onPress={onFolder} /> : null}
+        {onFolder ? (
+          <Button label="Importer mon dossier de photos" icon="folder-open" size="lg" onPress={onFolder} />
+        ) : (
+          <Button label="Choisir mes photos" icon="images" size="lg" onPress={onPick} />
+        )}
 
         <AppText variant="caption" style={{ textAlign: 'center', lineHeight: 19 }}>
-          Rien ne s'ouvre ? Copie des photos puis appuie sur Ctrl+V, ou glisse-les sur cette page.
+          {onFolder
+            ? 'Choisis le dossier qui contient tes photos (ex. Images). Toutes les images, sous-dossiers compris, entrent dans le jeu.'
+            : "Rien ne s'ouvre ? Copie des photos puis appuie sur Ctrl+V, ou glisse-les sur cette page."}
         </AppText>
 
         <View style={styles.row}>

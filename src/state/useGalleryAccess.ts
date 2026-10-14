@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 
-import { type GalleryAccess, type GallerySource, chooseDemoPhotos, getGalleryAccess, onGalleryChange, requestGalleryAccess } from '../game/gallery';
+import { type GalleryAccess, type GallerySource, chooseDemoPhotos, getGalleryAccess, importWholeFolder, onGalleryChange, requestGalleryAccess } from '../game/gallery';
 
 export function useGalleryAccess() {
   const [access, setAccess] = useState<GalleryAccess | null>(null);
@@ -28,9 +28,13 @@ export function useGalleryAccess() {
     return a;
   }, []);
 
+  const importFolder = useCallback(async () => {
+    setAccess(await importWholeFolder());
+  }, []);
+
   const pickDemo = useCallback(async () => {
     setAccess(await chooseDemoPhotos());
   }, []);
 
-  return { access, request, refresh, pickDemo };
+  return { access, request, refresh, pickDemo, importFolder };
 }

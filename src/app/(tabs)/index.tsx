@@ -18,7 +18,7 @@ import { Glow } from '../../components/fx';
 import { PACK_RATIO, PackArt } from '../../components/PackArt';
 import { Screen } from '../../components/Screen';
 import { DRAW_INTERVAL_MS, MAX_STORED_DRAWS, formatCountdown } from '../../game/draws';
-import { canImportFolder, galleryPhotoCount, openLimitedPicker } from '../../game/gallery';
+import { galleryPhotoCount, isDesktopBrowser, openLimitedPicker } from '../../game/gallery';
 import { RARITIES, getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import { useDrawStatus } from '../../state/useDrawStatus';
@@ -31,7 +31,7 @@ export default function DrawScreen() {
   const cards = useGame((s) => s.cards);
   const refillDrawsForDemo = useGame((s) => s.refillDrawsForDemo);
   const { charges, nextAt, now } = useDrawStatus();
-  const { access, request, pickDemo } = useGalleryAccess();
+  const { access, request, pickDemo, importFolder } = useGalleryAccess();
   const isWeb = Platform.OS === 'web';
   // Version navigateur : la fenêtre d'import s'ouvre à chaque arrivée sur le jeu.
   const [importOpen, setImportOpen] = useState(false);
@@ -123,16 +123,6 @@ export default function DrawScreen() {
             </AppText>
             <Button label="Ouvrir ma galerie" icon="images" size="lg" onPress={() => request('photos')} />
             <View style={styles.limited}>
-              {canImportFolder() ? (
-                <>
-                  <Pressable onPress={() => request('folder')} hitSlop={8}>
-                    <AppText variant="caption" style={{ color: colors.text }}>
-                      Importer un dossier
-                    </AppText>
-                  </Pressable>
-                  <AppText variant="caption">{'   ·   '}</AppText>
-                </>
-              ) : null}
               <Pressable onPress={pickDemo} hitSlop={8}>
                 <AppText variant="caption" style={{ color: colors.text }}>
                   Jouer avec des photos de démo
@@ -176,7 +166,7 @@ export default function DrawScreen() {
           open={importOpen}
           onClose={() => setImportOpen(false)}
           onPick={() => request('photos')}
-          onFolder={canImportFolder() ? () => request('folder') : undefined}
+          onFolder={isDesktopBrowser() ? importFolder : undefined}
           onDemo={pickDemo}
         />
       ) : null}

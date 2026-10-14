@@ -83,6 +83,52 @@ export function requestGalleryAccess(source: GallerySource = 'photos'): Promise<
   })();
 }
 
+/* Import de tout un dossier, sans choisir de photo une par une.
+   Chrome/Edge : le dossier est lu en entier (sous-dossiers compris).
+   Ailleurs : l'import de dossier du navigateur, sur ordinateur uniquement. */
+interface FsHandle {
+  kind: 'file' | 'directory';
+  name: string;
+  getFile?: () => Promise<File>;
+  entries?: () => AsyncIterable<[string, FsHandle]>;
+}
+
+async function readFolder(dir: FsHandle, out: File[], depth = 0): Promise<void> {
+  if (depth > 10 || !dir.entries) return;
+  for await (const [, handle] of dir.entries()) {
+    if (handle.kind === 'file' && handle.getFile) {
+      const f = await handle.getFile();
+      if (isImage(f)) out.push(f);
+    } else if (handle.kind === 'directory') {
+      await readFolder(handle, out, depth + 1);
+    }
+  }
+}
+
+export async function importWholeFolder(): Promise<GalleryAccess> {
+  const w = window as unknown as { showDirectoryPicker?: (o: { mode: 'read' }) => Promise<FsHandle> };
+  if (!w.showDirectoryPicker) return requestGalleryAccess('folder');
+  // Le sélecteur de dossier doit partir pendant le tap, avant toute attente.
+  const dirP = w.showDirectoryPicker({ mode: 'read' }).then(
+    (dir): { dir?: FsHandle; error?: Error } => ({ dir }),
+    (error: Error): { dir?: FsHandle; error?: Error } => ({ error }),
+  );
+  await ensureLoaded();
+  const { dir, error } = await dirP;
+  if (dir) {
+    const files: File[] = [];
+    await readFolder(dir, files);
+    addFiles(files);
+  } else if (error?.name !== 'AbortError') {
+    // Accès refusé (ex. dans une fenêtre intégrée) : on passe par l'import de dossier classique.
+    return requestGalleryAccess('folder');
+  }
+  return accessNow();
+}
+
+/** Sur ordinateur, on importe un dossier entier ; sur téléphone, le navigateur ne le permet pas. */
+export const isDesktopBrowser = () => canImportFolder();
+
 function pickFiles(source: GallerySource): Promise<File[]> {
   return new Promise((resolve) => {
     const input = document.createElement('input');

@@ -32,6 +32,8 @@ export async function requestGalleryAccess(_source?: GallerySource): Promise<Gal
 export const chooseDemoPhotos = getGalleryAccess;
 export const galleryPhotoCount = (): number | null => null;
 export const canImportFolder = () => false;
+export const importWholeFolder = (): Promise<GalleryAccess> => requestGalleryAccess();
+export const isDesktopBrowser = () => false;
 
 export async function openLimitedPicker() {
   try {
