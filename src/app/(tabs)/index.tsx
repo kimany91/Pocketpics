@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
@@ -13,6 +13,7 @@ import Animated, {
 
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
+import { GalleryImportSheet } from '../../components/GalleryImportSheet';
 import { Glow } from '../../components/fx';
 import { PACK_RATIO, PackArt } from '../../components/PackArt';
 import { Screen } from '../../components/Screen';
@@ -32,6 +33,11 @@ export default function DrawScreen() {
   const { charges, nextAt, now } = useDrawStatus();
   const { access, request, pickDemo } = useGalleryAccess();
   const isWeb = Platform.OS === 'web';
+  // Version navigateur : la fenêtre d'import s'ouvre à chaque arrivée sur le jeu.
+  const [importOpen, setImportOpen] = useState(false);
+  useEffect(() => {
+    if (isWeb) setImportOpen(true);
+  }, [isWeb]);
   const packW = Math.min(width * 0.5, (height * 0.36) / PACK_RATIO, 240);
   const canOpen = charges > 0 && (access === 'granted' || access === 'limited');
   const best = RARITIES[cards.reduce((m, c) => Math.max(m, getRarity(c.rarity).rank), -1)];
@@ -142,9 +148,9 @@ export default function DrawScreen() {
             {isWeb ? (
               <View style={[styles.limited, { flexWrap: 'wrap', rowGap: 6 }]}>
                 <AppText variant="caption">{galleryPhotoCount() ? `${galleryPhotoCount()} photos en jeu   ·   ` : 'Photos de démo   ·   '}</AppText>
-                <Pressable onPress={() => request('photos')} hitSlop={8}>
+                <Pressable onPress={() => setImportOpen(true)} hitSlop={8}>
                   <AppText variant="caption" style={{ color: colors.text }}>
-                    Ajouter des photos
+                    Rouvrir la fenêtre d'import
                   </AppText>
                 </Pressable>
                 <AppText variant="caption">{'   ·   '}</AppText>
@@ -165,6 +171,15 @@ export default function DrawScreen() {
           </>
         )}
       </View>
+      {isWeb ? (
+        <GalleryImportSheet
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          onPick={() => request('photos')}
+          onFolder={canImportFolder() ? () => request('folder') : undefined}
+          onDemo={pickDemo}
+        />
+      ) : null}
     </Screen>
   );
 }
