@@ -14,9 +14,12 @@ import { create } from 'zustand';
 import { useGame } from '../state/game';
 import { cardExists, readCardImagesBase64, readThumbBase64Sync, writeNewCard } from '../storage/disk';
 import { type Card, migrateCard } from '../storage/model';
-import type { TradeAddress } from './code';
+import type { TradeTarget } from './code';
+import { hostOnline, joinOnline } from './online';
 import { MAX_OFFER, type OfferCard, PROTOCOL_VERSION, type TradeMessage, mirrorKey, offerKey } from './protocol';
 import { type HostHandle, type TradeLink, hostTrade, joinTrade } from './transport';
+
+export type TradeMode = 'online' | 'lan';
 
 export type TradePhase = 'idle' | 'hosting' | 'connecting' | 'room' | 'transferring' | 'done' | 'ended';
 
@@ -34,8 +37,10 @@ interface TradeStore {
   received: Card[];
   givenCount: number;
 
-  host(): Promise<void>;
-  join(addr: TradeAddress): Promise<void>;
+  /** `online` (par défaut) : n'importe où via Internet · `lan` : même Wi-Fi, sans Internet. */
+  mode: TradeMode;
+  host(mode?: TradeMode): Promise<void>;
+  join(target: TradeTarget): Promise<void>;
   toggleCard(id: string): void;
   setLocked(locked: boolean): void;
   confirm(): void;
@@ -43,6 +48,7 @@ interface TradeStore {
 }
 
 const initial = {
+  mode: 'online' as TradeMode,
   phase: 'idle' as TradePhase,
   code: null,
   error: null,
@@ -56,6 +62,15 @@ const initial = {
   received: [] as Card[],
   givenCount: 0,
 };
+
+/** Message d'erreur compréhensible, avec la piste de secours adaptée au mode. */
+function describe(e: unknown, mode: TradeMode): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (mode === 'online' && /relais/i.test(msg)) {
+    return "Impossible de joindre le service d'échange en ligne. Vérifie ta connexion Internet, ou échange en Wi-Fi local.";
+  }
+  return msg;
+}
 
 let link: TradeLink | null = null;
 let hostHandle: HostHandle | null = null;
@@ -243,12 +258,13 @@ export const useTrade = create<TradeStore>((set, get) => {
   return {
     ...initial,
 
-    async host() {
+    async host(mode = 'online') {
       teardown();
-      set({ ...initial, phase: 'hosting' });
+      set({ ...initial, mode, phase: 'hosting' });
       const gen = generation;
       try {
-        const h = await hostTrade((l) => {
+        const open = mode === 'online' ? hostOnline : hostTrade;
+        const h = await open((l) => {
           if (gen !== generation) return l.close();
           set({ phase: 'connecting' });
           attach(l);
@@ -257,20 +273,20 @@ export const useTrade = create<TradeStore>((set, get) => {
         hostHandle = h;
         set({ code: h.code });
       } catch (e) {
-        if (gen === generation) set({ phase: 'idle', error: e instanceof Error ? e.message : String(e) });
+        if (gen === generation) set({ phase: 'idle', error: describe(e, mode) });
       }
     },
 
-    async join(addr) {
+    async join(target) {
       teardown();
-      set({ ...initial, phase: 'connecting' });
+      set({ ...initial, mode: target.kind, phase: 'connecting' });
       const gen = generation;
       try {
-        const l = await joinTrade(addr);
+        const l = target.kind === 'online' ? await joinOnline(target.code) : await joinTrade(target.addr);
         if (gen !== generation) return l.close();
         attach(l);
       } catch (e) {
-        if (gen === generation) set({ phase: 'idle', error: e instanceof Error ? e.message : String(e) });
+        if (gen === generation) set({ phase: 'idle', error: describe(e, target.kind) });
       }
     },
 

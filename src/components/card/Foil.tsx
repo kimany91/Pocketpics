@@ -23,9 +23,9 @@ const GOLD = ['#7A4A08', '#F7C948', '#FFF6CF', '#D9962A', '#FFE9A0', '#9C6410', 
 const DIVINE = ['#FF6FB5', '#FFD46B', '#FFFFFF', '#7CFFC8', '#6EC8FF', '#FFF2C4', '#C98CFF', '#FF6FB5'];
 
 const SETTINGS: Record<FoilKind, { bands: string[]; band: number; glitter: number; glare: number; tint: string; second: boolean }> = {
-  gold: { bands: GOLD, band: 0.36, glitter: 0.7, glare: 0.5, tint: '#FFE6A0', second: false },
-  chromatic: { bands: SPECTRUM, band: 0.4, glitter: 0.75, glare: 0.45, tint: '#FFFFFF', second: false },
-  divine: { bands: DIVINE, band: 0.48, glitter: 0.9, glare: 0.6, tint: '#FFF6DA', second: true },
+  gold: { bands: GOLD, band: 0.36, glitter: 0, glare: 0.5, tint: '#FFE6A0', second: false },
+  chromatic: { bands: SPECTRUM, band: 0.4, glitter: 0.45, glare: 0.45, tint: '#FFFFFF', second: false },
+  divine: { bands: DIVINE, band: 0.48, glitter: 0.6, glare: 0.6, tint: '#FFF6DA', second: true },
 };
 
 export function Foil({ kind, tilt, width, height }: { kind: FoilKind; tilt: SharedValue<number>; width: number; height: number }) {
@@ -34,8 +34,8 @@ export function Foil({ kind, tilt, width, height }: { kind: FoilKind; tilt: Shar
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Bands colors={cfg.bands} tilt={tilt} width={width} height={height} strength={cfg.band} angle={-28} direction={1} />
       {cfg.second ? <Bands colors={SPECTRUM} tilt={tilt} width={width} height={height} strength={cfg.band * 0.55} angle={34} direction={-1} /> : null}
-      <Glitter source={glitterA} tilt={tilt} sign={1} strength={cfg.glitter} tint={cfg.tint} />
-      <Glitter source={glitterB} tilt={tilt} sign={-1} strength={cfg.glitter} tint={cfg.tint} />
+      {cfg.glitter > 0 ? <Glitter source={glitterA} tilt={tilt} sign={1} strength={cfg.glitter} tint={cfg.tint} /> : null}
+      {cfg.glitter > 0 ? <Glitter source={glitterB} tilt={tilt} sign={-1} strength={cfg.glitter} tint={cfg.tint} /> : null}
       <Glare tilt={tilt} width={width} height={height} strength={cfg.glare} />
     </View>
   );
@@ -79,7 +79,7 @@ function Glitter({ source, tilt, sign, strength, tint }: { source: number; tilt:
   const style = useAnimatedStyle(() => {
     // Chaque motif s'allume d'un côté de l'inclinaison : les éclats se relaient.
     const t = tilt.value * sign;
-    return { opacity: strength * interpolate(t, [-1, -0.1, 0.4, 1.2], [0.1, 0.25, 0.85, 1], 'clamp') };
+    return { opacity: strength * interpolate(t, [-1, -0.1, 0.4, 1.2], [0, 0.08, 0.7, 1], 'clamp') };
   });
   return (
     <Animated.View style={[StyleSheet.absoluteFill, { mixBlendMode: 'color-dodge' }, style]}>

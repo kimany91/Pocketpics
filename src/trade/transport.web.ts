@@ -1,17 +1,7 @@
 import type { TradeAddress } from './code';
-import type { TradeMessage } from './protocol';
+import type { HostHandle, TradeLink } from './link';
 
-export interface TradeLink {
-  send(msg: TradeMessage): void;
-  close(): void;
-  onMessage(cb: (msg: TradeMessage) => void): void;
-  onClose(cb: (error?: string) => void): void;
-}
-
-export interface HostHandle {
-  code: string;
-  stop(): void;
-}
+export type { HostHandle, TradeLink } from './link';
 
 export class NotOnWifiError extends Error {}
 

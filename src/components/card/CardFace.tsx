@@ -61,7 +61,7 @@ const FOILS: Record<string, { colors: string[]; strength: number }> = {
 
 const SPARKS: Record<string, { colors: string[]; count: number; size: number }> = {
   mythic: { colors: ['#FF3D52', '#FF8A96', '#FF5A6B'], count: 7, size: 0.09 },
-  gold: { colors: ['#FFD25E', '#FFF3C2', '#F7B733'], count: 9, size: 0.1 },
+  gold: { colors: ['#FFD25E', '#FFF3C2', '#F7B733'], count: 3, size: 0.08 },
   chromatic: { colors: ['#FF7EB3', '#FFE07A', '#8CFFB4', '#7CCBFF', '#C9A6FF'], count: 11, size: 0.1 },
   divine: { colors: ['#FFFFFF', '#FFE7A0', '#FFB3DA', '#A6E4FF', '#FFF6D8'], count: 14, size: 0.12 },
 };

@@ -45,10 +45,10 @@ test('code d\'échange : aller-retour sur des IP variées', () => {
   for (const host of hosts) {
     for (const port of TRADE_PORTS) {
       const code = encodeTradeCode({ host, port });
-      assert.match(code, /^[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+      assert.match(code, /^[0-9A-Z]{3}-[0-9A-Z]{3}-[0-9A-Z]{2}$/);
       assert.deepEqual(decodeTradeCode(code), { host, port });
       assert.deepEqual(decodeTradeCode(code.toLowerCase().replace('-', ' ')), { host, port });
-      assert.deepEqual(parseTradeQr(tradeQrValue(code)), { host, port });
+      assert.deepEqual(parseTradeQr(tradeQrValue(code)), { kind: 'lan', addr: { host, port } });
     }
   }
 });
@@ -63,4 +63,13 @@ test('code d\'échange : une faute de frappe est détectée', () => {
     if (decodeTradeCode(alt.join('')) === null) detected++;
   }
   assert.ok(detected >= 6, `détectées: ${detected}/8`);
+});
+
+test('code saisi : 9 caractères = salon en ligne, 8 = Wi-Fi local', async () => {
+  const { parseTradeInput, formatCodeInput } = await import('../src/trade/code');
+  assert.deepEqual(parseTradeInput('qjd-2a5-0t2'), { kind: 'online', code: 'QJD2A50T2' });
+  const lan = encodeTradeCode({ host: '192.168.1.42', port: TRADE_PORTS[1] });
+  assert.deepEqual(parseTradeInput(lan), { kind: 'lan', addr: { host: '192.168.1.42', port: TRADE_PORTS[1] } });
+  assert.equal(parseTradeInput('ABC'), null);
+  assert.equal(formatCodeInput('qjd2a50t2'), 'QJD-2A5-0T2');
 });

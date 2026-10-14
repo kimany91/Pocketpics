@@ -24,14 +24,14 @@ export default function ScanScreen() {
 
   const onScan = ({ data }: { data: string }) => {
     if (busy.current) return;
-    const addr = parseTradeQr(data);
-    if (!addr) {
+    const target = parseTradeQr(data);
+    if (!target) {
       setBad(true);
       return;
     }
     busy.current = true;
     haptic.success();
-    join(addr).finally(() => {
+    join(target).finally(() => {
       busy.current = false;
     });
   };

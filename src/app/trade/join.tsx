@@ -9,7 +9,7 @@ import { Header } from '../../components/Header';
 import { Screen } from '../../components/Screen';
 import { Tile } from '../../components/Tile';
 import { useGoToRoomWhenConnected } from '../../state/useTradeNavigation';
-import { decodeTradeCode, formatCodeInput } from '../../trade/code';
+import { formatCodeInput, normalizeCode, parseTradeInput } from '../../trade/code';
 import { useTrade } from '../../trade/session';
 import { colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
@@ -24,14 +24,14 @@ export default function JoinScreen() {
   useGoToRoomWhenConnected();
 
   const submit = () => {
-    const addr = decodeTradeCode(code);
-    if (!addr) {
+    const target = parseTradeInput(code);
+    if (!target) {
       setInvalid(true);
       haptic.warning();
       return;
     }
     setInvalid(false);
-    void join(addr);
+    void join(target);
   };
   const connecting = phase === 'connecting';
 
@@ -42,7 +42,7 @@ export default function JoinScreen() {
         {mode === 'choose' ? (
           <View style={{ gap: 12 }}>
             <Tile icon="qr-code-outline" title="QR code" subtitle="Ouvre la caméra et scanne l'écran de ton ami" onPress={() => router.push('/trade/scan')} />
-            <Tile icon="keypad-outline" title="Code" subtitle="Tape le code à 8 caractères" onPress={() => setMode('code')} />
+            <Tile icon="keypad-outline" title="Code" subtitle="Tape le code affiché chez ton ami" onPress={() => setMode('code')} />
           </View>
         ) : (
           <Animated.View entering={FadeInDown.duration(300)} style={{ gap: 16 }}>
@@ -56,9 +56,9 @@ export default function JoinScreen() {
               autoFocus
               autoCapitalize="characters"
               autoCorrect={false}
-              placeholder="XXXX-XXXX"
+              placeholder="ABC-DEF-GHJ"
               placeholderTextColor={colors.textFaint}
-              maxLength={9}
+              maxLength={11}
               style={[styles.input, invalid && { borderColor: colors.danger }]}
               returnKeyType="go"
               onSubmitEditing={submit}
@@ -69,7 +69,7 @@ export default function JoinScreen() {
                 Ce code n'est pas valide. Vérifie chaque caractère.
               </AppText>
             ) : null}
-            <Button label="Rejoindre" size="lg" disabled={code.length < 9} loading={connecting} onPress={submit} />
+            <Button label="Rejoindre" size="lg" disabled={normalizeCode(code).length < 8} loading={connecting} onPress={submit} />
             <Button label="Scanner un QR code plutôt" kind="ghost" onPress={() => router.push('/trade/scan')} />
           </Animated.View>
         )}

@@ -9,14 +9,10 @@ import * as Network from 'expo-network';
 import TcpSocket from 'react-native-tcp-socket';
 
 import { TRADE_PORTS, type TradeAddress, encodeTradeCode } from './code';
+import type { HostHandle, TradeLink } from './link';
 import { LineDecoder, type TradeMessage, isTradeMessage } from './protocol';
 
-export interface TradeLink {
-  send(msg: TradeMessage): void;
-  close(): void;
-  onMessage(cb: (msg: TradeMessage) => void): void;
-  onClose(cb: (error?: string) => void): void;
-}
+export type { HostHandle, TradeLink } from './link';
 
 type Socket = ReturnType<typeof TcpSocket.createConnection>;
 type Server = ReturnType<typeof TcpSocket.createServer>;
@@ -93,11 +89,6 @@ function listen(server: Server, port: number): Promise<void> {
       resolve();
     });
   });
-}
-
-export interface HostHandle {
-  code: string;
-  stop(): void;
 }
 
 /** Ouvre un échange. `onGuest` est appelé une seule fois, au premier joueur connecté. */

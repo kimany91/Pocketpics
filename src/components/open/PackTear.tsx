@@ -24,6 +24,7 @@ import { Burst, Glow, Shockwave } from '../fx';
 import { PACK_RATIO, PackArt, TEAR_LINE } from '../PackArt';
 
 const COMPLETE_AT = 0.72;
+const GRAB = 44;
 const tick = haptic.tick;
 
 export function PackTear({ width, onTorn }: { width: number; onTorn: () => void }) {
@@ -128,6 +129,8 @@ export function PackTear({ width, onTorn }: { width: number; onTorn: () => void 
         </AppText>
       </Animated.View>
       <GestureDetector gesture={pan}>
+        {/* Zone tactile plus large que le sachet : on peut commencer la déchirure depuis le bord. */}
+        <View style={styles.grab}>
         <Animated.View style={[{ width, height }, wrapStyle]}>
           <Animated.View style={[styles.piece, { height: height - tearY, top: tearY }, bodyStyle]}>
             <View style={{ marginTop: -tearY }}>
@@ -151,6 +154,7 @@ export function PackTear({ width, onTorn }: { width: number; onTorn: () => void 
             <Ionicons name="finger-print" size={26} color="rgba(255,255,255,0.9)" />
           </Animated.View>
         </Animated.View>
+        </View>
       </GestureDetector>
     </View>
   );
@@ -158,6 +162,7 @@ export function PackTear({ width, onTorn }: { width: number; onTorn: () => void 
 
 const styles = StyleSheet.create({
   label: { marginBottom: 22 },
+  grab: { padding: GRAB, margin: -GRAB },
   piece: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
   cut: {
     position: 'absolute',

@@ -10,6 +10,7 @@ import { useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  Easing,
   FadeIn,
   FadeInDown,
   useAnimatedStyle,
@@ -87,7 +88,7 @@ export default function CardScreen() {
     rotX.value = 0;
     pageX.value = from * width;
     setCurrentId(nextId);
-    pageX.value = withSpring(0, { damping: 18, stiffness: 170 });
+    pageX.value = withTiming(0, SETTLE);
   };
 
   const go = (dir: number) => {
@@ -114,7 +115,7 @@ export default function CardScreen() {
       const far = Math.abs(e.translationX) > width * 0.22 || Math.abs(e.velocityX) > 700;
       const allowed = dir === 1 ? hasNext : hasPrev;
       if (far && allowed) scheduleOnRN(go, dir);
-      else pageX.value = withSpring(0, { damping: 16 });
+      else pageX.value = withTiming(0, SETTLE);
     });
   // Déclarée avant le geste : un geste capture ses variables à sa création.
   const onBackdropTap = () => (editing ? setEditing(false) : close());
@@ -226,9 +227,7 @@ export default function CardScreen() {
             </AppText>
             <Animated.View entering={FadeIn.delay(900)}>
               <AppText variant="caption" style={{ marginTop: 14, textAlign: 'center' }}>
-                {zoomed
-                  ? 'Un doigt pour te déplacer · double-tape pour revenir'
-                  : list.length > 1
+                {list.length > 1
                     ? 'Tourne la carte au doigt · pince pour zoomer · glisse à côté pour changer de carte'
                     : 'Tourne la carte au doigt · pince pour zoomer · double-tape pour la retourner'}
               </AppText>
@@ -314,6 +313,9 @@ function FavoriteButton({ active, onPress }: { active: boolean; onPress(): void 
     </Pressable>
   );
 }
+
+/** Arrivée d'une carte : glissement net, sans rebond (une carte qui oscille se touche mal). */
+const SETTLE = { duration: 260, easing: Easing.out(Easing.cubic) };
 
 const styles = StyleSheet.create({
   topRight: { flexDirection: 'row', gap: 10 },

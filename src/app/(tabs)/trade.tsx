@@ -21,7 +21,7 @@ export default function TradeTab() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <AppText variant="title">Échange</AppText>
         <AppText variant="caption" style={{ marginTop: 4, marginBottom: 24 }}>
-          Échange des cartes avec un ami, en face à face. Les noms que tu as donnés voyagent avec la carte.
+          Échange des cartes avec un ami, où qu'il soit. Les noms que tu as donnés voyagent avec la carte.
         </AppText>
 
         <View style={styles.profile}>
@@ -63,9 +63,9 @@ export default function TradeTab() {
         </View>
 
         <View style={styles.note}>
-          <Ionicons name="wifi" size={16} color={colors.textDim} />
+          <Ionicons name="lock-closed-outline" size={16} color={colors.textDim} />
           <AppText variant="caption" style={{ flex: 1 }}>
-            Les deux téléphones doivent être connectés au même Wi-Fi (ou l'un sur le partage de connexion de l'autre). Aucune donnée ne passe par Internet.
+            L'échange passe par Internet, chiffré de bout en bout : pas besoin d'être sur le même Wi-Fi. Sans Internet, l'hôte peut choisir l'échange en Wi-Fi local.
           </AppText>
         </View>
         {cardsCount === 0 ? (

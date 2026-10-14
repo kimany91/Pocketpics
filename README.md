@@ -1,10 +1,10 @@
 # PocketPics
 
-PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie photo. Toutes les 12 h tu gagnes un tirage (3 au maximum en réserve). Chaque paquet prend des photos au hasard dans ta galerie et donne à chacune une rareté. Tu peux ensuite échanger tes cartes en face à face avec tes amis.
+PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie photo. Toutes les 12 h tu gagnes un tirage (3 au maximum en réserve). Chaque paquet prend des photos au hasard dans ta galerie et donne à chacune une rareté. Tu peux ensuite échanger tes cartes avec tes amis, en ligne ou en face à face.
 
 - **Android et iOS** : Expo (React Native) + TypeScript, publiable sur le Play Store et l'App Store.
 - **Mises à jour en ligne** : EAS Update (expo-updates est déjà configuré).
-- **Multijoueur** : l'échange passe par une couche de transport interchangeable, prête pour un futur mode en ligne.
+- **Multijoueur** : échange en ligne chiffré de bout en bout (ou en Wi-Fi local), via une couche de transport interchangeable.
 
 ## Le jeu
 
@@ -71,7 +71,7 @@ npx eas-cli@latest build --profile development --platform android
 npm start                     # puis ouvrir l'app de dev sur le téléphone
 ```
 
-Version navigateur de test (sans échange) : `npm run web`, ou `node scripts/build-web-demo.mjs` pour obtenir un seul fichier `dist-demo/pocketpics.html` à héberger n'importe où.
+Version navigateur de test (l'échange en ligne y fonctionne aussi, sauf dans une fenêtre qui bloque les WebSockets) : `npm run web`, ou `node scripts/build-web-demo.mjs` pour obtenir un seul fichier `dist-demo/pocketpics.html` à héberger n'importe où.
 - **Fenêtre d'import** : à chaque arrivée sur la version navigateur, une fenêtre propose d'ajouter tes photos. Sur ordinateur (Chrome, Edge, Safari, Firefox), on importe un dossier entier, sous-dossiers compris, sans choisir les photos une par une. Sur téléphone, le navigateur ne donne pas accès à la galerie entière : on sélectionne les photos avec le sélecteur. « Rouvrir la fenêtre d'import » sur l'accueil la fait revenir.
 - **Limite** : une page web ne peut pas lire la galerie seule. La version navigateur reste donc un test ; le jeu complet sur téléphone (`expo run`, ou build de développement EAS) lit toute la galerie automatiquement, sans choix.
 - **Galerie** : un navigateur ne laisse aucun site lire la galerie tout seul. « Ouvrir ma galerie » ouvre le sélecteur de photos de l'appareil, où l'on peut tout sélectionner. Sur ordinateur, « Importer un dossier » ajoute un dossier entier. Des photos de démo générées sont aussi disponibles. Si le sélecteur est bloqué (fenêtre intégrée, webview), on peut aussi coller des photos (Ctrl+V) ou les glisser sur la page.
@@ -125,13 +125,19 @@ pocketpics/
 - **Ne jamais renommer ni supprimer un `id` de rareté.** Une rareté inconnue s'affiche comme Commune sans être modifiée sur le disque.
 - **Ouverture d'un paquet.** Les cartes sont enregistrées avant que le tirage soit décompté. Si l'app est tuée en plein milieu, le joueur garde ses cartes et son tirage.
 
-## Échange pair-à-pair
+## Échange
 
-L'hôte ouvre un port TCP sur le Wi-Fi local. Le code à 8 caractères (ex. `K7F4-QM2X`) encode son IP, son port et une somme de contrôle qui détecte les fautes de frappe. Le QR code contient `pocketpics://trade/<code>`. Aucun serveur n'est nécessaire, mais les deux téléphones doivent être sur le même réseau (ou l'un sur le partage de connexion de l'autre).
+**En ligne (par défaut).** Les deux joueurs peuvent être n'importe où : il suffit d'une connexion Internet. L'hôte reçoit un code à 9 caractères (ex. `K7F-4QM-2XH`, aussi en QR code `pocketpics://trade/<code>`). Les deux téléphones se retrouvent dans un « salon » sur un relais MQTT public, joint en WebSocket sécurisé (`src/trade/mqtt.ts`, `src/trade/relayCore.ts`).
 
-Déroulé (`src/trade/session.ts`) : présentation, choix des cartes (aperçu en direct), validation des deux côtés, double confirmation, envoi des cartes complètes, puis accusé de réception. **L'envoyeur ne retire ses cartes qu'après que le receveur a confirmé les avoir enregistrées.** Une coupure réseau ne peut donc pas faire perdre de carte. L'identité, le nom et la rareté de la carte voyagent avec elle.
+- **Chiffré de bout en bout.** Le sujet du salon et la clé de chiffrement (`tweetnacl` secretbox) sont dérivés du code, qui ne quitte jamais les téléphones. Le relais ne voit passer que des octets chiffrés : ni les photos, ni les noms, ni le code.
+- **Deux joueurs maximum.** Un troisième qui taperait le même code est refusé.
+- **Aucun compte et aucun serveur à soi.** Mais un échange par Internet passe forcément par un intermédiaire : deux téléphones derrière des box ou la 4G ne peuvent pas se joindre directement. Les relais gratuits utilisés sont listés dans `RELAYS` (`src/trade/online.ts`) et essayés dans l'ordre. **Pour une version publiée, remplace-les par ton propre relais** (n'importe quel broker MQTT sur WebSocket : Mosquitto, EMQX, HiveMQ Cloud gratuit…). Rien d'autre à changer.
 
-**Multijoueur en ligne plus tard** : `src/trade/transport.ts` expose une interface `TradeLink` (`send` / `onMessage` / `onClose`). Pour un mode en ligne, il suffira d'en fournir une seconde implémentation, par exemple un WebSocket vers un serveur relais. La logique d'échange ne change pas. Un serveur permettra aussi de valider les tirages côté serveur, ce qui empêche la triche par changement d'horloge, impossible à bloquer en local pur.
+**En Wi-Fi local (secours, sans Internet).** Depuis l'écran « Héberger », on peut passer en Wi-Fi local : l'hôte ouvre un port TCP, et le code à 8 caractères (ex. `K7F-4QM-2X`) encode son IP, son port et une somme de contrôle. Les deux téléphones doivent être sur le même réseau. Le joueur qui rejoint n'a rien à choisir : la longueur du code indique le mode.
+
+Déroulé (`src/trade/session.ts`, identique dans les deux modes) : présentation, choix des cartes (aperçu en direct), validation des deux côtés, double confirmation, envoi des cartes complètes, puis accusé de réception. **L'envoyeur ne retire ses cartes qu'après que le receveur a confirmé les avoir enregistrées.** Une coupure réseau ne peut donc pas faire perdre de carte. L'identité, le nom et la rareté de la carte voyagent avec elle.
+
+Un futur serveur de jeu pourra aussi valider les tirages, ce qui empêche la triche par changement d'horloge, impossible à bloquer en local pur.
 
 ## Structure
 
@@ -140,11 +146,11 @@ src/app/            écrans (expo-router) : onglets, ouverture, carte 3D, échan
 src/components/     carte (contours par rareté), sachet, effets (halo, rayons, étincelles, flash)
 src/game/           raretés, recharge des tirages, galerie, génération des paquets
 src/storage/        modèle + migrations, stockage disque (+ version web de démo)
-src/trade/          code d'échange, protocole, transport TCP, session
+src/trade/          code d'échange, protocole, relais en ligne chiffré, transport TCP, session
 assets/fx/          textures d'effets (générées par scripts/generate-assets.py)
 tests/              tests de logique
 ```
 
 ## À vérifier sur un vrai téléphone
 
-Le code compile (TypeScript, bundles Android/iOS/web), et le parcours complet a été testé dans la démo web : ouverture, révélations, collection, rotation 3D, renommage. L'accès à la galerie, la caméra QR, les retours haptiques et l'échange TCP ne peuvent être testés que sur appareil, avec un development build. Le module `react-native-tcp-socket` passe par la couche de compatibilité de React Native pour les anciens modules natifs : c'est le premier point à tester, avec deux téléphones sur le même Wi-Fi.
+Le code compile (TypeScript, bundles Android/iOS/web), et le parcours complet a été testé dans la démo web : ouverture, révélations, collection, rotation 3D, renommage. L'accès à la galerie, la caméra QR, les retours haptiques et l'échange en Wi-Fi local (TCP) ne peuvent être testés que sur appareil, avec un development build. L'échange en ligne a été testé de bout en bout entre deux navigateurs via un relais local. Le module `react-native-tcp-socket` passe par la couche de compatibilité de React Native pour les anciens modules natifs : c'est le premier point à tester, avec deux téléphones sur le même Wi-Fi.

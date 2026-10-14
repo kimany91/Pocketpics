@@ -1,6 +1,9 @@
 /**
- * Code d'échange : encode l'IP locale de l'hôte + le port en 8 caractères
- * (ex. « K7F4-QM2X »). 32 bits d'IP + 3 bits de port + 5 bits de contrôle.
+ * Codes d'échange.
+ *  - En ligne (par défaut) : 9 caractères au hasard (ex. « QJD-2A5-0T2 ») qui
+ *    désignent un salon sur le relais et servent de clé de chiffrement.
+ *  - Wi-Fi local (secours sans Internet) : 8 caractères qui encodent l'IP locale
+ *    de l'hôte + le port (ex. « K7F-4QM-2X ») : 32 bits d'IP + 3 bits de port + 5 bits de contrôle.
  */
 export const TRADE_PORTS = [47821, 47822, 47823, 47824, 47825, 47826, 47827, 47828];
 
@@ -38,7 +41,19 @@ export function encodeTradeCode({ host, port }: TradeAddress): string {
     loRem = ((loRem >>> 5) | ((hiRem & 31) << 27)) >>> 0;
     hiRem = hiRem >>> 5;
   }
-  return `${out.slice(0, 4)}-${out.slice(4)}`;
+  return groupBy3(out);
+}
+
+const groupBy3 = (code: string) => code.replace(/(.{3})(?=.)/g, '$1-');
+
+export type TradeTarget = { kind: 'lan'; addr: TradeAddress } | { kind: 'online'; code: string };
+
+/** Code tapé ou scanné → salon en ligne (9 caractères) ou hôte en Wi-Fi local (8). */
+export function parseTradeInput(input: string): TradeTarget | null {
+  const code = normalizeCode(input);
+  if (code.length === 9) return { kind: 'online', code };
+  const addr = decodeTradeCode(code);
+  return addr ? { kind: 'lan', addr } : null;
 }
 
 export function normalizeCode(input: string): string {
@@ -47,7 +62,7 @@ export function normalizeCode(input: string): string {
     .replace(/O/g, '0')
     .replace(/[IL]/g, '1')
     .replace(/[^0-9A-Z]/g, '')
-    .slice(0, 8);
+    .slice(0, 9);
 }
 
 export function decodeTradeCode(input: string): TradeAddress | null {
@@ -73,13 +88,12 @@ export function tradeQrValue(code: string): string {
   return QR_PREFIX + normalizeCode(code);
 }
 
-export function parseTradeQr(data: string): TradeAddress | null {
+export function parseTradeQr(data: string): TradeTarget | null {
   const raw = data.trim();
   const code = raw.startsWith(QR_PREFIX) ? raw.slice(QR_PREFIX.length) : raw;
-  return decodeTradeCode(code);
+  return parseTradeInput(code);
 }
 
 export function formatCodeInput(input: string): string {
-  const c = normalizeCode(input);
-  return c.length > 4 ? `${c.slice(0, 4)}-${c.slice(4)}` : c;
+  return groupBy3(normalizeCode(input));
 }

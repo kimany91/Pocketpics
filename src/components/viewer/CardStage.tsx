@@ -112,49 +112,38 @@ export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [burning]);
 
-  const clampOffsets = () => {
-    'worklet';
-    const maxX = ((zoom.value - 1) * width) / 2 + 24;
-    const maxY = ((zoom.value - 1) * height) / 2 + 24;
-    offX.value = withSpring(Math.max(-maxX, Math.min(maxX, offX.value)), { damping: 16 });
-    offY.value = withSpring(Math.max(-maxY, Math.min(maxY, offY.value)), { damping: 16 });
-  };
+  /** Au relâchement, la carte revient en douceur à sa taille et à sa place (sans rebond). */
   const resetZoom = () => {
     'worklet';
-    zoom.value = withSpring(1, { damping: 16 });
-    offX.value = withSpring(0, { damping: 16 });
-    offY.value = withSpring(0, { damping: 16 });
+    const back = { duration: 240, easing: Easing.out(Easing.cubic) };
+    zoom.value = withTiming(1, back);
+    offX.value = withTiming(0, back);
+    offY.value = withTiming(0, back);
     scheduleOnRN(notifyZoom, false);
   };
 
+  // Zoom tant qu'on pince ; on relâche, ça dézoome.
   const pinch = Gesture.Pinch()
     .enabled(!burning)
     .onStart(() => {
       zoomStart.value = zoom.value;
       offStartX.value = offX.value;
       offStartY.value = offY.value;
-      // On zoome sur la face visible, bien à plat.
-      cancelAnimation(rotY);
-      rotY.value = withSpring(Math.round(rotY.value / 180) * 180, { damping: 16 });
-      rotX.value = withSpring(0, { damping: 16 });
+      cancelAnimation(rotY); // stoppe l'élan de rotation, sans faire tourner la carte
+      scheduleOnRN(notifyZoom, true);
     })
     .onUpdate((e) => {
-      const next = Math.max(0.85, Math.min(MAX_ZOOM, zoomStart.value * e.scale));
+      const next = Math.max(1, Math.min(MAX_ZOOM, zoomStart.value * e.scale));
       const ratio = next / zoomStart.value;
       // Le point pincé reste sous les doigts.
-      const fx = e.focalX - (width + 2 * m) / 2;
-      const fy = e.focalY - (height + 2 * m) / 2;
+      const fx = e.focalX - width / 2;
+      const fy = e.focalY - height / 2;
       offX.value = offStartX.value * ratio + fx * (1 - ratio);
       offY.value = offStartY.value * ratio + fy * (1 - ratio);
       zoom.value = next;
     })
-    .onEnd(() => {
-      if (zoom.value < 1.08) {
-        resetZoom();
-      } else {
-        clampOffsets();
-        scheduleOnRN(notifyZoom, true);
-      }
+    .onFinalize(() => {
+      resetZoom();
     });
 
   const pan = Gesture.Pan()
@@ -164,20 +153,12 @@ export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onS
       t0.value = Date.now();
     })
     .onChange((e) => {
-      if (zoom.value > 1.01) {
-        // Carte zoomée : un doigt la déplace au lieu de la faire tourner.
-        offX.value += e.changeX;
-        offY.value += e.changeY;
-        return;
-      }
+      if (zoom.value > 1.01) return; // pendant un pincement, on ne tourne pas
       rotY.value += e.changeX * 0.45;
       rotX.value = Math.max(-28, Math.min(28, rotX.value - e.changeY * 0.25));
     })
     .onEnd((e) => {
-      if (zoom.value > 1.01) {
-        clampOffsets();
-        return;
-      }
+      if (zoom.value > 1.01) return;
       // Vitesse instantanée au relâchement, ou à défaut vitesse moyenne d'un geste court
       // (si les derniers événements arrivent groupés, la vitesse instantanée peut valoir 0).
       const dt = Math.max(16, Date.now() - t0.value);
@@ -195,10 +176,6 @@ export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onS
     .enabled(!burning)
     .numberOfTaps(2)
     .onEnd(() => {
-      if (zoom.value > 1.01) {
-        resetZoom(); // double-tape : on revient à la taille normale
-        return;
-      }
       rotY.value = withTiming(Math.round(rotY.value / 180) * 180 + 180, { duration: 520, easing: Easing.out(Easing.cubic) });
     });
 
@@ -236,8 +213,12 @@ export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onS
 
   return (
     <View style={{ width, height }}>
+      {/* La zone tactile fait exactement la taille de la carte : la marge de découpe
+          (ornements, combustion) ne doit pas recouvrir le nom ni les boutons voisins. */}
       <GestureDetector gesture={Gesture.Simultaneous(pinch, Gesture.Race(pan, doubleTap))}>
+        <View style={{ width, height }}>
         <Animated.View
+          pointerEvents="none"
           style={[
             { position: 'absolute', left: -m, top: -m, width: width + 2 * m, overflow: onFire ? 'hidden' : 'visible' },
             onFire ? clipStyle : { height: height + 2 * m },
@@ -272,6 +253,7 @@ export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onS
             />
           ) : null}
         </Animated.View>
+        </View>
       </GestureDetector>
 
       {onFire ? (
