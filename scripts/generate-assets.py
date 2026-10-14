@@ -115,7 +115,34 @@ def card_mark(size, bg=(9, 9, 11, 255), transparent=False, mono=False):
     return img.resize((size, size), Image.LANCZOS)
 
 
+def glitter(seed, size=256, count=170):
+    """Paillettes holographiques (motif répétable) : points et petites étoiles de tailles variées."""
+    import random
+    rnd = random.Random(seed)
+    s = size * 2
+    img = Image.new("L", (s, s), 0)
+    d = ImageDraw.Draw(img)
+    for _ in range(count):
+        x, y = rnd.uniform(0, s), rnd.uniform(0, s)
+        r = rnd.choice([1.2, 1.6, 2.2, 3.0, 4.5])
+        v = int(rnd.uniform(120, 255))
+        for ox in (-s, 0, s):  # répétable sans couture
+            for oy in (-s, 0, s):
+                cx, cy = x + ox, y + oy
+                if r > 3:
+                    d.polygon([(cx, cy - r * 2.2), (cx + r * 0.45, cy), (cx, cy + r * 2.2), (cx - r * 0.45, cy)], fill=v)
+                    d.polygon([(cx - r * 2.2, cy), (cx, cy + r * 0.45), (cx + r * 2.2, cy), (cx, cy - r * 0.45)], fill=v)
+                else:
+                    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=v)
+    img = img.filter(ImageFilter.GaussianBlur(0.6)).resize((size, size), Image.LANCZOS)
+    out = Image.new("RGBA", (size, size), (255, 255, 255, 0))
+    out.putalpha(img)
+    return out
+
+
 if __name__ == "__main__":
+    glitter(11).save(f"{OUT}/fx/glitter-a.png")
+    glitter(29).save(f"{OUT}/fx/glitter-b.png")
     radial_glow().save(f"{OUT}/fx/glow.png")
     sparkle().save(f"{OUT}/fx/sparkle.png")
     rays().save(f"{OUT}/fx/rays.png")

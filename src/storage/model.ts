@@ -11,6 +11,9 @@ import type { DrawState } from '../game/draws';
 import { initialDrawState } from '../game/draws';
 
 export const CARD_SCHEMA_VERSION = 1;
+
+/** Volume des effets sonores par défaut (un peu en retrait). */
+export const DEFAULT_SOUND_VOLUME = 0.55;
 export const STATE_SCHEMA_VERSION = 1;
 
 export type CardOrigin = 'draw' | 'trade';
@@ -35,6 +38,8 @@ export interface Card {
    * ou reçue par échange). Sert à pouvoir la retirer après une suppression.
    */
   sourceId: string | null;
+  /** Carte mise en favori par le joueur (ajouté après : `false` si absent). */
+  favorite: boolean;
   [extra: string]: unknown;
 }
 
@@ -50,6 +55,8 @@ export interface SaveState {
   totalPacksOpened: number;
   /** Effets sonores activés (ajouté après la v1 : vaut `true` si absent). */
   soundOn: boolean;
+  /** Volume des effets sonores, de 0 à 1 (ajouté après : déduit de `soundOn` si absent). */
+  soundVolume: number;
   [extra: string]: unknown;
 }
 
@@ -90,6 +97,7 @@ export function migrateCard(input: unknown, now = Date.now()): Card | null {
     width: num(c.width, 0),
     height: num(c.height, 0),
     sourceId: typeof c.sourceId === 'string' ? c.sourceId : null,
+    favorite: c.favorite === true,
   };
 }
 
@@ -108,6 +116,7 @@ export function createInitialState(now = Date.now()): SaveState {
     createdAt: now,
     totalPacksOpened: 0,
     soundOn: true,
+    soundVolume: DEFAULT_SOUND_VOLUME,
   };
 }
 
@@ -131,5 +140,6 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     createdAt: num(s.createdAt, now),
     totalPacksOpened: num(s.totalPacksOpened, 0),
     soundOn: s.soundOn !== false,
+    soundVolume: Math.max(0, Math.min(1, num(s.soundVolume, s.soundOn === false ? 0 : DEFAULT_SOUND_VOLUME))),
   };
 }

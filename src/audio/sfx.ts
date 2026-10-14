@@ -30,7 +30,8 @@ export type Sfx = keyof typeof SOURCES;
 const RISER_SECONDS = 2.5;
 
 const players = new Map<Sfx, AudioPlayer>();
-let enabled = true;
+/** Volume général réglé par le joueur (0 = muet). */
+let master = 0.55;
 let started = false;
 
 export function initSfx() {
@@ -45,9 +46,9 @@ export function initSfx() {
   }
 }
 
-export function setSfxEnabled(on: boolean) {
-  enabled = on;
-  if (!on) players.forEach((p) => stopPlayer(p));
+export function setSfxVolume(volume: number) {
+  master = Math.max(0, Math.min(1, volume));
+  if (master === 0) players.forEach((p) => stopPlayer(p));
 }
 
 function stopPlayer(p: AudioPlayer) {
@@ -57,11 +58,11 @@ function stopPlayer(p: AudioPlayer) {
 }
 
 export function playSfx(name: Sfx, opts: { volume?: number; from?: number } = {}) {
-  if (!enabled) return;
+  if (master <= 0) return;
   const p = players.get(name);
   if (!p) return;
   try {
-    p.volume = opts.volume ?? 1;
+    p.volume = Math.min(1, (opts.volume ?? 1) * master);
     p.seekTo(opts.from ?? 0).catch(() => {});
     p.play();
   } catch {}

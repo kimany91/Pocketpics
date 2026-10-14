@@ -14,6 +14,8 @@ import Animated, {
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { GalleryImportSheet } from '../../components/GalleryImportSheet';
+import { SoundSheet, volumeIcon } from '../../components/SoundSheet';
+import { DEFAULT_SOUND_VOLUME } from '../../storage/model';
 import { Glow } from '../../components/fx';
 import { PACK_RATIO, PackArt } from '../../components/PackArt';
 import { Screen } from '../../components/Screen';
@@ -30,8 +32,8 @@ export default function DrawScreen() {
   const { width, height } = useWindowDimensions();
   const cards = useGame((s) => s.cards);
   const refillDrawsForDemo = useGame((s) => s.refillDrawsForDemo);
-  const soundOn = useGame((s) => s.save?.soundOn ?? true);
-  const setSoundOn = useGame((s) => s.setSoundOn);
+  const soundVolume = useGame((s) => s.save?.soundVolume ?? DEFAULT_SOUND_VOLUME);
+  const [soundOpen, setSoundOpen] = useState(false);
   const { charges, nextAt, now } = useDrawStatus();
   const { access, request, pickDemo, importFolder } = useGalleryAccess();
   const isWeb = Platform.OS === 'web';
@@ -83,11 +85,11 @@ export default function DrawScreen() {
         <View style={styles.headerBtns}>
           <Pressable
             hitSlop={8}
-            onPress={() => setSoundOn(!soundOn)}
+            onPress={() => setSoundOpen(true)}
             style={styles.iconBtn}
-            accessibilityLabel={soundOn ? 'Couper le son' : 'Activer le son'}
+            accessibilityLabel="Régler le volume des effets sonores"
           >
-            <Ionicons name={soundOn ? 'volume-high' : 'volume-mute'} size={18} color={colors.textDim} />
+            <Ionicons name={volumeIcon(soundVolume)} size={18} color={colors.textDim} />
           </Pressable>
           <Pressable hitSlop={8} onPress={() => router.push('/rates')} style={styles.iconBtn} accessibilityLabel="Taux d'obtention">
             <Ionicons name="stats-chart" size={18} color={colors.textDim} />
@@ -173,6 +175,7 @@ export default function DrawScreen() {
           </>
         )}
       </View>
+      {soundOpen ? <SoundSheet onClose={() => setSoundOpen(false)} /> : null}
       {isWeb ? (
         <GalleryImportSheet
           open={importOpen}

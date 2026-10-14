@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 import { MAX_STORED_DRAWS, computeDraws, consumeDraw, type DrawStatus } from '../game/draws';
-import { setSfxEnabled } from '../audio/sfx';
+import { setSfxVolume } from '../audio/sfx';
 import { generatePack } from '../game/pack';
 import * as disk from '../storage/disk';
 import type { Card, SaveState } from '../storage/model';
@@ -19,8 +19,10 @@ interface GameStore {
   openPack(): Promise<Card[]>;
   clearPendingPack(): void;
   renameCard(id: string, name: string): void;
+  toggleFavorite(id: string): void;
   setPlayerName(name: string): void;
-  setSoundOn(on: boolean): void;
+  /** `persist: false` pendant qu'on fait glisser le réglage, `true` au relâchement. */
+  setSoundVolume(volume: number, persist?: boolean): void;
   /** Ajoute des cartes reçues par échange (déjà écrites sur disque). */
   addCards(cards: Card[]): void;
   /** Retire des cartes données lors d'un échange. */
@@ -64,7 +66,7 @@ export const useGame = create<GameStore>((set, get) => ({
       }
       const save = changed ? { ...state, drawnHashes: [...hashes] } : state;
       persistState(save);
-      setSfxEnabled(save.soundOn);
+      setSfxVolume(save.soundVolume);
       set({ ready: true, cards, save });
       disk
         .verifyCardsAgainstSidecars(cards)
@@ -129,13 +131,23 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ cards });
   },
 
-  setSoundOn(on) {
+  setSoundVolume(volume, persist = true) {
     const save = get().save;
     if (!save) return;
-    const next = { ...save, soundOn: on };
-    persistState(next);
-    setSfxEnabled(on);
+    const v = Math.max(0, Math.min(1, volume));
+    const next = { ...save, soundVolume: v, soundOn: v > 0 };
+    setSfxVolume(v);
+    if (persist) persistState(next);
     set({ save: next });
+  },
+
+  toggleFavorite(id) {
+    const cards = get().cards.map((c) => (c.id === id ? { ...c, favorite: !c.favorite } : c));
+    const card = cards.find((c) => c.id === id);
+    if (!card) return;
+    disk.updateCardSidecar(card);
+    disk.saveIndex(cards);
+    set({ cards });
   },
 
   setPlayerName(rawName) {

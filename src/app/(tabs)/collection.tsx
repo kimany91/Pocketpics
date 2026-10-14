@@ -1,5 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
@@ -15,10 +16,18 @@ import { haptic } from '../../utils/haptics';
 
 type Sort = 'recent' | 'rarity';
 
+/** Valeur du filtre « favoris » (distincte de tout id de rareté). */
+const FAVORITES = '__favorites__';
+
 export default function CollectionScreen() {
   const { width } = useWindowDimensions();
   const cards = useGame((s) => s.cards);
   const [filter, setFilter] = useState<string | null>(null);
+  const favCount = useMemo(() => cards.filter((c) => c.favorite).length, [cards]);
+  // Plus aucun favori : on revient à toutes les cartes plutôt que d'afficher une grille vide.
+  useEffect(() => {
+    if (filter === FAVORITES && favCount === 0) setFilter(null);
+  }, [filter, favCount]);
   const [sort, setSort] = useState<Sort>('recent');
   const cols = width > 600 ? 4 : 3;
   const gap = 10;
@@ -31,7 +40,8 @@ export default function CollectionScreen() {
   }, [cards]);
 
   const data = useMemo(() => {
-    const list = filter ? cards.filter((c) => c.rarity === filter) : [...cards];
+    const list =
+      filter === FAVORITES ? cards.filter((c) => c.favorite) : filter ? cards.filter((c) => c.rarity === filter) : [...cards];
     return list.sort((a, b) =>
       sort === 'rarity'
         ? getRarity(b.rarity).rank - getRarity(a.rarity).rank || b.obtainedAt - a.obtainedAt
@@ -65,6 +75,9 @@ export default function CollectionScreen() {
       <View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
           <Chip label="Toutes" active={filter === null} onPress={() => setFilter(null)} />
+          {favCount > 0 ? (
+            <Chip label={`★ Favoris · ${favCount}`} color={colors.gold} active={filter === FAVORITES} onPress={() => setFilter(filter === FAVORITES ? null : FAVORITES)} />
+          ) : null}
           {RARITIES.filter((r) => counts.get(r.id)).map((r) => (
             <Chip key={r.id} label={`${r.label} · ${counts.get(r.id)}`} color={r.color} active={filter === r.id} onPress={() => setFilter(filter === r.id ? null : r.id)} />
           ))}
@@ -108,6 +121,11 @@ function Thumb({ card, width, order }: { card: Card; width: number; order: Card[
         style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.96 : 1 }] })}
       >
         <CardFace card={card} width={width} quality="thumb" animated={r.rank >= 6} />
+        {card.favorite ? (
+          <View style={styles.favBadge} pointerEvents="none">
+            <Ionicons name="star" size={11} color="#1A1406" />
+          </View>
+        ) : null}
       </Pressable>
     </Animated.View>
   );
@@ -149,5 +167,18 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: colors.text, borderColor: colors.text },
   chipLabel: { fontFamily: fonts.semibold, fontSize: 12, color: colors.textDim },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  favBadge: {
+    position: 'absolute',
+    left: 5,
+    top: 5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.35)',
+  },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
 });

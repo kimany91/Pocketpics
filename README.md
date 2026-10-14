@@ -24,11 +24,13 @@ PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie ph
 6. On glisse la carte pour passer à la suivante. La meilleure arrive en dernier.
 7. Le récapitulatif retourne les cartes une à une et fait briller la meilleure. S'il reste des tirages, « Paquet suivant » enchaîne directement.
 
-**Sons** (synthétisés par `scripts/generate-sounds.py`, coupables sur l'accueil) : déchirure, éventail, glissement de carte, 7 paliers de montée de niveau, révélation (Commune à Super Rare), son spécial Épique/Mythique, son spécial Légendaire, son spécial Ultra Légendaire/Divine, suspense, briquet et feu.
+**Sons** (synthétisés par `scripts/generate-sounds.py`) : l'icône 🔊 de l'accueil ouvre un curseur d'intensité (55 % par défaut, 0 = coupé), enregistré dans la sauvegarde. Sons : déchirure, éventail, glissement de carte, 7 paliers de montée de niveau, révélation (Commune à Super Rare), son spécial Épique/Mythique, son spécial Légendaire, son spécial Ultra Légendaire/Divine, suspense, briquet et feu.
 
 **Carte agrandie** : on la fait tourner au doigt en semi-3D, avec de l'inertie. Un double-tap retourne la carte, et son dos affiche ses infos. On peut aussi la renommer. Le nom s'affiche sur la carte et la suit lors d'un échange.
 
 - **Changer de carte** : glisser à côté de la carte (au-dessus, en dessous, sur les côtés), ou toucher les flèches. L'ordre suit celui de la collection (tri et filtre compris).
+- **Zoom** : pincer à deux doigts zoome jusqu'à ×4 sur le point pincé ; une fois zoomé, un doigt déplace la carte au lieu de la tourner, et un double-tap revient à la taille normale. Le défilement entre cartes est suspendu pendant le zoom.
+- **Favoris** : l'étoile en haut de la carte la met en favori. Les favoris ont un badge ★ dans la grille et un filtre « ★ Favoris ».
 - **Rotation rapide** : faire tourner vite la carte déclenche un effet et le son de sa rareté, de plus en plus grandiose (rien pour une Commune).
 - **Brûler une carte** : la corbeille demande confirmation (action irréversible). Un briquet s'allume, la carte brûle du bas vers le haut puis part en fumée. Sa photo redevient tirable dans un prochain paquet.
 
@@ -37,9 +39,9 @@ Chaque rareté haute a sa mise en scène :
 | Rareté | Effets sur la carte | Décor |
 | --- | --- | --- |
 | Mythique | léger reflet holographique, scintillements rouges | lueur et braises rouges |
-| Légendaire | reflets dorés, scintillements dorés, holo or | salle dorée, rayons et poussière d'or |
-| Ultra Légendaire | les mêmes en chromatique | rayons et lueurs chromatiques |
-| Divine | gros reflet chromatique, forme ornementée (couronne, filigranes, gemmes) | espace : étoiles, nébuleuses, étoiles filantes |
+| Légendaire | foil holo doré (bandes de diffraction, paillettes, reflet de lumière) qui s'allume quand on penche, scintillements dorés | salle dorée, rayons et poussière d'or |
+| Ultra Légendaire | le même foil en arc-en-ciel | rayons et lueurs chromatiques |
+| Divine | foil chromatique et or à double bande croisée, paillettes intenses, forme ornementée (couronne, filigranes, gemmes) | espace : étoiles, nébuleuses, étoiles filantes |
 
 ## Raretés
 

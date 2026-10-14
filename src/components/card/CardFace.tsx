@@ -18,6 +18,7 @@ import { cardImageUri, cardThumbUri } from '../../storage/disk';
 import { CARD_RATIO, fonts } from '../../theme';
 import { Twinkles } from '../fx';
 import { Frame, Sweep } from './Frame';
+import { Foil } from './Foil';
 import { DivineOrnaments } from './Ornaments';
 
 export interface CardLike {
@@ -97,12 +98,13 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
         ) : null}
         {rarity.frameStyle === 'chromatic' && !tilt ? <Holo colors={CHROMA_HOLO} opacity={0.18} animated={animated} width={width} height={height} /> : null}
         {rarity.frameStyle === 'divine' && !tilt ? <Holo colors={DIVINE_HOLO} opacity={0.42} animated={animated} width={width} height={height} /> : null}
-        {fx && tilt ? <HoloFoil tilt={tilt} width={width} height={height} {...FOILS[fx]} /> : null}
+        {fx === 'mythic' && tilt ? <HoloFoil tilt={tilt} width={width} height={height} {...FOILS[fx]} /> : null}
+        {fx && fx !== 'mythic' && tilt ? <Foil kind={fx} tilt={tilt} width={width} height={height} /> : null}
         {rarity.frameStyle === 'divine' && animated ? <Sweep width={width} height={height} duration={3200} intensity={0.45} /> : null}
         {fx && animated && large ? <Twinkles width={width - border * 2} height={height - border * 2} {...SPARKS[fx]} /> : null}
         {rarity.frameStyle === 'divine' && animated && !large && width >= 100 ? <Twinkles width={width - border * 2} height={height - border * 2} /> : null}
-        {tilt && rarity.rank >= 1 ? (
-          <TiltSheen tilt={tilt} width={width} height={height} strength={rarity.rank >= 7 ? 0.8 : rarity.rank >= 5 ? 0.6 : rarity.rank >= 4 ? 0.45 : 0.3} />
+        {tilt && rarity.rank >= 1 && rarity.rank < 5 ? (
+          <TiltSheen tilt={tilt} width={width} height={height} strength={rarity.rank >= 4 ? 0.45 : 0.3} />
         ) : null}
         {card.name ? (
           <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.78)']} style={[styles.namePlate, { paddingHorizontal: width * 0.06, paddingBottom: width * 0.05, paddingTop: width * 0.18 }]}>

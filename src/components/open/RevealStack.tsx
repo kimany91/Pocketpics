@@ -54,11 +54,15 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
   const { width: sw, height: sh } = useWindowDimensions();
   const cardW = revealCardWidth(sw, sh);
   const [index, setIndex] = useState(0);
-  const [revealed, setRevealed] = useState(false);
+  // Ces états sont rattachés à l'index de la carte : une nouvelle carte repart de zéro
+  // dès son premier affichage (sinon elle hériterait un instant des effets de la précédente).
+  const [revealedAt, setRevealedAt] = useState(-1);
+  const revealed = revealedAt === index;
   const [fx, setFx] = useState(0);
   const [seen, setSeen] = useState<string[]>([]);
   /** Niveau affiché au dos de la carte cachée : il monte d'un cran à chaque toucher. */
-  const [level, setLevel] = useState(0);
+  const [levelState, setLevelState] = useState({ index: 0, level: 0 });
+  const level = levelState.index === index ? levelState.level : 0;
   const [upFx, setUpFx] = useState(0);
   const lastUp = useRef(0);
   const cardRef = useRef<RevealCardHandle>(null);
@@ -90,8 +94,6 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
 
   // Nouvelle carte : elle repart du niveau Commune, avec un halo neutre (aucun indice sur sa rareté).
   useEffect(() => {
-    setRevealed(false);
-    setLevel(0);
     const base = 0.3;
     glow.value = withRepeat(withSequence(withTiming(base + 0.15, { duration: 900 }), withTiming(base, { duration: 900 })), -1, true);
     dim.value = withTiming(0, { duration: 300 });
@@ -105,7 +107,7 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
       if (now - lastUp.current < 250) return; // laisse chaque palier se voir
       lastUp.current = now;
       const next = level + 1;
-      setLevel(next);
+      setLevelState({ index, level: next });
       setUpFx((n) => n + 1);
       playLevelUp(next);
       if (next >= 5) haptic.sequence(['heavy', 'heavy', 'medium'], 70);
@@ -130,7 +132,7 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
   };
 
   const onRevealed = () => {
-    setRevealed(true);
+    setRevealedAt(index);
     setFx((n) => n + 1);
     setSeen((s) => [...s.slice(0, index), card.rarity]);
     playReveal(hype);
@@ -173,8 +175,8 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
 
       <Animated.View style={[styles.stage, stageStyle]}>
         <View style={[styles.center, { width: sw, height: cardW * CARD_RATIO + 40 }]}>
-          {hype >= 5 ? <Rays colors={raysFor(rarity)} size={sw * 1.7} visible={revealed} /> : null}
-          {hype >= 5 ? <LightPillar trigger={revealed ? fx : 0} color={rarity.color} width={cardW * 1.1} height={sh * 1.3} /> : null}
+          {revealed && hype >= 5 ? <Rays colors={raysFor(rarity)} size={sw * 1.7} visible /> : null}
+          {revealed && hype >= 5 ? <LightPillar trigger={fx} color={rarity.color} width={cardW * 1.1} height={sh * 1.3} /> : null}
           <Glow color={revealed ? (hype === 0 ? '#FFFFFF' : rarity.color) : level === 0 ? '#FFFFFF' : shown.color} size={cardW * 2.6} opacity={glow} />
           {!revealed && level > 0 ? (
             <>
@@ -233,9 +235,9 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
         </View>
       </Animated.View>
 
-      {hype >= 4 ? <Flash trigger={revealed ? fx : 0} color={hype >= 5 ? '#FFFFFF' : rarity.color} peak={hype >= 5 ? 0.9 : 0.35} /> : null}
+      {revealed && hype >= 4 ? <Flash key={`f-${index}`} trigger={fx} color={hype >= 5 ? '#FFFFFF' : rarity.color} peak={hype >= 5 ? 0.9 : 0.35} /> : null}
       {!revealed && level >= 4 ? <Flash trigger={upFx} color={shown.color} peak={0.12 + (level - 4) * 0.06} /> : null}
-      {hype >= 7 ? <Flash trigger={revealed ? fx : 0} color="#FFE7A0" peak={0.5} /> : null}
+      {revealed && hype >= 7 ? <Flash key={`g-${index}`} trigger={fx} color="#FFE7A0" peak={0.5} /> : null}
     </View>
   );
 }

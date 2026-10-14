@@ -15,6 +15,7 @@ import Animated, {
   useAnimatedStyle,
   useDerivedValue,
   useSharedValue,
+  withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -24,7 +25,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { playRaritySound, playSfx } from '../../audio/sfx';
 import { AppText } from '../../components/AppText';
 import { ViewerEnvironment, hasEnvironment } from '../../components/card/ViewerEnvironment';
-import { Glow } from '../../components/fx';
+import { Burst, Glow } from '../../components/fx';
 import { CardStage } from '../../components/viewer/CardStage';
 import { ConfirmDelete } from '../../components/viewer/ConfirmDelete';
 import { SpinFx, spinCooldown } from '../../components/viewer/SpinFx';
@@ -39,6 +40,7 @@ export default function CardScreen() {
   const cards = useGame((s) => s.cards);
   const renameCard = useGame((s) => s.renameCard);
   const destroyCard = useGame((s) => s.destroyCard);
+  const toggleFavorite = useGame((s) => s.toggleFavorite);
   const orderIds = useCollectionView((s) => s.ids);
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -49,6 +51,7 @@ export default function CardScreen() {
   const [confirming, setConfirming] = useState(false);
   const [burning, setBurning] = useState(false);
   const [spin, setSpin] = useState(0);
+  const [zoomed, setZoomed] = useState(false);
   const lastSpin = useRef(0);
 
   // Ordre de défilement : celui de la grille si la carte y figure, sinon les plus récentes d'abord.
@@ -79,6 +82,7 @@ export default function CardScreen() {
   /** Remplace la carte affichée ; la nouvelle arrive du côté `from` (1 = droite, -1 = gauche). */
   const show = (nextId: string, from: number) => {
     setEditing(false);
+    setZoomed(false);
     rotY.value = 0;
     rotX.value = 0;
     pageX.value = from * width;
@@ -98,7 +102,7 @@ export default function CardScreen() {
 
   // Glisser à côté de la carte : la carte suit le doigt, puis passe à la voisine.
   const pagePan = Gesture.Pan()
-    .enabled(!burning && !confirming)
+    .enabled(!burning && !confirming && !zoomed)
     .activeOffsetX([-14, 14])
     .failOffsetY([-24, 24])
     .onChange((e) => {
@@ -180,7 +184,7 @@ export default function CardScreen() {
         <Animated.View style={[styles.page, pageStyle]} pointerEvents="box-none">
           <View style={{ alignItems: 'center', justifyContent: 'center' }} pointerEvents="box-none">
             <Glow color={r.color} size={cardW * 2.4} style={{ opacity: burning ? 0.25 : 0.5 }} />
-            <CardStage key={card.id} card={card} width={cardW} rotY={rotY} rotX={rotX} tilt={tilt} burning={burning} onBurnt={onBurnt} onSpin={onSpin} />
+            <CardStage key={card.id} card={card} width={cardW} rotY={rotY} rotX={rotX} tilt={tilt} burning={burning} onBurnt={onBurnt} onSpin={onSpin} onZoomChange={setZoomed} />
           </View>
 
           <Animated.View key={`meta-${card.id}`} entering={FadeInDown.delay(150)} style={[styles.meta, divine && { marginTop: 28 + cardW * 0.12 }]} pointerEvents="box-none">
@@ -222,9 +226,11 @@ export default function CardScreen() {
             </AppText>
             <Animated.View entering={FadeIn.delay(900)}>
               <AppText variant="caption" style={{ marginTop: 14, textAlign: 'center' }}>
-                {list.length > 1
-                  ? 'Tourne la carte au doigt · glisse à côté pour changer de carte'
-                  : 'Fais tourner la carte au doigt · double-tape pour la retourner'}
+                {zoomed
+                  ? 'Un doigt pour te déplacer · double-tape pour revenir'
+                  : list.length > 1
+                    ? 'Tourne la carte au doigt · pince pour zoomer · glisse à côté pour changer de carte'
+                    : 'Tourne la carte au doigt · pince pour zoomer · double-tape pour la retourner'}
               </AppText>
             </Animated.View>
           </Animated.View>
@@ -232,12 +238,12 @@ export default function CardScreen() {
       </KeyboardAvoidingView>
 
       {/* Flèches : changer de carte d'un toucher */}
-      {!burning && hasPrev ? (
+      {!burning && !zoomed && hasPrev ? (
         <Pressable onPress={() => go(-1)} style={[styles.arrow, { left: 6 }]} hitSlop={10} accessibilityLabel="Carte précédente">
           <Ionicons name="chevron-back" size={22} color="rgba(255,255,255,0.7)" />
         </Pressable>
       ) : null}
-      {!burning && hasNext ? (
+      {!burning && !zoomed && hasNext ? (
         <Pressable onPress={() => go(1)} style={[styles.arrow, { right: 6 }]} hitSlop={10} accessibilityLabel="Carte suivante">
           <Ionicons name="chevron-forward" size={22} color="rgba(255,255,255,0.7)" />
         </Pressable>
@@ -252,9 +258,12 @@ export default function CardScreen() {
           {list.length > 1 ? (
             <AppText variant="caption" style={styles.position}>{`${index + 1} / ${list.length}`}</AppText>
           ) : null}
-          <Pressable onPress={close} hitSlop={12} style={styles.round} accessibilityLabel="Fermer" accessibilityRole="button">
-            <Ionicons name="close" size={22} color={colors.text} />
-          </Pressable>
+          <View style={styles.topRight}>
+            <FavoriteButton active={card.favorite} onPress={() => toggleFavorite(card.id)} />
+            <Pressable onPress={close} hitSlop={12} style={styles.round} accessibilityLabel="Fermer" accessibilityRole="button">
+              <Ionicons name="close" size={22} color={colors.text} />
+            </Pressable>
+          </View>
         </View>
       ) : null}
 
@@ -273,7 +282,43 @@ export default function CardScreen() {
   );
 }
 
+/** Étoile des favoris : elle bondit et lâche quelques étincelles dorées quand on l'allume. */
+function FavoriteButton({ active, onPress }: { active: boolean; onPress(): void }) {
+  const pop = useSharedValue(1);
+  const [burst, setBurst] = useState(0);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
+  return (
+    <Pressable
+      hitSlop={12}
+      style={[styles.round, active && styles.favOn]}
+      accessibilityRole="button"
+      accessibilityLabel={active ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+      onPress={() => {
+        if (!active) {
+          setBurst((b) => b + 1);
+          playSfx('up1', { volume: 0.5 });
+          haptic.success();
+        } else {
+          haptic.light();
+        }
+        pop.value = withSequence(withTiming(1.35, { duration: 110 }), withSpring(1, { damping: 8, stiffness: 220 }));
+        onPress();
+      }}
+    >
+      <View pointerEvents="none" style={styles.favBurst}>
+        <Burst trigger={burst} colors={[colors.gold, '#FFF3C2']} count={12} radius={34} />
+      </View>
+      <Animated.View style={style}>
+        <Ionicons name={active ? 'star' : 'star-outline'} size={20} color={active ? colors.gold : colors.text} />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  topRight: { flexDirection: 'row', gap: 10 },
+  favOn: { backgroundColor: 'rgba(247,201,72,0.18)' },
+  favBurst: { position: 'absolute', left: 20, top: 20, width: 0, height: 0 },
   root: { flex: 1 },
   empty: { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg },
   backdrop: { backgroundColor: 'rgba(5,5,7,0.72)' },

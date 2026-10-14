@@ -60,3 +60,15 @@ test('photo d’origine : conservée si présente, nulle sinon (anciennes cartes
   assert.equal(migrateCard({ id: 'a', sourceId: 'asset-42' })!.sourceId, 'asset-42');
   assert.equal(migrateCard({ id: 'b' })!.sourceId, null);
 });
+
+test('volume des sons : 55 % par défaut, 0 si le son était coupé, borné entre 0 et 1', () => {
+  assert.equal(migrateState({ v: 1 }).soundVolume, 0.55);
+  assert.equal(migrateState({ v: 1, soundOn: false }).soundVolume, 0);
+  assert.equal(migrateState({ v: 1, soundVolume: 0.8 }).soundVolume, 0.8);
+  assert.equal(migrateState({ v: 1, soundVolume: 7 }).soundVolume, 1);
+});
+
+test('favori : faux par défaut, conservé s’il est coché', () => {
+  assert.equal(migrateCard({ id: 'a' })!.favorite, false);
+  assert.equal(migrateCard({ id: 'b', favorite: true })!.favorite, true);
+});

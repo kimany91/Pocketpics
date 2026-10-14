@@ -49,9 +49,13 @@ interface Props {
   burning: boolean;
   onBurnt(): void;
   onSpin(speed: number): void;
+  /** Prévient l'écran quand la carte est zoomée (pour suspendre le défilement). */
+  onZoomChange?(zoomed: boolean): void;
 }
 
-export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onSpin }: Props) {
+const MAX_ZOOM = 4;
+
+export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onSpin, onZoomChange }: Props) {
   const r = getRarity(card.rarity);
   const height = width * CARD_RATIO;
   const m = width * 0.14; // marge de découpe (ornements de la Divine compris)
@@ -60,6 +64,14 @@ export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onS
   const lighter = useSharedValue(0);
   /** Début du geste, pour calculer une vitesse moyenne fiable. */
   const t0 = useSharedValue(0);
+  // Zoom à deux doigts : facteur et décalage de la carte agrandie.
+  const zoom = useSharedValue(1);
+  const zoomStart = useSharedValue(1);
+  const offX = useSharedValue(0);
+  const offY = useSharedValue(0);
+  const offStartX = useSharedValue(0);
+  const offStartY = useSharedValue(0);
+  const notifyZoom = (z: boolean) => onZoomChange?.(z);
   const [poof, setPoof] = useState(0);
   const [onFire, setOnFire] = useState(false);
 
@@ -100,16 +112,72 @@ export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [burning]);
 
+  const clampOffsets = () => {
+    'worklet';
+    const maxX = ((zoom.value - 1) * width) / 2 + 24;
+    const maxY = ((zoom.value - 1) * height) / 2 + 24;
+    offX.value = withSpring(Math.max(-maxX, Math.min(maxX, offX.value)), { damping: 16 });
+    offY.value = withSpring(Math.max(-maxY, Math.min(maxY, offY.value)), { damping: 16 });
+  };
+  const resetZoom = () => {
+    'worklet';
+    zoom.value = withSpring(1, { damping: 16 });
+    offX.value = withSpring(0, { damping: 16 });
+    offY.value = withSpring(0, { damping: 16 });
+    scheduleOnRN(notifyZoom, false);
+  };
+
+  const pinch = Gesture.Pinch()
+    .enabled(!burning)
+    .onStart(() => {
+      zoomStart.value = zoom.value;
+      offStartX.value = offX.value;
+      offStartY.value = offY.value;
+      // On zoome sur la face visible, bien à plat.
+      cancelAnimation(rotY);
+      rotY.value = withSpring(Math.round(rotY.value / 180) * 180, { damping: 16 });
+      rotX.value = withSpring(0, { damping: 16 });
+    })
+    .onUpdate((e) => {
+      const next = Math.max(0.85, Math.min(MAX_ZOOM, zoomStart.value * e.scale));
+      const ratio = next / zoomStart.value;
+      // Le point pincé reste sous les doigts.
+      const fx = e.focalX - (width + 2 * m) / 2;
+      const fy = e.focalY - (height + 2 * m) / 2;
+      offX.value = offStartX.value * ratio + fx * (1 - ratio);
+      offY.value = offStartY.value * ratio + fy * (1 - ratio);
+      zoom.value = next;
+    })
+    .onEnd(() => {
+      if (zoom.value < 1.08) {
+        resetZoom();
+      } else {
+        clampOffsets();
+        scheduleOnRN(notifyZoom, true);
+      }
+    });
+
   const pan = Gesture.Pan()
     .enabled(!burning)
+    .maxPointers(1)
     .onBegin(() => {
       t0.value = Date.now();
     })
     .onChange((e) => {
+      if (zoom.value > 1.01) {
+        // Carte zoomée : un doigt la déplace au lieu de la faire tourner.
+        offX.value += e.changeX;
+        offY.value += e.changeY;
+        return;
+      }
       rotY.value += e.changeX * 0.45;
       rotX.value = Math.max(-28, Math.min(28, rotX.value - e.changeY * 0.25));
     })
     .onEnd((e) => {
+      if (zoom.value > 1.01) {
+        clampOffsets();
+        return;
+      }
       // Vitesse instantanée au relâchement, ou à défaut vitesse moyenne d'un geste court
       // (si les derniers événements arrivent groupés, la vitesse instantanée peut valoir 0).
       const dt = Math.max(16, Date.now() - t0.value);
@@ -127,8 +195,16 @@ export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onS
     .enabled(!burning)
     .numberOfTaps(2)
     .onEnd(() => {
+      if (zoom.value > 1.01) {
+        resetZoom(); // double-tape : on revient à la taille normale
+        return;
+      }
       rotY.value = withTiming(Math.round(rotY.value / 180) * 180 + 180, { duration: 520, easing: Easing.out(Easing.cubic) });
     });
+
+  const zoomStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: offX.value }, { translateY: offY.value }, { scale: zoom.value }],
+  }));
 
   const isFront = (a: number) => {
     'worklet';
@@ -160,14 +236,14 @@ export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onS
 
   return (
     <View style={{ width, height }}>
-      <GestureDetector gesture={Gesture.Race(pan, doubleTap)}>
+      <GestureDetector gesture={Gesture.Simultaneous(pinch, Gesture.Race(pan, doubleTap))}>
         <Animated.View
           style={[
             { position: 'absolute', left: -m, top: -m, width: width + 2 * m, overflow: onFire ? 'hidden' : 'visible' },
             onFire ? clipStyle : { height: height + 2 * m },
           ]}
         >
-          <View style={{ position: 'absolute', left: m, top: m, width, height }}>
+          <Animated.View style={[{ position: 'absolute', left: m, top: m, width, height }, zoomStyle]}>
             <Animated.View style={[StyleSheet.absoluteFill, styles.face, frontStyle]}>
               <CardFace card={card} width={width} tilt={tilt} />
             </Animated.View>
@@ -186,7 +262,7 @@ export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onS
                 </View>
               </CardBack>
             </Animated.View>
-          </View>
+          </Animated.View>
           {onFire ? (
             // Bord carbonisé qui suit la ligne de feu
             <LinearGradient
