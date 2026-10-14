@@ -1,11 +1,12 @@
 /** Sachet à déchirer au doigt le long de la ligne pointillée. */
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withDelay,
   withRepeat,
@@ -15,10 +16,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { playSfx } from '../../audio/sfx';
 import { colors } from '../../theme';
 import { haptic } from '../../utils/haptics';
 import { AppText } from '../AppText';
-import { Glow } from '../fx';
+import { Burst, Glow, Shockwave } from '../fx';
 import { PACK_RATIO, PackArt, TEAR_LINE } from '../PackArt';
 
 const COMPLETE_AT = 0.72;
@@ -44,10 +46,16 @@ export function PackTear({ width, onTorn }: { width: number; onTorn: () => void 
     hint.value = withDelay(600, withRepeat(withSequence(withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.cubic) }), withTiming(0, { duration: 0 })), -1, false));
   }, [enter, float, hint]);
 
+  const [boom, setBoom] = useState(0);
   const finish = () => {
+    setBoom(1);
+    playSfx('tear');
     haptic.sequence(['heavy', 'medium'], 70);
     onTorn();
   };
+
+  // Lumière qui filtre par la déchirure : plus on déchire, plus elle est forte.
+  const leak = useDerivedValue(() => Math.min(1, Math.pow(progress.value, 1.3) * 1.1) * (1 - topFly.value * 0.4) * (1 - bodyDrop.value));
 
   const pan = Gesture.Pan()
     .activeOffsetX([-8, 8])
@@ -78,6 +86,8 @@ export function PackTear({ width, onTorn }: { width: number; onTorn: () => void 
   const wrapStyle = useAnimatedStyle(() => ({
     opacity: enter.value,
     transform: [
+      // Le sachet résiste et tremble sous le doigt
+      { translateX: done.value ? 0 : Math.sin(progress.value * 95) * progress.value * 3.5 },
       { translateY: (1 - enter.value) * 120 + (done.value ? 0 : (float.value - 0.5) * 12) },
       { rotate: `${done.value ? 0 : (float.value - 0.5) * 2.4}deg` },
       { scale: 0.9 + enter.value * 0.1 },
@@ -128,10 +138,15 @@ export function PackTear({ width, onTorn }: { width: number; onTorn: () => void 
             <PackArt width={width} shimmer={false} />
           </Animated.View>
 
+          <Glow color="#FFE8B0" size={tearY * 1.6} stretchX={(width * 1.5) / (tearY * 1.6)} opacity={leak} style={{ left: -width * 0.25, top: tearY - tearY * 0.8 }} />
           <Animated.View style={[styles.cut, { top: tearY - 1 }, cutStyle]} />
           <Animated.View style={[styles.spark, { top: tearY }, sparkStyle]}>
             <Glow color="#FFF2C9" size={90} style={{ left: -45, top: -45 }} />
           </Animated.View>
+          <View pointerEvents="none" style={[styles.spark, { top: tearY, left: width / 2, alignItems: 'center', justifyContent: 'center' }]}>
+            <Shockwave trigger={boom} color="#FFE8B0" size={width * 0.9} />
+            <Burst trigger={boom} colors={['#FFE8B0', '#FFFFFF', '#B99CFF']} count={30} radius={width * 0.95} />
+          </View>
           <Animated.View style={[styles.hint, { top: tearY - 14 }, hintStyle]}>
             <Ionicons name="finger-print" size={26} color="rgba(255,255,255,0.9)" />
           </Animated.View>

@@ -1,6 +1,13 @@
-/** Effets visuels réutilisables : halo, rayons, gerbes d'étincelles, onde, flash. */
+/**
+ * Effets visuels réutilisables : halo, rayons, gerbes d'étincelles, onde, flash,
+ * scintillement, particules flottantes, colonne de lumière.
+ *
+ * Tous les effets sont décoratifs : ils ne captent jamais le toucher
+ * (`pointerEvents="none"`), sinon ils bloqueraient les boutons situés dessous.
+ */
+import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo } from 'react';
-import { type ImageStyle, StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -24,18 +31,20 @@ export function Glow({
   size,
   opacity,
   style,
+  stretchX = 1,
 }: {
   color: string;
   size: number;
   opacity?: SharedValue<number>;
-  style?: ImageStyle;
+  style?: ViewStyle;
+  /** Étire le halo horizontalement (fuite de lumière, colonne…). */
+  stretchX?: number;
 }) {
   const aStyle = useAnimatedStyle(() => ({ opacity: opacity ? opacity.value : 1 }));
   return (
-    <Animated.Image
-      source={glowTex}
-      style={[{ position: 'absolute', width: size, height: size, tintColor: color }, style, aStyle]}
-    />
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: size * stretchX, height: size }, style, aStyle]}>
+      <Image source={glowTex} style={[StyleSheet.absoluteFill, { width: size * stretchX, height: size, tintColor: color }]} />
+    </Animated.View>
   );
 }
 
@@ -161,23 +170,50 @@ function Particle({ spec }: { spec: ParticleSpec }) {
   );
 }
 
-/* ------------------------------- Scintillement ------------------------------ */
+/* ------------------------------ Scintillement ----------------------------- */
 
-const TWINKLE_SPOTS = [
-  [0.18, 0.14, 0.12, 0],
-  [0.78, 0.26, 0.09, 700],
-  [0.3, 0.55, 0.07, 1300],
-  [0.7, 0.68, 0.11, 400],
-  [0.48, 0.86, 0.08, 1800],
-  [0.12, 0.8, 0.06, 1000],
-] as const;
+/** Positions réparties régulièrement (suite de Halton) : jolies et stables. */
+function halton(i: number, base: number) {
+  let f = 1;
+  let r = 0;
+  while (i > 0) {
+    f /= base;
+    r += f * (i % base);
+    i = Math.floor(i / base);
+  }
+  return r;
+}
 
-/** Petites étoiles qui scintillent sur la carte (rareté Divine). */
-export function Twinkles({ width, height, color = '#FFF6D8' }: { width: number; height: number; color?: string }) {
+/** Petites étoiles qui scintillent sur la carte (raretés hautes). */
+export function Twinkles({
+  width,
+  height,
+  colors = ['#FFF6D8'],
+  count = 6,
+  size = 0.1,
+}: {
+  width: number;
+  height: number;
+  colors?: string[];
+  count?: number;
+  /** Taille moyenne relative à la largeur. */
+  size?: number;
+}) {
+  const spots = useMemo(
+    () =>
+      Array.from({ length: count }, (_, i) => ({
+        x: 0.08 + halton(i + 1, 2) * 0.84,
+        y: 0.06 + halton(i + 1, 3) * 0.88,
+        s: size * (0.55 + halton(i + 1, 5) * 0.9),
+        delay: Math.round(halton(i + 1, 7) * 2400),
+        color: colors[i % colors.length],
+      })),
+    [count, size, colors],
+  );
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {TWINKLE_SPOTS.map(([x, y, s, delay], i) => (
-        <Twinkle key={i} x={x * width} y={y * height} size={s * width} delay={delay} color={color} />
+      {spots.map((p, i) => (
+        <Twinkle key={i} x={p.x * width} y={p.y * height} size={p.s * width} delay={p.delay} color={p.color} />
       ))}
     </View>
   );
@@ -188,7 +224,7 @@ function Twinkle({ x, y, size, delay, color }: { x: number; y: number; size: num
   useEffect(() => {
     p.value = withDelay(
       delay,
-      withRepeat(withSequence(withTiming(1, { duration: 600, easing: Easing.out(Easing.quad) }), withTiming(0, { duration: 900 }), withTiming(0, { duration: 900 })), -1, false),
+      withRepeat(withSequence(withTiming(1, { duration: 550, easing: Easing.out(Easing.quad) }), withTiming(0, { duration: 850 }), withTiming(0, { duration: 1000 })), -1, false),
     );
     return () => cancelAnimation(p);
   }, [p, delay]);
@@ -198,6 +234,95 @@ function Twinkle({ x, y, size, delay, color }: { x: number; y: number; size: num
       source={sparkleTex}
       style={[{ position: 'absolute', left: x - size / 2, top: y - size / 2, width: size, height: size, tintColor: color }, style]}
     />
+  );
+}
+
+/* --------------------------- Particules flottantes -------------------------- */
+
+/** Particules qui montent lentement (poussière dorée, braises, poussière d'étoiles). */
+export function Embers({
+  width,
+  height,
+  colors,
+  count = 18,
+  speed = 1,
+  size = 14,
+}: {
+  width: number;
+  height: number;
+  colors: string[];
+  count?: number;
+  speed?: number;
+  size?: number;
+}) {
+  const specs = useMemo(
+    () =>
+      Array.from({ length: count }, (_, i) => ({
+        x: halton(i + 1, 2) * width,
+        drift: (halton(i + 1, 3) - 0.5) * 60,
+        duration: (5200 + halton(i + 1, 5) * 4800) / speed,
+        delay: Math.round(halton(i + 1, 7) * 6000),
+        s: size * (0.4 + halton(i + 1, 11) * 0.9),
+        color: colors[i % colors.length],
+      })),
+    [count, width, speed, size, colors],
+  );
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {specs.map((s, i) => (
+        <Ember key={i} {...s} height={height} />
+      ))}
+    </View>
+  );
+}
+
+function Ember({ x, drift, duration, delay, s, color, height }: { x: number; drift: number; duration: number; delay: number; s: number; color: string; height: number }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    p.value = withDelay(delay, withRepeat(withTiming(1, { duration, easing: Easing.linear }), -1, false));
+    return () => cancelAnimation(p);
+  }, [p, delay, duration]);
+  const style = useAnimatedStyle(() => {
+    const t = p.value;
+    return {
+      opacity: t === 0 ? 0 : Math.sin(t * Math.PI) * 0.9,
+      transform: [
+        { translateX: x + Math.sin(t * Math.PI * 2) * drift },
+        { translateY: height * (1.05 - t * 1.15) },
+        { scale: 0.6 + Math.sin(t * Math.PI) * 0.6 },
+      ],
+    };
+  });
+  return <Animated.Image source={glowTex} style={[{ position: 'absolute', left: -s / 2, top: -s / 2, width: s, height: s, tintColor: color }, style]} />;
+}
+
+/* --------------------------- Colonne de lumière ---------------------------- */
+
+/** Faisceau vertical qui jaillit derrière une carte rare. */
+export function LightPillar({ trigger, color, width, height }: { trigger: number; color: string; width: number; height: number }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    if (trigger <= 0) return;
+    p.value = 0;
+    p.value = withSequence(withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) }), withTiming(0.55, { duration: 1400 }));
+  }, [trigger, p]);
+  const style = useAnimatedStyle(() => ({ opacity: p.value, transform: [{ scaleY: 0.2 + Math.min(1, p.value) * 0.8 }, { scaleX: 0.6 + p.value * 0.4 }] }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', width, height }, style]}>
+      <LinearGradient
+        colors={['rgba(255,255,255,0)', color, 'rgba(255,255,255,0.95)', color, 'rgba(255,255,255,0)']}
+        locations={[0, 0.3, 0.5, 0.7, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={[StyleSheet.absoluteFill, { opacity: 0.35 }]}
+      />
+      <LinearGradient
+        colors={['rgba(255,255,255,0)', color, 'rgba(255,255,255,0)']}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={[StyleSheet.absoluteFill, { left: width * 0.3, right: width * 0.3, opacity: 0.8 }]}
+      />
+    </Animated.View>
   );
 }
 

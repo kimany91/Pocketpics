@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '../../components/AppText';
 import { CardBack } from '../../components/card/CardBack';
 import { CardFace } from '../../components/card/CardFace';
+import { ViewerEnvironment, hasEnvironment } from '../../components/card/ViewerEnvironment';
 import { Glow } from '../../components/fx';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
@@ -35,7 +36,9 @@ export default function CardScreen() {
   const renameCard = useGame((s) => s.renameCard);
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const cardW = Math.min(width * 0.78, (height * 0.56) / CARD_RATIO, 380);
+  const divine = getRarity(card?.rarity ?? 'common').frameStyle === 'divine';
+  // La Divine est un peu plus petite pour laisser la place à ses ornements.
+  const cardW = Math.min(width * 0.78, (height * 0.56) / CARD_RATIO, 380) * (divine ? 0.84 : 1);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(card?.name ?? '');
 
@@ -90,13 +93,15 @@ export default function CardScreen() {
     return (
       <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
         <AppText variant="heading">Cette carte n'est plus dans ta collection.</AppText>
-        <Pressable onPress={() => router.back()} style={{ marginTop: 16 }}>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/collection'))} style={{ marginTop: 16 }}>
           <AppText variant="label">Fermer</AppText>
         </Pressable>
       </View>
     );
   }
   const r = getRarity(card.rarity);
+  const env = hasEnvironment(r);
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/collection'));
 
   const save = () => {
     renameCard(card.id, draft);
@@ -107,13 +112,9 @@ export default function CardScreen() {
   return (
     <View style={styles.root}>
       <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
-      <Pressable style={[StyleSheet.absoluteFill, styles.backdrop]} onPress={() => (editing ? setEditing(false) : router.back())} />
-
-      <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.round} accessibilityLabel="Fermer">
-          <Ionicons name="close" size={22} color={colors.text} />
-        </Pressable>
-      </View>
+      {env ? <ViewerEnvironment rarity={r} width={width} height={height} tilt={tilt} /> : null}
+      <Pressable style={[StyleSheet.absoluteFill, !env && styles.backdrop]} onPress={() => (editing ? setEditing(false) : close())} />
+      <View style={{ height: insets.top + 56 }} />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.center} pointerEvents="box-none">
         <View style={{ alignItems: 'center', justifyContent: 'center' }} pointerEvents="box-none">
@@ -142,7 +143,7 @@ export default function CardScreen() {
           </GestureDetector>
         </View>
 
-        <Animated.View entering={FadeInDown.delay(150)} style={styles.meta}>
+        <Animated.View entering={FadeInDown.delay(150)} style={[styles.meta, divine && { marginTop: 28 + cardW * 0.12 }]}>
           {editing ? (
             <View style={styles.editRow}>
               <TextInput
@@ -185,6 +186,13 @@ export default function CardScreen() {
           </Animated.View>
         </Animated.View>
       </KeyboardAvoidingView>
+
+      {/* Rendu en dernier : rien ne peut recouvrir le bouton de fermeture. */}
+      <View style={[styles.top, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+        <Pressable onPress={close} hitSlop={12} style={styles.round} accessibilityLabel="Fermer" accessibilityRole="button">
+          <Ionicons name="close" size={22} color={colors.text} />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -192,7 +200,7 @@ export default function CardScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   backdrop: { backgroundColor: 'rgba(5,5,7,0.72)' },
-  top: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16 },
+  top: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16 },
   round: {
     width: 40,
     height: 40,

@@ -30,6 +30,8 @@ export default function DrawScreen() {
   const { width, height } = useWindowDimensions();
   const cards = useGame((s) => s.cards);
   const refillDrawsForDemo = useGame((s) => s.refillDrawsForDemo);
+  const soundOn = useGame((s) => s.save?.soundOn ?? true);
+  const setSoundOn = useGame((s) => s.setSoundOn);
   const { charges, nextAt, now } = useDrawStatus();
   const { access, request, pickDemo, importFolder } = useGalleryAccess();
   const isWeb = Platform.OS === 'web';
@@ -78,9 +80,19 @@ export default function DrawScreen() {
               : `${cards.length} carte${cards.length > 1 ? 's' : ''}${best ? ` · meilleure : ${best.label}` : ''}`}
           </AppText>
         </View>
-        <Pressable hitSlop={12} onPress={() => router.push('/rates')} style={styles.iconBtn} accessibilityLabel="Taux d'obtention">
-          <Ionicons name="stats-chart" size={18} color={colors.textDim} />
-        </Pressable>
+        <View style={styles.headerBtns}>
+          <Pressable
+            hitSlop={8}
+            onPress={() => setSoundOn(!soundOn)}
+            style={styles.iconBtn}
+            accessibilityLabel={soundOn ? 'Couper le son' : 'Activer le son'}
+          >
+            <Ionicons name={soundOn ? 'volume-high' : 'volume-mute'} size={18} color={colors.textDim} />
+          </Pressable>
+          <Pressable hitSlop={8} onPress={() => router.push('/rates')} style={styles.iconBtn} accessibilityLabel="Taux d'obtention">
+            <Ionicons name="stats-chart" size={18} color={colors.textDim} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.stage}>
@@ -196,6 +208,7 @@ function Permission({ text, action, onPress }: { text: string; action: string; o
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 12 },
+  headerBtns: { flexDirection: 'row', gap: 8 },
   iconBtn: {
     width: 38,
     height: 38,

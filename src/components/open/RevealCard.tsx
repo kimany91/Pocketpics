@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { playSfx } from '../../audio/sfx';
 import { getRarity } from '../../game/rarity';
 import type { Card } from '../../storage/model';
 import { CARD_RATIO } from '../../theme';
@@ -113,6 +114,7 @@ export const RevealCard = forwardRef<RevealCardHandle, Props>(function RevealCar
     if (state === 'leaving') return;
     canDrag.value = false;
     setState('leaving');
+    playSfx('swipe', { volume: 0.75 });
     haptic.light();
     const d = Math.max(1, Math.hypot(dx, dy));
     x.value = withTiming((dx / d) * width * 2.4, { duration: 380, easing: Easing.in(Easing.quad) });

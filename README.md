@@ -16,13 +16,24 @@ PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie ph
 
 **Ouverture d'un paquet**
 
-1. On déchire le sachet au doigt le long des pointillés : une étincelle suit le doigt et un retour haptique se fait sentir à chaque cran.
-2. Les cartes arrivent face cachée. Le halo derrière chaque carte trahit déjà sa rareté.
-3. On touche la carte pour la retourner. Pour les cartes rares, il y a d'abord un temps de suspense : la carte se soulève et tremble.
-4. La révélation dépend de la rareté : ondes de choc, gerbe d'étincelles, tremblement de l'écran, flash, rayons qui tournent, bannière et vibrations de plus en plus fortes.
-5. On glisse la carte pour passer à la suivante. Les cartes sont rangées de la moins rare à la plus rare, donc la meilleure arrive en dernier.
+1. On déchire le sachet au doigt le long des pointillés. Une lumière filtre par la déchirure, le sachet tremble sous le doigt, et un retour haptique se fait sentir à chaque cran.
+2. Le paquet s'ouvre dans un flash et une gerbe d'étincelles. Les cartes jaillissent en éventail, puis se rassemblent en pile.
+3. Une jauge en haut de l'écran compte les cartes du paquet et prend la couleur de chaque rareté révélée.
+4. Le halo derrière chaque carte cachée trahit déjà sa rareté. On touche la carte pour la retourner. Pour les cartes Légendaires et au-dessus, il y a d'abord un suspense : l'écran s'assombrit, la carte tremble, et un son monte.
+5. La révélation dépend de la rareté : ondes de choc, étincelles, tremblement et zoom de l'écran, flash, rayons, colonne de lumière, bannière et vibrations de plus en plus fortes. Une rareté obtenue pour la première fois affiche « Première … ! ».
+6. On glisse la carte pour passer à la suivante. La meilleure arrive en dernier.
+7. Le récapitulatif retourne les cartes une à une et fait briller la meilleure. S'il reste des tirages, « Paquet suivant » enchaîne directement.
 
-**Carte agrandie** : on la fait tourner au doigt en semi-3D, avec de l'inertie, et un reflet holographique suit l'angle. Un double-tap retourne la carte, et son dos affiche ses infos. On peut aussi la renommer. Le nom s'affiche sur la carte et la suit lors d'un échange.
+**Sons** (synthétisés par `scripts/generate-sounds.py`, coupables sur l'accueil) : déchirure, éventail, glissement de carte, révélation (Commune à Super Rare), son spécial Épique/Mythique, son spécial Légendaire, son spécial Ultra Légendaire/Divine, et un son de suspense.
+
+**Carte agrandie** : on la fait tourner au doigt en semi-3D, avec de l'inertie. Un double-tap retourne la carte, et son dos affiche ses infos. On peut aussi la renommer. Le nom s'affiche sur la carte et la suit lors d'un échange. Chaque rareté haute a sa mise en scène :
+
+| Rareté | Effets sur la carte | Décor |
+| --- | --- | --- |
+| Mythique | léger reflet holographique, scintillements rouges | lueur et braises rouges |
+| Légendaire | reflets dorés, scintillements dorés, holo or | salle dorée, rayons et poussière d'or |
+| Ultra Légendaire | les mêmes en chromatique | rayons et lueurs chromatiques |
+| Divine | gros reflet chromatique, forme ornementée (couronne, filigranes, gemmes) | espace : étoiles, nébuleuses, étoiles filantes |
 
 ## Raretés
 

@@ -43,6 +43,8 @@ export interface SaveState {
   playerName: string;
   createdAt: number;
   totalPacksOpened: number;
+  /** Effets sonores activés (ajouté après la v1 : vaut `true` si absent). */
+  soundOn: boolean;
   [extra: string]: unknown;
 }
 
@@ -99,6 +101,7 @@ export function createInitialState(now = Date.now()): SaveState {
     playerName: defaultPlayerName(),
     createdAt: now,
     totalPacksOpened: 0,
+    soundOn: true,
   };
 }
 
@@ -121,5 +124,6 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     playerName: str(s.playerName, base.playerName).slice(0, 24) || base.playerName,
     createdAt: num(s.createdAt, now),
     totalPacksOpened: num(s.totalPacksOpened, 0),
+    soundOn: s.soundOn !== false,
   };
 }

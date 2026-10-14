@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { MAX_STORED_DRAWS, computeDraws, consumeDraw, type DrawStatus } from '../game/draws';
+import { setSfxEnabled } from '../audio/sfx';
 import { generatePack } from '../game/pack';
 import * as disk from '../storage/disk';
 import type { Card, SaveState } from '../storage/model';
@@ -19,6 +20,7 @@ interface GameStore {
   clearPendingPack(): void;
   renameCard(id: string, name: string): void;
   setPlayerName(name: string): void;
+  setSoundOn(on: boolean): void;
   /** Ajoute des cartes reçues par échange (déjà écrites sur disque). */
   addCards(cards: Card[]): void;
   /** Retire des cartes données lors d'un échange. */
@@ -57,6 +59,7 @@ export const useGame = create<GameStore>((set, get) => ({
       }
       const save = changed ? { ...state, drawnHashes: [...hashes] } : state;
       persistState(save);
+      setSfxEnabled(save.soundOn);
       set({ ready: true, cards, save });
       disk
         .verifyCardsAgainstSidecars(cards)
@@ -119,6 +122,15 @@ export const useGame = create<GameStore>((set, get) => ({
     disk.updateCardSidecar(card);
     disk.saveIndex(cards);
     set({ cards });
+  },
+
+  setSoundOn(on) {
+    const save = get().save;
+    if (!save) return;
+    const next = { ...save, soundOn: on };
+    persistState(next);
+    setSfxEnabled(on);
+    set({ save: next });
   },
 
   setPlayerName(rawName) {

@@ -13,6 +13,7 @@ import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { initSfx } from '../audio/sfx';
 import { AppText } from '../components/AppText';
 import { useGame } from '../state/game';
 import { colors } from '../theme';
@@ -26,6 +27,7 @@ export default function RootLayout() {
   const init = useGame((s) => s.init);
 
   useEffect(() => {
+    initSfx();
     void init();
   }, [init]);
 

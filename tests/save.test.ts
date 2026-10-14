@@ -50,3 +50,8 @@ test("protocole d'échange : clés miroir et découpage des lignes", () => {
   assert.deepEqual(d.push('llo"}\n{"t":"bye"}\n{"t'), [{ t: 'hello' }, { t: 'bye' }]);
   assert.deepEqual(d.push('":"x"}\n'), [{ t: 'x' }]);
 });
+
+test('réglage du son : activé par défaut, conservé s’il est coupé', () => {
+  assert.equal(migrateState({ v: 1 }).soundOn, true);
+  assert.equal(migrateState({ v: 1, soundOn: false }).soundOn, false);
+});
