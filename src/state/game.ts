@@ -13,7 +13,7 @@ interface GameStore {
   /** Cartes du dernier paquet ouvert (pour l'écran d'ouverture). */
   pendingPack: Card[];
 
-  init(): void;
+  init(): Promise<void>;
   drawStatus(now?: number): DrawStatus;
   openPack(): Promise<Card[]>;
   clearPendingPack(): void;
@@ -38,9 +38,10 @@ export const useGame = create<GameStore>((set, get) => ({
   save: null,
   pendingPack: [],
 
-  init() {
+  async init() {
     if (get().ready) return;
     try {
+      await disk.prepare();
       disk.cleanupStaging();
       const { state } = disk.loadState();
       const cards = disk.loadCards();

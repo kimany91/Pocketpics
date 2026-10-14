@@ -26,7 +26,7 @@ export default function RootLayout() {
   const init = useGame((s) => s.init);
 
   useEffect(() => {
-    init();
+    void init();
   }, [init]);
 
   const fontsDone = fontsLoaded || !!fontError;

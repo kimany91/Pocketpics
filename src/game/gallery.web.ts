@@ -1,8 +1,14 @@
 /**
- * Version navigateur (démo de test) : le joueur choisit ses propres photos,
- * ou à défaut des « photos » générées. L'app mobile utilise gallery.ts.
+ * Version navigateur. Un site web ne peut pas lire toute la galerie de lui-même :
+ * le joueur ouvre le sélecteur de photos de son appareil (et peut tout sélectionner)
+ * ou importe un dossier entier. Les photos importées sont gardées dans le
+ * navigateur (IndexedDB) et forment sa « galerie de jeu ».
+ * L'app mobile, elle, lit directement la galerie (gallery.ts).
  */
+import { idbEntries, idbPut } from '../storage/webdb';
+
 export type GalleryAccess = 'granted' | 'limited' | 'denied' | 'undetermined';
+export type GallerySource = 'photos' | 'folder';
 
 export interface ProcessedPhoto {
   assetId: string;
@@ -15,26 +21,55 @@ export interface ProcessedPhoto {
 
 export type PhotoCheck = (hash: string) => boolean;
 
-/** Photos choisies par le joueur (id → fichier). Vide = photos de démo générées. */
-const picked = new Map<string, File>();
-let access: GalleryAccess = 'undetermined';
+/** Galerie de jeu : id stable (nom + taille + date) → fichier. */
+const picked = new Map<string, Blob>();
+let demoMode = false;
+let loading: Promise<void> | null = null;
 
-export const getGalleryAccess = async (): Promise<GalleryAccess> => access;
+function ensureLoaded() {
+  if (!loading) {
+    loading = (async () => {
+      const [files, kv] = await Promise.all([idbEntries<Blob>('gallery'), idbEntries<unknown>('kv')]);
+      for (const [id, blob] of files) if (blob instanceof Blob) picked.set(id, blob);
+      demoMode = kv.some(([k, v]) => k === 'demoPhotos' && v === true);
+    })();
+  }
+  return loading;
+}
 
-/** Ouvre le sélecteur de fichiers ; si le joueur annule, on passe aux photos de démo. */
-export function requestGalleryAccess(): Promise<GalleryAccess> {
+const accessNow = (): GalleryAccess => (picked.size > 0 || demoMode ? 'granted' : 'undetermined');
+
+export async function getGalleryAccess(): Promise<GalleryAccess> {
+  await ensureLoaded();
+  return accessNow();
+}
+
+/** Ouvre le sélecteur de photos (ou de dossier) et ajoute les images choisies à la galerie de jeu. */
+export async function requestGalleryAccess(source: GallerySource = 'photos'): Promise<GalleryAccess> {
+  await ensureLoaded();
+  const files = await pickFiles(source);
+  for (const f of files) {
+    if (!f.type.startsWith('image/') && !/\.(jpe?g|png|webp|gif|heic|heif|avif)$/i.test(f.name)) continue;
+    const id = `${f.name}-${f.size}-${f.lastModified}`;
+    if (picked.has(id)) continue;
+    picked.set(id, f);
+    void idbPut('gallery', id, f);
+  }
+  return accessNow();
+}
+
+function pickFiles(source: GallerySource): Promise<File[]> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/*';
     input.multiple = true;
+    if (source === 'folder') input.setAttribute('webkitdirectory', '');
+    else input.accept = 'image/*';
     let done = false;
     const finish = () => {
       if (done) return;
       done = true;
-      Array.from(input.files ?? []).forEach((f, i) => picked.set(`file-${Date.now()}-${i}`, f));
-      access = picked.size > 0 ? 'granted' : 'limited';
-      resolve(access);
+      resolve(Array.from(input.files ?? []));
     };
     input.addEventListener('change', finish);
     input.addEventListener('cancel', finish);
@@ -42,16 +77,30 @@ export function requestGalleryAccess(): Promise<GalleryAccess> {
   });
 }
 
-/** Ajouter d'autres photos plus tard. */
+export async function chooseDemoPhotos(): Promise<GalleryAccess> {
+  demoMode = true;
+  void idbPut('kv', 'demoPhotos', true);
+  return 'granted';
+}
+
+export function galleryPhotoCount(): number | null {
+  return picked.size > 0 ? picked.size : null;
+}
+
+/** Import de dossier : seulement là où le navigateur le permet (ordinateur). */
+export function canImportFolder(): boolean {
+  return typeof navigator !== 'undefined' && !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
 export async function openLimitedPicker() {
-  await requestGalleryAccess();
+  await requestGalleryAccess('photos');
 }
 
 const DEMO_COUNT = 400;
-export const listPhotoIds = async () =>
-  picked.size > 0 ? [...picked.keys()] : Array.from({ length: DEMO_COUNT }, (_, i) => `demo-${i}`);
-
-export const usingDemoPhotos = () => picked.size === 0;
+export async function listPhotoIds() {
+  await ensureLoaded();
+  return picked.size > 0 ? [...picked.keys()] : Array.from({ length: DEMO_COUNT }, (_, i) => `demo-${i}`);
+}
 
 const PALETTES = [
   ['#FF9A8B', '#FF6A88', '#FFD3A5', '#2B1B3A'],
@@ -105,13 +154,12 @@ function paintDemo(index: number, w: number, h: number): string {
   return canvas.toDataURL('image/jpeg', 0.85);
 }
 
-function loadImage(file: File): Promise<HTMLImageElement> {
+function loadImage(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error('Image illisible'));
-    img.src = url;
+    img.src = URL.createObjectURL(blob);
   });
 }
 
@@ -126,28 +174,32 @@ function resized(img: HTMLImageElement, shortSide: number, quality: number) {
   return { uri: canvas.toDataURL('image/jpeg', quality), width: canvas.width, height: canvas.height };
 }
 
-async function fileHash(file: File): Promise<string> {
+async function blobHash(id: string, blob: Blob): Promise<string> {
   try {
-    const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
     return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
   } catch {
-    return `${file.name}-${file.size}-${file.lastModified}`;
+    return `${id}-${blob.size}`;
   }
 }
 
 export async function processPhoto(assetId: string, isKnownHash: PhotoCheck): Promise<ProcessedPhoto | { duplicate: true } | null> {
-  const file = picked.get(assetId);
-  if (!file) {
+  const blob = picked.get(assetId);
+  if (!blob) {
+    if (!assetId.startsWith('demo-')) return null;
     const index = Number(assetId.split('-')[1] ?? 0);
     if (isKnownHash(assetId)) return { duplicate: true };
     await new Promise((r) => setTimeout(r, 60));
     return { assetId, hash: assetId, imageUri: paintDemo(index, 600, 840), thumbUri: paintDemo(index, 240, 336), width: 600, height: 840 };
   }
-  const hash = await fileHash(file);
+  const hash = await blobHash(assetId, blob);
   if (isKnownHash(hash)) return { duplicate: true };
-  const img = await loadImage(file);
-  const image = resized(img, 1080, 0.86);
-  const thumb = resized(img, 360, 0.72);
-  URL.revokeObjectURL(img.src);
-  return { assetId, hash, imageUri: image.uri, thumbUri: thumb.uri, width: image.width, height: image.height };
+  const img = await loadImage(blob);
+  try {
+    const image = resized(img, 1080, 0.86);
+    const thumb = resized(img, 360, 0.72);
+    return { assetId, hash, imageUri: image.uri, thumbUri: thumb.uri, width: image.width, height: image.height };
+  } finally {
+    URL.revokeObjectURL(img.src);
+  }
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 
-import { type GalleryAccess, getGalleryAccess, requestGalleryAccess } from '../game/gallery';
+import { type GalleryAccess, type GallerySource, chooseDemoPhotos, getGalleryAccess, requestGalleryAccess } from '../game/gallery';
 
 export function useGalleryAccess() {
   const [access, setAccess] = useState<GalleryAccess | null>(null);
@@ -18,11 +18,15 @@ export function useGalleryAccess() {
     return () => sub.remove();
   }, [refresh]);
 
-  const request = useCallback(async () => {
-    const a = await requestGalleryAccess().catch(() => 'denied' as const);
+  const request = useCallback(async (source?: GallerySource) => {
+    const a = await requestGalleryAccess(source).catch(() => 'denied' as const);
     setAccess(a);
     return a;
   }, []);
 
-  return { access, request, refresh };
+  const pickDemo = useCallback(async () => {
+    setAccess(await chooseDemoPhotos());
+  }, []);
+
+  return { access, request, refresh, pickDemo };
 }

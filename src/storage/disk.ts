@@ -53,6 +53,12 @@ function writeJsonAtomic(file: File, data: unknown, backup?: File) {
   tmp.moveSync(file, { overwrite: true });
 }
 
+/** Rien à précharger sur mobile (la version navigateur charge IndexedDB ici). */
+export async function prepare() {}
+
+/** Propre à la version navigateur. */
+export async function resetWebSave() {}
+
 /* ------------------------------- État joueur ------------------------------ */
 
 export function loadState(): { state: SaveState; recovered: boolean } {

@@ -12,6 +12,8 @@ import {
 import { Platform } from 'react-native';
 
 export type GalleryAccess = 'granted' | 'limited' | 'denied' | 'undetermined';
+/** Utilisé par la version navigateur (sélecteur de photos ou de dossier). */
+export type GallerySource = 'photos' | 'folder';
 
 function toAccess(p: { granted: boolean; canAskAgain: boolean; accessPrivileges?: string; status: string }): GalleryAccess {
   if (p.granted) return p.accessPrivileges === 'limited' ? 'limited' : 'granted';
@@ -22,9 +24,14 @@ export async function getGalleryAccess(): Promise<GalleryAccess> {
   return toAccess(await getPermissionsAsync(false, ['photo']));
 }
 
-export async function requestGalleryAccess(): Promise<GalleryAccess> {
+export async function requestGalleryAccess(_source?: GallerySource): Promise<GalleryAccess> {
   return toAccess(await requestPermissionsAsync(false, ['photo']));
 }
+
+/* Fonctions propres à la version navigateur : sans effet sur mobile. */
+export const chooseDemoPhotos = getGalleryAccess;
+export const galleryPhotoCount = (): number | null => null;
+export const canImportFolder = () => false;
 
 export async function openLimitedPicker() {
   try {

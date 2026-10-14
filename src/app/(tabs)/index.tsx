@@ -17,7 +17,7 @@ import { Glow } from '../../components/fx';
 import { PACK_RATIO, PackArt } from '../../components/PackArt';
 import { Screen } from '../../components/Screen';
 import { DRAW_INTERVAL_MS, MAX_STORED_DRAWS, formatCountdown } from '../../game/draws';
-import { openLimitedPicker } from '../../game/gallery';
+import { canImportFolder, galleryPhotoCount, openLimitedPicker } from '../../game/gallery';
 import { RARITIES, getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import { useDrawStatus } from '../../state/useDrawStatus';
@@ -30,7 +30,8 @@ export default function DrawScreen() {
   const cards = useGame((s) => s.cards);
   const refillDrawsForDemo = useGame((s) => s.refillDrawsForDemo);
   const { charges, nextAt, now } = useDrawStatus();
-  const { access, request } = useGalleryAccess();
+  const { access, request, pickDemo } = useGalleryAccess();
+  const isWeb = Platform.OS === 'web';
   const packW = Math.min(width * 0.5, (height * 0.36) / PACK_RATIO, 240);
   const canOpen = charges > 0 && (access === 'granted' || access === 'limited');
   const best = RARITIES[cards.reduce((m, c) => Math.max(m, getRarity(c.rarity).rank), -1)];
@@ -109,22 +110,39 @@ export default function DrawScreen() {
             action="Ouvrir les réglages"
             onPress={() => Linking.openSettings()}
           />
+        ) : access === 'undetermined' && isWeb ? (
+          <View style={{ gap: 12 }}>
+            <AppText variant="caption" style={{ textAlign: 'center' }}>
+              Ton navigateur ne laisse pas un site lire ta galerie seul : ouvre-la et sélectionne les photos à mettre en jeu (tu peux tout sélectionner). Elles restent mémorisées pour la prochaine fois.
+            </AppText>
+            <Button label="Ouvrir ma galerie" icon="images" size="lg" onPress={() => request('photos')} />
+            <View style={styles.limited}>
+              {canImportFolder() ? (
+                <>
+                  <Pressable onPress={() => request('folder')} hitSlop={8}>
+                    <AppText variant="caption" style={{ color: colors.text }}>
+                      Importer un dossier
+                    </AppText>
+                  </Pressable>
+                  <AppText variant="caption">{'   ·   '}</AppText>
+                </>
+              ) : null}
+              <Pressable onPress={pickDemo} hitSlop={8}>
+                <AppText variant="caption" style={{ color: colors.text }}>
+                  Jouer avec des photos de démo
+                </AppText>
+              </Pressable>
+            </View>
+          </View>
         ) : access === 'undetermined' ? (
-          <Permission
-            text={
-              Platform.OS === 'web'
-                ? 'Version navigateur : choisis des photos de ton appareil, ou annule pour jouer avec des photos de démo.'
-                : 'Chaque carte est une photo de ta galerie, tirée au hasard.'
-            }
-            action={Platform.OS === 'web' ? 'Choisir mes photos' : "Autoriser l'accès aux photos"}
-            onPress={request}
-          />
+          <Permission text="Chaque carte est une photo de ta galerie, tirée au hasard." action="Autoriser l'accès aux photos" onPress={() => request()} />
         ) : (
           <>
             <Button label="Ouvrir un paquet" icon="sparkles" size="lg" disabled={!canOpen} onPress={open} />
-            {Platform.OS === 'web' ? (
-              <View style={styles.limited}>
-                <Pressable onPress={() => openLimitedPicker()} hitSlop={8}>
+            {isWeb ? (
+              <View style={[styles.limited, { flexWrap: 'wrap', rowGap: 6 }]}>
+                <AppText variant="caption">{galleryPhotoCount() ? `${galleryPhotoCount()} photos en jeu   ·   ` : 'Photos de démo   ·   '}</AppText>
+                <Pressable onPress={() => request('photos')} hitSlop={8}>
                   <AppText variant="caption" style={{ color: colors.text }}>
                     Ajouter des photos
                   </AppText>

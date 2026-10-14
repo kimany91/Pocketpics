@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { AppText } from '../components/AppText';
@@ -7,6 +8,7 @@ import { CardFace } from '../components/card/CardFace';
 import { CARDS_PER_PACK, MAX_STORED_DRAWS } from '../game/draws';
 import { RARITIES, formatChance } from '../game/rarity';
 import { useGame } from '../state/game';
+import { resetWebSave } from '../storage/disk';
 import { colors } from '../theme';
 
 export default function RatesScreen() {
@@ -40,12 +42,38 @@ export default function RatesScreen() {
             </View>
           );
         })}
+        {Platform.OS === 'web' ? <WebReset /> : null}
       </ScrollView>
     </View>
   );
 }
 
+/** Version navigateur : repartir de zéro (collection, tirages et photos importées). */
+function WebReset() {
+  const [armed, setArmed] = useState(false);
+  return (
+    <Pressable
+      style={styles.reset}
+      onPress={async () => {
+        if (!armed) return setArmed(true);
+        await resetWebSave();
+        try {
+          globalThis.location?.reload();
+        } catch {}
+      }}
+    >
+      <AppText variant="label" style={{ color: colors.danger }}>
+        {armed ? 'Toucher encore pour tout effacer' : 'Effacer ma partie de test'}
+      </AppText>
+      <AppText variant="caption" style={{ textAlign: 'center' }}>
+        Supprime la collection, les tirages et les photos importées dans ce navigateur.
+      </AppText>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  reset: { alignItems: 'center', gap: 4, marginTop: 28, padding: 14, borderRadius: 14, backgroundColor: 'rgba(255,90,103,0.08)' },
   root: { flex: 1, backgroundColor: colors.bgElevated },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
   row: {
