@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
-import { Linking, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -28,6 +28,7 @@ import { haptic } from '../../utils/haptics';
 export default function DrawScreen() {
   const { width, height } = useWindowDimensions();
   const cards = useGame((s) => s.cards);
+  const refillDrawsForDemo = useGame((s) => s.refillDrawsForDemo);
   const { charges, nextAt, now } = useDrawStatus();
   const { access, request } = useGalleryAccess();
   const packW = Math.min(width * 0.5, (height * 0.36) / PACK_RATIO, 240);
@@ -109,11 +110,33 @@ export default function DrawScreen() {
             onPress={() => Linking.openSettings()}
           />
         ) : access === 'undetermined' ? (
-          <Permission text="Chaque carte est une photo de ta galerie, tirée au hasard." action="Autoriser l'accès aux photos" onPress={request} />
+          <Permission
+            text={
+              Platform.OS === 'web'
+                ? 'Version navigateur : choisis des photos de ton appareil, ou annule pour jouer avec des photos de démo.'
+                : 'Chaque carte est une photo de ta galerie, tirée au hasard.'
+            }
+            action={Platform.OS === 'web' ? 'Choisir mes photos' : "Autoriser l'accès aux photos"}
+            onPress={request}
+          />
         ) : (
           <>
             <Button label="Ouvrir un paquet" icon="sparkles" size="lg" disabled={!canOpen} onPress={open} />
-            {access === 'limited' ? (
+            {Platform.OS === 'web' ? (
+              <View style={styles.limited}>
+                <Pressable onPress={() => openLimitedPicker()} hitSlop={8}>
+                  <AppText variant="caption" style={{ color: colors.text }}>
+                    Ajouter des photos
+                  </AppText>
+                </Pressable>
+                <AppText variant="caption">{'   ·   '}</AppText>
+                <Pressable onPress={refillDrawsForDemo} hitSlop={8}>
+                  <AppText variant="caption" style={{ color: colors.text }}>
+                    Recharger les tirages (test)
+                  </AppText>
+                </Pressable>
+              </View>
+            ) : access === 'limited' ? (
               <Pressable onPress={openLimitedPicker} style={styles.limited}>
                 <AppText variant="caption">Accès limité à certaines photos · </AppText>
                 <AppText variant="caption" style={{ color: colors.text }}>

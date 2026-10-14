@@ -52,7 +52,7 @@ npx eas-cli@latest build --profile development --platform android
 npm start                     # puis ouvrir l'app de dev sur le téléphone
 ```
 
-Démo dans le navigateur, avec des photos générées et sans échange : `npm run web`.
+Version navigateur de test (sans échange) : `npm run web`, ou `node scripts/build-web-demo.mjs` pour obtenir un seul fichier `dist-demo/pocketpics.html` à héberger n'importe où. On y choisit ses propres photos (ou des photos de démo générées) et un lien « Recharger les tirages (test) » évite d'attendre 12 h. Dans cette version, rien n'est sauvegardé : recharger la page repart de zéro.
 
 Vérifications :
 

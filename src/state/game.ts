@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { computeDraws, consumeDraw, type DrawStatus } from '../game/draws';
+import { MAX_STORED_DRAWS, computeDraws, consumeDraw, type DrawStatus } from '../game/draws';
 import { generatePack } from '../game/pack';
 import * as disk from '../storage/disk';
 import type { Card, SaveState } from '../storage/model';
@@ -23,6 +23,8 @@ interface GameStore {
   addCards(cards: Card[]): void;
   /** Retire des cartes données lors d'un échange. */
   removeCards(ids: string[]): void;
+  /** Démo navigateur uniquement : remet la réserve de tirages au maximum. */
+  refillDrawsForDemo(): void;
 }
 
 function persistState(save: SaveState) {
@@ -149,5 +151,10 @@ export const useGame = create<GameStore>((set, get) => ({
     const cards = get().cards.filter((c) => !remove.has(c.id));
     disk.saveIndex(cards);
     set({ cards });
+  },
+
+  refillDrawsForDemo() {
+    const save = get().save;
+    if (save) set({ save: { ...save, draws: { charges: MAX_STORED_DRAWS, anchor: Date.now() } } });
   },
 }));

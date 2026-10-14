@@ -1,6 +1,6 @@
 /**
- * Version web (démo navigateur) : des « photos » générées à la volée,
- * pour essayer le jeu sans téléphone. L'app mobile utilise gallery.ts.
+ * Version navigateur (démo de test) : le joueur choisit ses propres photos,
+ * ou à défaut des « photos » générées. L'app mobile utilise gallery.ts.
  */
 export type GalleryAccess = 'granted' | 'limited' | 'denied' | 'undetermined';
 
@@ -15,12 +15,43 @@ export interface ProcessedPhoto {
 
 export type PhotoCheck = (hash: string) => boolean;
 
-export const getGalleryAccess = async (): Promise<GalleryAccess> => 'granted';
-export const requestGalleryAccess = async (): Promise<GalleryAccess> => 'granted';
-export async function openLimitedPicker() {}
+/** Photos choisies par le joueur (id → fichier). Vide = photos de démo générées. */
+const picked = new Map<string, File>();
+let access: GalleryAccess = 'undetermined';
+
+export const getGalleryAccess = async (): Promise<GalleryAccess> => access;
+
+/** Ouvre le sélecteur de fichiers ; si le joueur annule, on passe aux photos de démo. */
+export function requestGalleryAccess(): Promise<GalleryAccess> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      Array.from(input.files ?? []).forEach((f, i) => picked.set(`file-${Date.now()}-${i}`, f));
+      access = picked.size > 0 ? 'granted' : 'limited';
+      resolve(access);
+    };
+    input.addEventListener('change', finish);
+    input.addEventListener('cancel', finish);
+    input.click();
+  });
+}
+
+/** Ajouter d'autres photos plus tard. */
+export async function openLimitedPicker() {
+  await requestGalleryAccess();
+}
 
 const DEMO_COUNT = 400;
-export const listPhotoIds = async () => Array.from({ length: DEMO_COUNT }, (_, i) => `demo-${i}`);
+export const listPhotoIds = async () =>
+  picked.size > 0 ? [...picked.keys()] : Array.from({ length: DEMO_COUNT }, (_, i) => `demo-${i}`);
+
+export const usingDemoPhotos = () => picked.size === 0;
 
 const PALETTES = [
   ['#FF9A8B', '#FF6A88', '#FFD3A5', '#2B1B3A'],
@@ -41,7 +72,7 @@ function seeded(n: number) {
   };
 }
 
-function paint(index: number, w: number, h: number): string {
+function paintDemo(index: number, w: number, h: number): string {
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
@@ -74,16 +105,49 @@ function paint(index: number, w: number, h: number): string {
   return canvas.toDataURL('image/jpeg', 0.85);
 }
 
+function loadImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Image illisible'));
+    img.src = url;
+  });
+}
+
+function resized(img: HTMLImageElement, shortSide: number, quality: number) {
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  const k = Math.min(1, shortSide / Math.min(w, h));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(w * k);
+  canvas.height = Math.round(h * k);
+  canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return { uri: canvas.toDataURL('image/jpeg', quality), width: canvas.width, height: canvas.height };
+}
+
+async function fileHash(file: File): Promise<string> {
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return `${file.name}-${file.size}-${file.lastModified}`;
+  }
+}
+
 export async function processPhoto(assetId: string, isKnownHash: PhotoCheck): Promise<ProcessedPhoto | { duplicate: true } | null> {
-  const index = Number(assetId.split('-')[1] ?? 0);
-  if (isKnownHash(assetId)) return { duplicate: true };
-  await new Promise((r) => setTimeout(r, 60));
-  return {
-    assetId,
-    hash: assetId,
-    imageUri: paint(index, 600, 840),
-    thumbUri: paint(index, 240, 336),
-    width: 600,
-    height: 840,
-  };
+  const file = picked.get(assetId);
+  if (!file) {
+    const index = Number(assetId.split('-')[1] ?? 0);
+    if (isKnownHash(assetId)) return { duplicate: true };
+    await new Promise((r) => setTimeout(r, 60));
+    return { assetId, hash: assetId, imageUri: paintDemo(index, 600, 840), thumbUri: paintDemo(index, 240, 336), width: 600, height: 840 };
+  }
+  const hash = await fileHash(file);
+  if (isKnownHash(hash)) return { duplicate: true };
+  const img = await loadImage(file);
+  const image = resized(img, 1080, 0.86);
+  const thumb = resized(img, 360, 0.72);
+  URL.revokeObjectURL(img.src);
+  return { assetId, hash, imageUri: image.uri, thumbUri: thumb.uri, width: image.width, height: image.height };
 }

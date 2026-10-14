@@ -6,7 +6,6 @@ import { type Card, type SaveState, migrateState } from './model';
 
 const images = new Map<string, { image: string; thumb: string }>();
 const sidecars = new Map<string, Card>();
-const KEY = 'pocketpics-demo-state';
 
 const toUri = (src: { uri: string } | { base64: string }) => ('uri' in src ? src.uri : `data:image/jpeg;base64,${src.base64}`);
 const toB64 = (uri: string) => uri.replace(/^data:[^,]+,/, '');
@@ -14,19 +13,12 @@ const toB64 = (uri: string) => uri.replace(/^data:[^,]+,/, '');
 export const cardImageUri = (id: string) => images.get(id)?.image ?? '';
 export const cardThumbUri = (id: string) => images.get(id)?.thumb ?? '';
 
+// Démo navigateur : tout reste en mémoire, un rechargement repart de zéro.
 export function loadState(): { state: SaveState; recovered: boolean } {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(globalThis.localStorage?.getItem(KEY) ?? 'null') ?? undefined;
-  } catch {}
-  return { state: migrateState(raw), recovered: false };
+  return { state: migrateState(undefined), recovered: false };
 }
 
-export function saveState(state: SaveState) {
-  try {
-    globalThis.localStorage?.setItem(KEY, JSON.stringify({ ...state, drawnAssetIds: [], drawnHashes: [] }));
-  } catch {}
-}
+export function saveState(_state: SaveState) {}
 
 export const loadCards = (): Card[] => [...sidecars.values()];
 export const verifyCardsAgainstSidecars = async (_cards: Card[]): Promise<Card[] | null> => null;
