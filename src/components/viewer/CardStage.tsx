@@ -30,7 +30,7 @@ import { cardSerial, formatDate } from '../../utils/format';
 import { haptic } from '../../utils/haptics';
 import { AppText } from '../AppText';
 import { CardBack } from '../card/CardBack';
-import { CardFace } from '../card/CardFace';
+import { CardFace, type CardLike } from '../card/CardFace';
 import { Burst, Embers, Glow, Shockwave } from '../fx';
 
 /** Vitesse (px/s) à partir de laquelle une rotation déclenche l'effet de rareté. */
@@ -39,23 +39,31 @@ export const SPIN_SPEED = 1100;
 const BURN_MS = 2400;
 const LIGHTER_MS = 750;
 
+/** Une carte de la collection, ou une carte d'adversaire (sans date ni origine). */
+export type StageCard = CardLike & Partial<Pick<Card, 'origin' | 'obtainedAt' | 'createdAt'>>;
+
 interface Props {
-  card: Card;
+  card: StageCard;
+  /** Image intégrée (cartes des adversaires du mode solo). */
+  imageSource?: number;
+  /** Texte au dos à la place des dates (ex. « Carte de Léo »). */
+  backNote?: string;
   width: number;
   rotY: SharedValue<number>;
   rotX: SharedValue<number>;
   tilt: SharedValue<number>;
   /** Passe à `true` pour lancer le briquet puis la combustion. */
-  burning: boolean;
-  onBurnt(): void;
+  burning?: boolean;
+  onBurnt?(): void;
   onSpin(speed: number): void;
   /** Prévient l'écran quand la carte est zoomée (pour suspendre le défilement). */
   onZoomChange?(zoomed: boolean): void;
 }
 
 const MAX_ZOOM = 4;
+const noop = () => {};
 
-export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onSpin, onZoomChange }: Props) {
+export function CardStage({ card, imageSource, backNote, width, rotY, rotX, tilt, burning = false, onBurnt = noop, onSpin, onZoomChange }: Props) {
   const r = getRarity(card.rarity);
   const height = width * CARD_RATIO;
   const m = width * 0.14; // marge de découpe (ornements de la Divine compris)
@@ -226,7 +234,7 @@ export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onS
         >
           <Animated.View style={[{ position: 'absolute', left: m, top: m, width, height }, zoomStyle]}>
             <Animated.View style={[StyleSheet.absoluteFill, styles.face, frontStyle]}>
-              <CardFace card={card} width={width} tilt={tilt} />
+              <CardFace card={card} width={width} tilt={tilt} imageSource={imageSource} />
             </Animated.View>
             <Animated.View style={[StyleSheet.absoluteFill, styles.face, backStyle]}>
               <CardBack width={width}>
@@ -237,8 +245,12 @@ export function CardStage({ card, width, rotY, rotX, tilt, burning, onBurnt, onS
                     {card.name ?? 'Sans nom'}
                   </AppText>
                   <View style={styles.backDivider} />
-                  <AppText variant="caption">{`${card.origin === 'trade' ? 'Reçue par échange' : 'Tirée'} le ${formatDate(card.obtainedAt)}`}</AppText>
-                  {card.origin === 'trade' ? <AppText variant="caption">{`Créée le ${formatDate(card.createdAt)}`}</AppText> : null}
+                  {backNote || card.obtainedAt === undefined ? (
+                    <AppText variant="caption">{backNote ?? ''}</AppText>
+                  ) : (
+                    <AppText variant="caption">{`${card.origin === 'trade' ? 'Reçue par échange' : 'Tirée'} le ${formatDate(card.obtainedAt)}`}</AppText>
+                  )}
+                  {card.origin === 'trade' && card.createdAt !== undefined ? <AppText variant="caption">{`Créée le ${formatDate(card.createdAt)}`}</AppText> : null}
                   <AppText style={styles.serial}>{cardSerial(card.id)}</AppText>
                 </View>
               </CardBack>

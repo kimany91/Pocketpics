@@ -25,7 +25,7 @@ PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie ph
 6. On glisse la carte pour passer à la suivante. La meilleure arrive en dernier.
 7. Le récapitulatif retourne les cartes une à une et fait briller la meilleure. S'il reste des tirages, « Paquet suivant » enchaîne directement.
 
-**Sons** (synthétisés par `scripts/generate-sounds.py`, y compris coup, critique, gifle, raté, étourdi, K.O., victoire et défaite pour les combats) : l'icône 🔊 de l'accueil ouvre un curseur d'intensité (55 % par défaut, 0 = coupé), enregistré dans la sauvegarde. Sons : déchirure, éventail, glissement de carte, 7 paliers de montée de niveau, révélation (Commune à Super Rare), son spécial Épique/Mythique, son spécial Légendaire, son spécial Ultra Légendaire/Divine, suspense, briquet et feu.
+**Sons** (synthétisés par `scripts/generate-sounds.py`, y compris coup, critique, gifle, raté, étourdi, K.O., victoire et défaite pour les combats) : l'icône 🔊 de l'accueil ouvre deux curseurs, effets sonores (55 % par défaut) et musique de combat (45 %), enregistrés dans la sauvegarde. Sons : déchirure, éventail, glissement de carte, 7 paliers de montée de niveau, révélation (Commune à Super Rare), son spécial Épique/Mythique, son spécial Légendaire, son spécial Ultra Légendaire/Divine, suspense, briquet et feu.
 
 **Carte agrandie** : on la fait tourner au doigt en semi-3D, avec de l'inertie. Un double-tap retourne la carte, et son dos affiche ses infos. On peut aussi la renommer. Le nom s'affiche sur la carte et la suit lors d'un échange.
 
@@ -63,6 +63,10 @@ Chaque rareté haute a sa mise en scène :
 (± 8 % selon la carte.)
 
 **Précision (façon Undertale).** On choisit une attaque, puis une barre apparaît : on touche pour lancer le curseur, et on retouche quand il passe sur la cible au centre. Au centre, c'est un critique (× 1,5). Au bord, le coup ne fait que × 0,4, et s'il n'y a pas de deuxième toucher, l'attaque est ratée. La double frappe enchaîne deux passages.
+
+**Voir une carte.** En plein combat, on touche sa carte ou celle de l'adversaire pour la voir en 3D, comme dans la collection (rotation au doigt, zoom, dos), avec ses PV actuels, ses attaques et les utilisations de spéciale restantes. Quand on touche une remplaçante, trois boutons apparaissent : Annuler, Info (la même vue) et Envoyer. Le combat est en pause pendant qu'on regarde.
+
+**Musique.** Une boucle de combat (`assets/music/battle.wav`, générée par `scripts/generate-music.py`) démarre en fondu au début du combat et s'arrête en fondu à la fin. Son volume se règle à part (45 % par défaut, enregistré dans la sauvegarde) dans la fenêtre « Son », ouverte depuis l'icône 🔊 de l'accueil ou depuis l'icône ♪ en combat.
 
 **Déroulé.** Avant le combat, on choisit 4 cartes (la première commence ; « Auto » prend les plus fortes). L'adversaire en a 4 aussi. On voit sa carte active et ses remplaçantes. Changer de carte est possible à tout moment, mais ça utilise le tour. Une carte K.O. est remplacée sans perdre de tour. Le camp qui n'a plus de carte debout perd.
 
@@ -175,6 +179,7 @@ src/storage/        modèle + migrations, stockage disque (+ version web de dém
 src/trade/          code d'échange, protocole, relais en ligne chiffré, transport TCP, session
 assets/fx/          textures d'effets (générées par scripts/generate-assets.py)
 assets/bots/        illustrations des cartes des adversaires (scripts/generate-bot-art.py)
+assets/music/       musique de combat (scripts/generate-music.py)
 tests/              tests de logique
 ```
 

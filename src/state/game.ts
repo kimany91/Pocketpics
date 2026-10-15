@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { MAX_STORED_DRAWS, computeDraws, consumeDraw, type DrawStatus } from '../game/draws';
+import { setMusicVolume } from '../audio/music';
 import { setSfxVolume } from '../audio/sfx';
 import { ATTACK_NAME_MAX } from '../battle/stats';
 import { generatePack } from '../game/pack';
@@ -28,6 +29,8 @@ interface GameStore {
   setPlayerName(name: string): void;
   /** `persist: false` pendant qu'on fait glisser le réglage, `true` au relâchement. */
   setSoundVolume(volume: number, persist?: boolean): void;
+  /** Volume de la musique de combat (même principe que les effets). */
+  setMusicVolume(volume: number, persist?: boolean): void;
   /** Ajoute des cartes reçues par échange (déjà écrites sur disque). */
   addCards(cards: Card[]): void;
   /** Retire des cartes données lors d'un échange. */
@@ -72,6 +75,7 @@ export const useGame = create<GameStore>((set, get) => ({
       const save = changed ? { ...state, drawnHashes: [...hashes] } : state;
       persistState(save);
       setSfxVolume(save.soundVolume);
+      setMusicVolume(save.musicVolume);
       set({ ready: true, cards, save });
       disk
         .verifyCardsAgainstSidecars(cards)
@@ -166,6 +170,15 @@ export const useGame = create<GameStore>((set, get) => ({
     const v = Math.max(0, Math.min(1, volume));
     const next = { ...save, soundVolume: v, soundOn: v > 0 };
     setSfxVolume(v);
+    if (persist) persistState(next);
+    set({ save: next });
+  },
+
+  setMusicVolume(volume, persist = true) {
+    const save = get().save;
+    if (!save) return;
+    const next = { ...save, musicVolume: Math.max(0, Math.min(1, volume)) };
+    setMusicVolume(next.musicVolume);
     if (persist) persistState(next);
     set({ save: next });
   },

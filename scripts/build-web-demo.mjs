@@ -23,7 +23,7 @@ const entry = html.match(/<script src="([^"]+entry-[^"]+\.js)"/)?.[1];
 if (!entry) throw new Error('Bundle introuvable dans index.html');
 let js = readFileSync(join(exportDir, entry), 'utf8');
 
-const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.ttf': 'font/ttf', '.otf': 'font/otf', '.xml': 'image/svg+xml', '.wav': 'audio/wav' };
+const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.mp3': 'audio/mpeg', '.ttf': 'font/ttf', '.otf': 'font/otf', '.xml': 'image/svg+xml', '.wav': 'audio/wav' };
 // Polices d'icônes jamais affichées : on ne les embarque pas.
 const keepFont = (p) => !p.includes('react-native-vector-icons/Fonts/') || p.includes('/Ionicons.');
 let inlined = 0;

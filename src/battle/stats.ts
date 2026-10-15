@@ -66,6 +66,14 @@ export const ATTACK_EFFECT: Record<AttackKind, string> = {
   mirror: 'Copie la dernière attaque de l’adversaire.',
 };
 
+/** Nom court de chaque type d'attaque. */
+export const ATTACK_KIND_LABEL: Record<AttackKind, string> = {
+  basic: 'Coup simple',
+  double: 'Double frappe',
+  slap: 'Gifle',
+  mirror: 'Miroir',
+};
+
 export const KNOWN_KINDS: readonly AttackKind[] = ['basic', 'double', 'slap', 'mirror'];
 
 /** Générateur pseudo-aléatoire déterministe (mulberry32) à partir d'un texte. */

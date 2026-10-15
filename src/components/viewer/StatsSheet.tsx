@@ -10,19 +10,12 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { ATTACK_EFFECT, ATTACK_NAME_MAX, type Attack, MAX_HP, MAX_POWER, kindOf, powerLabel } from '../../battle/stats';
+import { ATTACK_EFFECT, ATTACK_KIND_LABEL, ATTACK_NAME_MAX, type Attack, MAX_HP, MAX_POWER, kindOf, powerLabel } from '../../battle/stats';
 import { getRarity } from '../../game/rarity';
 import type { Card } from '../../storage/model';
 import { colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
 import { AppText } from '../AppText';
-
-const KIND_LABEL: Record<string, string> = {
-  basic: 'Coup simple',
-  double: 'Double frappe',
-  slap: 'Gifle',
-  mirror: 'Miroir',
-};
 
 export function StatsSheet({ card, onClose, onRename }: { card: Card; onClose(): void; onRename(slot: 0 | 1, name: string): void }) {
   const { height } = useWindowDimensions();
@@ -177,7 +170,7 @@ function AttackRow({
       )}
       <View style={styles.effectRow}>
         <View style={styles.kind}>
-          <AppText style={styles.kindText}>{KIND_LABEL[kind]}</AppText>
+          <AppText style={styles.kindText}>{ATTACK_KIND_LABEL[kind]}</AppText>
         </View>
         <AppText variant="caption" style={{ flex: 1 }}>
           {ATTACK_EFFECT[kind]}

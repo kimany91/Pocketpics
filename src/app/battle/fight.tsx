@@ -12,6 +12,7 @@ import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeInUp, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { startBattleMusic, stopBattleMusic } from '../../audio/music';
 import { playSfx } from '../../audio/sfx';
 import { arenaFighters, getArena } from '../../battle/arenas';
 import { botAction, botReplacement } from '../../battle/bot';
@@ -33,7 +34,9 @@ import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { FighterView, HpBar, type Popup } from '../../components/battle/FighterView';
 import { FitText, type TextPart, fitFontSize } from '../../components/battle/FitText';
+import { InspectFighter } from '../../components/battle/InspectFighter';
 import { TimingBar } from '../../components/battle/TimingBar';
+import { SoundSheet } from '../../components/SoundSheet';
 import { CardFace } from '../../components/card/CardFace';
 import { Burst } from '../../components/fx';
 import { getRarity } from '../../game/rarity';
@@ -80,6 +83,17 @@ export default function FightScreen() {
   const [switchTo, setSwitchTo] = useState<number | null>(null);
   const [result, setResult] = useState<SideId | null>(null);
   const [quitting, setQuitting] = useState(false);
+  const [soundOpen, setSoundOpen] = useState(false);
+  /** Carte affichée en grand (3D + stats). */
+  const [inspect, setInspect] = useState<{ side: SideId; index: number } | null>(null);
+  /** D'où vient la confirmation d'envoi : un changement (coûte le tour) ou un remplacement après K.O. */
+  const [confirmFrom, setConfirmFrom] = useState<'menu' | 'replace'>('menu');
+  const music = useRef(0);
+  useEffect(() => {
+    music.current = startBattleMusic();
+    const token = music.current;
+    return () => stopBattleMusic(token, 500);
+  }, []);
   const [fx, setFx] = useState({ lunge: [0, 0], hurt: [0, 0], enter: [1, 1] });
   const [popups, setPopups] = useState<[Popup[], Popup[]]>([[], []]);
   const popupKey = useRef(0);
@@ -176,9 +190,11 @@ export default function FightScreen() {
 
   // Déroulé du combat : fin, remplacements après K.O., tour du bot ou du joueur.
   useEffect(() => {
-    if (!battle || !arena || busy || result !== null) return;
+    // En pause pendant qu'on regarde une carte ou qu'on règle le son.
+    if (!battle || !arena || busy || result !== null || inspect || soundOpen) return;
     if (battle.winner !== null) {
       setResult(battle.winner);
+      stopBattleMusic(music.current, 600);
       if (battle.winner === 0) {
         winArena(arena.n);
         playSfx('win');
@@ -196,6 +212,8 @@ export default function FightScreen() {
       }, 500);
       return () => clearTimeout(t);
     }
+    // Une confirmation d'envoi en cours (ex. retour de « Info ») reste affichée.
+    if (mode === 'confirmSwitch') return;
     if (battle.mustReplace === 0) {
       setMode('replace');
       setMsg([{ text: 'Choisis ta prochaine carte' }]);
@@ -213,7 +231,7 @@ export default function FightScreen() {
     setMode('menu');
     setMsg(me.stun > 0 ? [nameParts(me.name, 0), { text: ' est étourdie…' }] : [{ text: 'Que doit faire ' }, nameParts(me.name, 0), { text: ' ?' }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [battle, busy, result]);
+  }, [battle, busy, result, inspect, soundOpen]);
 
   const layout = useMemo(() => {
     const avail = height - insets.top - insets.bottom;
@@ -262,12 +280,9 @@ export default function FightScreen() {
     if (busy) return;
     const f = shown.sides[0].fighters[i];
     if (!f || f.hp <= 0) return;
-    if (mode === 'replace') {
-      haptic.light();
-      const r = replace(battle, 0, i);
-      void play(r.events, r.battle);
-    } else if (mode === 'menu' || mode === 'confirmSwitch') {
+    if (mode === 'replace' || mode === 'menu' || mode === 'confirmSwitch') {
       haptic.tick();
+      if (mode !== 'confirmSwitch') setConfirmFrom(mode === 'replace' ? 'replace' : 'menu');
       setSwitchTo(i);
       setMode('confirmSwitch');
     }
@@ -275,9 +290,21 @@ export default function FightScreen() {
 
   const doSwitch = () => {
     if (switchTo === null) return;
-    const r = act(battle, { type: 'switch', to: switchTo });
+    haptic.light();
+    const r = confirmFrom === 'replace' ? replace(battle, 0, switchTo) : act(battle, { type: 'switch', to: switchTo });
     setSwitchTo(null);
     void play(r.events, r.battle);
+  };
+
+  const cancelSwitch = () => {
+    setSwitchTo(null);
+    setMode(confirmFrom);
+  };
+
+  const look = (side: SideId, index: number) => {
+    if (mode === 'timing') return;
+    haptic.light();
+    setInspect({ side, index });
   };
 
   const doPass = () => {
@@ -298,7 +325,9 @@ export default function FightScreen() {
             <Ionicons name="close" size={20} color={colors.text} />
           </Pressable>
           <AppText variant="label" style={{ color: colors.textDim }} numberOfLines={1}>{`Arène ${arena.n} · ${arena.place}`}</AppText>
-          <View style={styles.round} />
+          <Pressable onPress={() => setSoundOpen(true)} hitSlop={12} style={styles.round} accessibilityLabel="Régler le son">
+            <Ionicons name="musical-notes" size={17} color={colors.text} />
+          </Pressable>
         </View>
 
         {/* Adversaire : infos à gauche, carte à droite */}
@@ -319,6 +348,7 @@ export default function FightScreen() {
             </View>
             <HpBar hp={foe.hp} maxHp={foe.maxHp} width={Math.min(infoW, 190)} />
           </View>
+          <Pressable onPress={() => look(1, shown.sides[1].active)} disabled={mode === 'timing'} accessibilityLabel={`Voir ${foe.name}`}>
           <FighterView
             key={foe.ref}
             card={{ id: foe.ref, rarity: foe.rarity, name: foe.name }}
@@ -332,6 +362,7 @@ export default function FightScreen() {
             stunned={foe.stun > 0}
             popups={popups[1]}
           />
+          </Pressable>
         </View>
 
         <View style={[styles.message, { height: layout.msgH }]}>
@@ -341,6 +372,7 @@ export default function FightScreen() {
         {/* Joueur : carte à gauche, infos à droite */}
         <View style={[styles.row, { paddingHorizontal: 20 }]}>
           {myCard ? (
+            <Pressable onPress={() => look(0, shown.sides[0].active)} disabled={mode === 'timing'} accessibilityLabel={`Voir ${me.name}`}>
             <FighterView
               key={myCard.id}
               card={myCard}
@@ -353,6 +385,7 @@ export default function FightScreen() {
               stunned={me.stun > 0}
               popups={popups[0]}
             />
+            </Pressable>
           ) : null}
           <View style={{ width: infoW, gap: 6, alignItems: 'flex-end' }}>
             <AppText variant="heading" numberOfLines={2} style={{ textAlign: 'right' }}>
@@ -406,11 +439,14 @@ export default function FightScreen() {
           ) : mode === 'confirmSwitch' && switchTo !== null ? (
             <Animated.View entering={FadeIn.duration(180)} style={{ gap: 10 }}>
               <AppText variant="body" style={{ textAlign: 'center' }} numberOfLines={2}>
-                {`Envoyer ${shown.sides[0].fighters[switchTo].name} ? Ça utilise ton tour.`}
+                {confirmFrom === 'replace'
+                  ? `Envoyer ${shown.sides[0].fighters[switchTo].name} ?`
+                  : `Envoyer ${shown.sides[0].fighters[switchTo].name} ? Ça utilise ton tour.`}
               </AppText>
               <View style={styles.twoButtons}>
-                <Button label="Annuler" kind="secondary" style={{ flex: 1 }} onPress={() => (setSwitchTo(null), setMode('menu'))} />
-                <Button label="Envoyer" icon="swap-horizontal" style={{ flex: 1 }} onPress={doSwitch} />
+                <Button label="Annuler" kind="secondary" style={{ flex: 1 }} onPress={cancelSwitch} />
+                <Button label="Info" icon="information-circle-outline" kind="secondary" style={{ flex: 1 }} onPress={() => look(0, switchTo)} />
+                <Button label="Envoyer" icon="swap-horizontal" style={{ flex: 1.2 }} onPress={doSwitch} />
               </View>
             </Animated.View>
           ) : mode === 'replace' ? (
@@ -457,6 +493,11 @@ export default function FightScreen() {
         </View>
       </View>
 
+      {inspect ? (
+        <InspectOverlay inspect={inspect} battle={shown} deck={deck} bot={arena.bot} onClose={() => setInspect(null)} />
+      ) : null}
+      {soundOpen ? <SoundSheet onClose={() => setSoundOpen(false)} /> : null}
+
       {result !== null ? <ResultOverlay won={result === 0} arenaN={arena.n} deck={deck.map((c) => c.id).join(',')} /> : null}
       {quitting ? (
         <Animated.View entering={FadeIn.duration(150)} style={[StyleSheet.absoluteFill, styles.overlay]}>
@@ -475,6 +516,40 @@ export default function FightScreen() {
         </Animated.View>
       ) : null}
     </View>
+  );
+}
+
+function InspectOverlay({
+  inspect,
+  battle,
+  deck,
+  bot,
+  onClose,
+}: {
+  inspect: { side: SideId; index: number };
+  battle: Battle;
+  deck: Card[];
+  bot: string;
+  onClose(): void;
+}) {
+  const side = battle.sides[inspect.side];
+  const f = side.fighters[inspect.index];
+  if (!f) return null;
+  const status = f.hp <= 0 ? 'K.O.' : inspect.index === side.active ? 'En jeu' : 'Remplaçante';
+  if (inspect.side === 0) {
+    const card = deck.find((c) => c.id === f.ref);
+    if (!card) return null;
+    return <InspectFighter fighter={f} card={card} status={status} onClose={onClose} />;
+  }
+  return (
+    <InspectFighter
+      fighter={f}
+      card={{ id: f.ref, rarity: f.rarity, name: f.name }}
+      imageSource={botArt(f.ref)}
+      owner={`Carte de ${bot}`}
+      status={status}
+      onClose={onClose}
+    />
   );
 }
 

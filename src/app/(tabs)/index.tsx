@@ -87,7 +87,7 @@ export default function DrawScreen() {
             hitSlop={8}
             onPress={() => setSoundOpen(true)}
             style={styles.iconBtn}
-            accessibilityLabel="Régler le volume des effets sonores"
+            accessibilityLabel="Régler le son"
           >
             <Ionicons name={volumeIcon(soundVolume)} size={18} color={colors.textDim} />
           </Pressable>

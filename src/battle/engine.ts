@@ -20,6 +20,8 @@ export interface Fighter {
   hp: number;
   attacks: [Attack, Attack];
   usesLeft: number;
+  /** Utilisations de la spéciale au début du combat. */
+  maxUses: number;
   /** Tours restants pendant lesquels la carte est étourdie. */
   stun: number;
 }
@@ -78,6 +80,7 @@ export function makeFighter(c: FighterInput): Fighter {
     hp: c.battle.hp,
     attacks: [{ ...c.battle.attacks[0] }, { ...c.battle.attacks[1] }],
     usesLeft: c.battle.uses,
+    maxUses: c.battle.uses,
     stun: 0,
   };
 }

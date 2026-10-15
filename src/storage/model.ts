@@ -16,6 +16,8 @@ export const CARD_SCHEMA_VERSION = 1;
 
 /** Volume des effets sonores par défaut (un peu en retrait). */
 export const DEFAULT_SOUND_VOLUME = 0.55;
+/** Volume de la musique de combat par défaut. */
+export const DEFAULT_MUSIC_VOLUME = 0.45;
 export const STATE_SCHEMA_VERSION = 1;
 
 export type CardOrigin = 'draw' | 'trade';
@@ -64,6 +66,8 @@ export interface SaveState {
   soundOn: boolean;
   /** Volume des effets sonores, de 0 à 1 (ajouté après : déduit de `soundOn` si absent). */
   soundVolume: number;
+  /** Volume de la musique de combat, de 0 à 1 (ajouté après : valeur par défaut si absent). */
+  musicVolume: number;
   /** Nombre d'arènes solo gagnées, dans l'ordre (ajouté après : 0 si absent). */
   arenaCleared: number;
   [extra: string]: unknown;
@@ -128,6 +132,7 @@ export function createInitialState(now = Date.now()): SaveState {
     totalPacksOpened: 0,
     soundOn: true,
     soundVolume: DEFAULT_SOUND_VOLUME,
+    musicVolume: DEFAULT_MUSIC_VOLUME,
     arenaCleared: 0,
   };
 }
@@ -153,6 +158,7 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     totalPacksOpened: num(s.totalPacksOpened, 0),
     soundOn: s.soundOn !== false,
     soundVolume: Math.max(0, Math.min(1, num(s.soundVolume, s.soundOn === false ? 0 : DEFAULT_SOUND_VOLUME))),
+    musicVolume: Math.max(0, Math.min(1, num(s.musicVolume, DEFAULT_MUSIC_VOLUME))),
     arenaCleared: Math.max(0, Math.floor(num(s.arenaCleared, 0))),
   };
 }
