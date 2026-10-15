@@ -28,8 +28,8 @@ interface GameStore {
   renameCard(id: string, name: string): void;
   /** Renomme l'attaque classique (0) ou spéciale (1) d'une carte. Un nom vide est ignoré. */
   renameAttack(id: string, slot: 0 | 1, name: string): void;
-  /** Note une victoire dans l'arène `n` (débloque la suivante) et verse les pièces gagnées. */
-  winArena(n: number): SoloReward | null;
+  /** Note une victoire au niveau `n` de l'aventure (débloque le suivant), garde les meilleures étoiles et verse les pièces. */
+  winLevel(n: number, stars: number): SoloReward | null;
   /** Achète un tirage avec des pièces (seulement quand il n'en reste plus). */
   buyDraw(): boolean;
   /** Début d'un combat en ligne classé : la défaite est comptée d'avance. */
@@ -190,11 +190,14 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ cards });
   },
 
-  winArena(n) {
+  winLevel(n, stars) {
     const save = get().save;
-    if (!save) return null;
-    const reward = soloReward({ arena: n, firstClear: n > save.arenaCleared, day: save.soloDay, now: Date.now() });
-    const next: SaveState = { ...save, arenaCleared: Math.max(save.arenaCleared, n), coins: save.coins + reward.coins, soloDay: reward.day };
+    if (!save || n < 1 || n > save.soloLevel + 1) return null;
+    const reward = soloReward({ level: n, firstClear: n > save.soloLevel, day: save.soloDay, now: Date.now() });
+    const soloStars = [...save.soloStars];
+    while (soloStars.length < n) soloStars.push(0);
+    soloStars[n - 1] = Math.max(soloStars[n - 1], Math.max(1, Math.min(3, stars)));
+    const next: SaveState = { ...save, soloLevel: Math.max(save.soloLevel, n), soloStars, coins: save.coins + reward.coins, soloDay: reward.day };
     persistState(next);
     set({ save: next });
     return reward;

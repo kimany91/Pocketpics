@@ -32,7 +32,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { startBattleMusic, stopBattleMusic } from '../../audio/music';
 import { type Sfx, playSfx } from '../../audio/sfx';
-import { type Arena, arenaFighters, getArena } from '../../battle/arenas';
+import { type Level, TOTAL_LEVELS, getLevel, levelFighters, levelMmr, starsFor } from '../../battle/levels';
 import { botAction, botReplacement } from '../../battle/bot';
 import { botArt } from '../../battle/botArt';
 import {
@@ -60,7 +60,7 @@ import { useSocial } from '../../net/social';
 import { CoinIcon } from '../../components/Coin';
 import { RankEmblem } from '../../components/rank/RankEmblem';
 import type { SoloReward } from '../../game/economy';
-import { DIVISION_POINTS, arenaMmr, rankOf, shownMmr } from '../../game/rank';
+import { DIVISION_POINTS, rankOf, shownMmr } from '../../game/rank';
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { type ActKind, type FighterStatus, FighterView, HpBar, type Popup, type ReactKind } from '../../components/battle/FighterView';
@@ -123,11 +123,11 @@ const ONLINE_TINT = '#7C9CFF';
 const TURN_SECONDS = 40;
 
 export default function FightScreen() {
-  const params = useLocalSearchParams<{ arena?: string; deck?: string; online?: string }>();
+  const params = useLocalSearchParams<{ level?: string; deck?: string; online?: string }>();
   const online = params.online === '1';
-  const arena: Arena | undefined = online ? undefined : (getArena(Number(params.arena)) ?? undefined);
+  const level: Level | undefined = online ? undefined : (getLevel(Number(params.level)) ?? undefined);
   const allCards = useGame((s) => s.cards);
-  const winArena = useGame((s) => s.winArena);
+  const winLevel = useGame((s) => s.winLevel);
   const finishRanked = useGame((s) => s.finishRanked);
   const myMmr = useGame((s) => (s.save ? shownMmr(s.save.rank) : 0));
   const insets = useSafeAreaInsets();
@@ -155,16 +155,16 @@ export default function FightScreen() {
       };
       return { deck, foe, battle: m.start, controller: m.controller };
     }
-    if (!arena || deck.length === 0) return null;
+    if (!level || deck.length === 0) return null;
     const foe: Foe = {
-      name: arena.bot,
-      tint: arena.tint,
-      mmr: arenaMmr(arena.n),
-      label: `Arène ${arena.n} · ${arena.place}`,
-      art: botArt(`bot:${arena.n}:3`),
+      name: level.world.bot,
+      tint: level.world.tint,
+      mmr: levelMmr(level.n),
+      label: `${level.boss ? 'Boss · ' : ''}Monde ${level.world.n} · Niveau ${level.n}`,
+      art: botArt(`bot:${level.world.n}:3`),
       image: (ref) => ({ imageSource: botArt(ref) }),
     };
-    return { deck, foe, battle: createBattle(deck.map(toFighter), arenaFighters(arena)), controller: new BotController(arena.level) as BattleController };
+    return { deck, foe, battle: createBattle(deck.map(toFighter), levelFighters(level)), controller: new BotController(level.botLevel) as BattleController };
   });
   const deck = setup?.deck ?? [];
   const foeInfo = setup?.foe;
@@ -176,6 +176,7 @@ export default function FightScreen() {
   const asked = useRef<Battle | null>(null);
   /** Gains en fin de combat : pièces (solo) ou points de rang (en ligne). */
   const [reward, setReward] = useState<SoloReward | null>(null);
+  const [starsWon, setStarsWon] = useState(0);
   const [rankChange, setRankChange] = useState<{ before: number; after: number } | null>(null);
   const [endReason, setEndReason] = useState<'gone' | 'lost' | null>(null);
   const [turnLeft, setTurnLeft] = useState<number | null>(null);
@@ -423,7 +424,12 @@ export default function FightScreen() {
     setMode('idle');
     stopBattleMusic(music.current, 600);
     if (online) setRankChange(finishRanked(winner === 0));
-    else if (winner === 0 && arena) setReward(winArena(arena.n));
+    else if (winner === 0 && level && battle) {
+      // étoiles : 3 sans perdre de carte, 2 en en perdant une, 1 sinon
+      const stars = starsFor(battle.sides[0].fighters.filter((f) => f.hp <= 0).length);
+      setStarsWon(stars);
+      setReward(winLevel(level.n, stars));
+    }
     if (winner === 0) {
       playSfx('win');
       haptic.success();
@@ -848,8 +854,8 @@ export default function FightScreen() {
       {result !== null ? (
         online ? (
           <OnlineResult won={result === 0} change={rankChange} opp={foeInfo.name} reason={endReason} />
-        ) : arena ? (
-          <ResultOverlay won={result === 0} arenaN={arena.n} deck={deck.map((c) => c.id).join(',')} reward={reward} />
+        ) : level ? (
+          <ResultOverlay won={result === 0} levelN={level.n} deck={deck.map((c) => c.id).join(',')} reward={reward} stars={starsWon} />
         ) : null
       ) : null}
       {quitting ? (
@@ -1143,8 +1149,8 @@ function AttackButton({
   );
 }
 
-function ResultOverlay({ won, arenaN, deck, reward }: { won: boolean; arenaN: number; deck: string; reward: SoloReward | null }) {
-  const next = getArena(arenaN + 1);
+function ResultOverlay({ won, levelN, deck, reward, stars }: { won: boolean; levelN: number; deck: string; reward: SoloReward | null; stars: number }) {
+  const next = levelN < TOTAL_LEVELS ? getLevel(levelN + 1) : null;
   return (
     <Animated.View entering={FadeIn.duration(250)} style={[StyleSheet.absoluteFill, styles.overlay]}>
       <View style={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -1157,10 +1163,25 @@ function ResultOverlay({ won, arenaN, deck, reward }: { won: boolean; arenaN: nu
           <Ionicons name={won ? 'trophy' : 'refresh'} size={40} color={won ? '#141414' : colors.text} />
         </Animated.View>
       </View>
+      {won ? (
+        <View style={styles.resultStars}>
+          {[0, 1, 2].map((i) => (
+            <Animated.View key={i} entering={ZoomIn.delay(350 + i * 220).springify().damping(8)} style={{ transform: [{ translateY: i === 1 ? -10 : 0 }, { rotate: `${(i - 1) * 12}deg` }] }}>
+              <Ionicons name="star" size={i === 1 ? 46 : 38} color={i < stars ? colors.gold : 'rgba(255,255,255,0.14)'} />
+            </Animated.View>
+          ))}
+        </View>
+      ) : null}
       <Animated.View entering={FadeInDown.delay(200)} style={{ alignItems: 'center', marginTop: 22, paddingHorizontal: 32 }}>
         <AppText variant="display">{won ? 'Victoire !' : 'Défaite'}</AppText>
         <AppText variant="body" style={{ textAlign: 'center', color: colors.textDim, marginTop: 6 }}>
-          {won ? (next ? `Arène ${arenaN} gagnée. L'arène ${next.n} est débloquée !` : 'Tu as gagné la dernière arène. Bravo !') : 'Change de cartes ou vise mieux la cible, et retente ta chance.'}
+          {won
+            ? next
+              ? next.world.n !== getLevel(levelN)?.world.n
+                ? `Monde terminé ! Direction ${next.world.place}.`
+                : `Niveau ${levelN} gagné. Le niveau ${next.n} t’attend.`
+              : 'Tu as terminé toute l’aventure. Bravo !'
+            : 'Change de cartes ou vise mieux la cible, et retente ta chance.'}
         </AppText>
       </Animated.View>
       {won && reward ? (
@@ -1182,10 +1203,10 @@ function ResultOverlay({ won, arenaN, deck, reward }: { won: boolean; arenaN: nu
       ) : null}
       <Animated.View entering={FadeInDown.delay(350)} style={{ alignSelf: 'stretch', gap: 10, marginTop: 30, paddingHorizontal: 32 }}>
         {won && next ? (
-          <Button label={`Arène ${next.n} · ${next.place}`} size="lg" icon="arrow-forward" onPress={() => router.replace({ pathname: '/battle/deck', params: { arena: String(next.n) } })} />
+          <Button label={`Niveau ${next.n}`} size="lg" icon="arrow-forward" onPress={() => router.replace({ pathname: '/battle/deck', params: { level: String(next.n) } })} />
         ) : null}
-        {!won ? <Button label="Réessayer" size="lg" icon="refresh" onPress={() => router.replace({ pathname: '/battle/fight', params: { arena: String(arenaN), deck } })} /> : null}
-        <Button label="Retour aux arènes" kind="secondary" onPress={() => router.back()} />
+        {!won ? <Button label="Réessayer" size="lg" icon="refresh" onPress={() => router.replace({ pathname: '/battle/fight', params: { level: String(levelN), deck } })} /> : null}
+        <Button label="Retour à la carte" kind="secondary" onPress={() => router.back()} />
       </Animated.View>
     </Animated.View>
   );
@@ -1272,6 +1293,7 @@ function OnlineResult({ won, change, opp, reason }: { won: boolean; change: { be
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
+  resultStars: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 18 },
   coinsWon: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 18, height: 52, borderRadius: 26, backgroundColor: 'rgba(247,201,72,0.14)', borderWidth: 1.5, borderColor: 'rgba(247,201,72,0.5)' },
   coinsText: { fontFamily: fonts.black, fontSize: 28, color: colors.gold },
   promo: { paddingHorizontal: 14, height: 34, borderRadius: 8, justifyContent: 'center', transform: [{ skewX: '-10deg' }] },

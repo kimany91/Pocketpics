@@ -6,10 +6,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, BackHandler, FlatList, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, BackHandler, FlatList, Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { getArena } from '../../battle/arenas';
+import { botArt } from '../../battle/botArt';
+import { getLevel, levelFighters } from '../../battle/levels';
 import { ATTACK_KIND_LABEL, kindOf, powerLabel } from '../../battle/stats';
 import { KIND_LOOK } from '../../components/battle/kinds';
 import { AppText } from '../../components/AppText';
@@ -35,9 +36,10 @@ let lastDeck: string[] = [];
 const strength = (c: Card) => c.battle.hp * (c.battle.attacks[0].power + c.battle.attacks[1].power * 0.5);
 
 export default function DeckScreen() {
-  const { arena: arenaParam, online: onlineParam } = useLocalSearchParams<{ arena?: string; online?: string }>();
+  const { level: levelParam, online: onlineParam } = useLocalSearchParams<{ level?: string; online?: string }>();
   const online = onlineParam === '1';
-  const arena = online ? undefined : getArena(Number(arenaParam));
+  const level = online ? undefined : (getLevel(Number(levelParam)) ?? undefined);
+  const foes = useMemo(() => (level ? levelFighters(level) : []), [level]);
   const match = useMatch();
   const cards = useGame((s) => s.cards);
   const insets = useSafeAreaInsets();
@@ -88,7 +90,7 @@ export default function DeckScreen() {
       </View>
     );
   }
-  if (!arena && !online) return null;
+  if (!level && !online) return null;
 
   const toggle = (id: string) => {
     if (online && match.myReady) return;
@@ -106,14 +108,14 @@ export default function DeckScreen() {
       match.setDeck(picked.map((id) => cards.find((c) => c.id === id)).filter((c): c is Card => !!c));
       return;
     }
-    if (arena) router.replace({ pathname: '/battle/fight', params: { arena: String(arena.n), deck: picked.join(',') } });
+    if (level) router.replace({ pathname: '/battle/fight', params: { level: String(level.n), deck: picked.join(',') } });
   };
   const opp = match.opp;
   const oppRank = rankOf(opp?.mmr ?? 0);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <Header title={arena ? `Arène ${arena.n} · ${arena.place}` : 'Combat classé'} onBack={online ? leaveOnline : undefined} />
+      <Header title={level ? `Niveau ${level.n} · ${level.world.place}` : 'Combat classé'} onBack={online ? leaveOnline : undefined} />
       {online ? (
         <View style={[styles.foe, { borderColor: `${oppRank.tier.color}55` }]}>
           {opp ? <RankEmblem rank={oppRank} size={50} /> : <ActivityIndicator color={colors.text} />}
@@ -125,15 +127,19 @@ export default function DeckScreen() {
             <AppText variant="caption">{match.oppReady ? 'A choisi ses cartes ✓' : 'Choisit ses cartes…'}</AppText>
           </View>
         </View>
-      ) : arena ? (
-      <View style={styles.foe}>
-        <View style={[styles.avatar, { backgroundColor: arena.tint }]}>
-          <AppText style={styles.avatarText}>{arena.bot.slice(0, 1)}</AppText>
-        </View>
+      ) : level ? (
+      <View style={[styles.foe, { borderColor: `${level.world.tint}66` }]}>
+        <Image source={botArt(`bot:${level.world.n}:3`)} style={[styles.avatar, { borderWidth: 3, borderColor: level.world.tint }]} />
         <View style={{ flex: 1, gap: 4 }}>
-          <AppText variant="heading">{`${arena.bot} t'attend`}</AppText>
+          <AppText variant="heading">{level.boss ? `Boss : ${level.world.bot}` : `${level.world.bot} t'attend`}</AppText>
+          <View style={styles.flames}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Ionicons key={i} name="flame" size={13} color={i < level.stars ? '#FF7A2C' : 'rgba(255,255,255,0.15)'} />
+            ))}
+            <AppText variant="caption" style={{ marginLeft: 4 }}>{`${foes.length} cartes`}</AppText>
+          </View>
           <View style={styles.gems}>
-            {arena.cards.map((c, i) => {
+            {foes.map((c, i) => {
               const r = getRarity(c.rarity);
               return (
                 <View key={i} style={styles.gemRow}>
@@ -242,6 +248,7 @@ const styles = StyleSheet.create({
   avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontFamily: fonts.black, fontSize: 20, color: '#141414' },
   gems: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 2 },
+  flames: { flexDirection: 'row', alignItems: 'center', gap: 1 },
   gemRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   gem: { width: 8, height: 8, borderRadius: 2, transform: [{ rotate: '45deg' }] },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 14 },

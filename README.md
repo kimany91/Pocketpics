@@ -12,7 +12,7 @@ PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie ph
 | --- | --- |
 | **Tirage** | Paquet animé, réserve de tirages (3 max), compte à rebours jusqu'au prochain, taux d'obtention, solde de pièces. Sans tirage, on peut en acheter un avec des pièces |
 | **Collection** | Grille de cartes, filtres par rareté, tri récentes/rareté. On touche une carte pour l'agrandir |
-| **Combat** | Rang en ligne, amis, combats classés (défi, ou code / QR code), et 10 arènes solo contre des bots qui rapportent des pièces |
+| **Combat** | Un menu à deux grands panneaux : **Aventure solo** (carte de 10 mondes, 50 niveaux, qui rapportent des pièces) et **Multijoueur** (rang, amis, combats classés par défi ou par code / QR code) |
 | **Échange** | Héberger (QR code + code) ou rejoindre (scan QR ou saisie du code), puis échange classique |
 
 **Ouverture d'un paquet**
@@ -87,26 +87,42 @@ Les effets en cours disparaissent quand la carte quitte le terrain (sauf l'étou
 
 **Voir une carte.** En plein combat, on touche sa carte ou celle de l'adversaire pour la voir en 3D, comme dans la collection (rotation au doigt, zoom, dos), avec ses PV actuels, ses attaques et les utilisations de spéciale restantes. Quand on touche une remplaçante, trois boutons apparaissent : Annuler, Info (la même vue) et Envoyer. Le combat est en pause pendant qu'on regarde.
 
-**Mise en scène.** Le décor est l'illustration de l'arène, floutée sous un voile sombre (`src/components/battle/ArenaBackdrop.tsx`). Le combat s'ouvre sur un écran « VS » d'environ 1,6 s (un toucher le passe), puis les cartes tombent sur leur socle. Au repos, elles flottent doucement. Une carte qui attaque fonce en diagonale vers l'adversaire en laissant une traînée. La carte touchée prend un éclat, une onde et des étincelles, sa jauge clignote, et l'écran tremble selon la part de PV perdue. Un critique ou un coup de grâce ajoute un éclair blanc. Le cadre du message prend la couleur du camp dont il parle, et un onglet dit à qui est le tour.
+**Mise en scène.** Le décor est l'illustration du monde, floutée sous un voile sombre (`src/components/battle/ArenaBackdrop.tsx`). Le combat s'ouvre sur un écran « VS » d'environ 1,6 s (un toucher le passe), puis les cartes tombent sur leur socle. Au repos, elles flottent doucement. Une carte qui attaque fonce en diagonale vers l'adversaire en laissant une traînée. La carte touchée prend un éclat, une onde et des étincelles, sa jauge clignote, et l'écran tremble selon la part de PV perdue. Un critique ou un coup de grâce ajoute un éclair blanc. Le cadre du message prend la couleur du camp dont il parle, et un onglet dit à qui est le tour.
 
 **Musique.** Une boucle de combat (`assets/music/battle.wav`, générée par `scripts/generate-music.py`) démarre en fondu au début du combat et s'arrête en fondu à la fin. Son volume se règle à part (45 % par défaut, enregistré dans la sauvegarde) dans la fenêtre « Son », ouverte depuis l'icône 🔊 de l'accueil ou depuis l'icône ♪ en combat.
 
 **Déroulé.** Avant le combat, on choisit 4 cartes (la première commence ; « Auto » prend les plus fortes). L'adversaire en a 4 aussi. On voit sa carte active et ses remplaçantes. Changer de carte est possible à tout moment, mais ça utilise le tour. Une carte K.O. est remplacée sans perdre de tour. Le camp qui n'a plus de carte debout perd.
 
-**Arènes solo** (`src/battle/arenas.ts`). Il y en a 10, du Parc (Communes, bot maladroit) au Cosmos (Ultra Légendaire, Divine…). Le bot vise de mieux en mieux, garde ses spéciales pour le bon moment et met à l'abri ses cartes en danger (`src/battle/bot.ts`). Gagner une arène débloque la suivante, et la progression est enregistrée dans la sauvegarde. Les illustrations des adversaires sont générées par `scripts/generate-bot-art.py`, et les sons de combat par `python3 scripts/generate-sounds.py combat`.
+**Aventure solo** (`src/battle/levels.ts`). Les 10 anciennes arènes sont devenues 10 mondes de 5 niveaux, soit 50 niveaux à refaire depuis le début : le Parc, la Plage, le Marché, la Forêt, le Port, la Montagne, le Volcan, la Tempête, le Palais, le Cosmos. Chaque monde a son adversaire et ses 4 cartes, de plus en plus rares. Le bot vise de mieux en mieux, garde ses spéciales pour le bon moment et met à l'abri ses cartes en danger (`src/battle/bot.ts`). Gagner un niveau débloque le suivant. Les illustrations des adversaires sont générées par `scripts/generate-bot-art.py`, et les sons de combat par `python3 scripts/generate-sounds.py combat`.
+
+- **Difficulté** : douce au début, puis de plus en plus raide. L'adversaire n'aligne que 2 cartes aux niveaux 1-2, puis 3, puis 4. Ses PV et sa puissance sont multipliés par ×0,78 au niveau 1, jusqu'à environ ×1,05 en fin d'aventure, en plus de la rareté de ses cartes qui monte d'un monde à l'autre (Communes au Parc, Divine au Cosmos). Son habileté passe de « maladroit » à presque parfait. Le 1er niveau d'un monde est une respiration (sa meilleure carte est rétrogradée d'un cran), le 5e est un **boss** : sa meilleure carte monte d'un cran et ses stats de 6 %.
+- **Réglé par simulation** (`tests/levels.test.ts`), avec un joueur qui vise bien :
+
+| Deck du joueur | Niveau 1 | Niveau 25 | Niveau 35 | Niveau 45 | Niveau 50 (boss) |
+| --- | --- | --- | --- | --- | --- |
+| Débutant (1 Épique, 1 Rare, 2 Communes) | 100 % | 2 % | — | — | — |
+| Départ (Mythique, 2 Épiques, Rare) | 100 % | 40 % | 0 % | 0 % | 0 % |
+| Fort (Ultra Légendaire, Légendaire, 2 Mythiques) | 100 % | 99 % | 49 % | 1 % | 2 % |
+| Au maximum (Divine, Ultra Légendaire, 2 Légendaires) | 100 % | 100 % | 90 % | 29 % | 24 % |
+
+- **Étoiles** : 3 si on gagne sans perdre de carte, 2 en en perdant une, 1 sinon. La meilleure note de chaque niveau est gardée (150 étoiles au total).
+
+**La carte** (`src/components/map/`). Une longue route qui serpente vers le haut, comme dans les jeux « saga » : niveau 1 en bas, on remonte la carte pour voir les mondes suivants. Chaque monde a son sol, sa route (sable, pavés, planches, tapis rouge, route d'étoiles…), ses décors dessinés façon dessin animé (contour sombre, reflets, arbres avec des yeux), un grand décor (mare et son canard, mer, halle du marché, arbre géant, phare, montagnes, volcan, nuage d'orage, château, planète à anneaux) et son panneau. Le passage d'un monde à l'autre se fait par un bord ondulé. Ça bouge : braises et lueur du volcan, éclairs de la tempête, étoiles qui scintillent dans le Cosmos, lumière du phare. Le portrait de l'adversaire de chaque monde attend à côté de son boss.
+
+Les niveaux sont des pastilles dorées avec leur numéro, et leurs étoiles au-dessus une fois gagnés. Les boss sont plus grands, avec une couronne et le portrait de l'adversaire. Un repère à ton initiale sautille au-dessus du niveau à jouer, et la carte s'ouvre centrée dessus. Toucher un niveau ouvre sa fiche : adversaire et son rang, difficulté (1 à 5 flammes), ses cartes, gains, étoiles obtenues, puis « Jouer ». La carte est calculée une fois (positions, route, décors placés au hasard mais toujours au même endroit, jamais sur la route) et dessinée monde par monde en SVG.
 
 ## Pièces (`src/game/economy.ts`)
 
-Les pièces se gagnent seulement en battant les arènes solo, et servent à acheter un tirage quand la réserve est vide (200 pièces). Les tirages gratuits restent la base : un joueur assidu gagne environ un tirage de plus par jour, pas davantage.
+Les pièces se gagnent seulement en battant les niveaux de l'aventure solo, et servent à acheter un tirage quand la réserve est vide (200 pièces). Les tirages gratuits restent la base : un joueur assidu gagne environ un tirage de plus par jour, pas davantage.
 
 | Situation | Gain |
 | --- | --- |
-| Victoire dans l'arène n | 8 + 4 × n (12 en arène 1, 48 en arène 10) |
-| Première victoire dans une arène | + 40 + 15 × n, une seule fois |
+| Victoire au niveau n | 6 + 0,85 × n (7 au niveau 1, 49 au niveau 50) |
+| Première victoire à un niveau | + 5 + 0,8 × n, une seule fois |
 | Au-delà de 5 victoires dans la journée | un quart du gain |
 | Défaite, abandon, combat en ligne | rien |
 
-Toute la campagne (10 premières victoires) rapporte 1 525 pièces, soit environ 7 tirages. Rejouer l'arène 10 rapporte 240 pièces pour les 5 premières victoires du jour. Un tirage acheté s'ajoute à la réserve et se consomme après les tirages gratuits. L'écran de victoire affiche le gain, et la liste des arènes ce que chacune rapporte.
+Toute l'aventure (50 premières victoires) rapporte environ 2 650 pièces, soit une douzaine de tirages, étalés sur toute la progression. Rejouer le niveau 50 rapporte 245 pièces pour les 5 premières victoires du jour. Un tirage acheté s'ajoute à la réserve et se consomme après les tirages gratuits. L'écran de victoire affiche le gain, et la fiche de chaque niveau ce qu'il rapporte.
 
 ## Rang en ligne (`src/game/rank.ts`)
 
@@ -114,7 +130,7 @@ Six rangs, chacun en trois divisions : **Papier**, **Bronze**, **Argent**, **Tit
 
 - **Points par combat (formule Elo)** : 25 contre un adversaire de même niveau, jusqu'à 45 contre bien plus fort, 5 au minimum contre bien plus faible. Le gagnant prend exactement ce que le perdant perd. Il faut donc 4 victoires à niveau égal pour passer une division.
 - **Abandon = défaite** : les points de la défaite sont retirés dès le début du combat, et rendus (avec le gain) en cas de victoire. Fermer l'app en plein combat compte donc comme une défaite, même sans serveur.
-- **Affichage** : une carte « Ton rang » dans l'onglet Combat (emblème, barre, bilan), le rang des deux joueurs dans l'ouverture « VS » de chaque combat (les bots solo ont un rang aussi, de Papier I en arène 1 à Légende III en arène 10), et en fin de combat en ligne la barre qui se remplit, avec « Promotion ! » ou « Rétrogradé ».
+- **Affichage** : une carte « Ton rang » dans l'onglet Combat (emblème, barre, bilan), le rang des deux joueurs dans l'ouverture « VS » de chaque combat (les bots solo ont un rang aussi, de Papier I au niveau 1 à Légende III au niveau 50), et en fin de combat en ligne la barre qui se remplit, avec « Promotion ! » ou « Rétrogradé ».
 - **Emblèmes** (`src/components/rank/RankEmblem.tsx`) : feuille, écu de bronze, écu d'argent étoilé, hexagone de titane, gemme, couronne. Plus le rang est haut, plus l'apparition est travaillée : simple pose pour le Papier, reflets pour le Bronze et l'Argent, halo et anneau qui tourne pour le Titane, rayons, onde et scintillements pour le Diamant, double onde, braises et halo changeant pour la Légende.
 
 ## En ligne sans serveur : amis et combats classés
@@ -250,7 +266,8 @@ Un futur serveur de jeu pourra aussi valider les tirages, ce qui empêche la tri
 
 ```
 src/app/            écrans (expo-router) : onglets, ouverture, carte 3D, combat, échange
-src/battle/         stats des cartes, règles du combat, bot, arènes
+src/battle/         stats des cartes, règles du combat, bot, mondes et niveaux de l'aventure
+src/components/map/ carte de l'aventure : géométrie, décors SVG, mondes
 src/components/     carte (contours par rareté), sachet, effets (halo, rayons, étincelles, flash)
 src/game/           raretés, recharge des tirages, galerie, paquets, chance, pièces, rang
 src/storage/        modèle + migrations, stockage disque (+ version web de démo)

@@ -71,8 +71,12 @@ export interface SaveState {
   soundVolume: number;
   /** Volume de la musique de combat, de 0 à 1 (ajouté après : valeur par défaut si absent). */
   musicVolume: number;
-  /** Nombre d'arènes solo gagnées, dans l'ordre (ajouté après : 0 si absent). */
+  /** Nombre d'arènes solo gagnées, dans l'ordre (ancien mode solo, conservé ; ajouté après : 0 si absent). */
   arenaCleared: number;
+  /** Aventure solo : niveaux terminés dans l'ordre, de 0 à 50 (ajouté après : 0 si absent). */
+  soloLevel: number;
+  /** Meilleures étoiles par niveau (index = niveau - 1, 0 à 3). Ajouté après : vide si absent. */
+  soloStars: number[];
   /** Compteurs de chance (malchance, paquets brillants). Ajouté après : remis à zéro si absent. */
   luck: LuckState;
   /** Pièces gagnées en solo (ajouté après : 0 si absent). */
@@ -161,6 +165,8 @@ export function createInitialState(now = Date.now()): SaveState {
     soundVolume: DEFAULT_SOUND_VOLUME,
     musicVolume: DEFAULT_MUSIC_VOLUME,
     arenaCleared: 0,
+    soloLevel: 0,
+    soloStars: [],
     luck: initialLuck(),
     coins: 0,
     bonusDraws: 0,
@@ -220,6 +226,8 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     soundVolume: Math.max(0, Math.min(1, num(s.soundVolume, s.soundOn === false ? 0 : DEFAULT_SOUND_VOLUME))),
     musicVolume: Math.max(0, Math.min(1, num(s.musicVolume, DEFAULT_MUSIC_VOLUME))),
     arenaCleared: Math.max(0, Math.floor(num(s.arenaCleared, 0))),
+    soloLevel: Math.max(0, Math.min(50, Math.floor(num(s.soloLevel, 0)))),
+    soloStars: Array.isArray(s.soloStars) ? s.soloStars.slice(0, 50).map((x) => Math.max(0, Math.min(3, Math.floor(num(x, 0))))) : [],
     luck: migrateLuck(s.luck),
     coins: Math.max(0, Math.floor(num(s.coins, 0))),
     bonusDraws: Math.max(0, Math.floor(num(s.bonusDraws, 0))),
