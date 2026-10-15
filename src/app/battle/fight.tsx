@@ -152,122 +152,127 @@ export default function FightScreen() {
     setBusy(true);
     setMode('idle');
     let view = shown ?? final;
-    for (const e of events) {
-      if (!alive.current) return;
-      const before = view;
-      view = applyEvent(view, e);
-      switch (e.t) {
-        case 'use': {
-          const kind = kindOf(e.attack);
-          setMsg({ top: [nameParts(e.fighter, e.side), { text: e.copied ? ' copie' : ' utilise' }], attack: `${e.attack.name} !` });
-          setShown(view);
-          if (e.copied) {
-            doAct(e.side, 'mirror');
-            await sleep(380);
+    try {
+      for (const e of events) {
+        if (!alive.current) return;
+        const before = view;
+        view = applyEvent(view, e);
+        switch (e.t) {
+          case 'use': {
+            const kind = kindOf(e.attack);
+            setMsg({ top: [nameParts(e.fighter, e.side), { text: e.copied ? ' copie' : ' utilise' }], attack: `${e.attack.name} !` });
+            setShown(view);
+            if (e.copied) {
+              doAct(e.side, 'mirror');
+              await sleep(380);
+            }
+            doAct(e.side, actFor(kind, e.special, before, e.side));
+            playSfx(soundFor(kind), { volume: 0.6 });
+            await sleep(STATUS_KINDS.includes(kind) ? 500 : e.side === 0 ? 650 : 900);
+            break;
           }
-          doAct(e.side, actFor(kind, e.special, before, e.side));
-          playSfx(soundFor(kind), { volume: 0.6 });
-          await sleep(STATUS_KINDS.includes(kind) ? 500 : e.side === 0 ? 650 : 900);
-          break;
+          case 'hit': {
+            setShown(view);
+            if (e.damage > 0) doReact(e.side, e.execute ? 'execute' : e.guarded ? 'guarded' : e.kind === 'slap' ? 'slapped' : 'hurt');
+            const q = QUALITY_LABEL[e.quality];
+            const tag = hitTag(e);
+            popup(e.side, {
+              main: e.damage > 0 ? `-${e.damage}` : '0',
+              color: e.damage <= 0 ? colors.textDim : e.quality === 'crit' || e.execute ? colors.gold : '#FFFFFF',
+              sub: tag ?? q.text,
+              subColor: tag ? colors.gold : q.color,
+              big: e.quality === 'crit' || !!e.execute,
+            });
+            if (e.quality === 'miss') playSfx('miss');
+            else if (e.quality === 'crit' || e.execute) playSfx('crit');
+            else playSfx(e.kind === 'slap' ? 'slap' : 'hit', { volume: e.quality === 'weak' || e.guarded ? 0.6 : 1 });
+            if (e.guarded) playSfx('shield', { volume: 0.6 });
+            if (e.damage > 0) (e.quality === 'crit' || e.execute ? haptic.heavy : haptic.medium)();
+            await sleep(e.execute ? 950 : 700);
+            break;
+          }
+          case 'status': {
+            setShown(view);
+            const look = STATUS_TEXT[e.status];
+            setMsg([nameParts(e.fighter, e.side), { text: look.text }]);
+            playSfx(look.sound, { volume: 0.8 });
+            if (e.status === 'guard') doAct(e.side, 'guard');
+            await sleep(1150);
+            break;
+          }
+          case 'heal':
+            setShown(view);
+            doReact(e.side, 'heal');
+            popup(e.side, { main: `+${e.amount}`, color: colors.success, sub: 'Soin' , subColor: colors.success });
+            setMsg([nameParts(e.fighter, e.side), { text: ` récupère ${e.amount} PV !` }]);
+            playSfx('heal');
+            haptic.success();
+            await sleep(1150);
+            break;
+          case 'dodged':
+            setShown(view);
+            doReact(e.side, 'dodged');
+            popup(e.side, { main: 'Esquivé !', color: '#5EE6D6' });
+            setMsg([nameParts(e.fighter, e.side), { text: ' esquive l’attaque !' }]);
+            playSfx('swipe', { volume: 0.9 });
+            haptic.light();
+            await sleep(1100);
+            break;
+          case 'dodgeFail':
+            setMsg([nameParts(e.fighter, e.side), { text: ' n’arrive pas à esquiver !' }]);
+            await sleep(550);
+            break;
+          case 'recoil':
+            setShown(view);
+            doReact(e.side, 'recoil');
+            popup(e.side, { main: `-${e.damage}`, color: '#FF8A7A', sub: 'Contrecoup', subColor: '#FF8A7A' });
+            setMsg([nameParts(e.fighter, e.side), { text: ' encaisse le contrecoup !' }]);
+            playSfx('hit', { volume: 0.6 });
+            await sleep(950);
+            break;
+          case 'poisonTick':
+            setShown(view);
+            doReact(e.side, 'poison');
+            popup(e.side, { main: `-${e.damage}`, color: '#D9A6FF', sub: 'Poison', subColor: '#D9A6FF' });
+            setMsg([nameParts(e.fighter, e.side), { text: ' souffre du poison !' }]);
+            playSfx('poison');
+            haptic.light();
+            await sleep(1100);
+            break;
+          case 'stun':
+            setShown(view);
+            setMsg([nameParts(e.fighter, e.side), { text: ` est étourdie pendant ${e.turns} tour${e.turns > 1 ? 's' : ''} !` }]);
+            playSfx('stun', { volume: 0.8 });
+            await sleep(1200);
+            break;
+          case 'stunned':
+            setShown(view);
+            setMsg([nameParts(e.fighter, e.side), { text: e.left > 0 ? ' est étourdie et ne peut pas attaquer !' : ' est étourdie… mais reprend ses esprits !' }]);
+            playSfx('stun', { volume: 0.5 });
+            await sleep(1300);
+            break;
+          case 'ko':
+            setShown(view);
+            setMsg([nameParts(e.fighter, e.side), { text: ' est K.O. !' }]);
+            playSfx('ko');
+            haptic.heavy();
+            await sleep(1300);
+            break;
+          case 'switch':
+            setShown(view);
+            doEnter(e.side);
+            playSfx('swipe', { volume: 0.7 });
+            if (e.side === 0) setMsg(e.forced ? [{ text: 'À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }] : [{ text: 'Reviens ! À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }]);
+            else setMsg([{ text: `${arena.bot} ${e.forced ? 'envoie' : 'rappelle sa carte et envoie'} ` }, nameParts(e.fighter, 1), { text: ' !' }]);
+            await sleep(1000);
+            break;
+          case 'win':
+            break;
         }
-        case 'hit': {
-          setShown(view);
-          if (e.damage > 0) doReact(e.side, e.execute ? 'execute' : e.guarded ? 'guarded' : e.kind === 'slap' ? 'slapped' : 'hurt');
-          const q = QUALITY_LABEL[e.quality];
-          const tag = hitTag(e);
-          popup(e.side, {
-            main: e.damage > 0 ? `-${e.damage}` : '0',
-            color: e.damage <= 0 ? colors.textDim : e.quality === 'crit' || e.execute ? colors.gold : '#FFFFFF',
-            sub: tag ?? q.text,
-            subColor: tag ? colors.gold : q.color,
-            big: e.quality === 'crit' || !!e.execute,
-          });
-          if (e.quality === 'miss') playSfx('miss');
-          else if (e.quality === 'crit' || e.execute) playSfx('crit');
-          else playSfx(e.kind === 'slap' ? 'slap' : 'hit', { volume: e.quality === 'weak' || e.guarded ? 0.6 : 1 });
-          if (e.guarded) playSfx('shield', { volume: 0.6 });
-          if (e.damage > 0) (e.quality === 'crit' || e.execute ? haptic.heavy : haptic.medium)();
-          await sleep(e.execute ? 950 : 700);
-          break;
-        }
-        case 'status': {
-          setShown(view);
-          const look = STATUS_TEXT[e.status];
-          setMsg([nameParts(e.fighter, e.side), { text: look.text }]);
-          playSfx(look.sound, { volume: 0.8 });
-          if (e.status === 'guard') doAct(e.side, 'guard');
-          await sleep(1150);
-          break;
-        }
-        case 'heal':
-          setShown(view);
-          doReact(e.side, 'heal');
-          popup(e.side, { main: `+${e.amount}`, color: colors.success, sub: 'Soin' , subColor: colors.success });
-          setMsg([nameParts(e.fighter, e.side), { text: ` récupère ${e.amount} PV !` }]);
-          playSfx('heal');
-          haptic.success();
-          await sleep(1150);
-          break;
-        case 'dodged':
-          setShown(view);
-          doReact(e.side, 'dodged');
-          popup(e.side, { main: 'Esquivé !', color: '#5EE6D6' });
-          setMsg([nameParts(e.fighter, e.side), { text: ' esquive l’attaque !' }]);
-          playSfx('swipe', { volume: 0.9 });
-          haptic.light();
-          await sleep(1100);
-          break;
-        case 'dodgeFail':
-          setMsg([nameParts(e.fighter, e.side), { text: ' n’arrive pas à esquiver !' }]);
-          await sleep(550);
-          break;
-        case 'recoil':
-          setShown(view);
-          doReact(e.side, 'recoil');
-          popup(e.side, { main: `-${e.damage}`, color: '#FF8A7A', sub: 'Contrecoup', subColor: '#FF8A7A' });
-          setMsg([nameParts(e.fighter, e.side), { text: ' encaisse le contrecoup !' }]);
-          playSfx('hit', { volume: 0.6 });
-          await sleep(950);
-          break;
-        case 'poisonTick':
-          setShown(view);
-          doReact(e.side, 'poison');
-          popup(e.side, { main: `-${e.damage}`, color: '#D9A6FF', sub: 'Poison', subColor: '#D9A6FF' });
-          setMsg([nameParts(e.fighter, e.side), { text: ' souffre du poison !' }]);
-          playSfx('poison');
-          haptic.light();
-          await sleep(1100);
-          break;
-        case 'stun':
-          setShown(view);
-          setMsg([nameParts(e.fighter, e.side), { text: ` est étourdie pendant ${e.turns} tour${e.turns > 1 ? 's' : ''} !` }]);
-          playSfx('stun', { volume: 0.8 });
-          await sleep(1200);
-          break;
-        case 'stunned':
-          setShown(view);
-          setMsg([nameParts(e.fighter, e.side), { text: e.left > 0 ? ' est étourdie et ne peut pas attaquer !' : ' est étourdie… mais reprend ses esprits !' }]);
-          playSfx('stun', { volume: 0.5 });
-          await sleep(1300);
-          break;
-        case 'ko':
-          setShown(view);
-          setMsg([nameParts(e.fighter, e.side), { text: ' est K.O. !' }]);
-          playSfx('ko');
-          haptic.heavy();
-          await sleep(1300);
-          break;
-        case 'switch':
-          setShown(view);
-          doEnter(e.side);
-          playSfx('swipe', { volume: 0.7 });
-          if (e.side === 0) setMsg(e.forced ? [{ text: 'À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }] : [{ text: 'Reviens ! À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }]);
-          else setMsg([{ text: `${arena.bot} ${e.forced ? 'envoie' : 'rappelle sa carte et envoie'} ` }, nameParts(e.fighter, 1), { text: ' !' }]);
-          await sleep(1000);
-          break;
-        case 'win':
-          break;
       }
+    } catch (err) {
+      // Une mise en scène qui échoue ne doit jamais bloquer le combat : on passe directement à la suite.
+      console.warn('Mise en scène du combat interrompue', err);
     }
     if (!alive.current) return;
     setShown(final);
