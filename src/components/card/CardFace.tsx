@@ -37,6 +37,8 @@ interface Props {
   tilt?: SharedValue<number>;
   /** Image à afficher à la place de celle stockée (aperçu d'échange). */
   imageUri?: string;
+  /** Image intégrée à l'app (cartes des adversaires du mode solo). */
+  imageSource?: number;
 }
 
 /** Reflets holographiques qui suivent l'inclinaison, par rareté (Mythique et au-dessus). */
@@ -73,7 +75,7 @@ function effectKey(rarity: ReturnType<typeof getRarity>) {
   return rarity.id === 'mythic' ? 'mythic' : null;
 }
 
-export const CardFace = memo(function CardFace({ card, width, quality = 'full', animated = true, tilt, imageUri }: Props) {
+export const CardFace = memo(function CardFace({ card, width, quality = 'full', animated = true, tilt, imageUri, imageSource }: Props) {
   const rarity = getRarity(card.rarity);
   const height = width * CARD_RATIO;
   const border = Math.max(3, width * (quality === 'thumb' ? 0.05 : 0.042));
@@ -93,7 +95,9 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
         pointerEvents="none"
         style={[styles.window, { top: border, left: border, right: border, bottom: border, borderRadius: innerRadius }]}
       >
-        {uri ? (
+        {imageSource !== undefined ? (
+          <Image source={imageSource} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={card.id} />
+        ) : uri ? (
           <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={card.id} transition={quality === 'thumb' ? 120 : 0} />
         ) : null}
         {rarity.frameStyle === 'chromatic' && !tilt ? <Holo colors={CHROMA_HOLO} opacity={0.18} animated={animated} width={width} height={height} /> : null}

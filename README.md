@@ -12,6 +12,7 @@ PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie ph
 | --- | --- |
 | **Tirage** | Paquet animé, réserve de tirages (3 max), compte à rebours jusqu'au prochain, taux d'obtention |
 | **Collection** | Grille de cartes, filtres par rareté, tri récentes/rareté. On touche une carte pour l'agrandir |
+| **Combat** | 10 arènes solo contre des bots, de plus en plus dures. Multijoueur à venir |
 | **Échange** | Héberger (QR code + code) ou rejoindre (scan QR ou saisie du code), puis échange classique |
 
 **Ouverture d'un paquet**
@@ -24,7 +25,7 @@ PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie ph
 6. On glisse la carte pour passer à la suivante. La meilleure arrive en dernier.
 7. Le récapitulatif retourne les cartes une à une et fait briller la meilleure. S'il reste des tirages, « Paquet suivant » enchaîne directement.
 
-**Sons** (synthétisés par `scripts/generate-sounds.py`) : l'icône 🔊 de l'accueil ouvre un curseur d'intensité (55 % par défaut, 0 = coupé), enregistré dans la sauvegarde. Sons : déchirure, éventail, glissement de carte, 7 paliers de montée de niveau, révélation (Commune à Super Rare), son spécial Épique/Mythique, son spécial Légendaire, son spécial Ultra Légendaire/Divine, suspense, briquet et feu.
+**Sons** (synthétisés par `scripts/generate-sounds.py`, y compris coup, critique, gifle, raté, étourdi, K.O., victoire et défaite pour les combats) : l'icône 🔊 de l'accueil ouvre un curseur d'intensité (55 % par défaut, 0 = coupé), enregistré dans la sauvegarde. Sons : déchirure, éventail, glissement de carte, 7 paliers de montée de niveau, révélation (Commune à Super Rare), son spécial Épique/Mythique, son spécial Légendaire, son spécial Ultra Légendaire/Divine, suspense, briquet et feu.
 
 **Carte agrandie** : on la fait tourner au doigt en semi-3D, avec de l'inertie. Un double-tap retourne la carte, et son dos affiche ses infos. On peut aussi la renommer. Le nom s'affiche sur la carte et la suit lors d'un échange.
 
@@ -42,6 +43,30 @@ Chaque rareté haute a sa mise en scène :
 | Légendaire | foil holo doré (bandes de diffraction, paillettes, reflet de lumière) qui s'allume quand on penche, scintillements dorés | salle dorée, rayons et poussière d'or |
 | Ultra Légendaire | le même foil en arc-en-ciel | rayons et lueurs chromatiques |
 | Divine | foil chromatique et or à double bande croisée, paillettes intenses, forme ornementée (couronne, filigranes, gemmes) | espace : étoiles, nébuleuses, étoiles filantes |
+
+## Combat
+
+**Stats d'une carte.** Chaque carte a des PV et deux attaques, qui dépendent de sa rareté (`src/battle/stats.ts`). Elles sont tirées à partir de l'identifiant de la carte : une même carte a toujours les mêmes stats. Les anciennes cartes les reçoivent donc à la mise à jour, sans rien perdre, et un échange les transporte avec la carte. Dans la collection, on glisse vers le haut (ou on touche « Stats de combat ») pour les voir. On peut y **renommer les deux attaques**, puisqu'elles n'ont pas de type : en combat, on lira « <carte> utilise <attaque> ! ».
+
+| Attaque | Effet |
+| --- | --- |
+| Classique | Un coup simple, illimité |
+| Spéciale : coup simple | 1,6 × plus fort, 3 fois par combat |
+| Spéciale : double frappe | Deux coups à 0,62 × chacun, 3 fois par combat |
+| Spéciale : gifle | 0,75 ×, 1 chance sur 3 d'étourdir l'adversaire 1 à 2 tours (il ne peut plus attaquer), 2 fois par combat |
+| Spéciale : miroir | Copie la dernière attaque de l'adversaire, 2 fois par combat. Seulement Légendaire et au-dessus |
+
+| Rareté | PV | Puissance |
+| --- | --- | --- |
+| Commune → Divine | 50 → 115 | 12 → 32 |
+
+(± 8 % selon la carte.)
+
+**Précision (façon Undertale).** On choisit une attaque, puis une barre apparaît : on touche pour lancer le curseur, et on retouche quand il passe sur la cible au centre. Au centre, c'est un critique (× 1,5). Au bord, le coup ne fait que × 0,4, et s'il n'y a pas de deuxième toucher, l'attaque est ratée. La double frappe enchaîne deux passages.
+
+**Déroulé.** Avant le combat, on choisit 4 cartes (la première commence ; « Auto » prend les plus fortes). L'adversaire en a 4 aussi. On voit sa carte active et ses remplaçantes. Changer de carte est possible à tout moment, mais ça utilise le tour. Une carte K.O. est remplacée sans perdre de tour. Le camp qui n'a plus de carte debout perd.
+
+**Arènes solo** (`src/battle/arenas.ts`). Il y en a 10, du Parc (Communes, bot maladroit) au Cosmos (Ultra Légendaire, Divine…). Le bot vise de mieux en mieux, garde ses spéciales pour le bon moment et met à l'abri ses cartes en danger (`src/battle/bot.ts`). Gagner une arène débloque la suivante, et la progression est enregistrée dans la sauvegarde. Les illustrations des adversaires sont générées par `scripts/generate-bot-art.py`, et les sons de combat par `python3 scripts/generate-sounds.py combat`.
 
 ## Raretés
 
@@ -142,12 +167,14 @@ Un futur serveur de jeu pourra aussi valider les tirages, ce qui empêche la tri
 ## Structure
 
 ```
-src/app/            écrans (expo-router) : onglets, ouverture, carte 3D, échange
+src/app/            écrans (expo-router) : onglets, ouverture, carte 3D, combat, échange
+src/battle/         stats des cartes, règles du combat, bot, arènes
 src/components/     carte (contours par rareté), sachet, effets (halo, rayons, étincelles, flash)
 src/game/           raretés, recharge des tirages, galerie, génération des paquets
 src/storage/        modèle + migrations, stockage disque (+ version web de démo)
 src/trade/          code d'échange, protocole, relais en ligne chiffré, transport TCP, session
 assets/fx/          textures d'effets (générées par scripts/generate-assets.py)
+assets/bots/        illustrations des cartes des adversaires (scripts/generate-bot-art.py)
 tests/              tests de logique
 ```
 

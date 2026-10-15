@@ -323,7 +323,122 @@ def make_burn():
     return reverb(buf, 0.15, tail=0.4)
 
 
+# ------------------------------- Combat -------------------------------------
+
+# --- Le curseur de précision part : petit « tic » montant
+def make_tick():
+    t = t_axis(0.09)
+    f = 900 + 900 * t / 0.09
+    s = np.sin(2 * math.pi * np.cumsum(f) / SR) * np.exp(-t * 30)
+    return s * 0.7
+
+
+# --- Coup qui porte : claquement sec + impact grave
+def make_hit():
+    dur = 0.45
+    buf = np.zeros(int(SR * dur))
+    snap = biquad(noise(0.05), "bp", 2200, q=0.9) * np.exp(-t_axis(0.05) * 70)
+    place(buf, snap, 0)
+    place(buf, boom(0.4, 160, 60, 0.9), 0.002)
+    return reverb(buf, 0.08, tail=0.15)
+
+
+# --- Coup critique : impact plus lourd + éclat brillant
+def make_crit():
+    dur = 0.9
+    buf = np.zeros(int(SR * dur))
+    place(buf, make_hit() * 1.1, 0)
+    place(buf, boom(0.7, 120, 40, 0.8), 0.01)
+    for i, n in enumerate((84, 88, 91, 96)):
+        place(buf, bell(note(n), 0.5, 0.25, bright=0.7), 0.04 + i * 0.03)
+    place(buf, whoosh(0.25, 2000, 7000, 3000, 0.25), 0.02)
+    return reverb(buf, 0.2, tail=0.4)
+
+
+# --- Gifle : claque de peau (bruit filtré très court) + petit « rebond »
+def make_slap():
+    dur = 0.4
+    buf = np.zeros(int(SR * dur))
+    t = t_axis(0.06)
+    crack = biquad(noise(0.06), "bp", 1800, q=0.6) * np.exp(-t * 55) * 1.2
+    crack += biquad(noise(0.06), "hp", 3500) * np.exp(-t * 90) * 0.6
+    place(buf, crack, 0)
+    place(buf, boom(0.25, 220, 120, 0.35), 0)
+    return reverb(buf, 0.1, tail=0.15)
+
+
+# --- Raté : souffle dans le vide qui retombe
+def make_miss():
+    return reverb(whoosh(0.35, 1800, 2600, 500, 0.8, q=1.6), 0.1, tail=0.2)
+
+
+# --- Étourdi : petites étoiles qui tournent (notes qui oscillent)
+def make_stun():
+    dur = 1.0
+    buf = np.zeros(int(SR * dur))
+    for i in range(7):
+        n = 86 + (0, 3, 7, 3)[i % 4]
+        place(buf, bell(note(n), 0.3, 0.35, bright=0.5), i * 0.11)
+    return reverb(buf, 0.25, tail=0.4)
+
+
+# --- K.O. : chute grave qui descend
+def make_ko():
+    dur = 1.1
+    t = t_axis(dur)
+    f = 420 * np.exp(-t * 2.4) + 60
+    tone = np.sign(np.sin(2 * math.pi * np.cumsum(f) / SR)) * 0.25
+    tone = biquad(tone, "lp", 1400) * np.exp(-t * 2.2)
+    buf = tone + boom(dur, 110, 35, 0.8)
+    return reverb(buf, 0.18, tail=0.4)
+
+
+# --- Victoire : petite fanfare montante
+def make_win():
+    dur = 1.8
+    buf = np.zeros(int(SR * dur))
+    seqn = ((72, 0.0), (76, 0.12), (79, 0.24), (84, 0.36))
+    for n, at in seqn:
+        place(buf, bell(note(n), 0.6, 0.6, bright=0.8), at)
+        place(buf, bell(note(n - 12), 0.6, 0.3, bright=0.5), at)
+    for n in (84, 88, 91):
+        place(buf, bell(note(n), 1.3, 0.45, bright=0.9), 0.5)
+    place(buf, pad([note(60), note(64), note(67), note(72)], 1.3, 0.25, attack=0.05), 0.48)
+    place(buf, sparkles(1.0, 14, 3000, 6500, 0.1), 0.5)
+    return reverb(buf, 0.25, tail=0.6)
+
+
+# --- Défaite : trois notes qui descendent, plus douces
+def make_lose():
+    dur = 1.6
+    buf = np.zeros(int(SR * dur))
+    for i, n in enumerate((67, 63, 60)):
+        place(buf, bell(note(n), 0.8, 0.5, bright=0.35), i * 0.28)
+    place(buf, pad([note(48), note(51), note(55)], 1.0, 0.2, attack=0.1, cutoff=900), 0.56)
+    return reverb(buf, 0.3, tail=0.6)
+
+
+COMBAT = (
+    ("tick", make_tick),
+    ("hit", make_hit),
+    ("crit", make_crit),
+    ("slap", make_slap),
+    ("miss", make_miss),
+    ("stun", make_stun),
+    ("ko", make_ko),
+    ("win", make_win),
+    ("lose", make_lose),
+)
+
+
 if __name__ == "__main__":
+    import sys
+
+    if sys.argv[1:] == ["combat"]:
+        # Seulement les sons de combat (les autres restent identiques).
+        for name, fn in COMBAT:
+            save(name, fn())
+        sys.exit(0)
     for lvl in range(1, 8):
         save(f"up{lvl}", make_level_up(lvl))
     save("lighter", make_lighter())
@@ -338,4 +453,6 @@ if __name__ == "__main__":
         ("ultra", make_ultra),
         ("riser", make_riser),
     ):
+        save(name, fn())
+    for name, fn in COMBAT:
         save(name, fn())

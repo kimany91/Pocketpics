@@ -30,6 +30,8 @@ import { Burst, Glow } from '../../components/fx';
 import { CardStage } from '../../components/viewer/CardStage';
 import { ConfirmDelete } from '../../components/viewer/ConfirmDelete';
 import { SpinFx, spinCooldown } from '../../components/viewer/SpinFx';
+import { StatsSheet } from '../../components/viewer/StatsSheet';
+import { powerLabel } from '../../battle/stats';
 import { getRarity } from '../../game/rarity';
 import { useCollectionView } from '../../state/collectionView';
 import { useGame } from '../../state/game';
@@ -42,6 +44,7 @@ export default function CardScreen() {
   const renameCard = useGame((s) => s.renameCard);
   const destroyCard = useGame((s) => s.destroyCard);
   const toggleFavorite = useGame((s) => s.toggleFavorite);
+  const renameAttack = useGame((s) => s.renameAttack);
   const orderIds = useCollectionView((s) => s.ids);
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -53,6 +56,7 @@ export default function CardScreen() {
   const [burning, setBurning] = useState(false);
   const [spin, setSpin] = useState(0);
   const [zoomed, setZoomed] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
   const lastSpin = useRef(0);
 
   // Ordre de défilement : celui de la grille si la carte y figure, sinon les plus récentes d'abord.
@@ -117,6 +121,19 @@ export default function CardScreen() {
       if (far && allowed) scheduleOnRN(go, dir);
       else pageX.value = withTiming(0, SETTLE);
     });
+  // Glisser vers le haut (à côté de la carte) : stats de combat.
+  const openStats = () => {
+    if (editing) setEditing(false);
+    haptic.light();
+    setStatsOpen(true);
+  };
+  const statsPan = Gesture.Pan()
+    .enabled(!burning && !confirming && !zoomed && !statsOpen)
+    .activeOffsetY(-16)
+    .failOffsetX([-22, 22])
+    .onEnd((e) => {
+      if (e.translationY < -40 || e.velocityY < -500) scheduleOnRN(openStats);
+    });
   // Déclarée avant le geste : un geste capture ses variables à sa création.
   const onBackdropTap = () => (editing ? setEditing(false) : close());
   const backdropTap = Gesture.Tap()
@@ -174,7 +191,7 @@ export default function CardScreen() {
     <View style={styles.root}>
       <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
       {env ? <ViewerEnvironment key={r.id} rarity={r} width={width} height={height} tilt={tilt} /> : null}
-      <GestureDetector gesture={Gesture.Race(pagePan, backdropTap)}>
+      <GestureDetector gesture={Gesture.Race(pagePan, statsPan, backdropTap)}>
         <View style={[StyleSheet.absoluteFill, !env && styles.backdrop]} />
       </GestureDetector>
       <View style={{ height: insets.top + 56 }} pointerEvents="none" />
@@ -225,11 +242,21 @@ export default function CardScreen() {
             <AppText variant="label" style={{ color: r.color, marginTop: 4 }}>
               {r.label}
             </AppText>
+            <Pressable onPress={openStats} disabled={burning} style={styles.statsPill} accessibilityLabel="Stats de combat" accessibilityRole="button">
+              <Ionicons name="chevron-up" size={16} color={colors.text} />
+              <AppText variant="label">Stats de combat</AppText>
+              <View style={styles.pillStats}>
+                <Ionicons name="heart" size={12} color={colors.danger} />
+                <AppText style={styles.pillValue}>{card.battle.hp}</AppText>
+                <Ionicons name="flash" size={12} color={colors.gold} />
+                <AppText style={styles.pillValue}>{powerLabel(card.battle.attacks[0])}</AppText>
+              </View>
+            </Pressable>
             <Animated.View entering={FadeIn.delay(900)}>
-              <AppText variant="caption" style={{ marginTop: 14, textAlign: 'center' }}>
+              <AppText variant="caption" style={{ marginTop: 10, textAlign: 'center' }}>
                 {list.length > 1
-                    ? 'Tourne la carte au doigt · pince pour zoomer · glisse à côté pour changer de carte'
-                    : 'Tourne la carte au doigt · pince pour zoomer · double-tape pour la retourner'}
+                    ? 'Tourne la carte au doigt · pince pour zoomer · glisse sur le côté pour changer de carte, vers le haut pour ses stats'
+                    : 'Tourne la carte au doigt · pince pour zoomer · glisse vers le haut pour ses stats'}
               </AppText>
             </Animated.View>
           </Animated.View>
@@ -265,6 +292,8 @@ export default function CardScreen() {
           </View>
         </View>
       ) : null}
+
+      {statsOpen ? <StatsSheet key={card.id} card={card} onClose={() => setStatsOpen(false)} onRename={(slot, name) => renameAttack(card.id, slot, name)} /> : null}
 
       {confirming ? (
         <ConfirmDelete
@@ -319,6 +348,20 @@ const SETTLE = { duration: 260, easing: Easing.out(Easing.cubic) };
 
 const styles = StyleSheet.create({
   topRight: { flexDirection: 'row', gap: 10 },
+  statsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+    paddingHorizontal: 14,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  pillStats: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 2 },
+  pillValue: { fontFamily: fonts.bold, fontSize: 12, color: colors.textDim, fontVariant: ['tabular-nums'], marginRight: 4 },
   favOn: { backgroundColor: 'rgba(247,201,72,0.18)' },
   favBurst: { position: 'absolute', left: 20, top: 20, width: 0, height: 0 },
   root: { flex: 1 },

@@ -1,0 +1,64 @@
+/**
+ * Texte qui prend la plus grande taille possible sans jamais déborder de sa
+ * boîte : la taille est calculée d'après la largeur réelle et la longueur du
+ * texte (et sur téléphone, le système réduit encore si besoin).
+ */
+import { useState } from 'react';
+import { type StyleProp, Text, type TextStyle, View } from 'react-native';
+
+import { colors, fonts } from '../../theme';
+
+export interface TextPart {
+  text: string;
+  color?: string;
+  bold?: boolean;
+}
+
+/** Largeur moyenne d'un caractère de la police Sora, en fraction de la taille. */
+const CHAR_W = 0.62;
+
+export function fitFontSize(parts: TextPart[], width: number, lines: number, maxSize: number, minSize: number) {
+  const text = parts.map((p) => p.text).join('');
+  const chars = Math.max(1, text.length);
+  const longestWord = Math.max(1, ...text.split(/\s+/).map((w) => w.length));
+  // Assez de place pour tout le texte sur `lines` lignes (avec une marge pour les retours à la ligne)…
+  const byLength = (width * lines * 0.86) / (chars * CHAR_W);
+  // …et le mot le plus long doit tenir sur une ligne.
+  const byWord = width / (longestWord * CHAR_W * 1.04);
+  return Math.max(minSize, Math.min(maxSize, byLength, byWord));
+}
+
+export function FitText({
+  parts,
+  lines = 3,
+  maxSize = 30,
+  minSize = 14,
+  style,
+  initialWidth = 300,
+}: {
+  parts: TextPart[];
+  lines?: number;
+  maxSize?: number;
+  minSize?: number;
+  style?: StyleProp<TextStyle>;
+  initialWidth?: number;
+}) {
+  const [width, setWidth] = useState(initialWidth);
+  const size = Math.floor(fitFontSize(parts, width, lines, maxSize, minSize));
+  return (
+    <View style={{ alignSelf: 'stretch' }} onLayout={(e) => setWidth(Math.max(40, e.nativeEvent.layout.width))}>
+      <Text
+        numberOfLines={lines}
+        adjustsFontSizeToFit
+        minimumFontScale={0.5}
+        style={[{ fontFamily: fonts.semibold, fontSize: size, lineHeight: Math.round(size * 1.22), color: colors.text, textAlign: 'center' }, style]}
+      >
+        {parts.map((p, i) => (
+          <Text key={i} style={[p.color ? { color: p.color } : null, p.bold ? { fontFamily: fonts.black } : null]}>
+            {p.text}
+          </Text>
+        ))}
+      </Text>
+    </View>
+  );
+}

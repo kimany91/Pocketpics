@@ -56,6 +56,8 @@ export default function RootLayout() {
         <Stack.Screen name="open" options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="card/[id]" options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
         <Stack.Screen name="rates" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="battle/deck" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="battle/fight" options={{ animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="trade/host" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="trade/join" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="trade/scan" options={{ animation: 'slide_from_bottom' }} />

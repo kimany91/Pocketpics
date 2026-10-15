@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { MAX_STORED_DRAWS, computeDraws, consumeDraw, type DrawStatus } from '../game/draws';
 import { setSfxVolume } from '../audio/sfx';
+import { ATTACK_NAME_MAX } from '../battle/stats';
 import { generatePack } from '../game/pack';
 import * as disk from '../storage/disk';
 import type { Card, SaveState } from '../storage/model';
@@ -19,6 +20,10 @@ interface GameStore {
   openPack(): Promise<Card[]>;
   clearPendingPack(): void;
   renameCard(id: string, name: string): void;
+  /** Renomme l'attaque classique (0) ou spéciale (1) d'une carte. Un nom vide est ignoré. */
+  renameAttack(id: string, slot: 0 | 1, name: string): void;
+  /** Note une victoire dans l'arène `n` (débloque la suivante). */
+  winArena(n: number): void;
   toggleFavorite(id: string): void;
   setPlayerName(name: string): void;
   /** `persist: false` pendant qu'on fait glisser le réglage, `true` au relâchement. */
@@ -129,6 +134,30 @@ export const useGame = create<GameStore>((set, get) => ({
     disk.updateCardSidecar(card);
     disk.saveIndex(cards);
     set({ cards });
+  },
+
+  renameAttack(id, slot, rawName) {
+    const name = rawName.trim().slice(0, ATTACK_NAME_MAX);
+    if (!name) return;
+    const cards = get().cards.map((c) => {
+      if (c.id !== id) return c;
+      const attacks = [...c.battle.attacks] as Card['battle']['attacks'];
+      attacks[slot] = { ...attacks[slot], name };
+      return { ...c, battle: { ...c.battle, attacks } };
+    });
+    const card = cards.find((c) => c.id === id);
+    if (!card) return;
+    disk.updateCardSidecar(card);
+    disk.saveIndex(cards);
+    set({ cards });
+  },
+
+  winArena(n) {
+    const save = get().save;
+    if (!save || n <= save.arenaCleared) return;
+    const next = { ...save, arenaCleared: Math.max(save.arenaCleared, n) };
+    persistState(next);
+    set({ save: next });
   },
 
   setSoundVolume(volume, persist = true) {

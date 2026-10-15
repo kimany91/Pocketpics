@@ -10,6 +10,7 @@ export default function TabsLayout() {
     <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg }, animation: 'fade' }}>
       <Tabs.Screen name="index" options={{ tabBarBadge: charges > 0 ? charges : undefined }} />
       <Tabs.Screen name="collection" />
+      <Tabs.Screen name="battle" />
       <Tabs.Screen name="trade" />
     </Tabs>
   );

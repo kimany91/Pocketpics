@@ -12,6 +12,7 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
 const TABS: Record<string, { label: string; icon: IconName; iconActive: IconName }> = {
   index: { label: 'Tirage', icon: 'sparkles-outline', iconActive: 'sparkles' },
   collection: { label: 'Collection', icon: 'albums-outline', iconActive: 'albums' },
+  battle: { label: 'Combat', icon: 'flash-outline', iconActive: 'flash' },
   trade: { label: 'Échange', icon: 'swap-horizontal-outline', iconActive: 'swap-horizontal' },
 };
 

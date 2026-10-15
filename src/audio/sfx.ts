@@ -22,6 +22,15 @@ const SOURCES = {
   up7: require('../../assets/sfx/up7.wav'),
   lighter: require('../../assets/sfx/lighter.wav'),
   burn: require('../../assets/sfx/burn.wav'),
+  tick: require('../../assets/sfx/tick.wav'),
+  hit: require('../../assets/sfx/hit.wav'),
+  crit: require('../../assets/sfx/crit.wav'),
+  slap: require('../../assets/sfx/slap.wav'),
+  miss: require('../../assets/sfx/miss.wav'),
+  stun: require('../../assets/sfx/stun.wav'),
+  ko: require('../../assets/sfx/ko.wav'),
+  win: require('../../assets/sfx/win.wav'),
+  lose: require('../../assets/sfx/lose.wav'),
 } as const;
 
 export type Sfx = keyof typeof SOURCES;

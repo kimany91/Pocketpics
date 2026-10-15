@@ -3,6 +3,7 @@ import { randomUUID } from 'expo-crypto';
 import { CARD_SCHEMA_VERSION, type Card } from '../storage/model';
 import { CARDS_PER_PACK } from './draws';
 import { listPhotoIds, processPhoto, type ProcessedPhoto } from './gallery';
+import { generateStats } from '../battle/stats';
 import { getRarity, rollRarity } from './rarity';
 
 export interface GeneratedCard {
@@ -58,12 +59,14 @@ export async function generatePack(opts: {
       consumed.push(assetId);
       if ('duplicate' in res) continue;
       packHashes.add(res.hash);
+      const id = randomUUID();
+      const rarity = rollRarity();
       cards.push({
         photo: res,
         card: {
           v: CARD_SCHEMA_VERSION,
-          id: randomUUID(),
-          rarity: rollRarity(),
+          id,
+          rarity,
           name: null,
           hash: res.hash,
           createdAt: now,
@@ -73,6 +76,7 @@ export async function generatePack(opts: {
           height: res.height,
           sourceId: res.assetId,
           favorite: false,
+          battle: generateStats(id, getRarity(rarity).rank),
         },
       });
     } catch {

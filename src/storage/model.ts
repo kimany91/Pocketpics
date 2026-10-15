@@ -7,8 +7,10 @@
  *  - les champs inconnus (venant d'une version plus récente) sont conservés tels quels ;
  *  - une carte n'est jamais supprimée par une migration, seulement complétée.
  */
+import { type BattleStats, normalizeStats } from '../battle/stats';
 import type { DrawState } from '../game/draws';
 import { initialDrawState } from '../game/draws';
+import { getRarity } from '../game/rarity';
 
 export const CARD_SCHEMA_VERSION = 1;
 
@@ -40,6 +42,11 @@ export interface Card {
   sourceId: string | null;
   /** Carte mise en favori par le joueur (ajouté après : `false` si absent). */
   favorite: boolean;
+  /**
+   * PV et attaques pour les combats (ajouté après : générés à partir de l'id si
+   * absents, donc identiques à chaque chargement). Les noms d'attaque sont modifiables.
+   */
+  battle: BattleStats;
   [extra: string]: unknown;
 }
 
@@ -57,6 +64,8 @@ export interface SaveState {
   soundOn: boolean;
   /** Volume des effets sonores, de 0 à 1 (ajouté après : déduit de `soundOn` si absent). */
   soundVolume: number;
+  /** Nombre d'arènes solo gagnées, dans l'ordre (ajouté après : 0 si absent). */
+  arenaCleared: number;
   [extra: string]: unknown;
 }
 
@@ -84,11 +93,12 @@ export function migrateCard(input: unknown, now = Date.now()): Card | null {
     v = num(c.v, v + 1);
   }
   const name = typeof c.name === 'string' && c.name.trim() ? c.name : null;
+  const rarity = str(c.rarity, 'common');
   return {
     ...c,
     v: Math.max(v, CARD_SCHEMA_VERSION),
     id: c.id as string,
-    rarity: str(c.rarity, 'common'),
+    rarity,
     name,
     hash: str(c.hash, ''),
     createdAt: num(c.createdAt, now),
@@ -98,6 +108,7 @@ export function migrateCard(input: unknown, now = Date.now()): Card | null {
     height: num(c.height, 0),
     sourceId: typeof c.sourceId === 'string' ? c.sourceId : null,
     favorite: c.favorite === true,
+    battle: normalizeStats(c.battle, c.id as string, getRarity(rarity).rank),
   };
 }
 
@@ -117,6 +128,7 @@ export function createInitialState(now = Date.now()): SaveState {
     totalPacksOpened: 0,
     soundOn: true,
     soundVolume: DEFAULT_SOUND_VOLUME,
+    arenaCleared: 0,
   };
 }
 
@@ -141,5 +153,6 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     totalPacksOpened: num(s.totalPacksOpened, 0),
     soundOn: s.soundOn !== false,
     soundVolume: Math.max(0, Math.min(1, num(s.soundVolume, s.soundOn === false ? 0 : DEFAULT_SOUND_VOLUME))),
+    arenaCleared: Math.max(0, Math.floor(num(s.arenaCleared, 0))),
   };
 }
