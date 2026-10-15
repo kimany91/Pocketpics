@@ -4,6 +4,7 @@ import { MAX_STORED_DRAWS, computeDraws, consumeDraw, type DrawStatus } from '..
 import { setMusicVolume } from '../audio/music';
 import { setSfxVolume } from '../audio/sfx';
 import { ATTACK_NAME_MAX } from '../battle/stats';
+import { planPack, rollLucky } from '../game/luck';
 import { generatePack } from '../game/pack';
 import * as disk from '../storage/disk';
 import type { Card, SaveState } from '../storage/model';
@@ -15,6 +16,8 @@ interface GameStore {
   save: SaveState | null;
   /** Cartes du dernier paquet ouvert (pour l'écran d'ouverture). */
   pendingPack: Card[];
+  /** Le paquet en cours d'ouverture est un paquet brillant (sachet doré). */
+  openingLucky: boolean;
 
   init(): Promise<void>;
   drawStatus(now?: number): DrawStatus;
@@ -54,6 +57,7 @@ export const useGame = create<GameStore>((set, get) => ({
   cards: [],
   save: null,
   pendingPack: [],
+  openingLucky: false,
 
   async init() {
     if (get().ready) return;
@@ -97,10 +101,20 @@ export const useGame = create<GameStore>((set, get) => ({
     const now = Date.now();
     if (!consumeDraw(save.draws, now)) throw new Error('Aucun tirage disponible');
 
+    // Chance : démarrage garanti, malchance, paquet brillant (décidé avant l'ouverture pour le montrer).
+    const packIndex = save.totalPacksOpened;
+    const lucky = rollLucky(save.luck, packIndex);
+    set({ openingLucky: lucky });
+    let luckAfter = save.luck;
     const pack = await generatePack({
       drawnAssetIds: new Set(save.drawnAssetIds),
       drawnHashes: new Set(save.drawnHashes),
       now,
+      rarities: (count) => {
+        const plan = planPack({ state: save.luck, cards: count, packIndex, lucky });
+        luckAfter = plan.state;
+        return plan.rarities;
+      },
     });
 
     // 1) les cartes d'abord (si l'app est tuée ici, le joueur garde ses cartes ET son tirage)
@@ -120,6 +134,7 @@ export const useGame = create<GameStore>((set, get) => ({
       drawnAssetIds: [...new Set([...latest.drawnAssetIds, ...pack.consumedAssetIds])],
       drawnHashes: [...new Set([...latest.drawnHashes, ...written.map((c) => c.hash)])],
       totalPacksOpened: latest.totalPacksOpened + 1,
+      luck: luckAfter,
     };
     persistState(next);
     set({ cards, save: next, pendingPack: written });

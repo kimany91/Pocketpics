@@ -93,6 +93,25 @@ Les effets en cours disparaissent quand la carte quitte le terrain (sauf l'étou
 
 **Arènes solo** (`src/battle/arenas.ts`). Il y en a 10, du Parc (Communes, bot maladroit) au Cosmos (Ultra Légendaire, Divine…). Le bot vise de mieux en mieux, garde ses spéciales pour le bon moment et met à l'abri ses cartes en danger (`src/battle/bot.ts`). Gagner une arène débloque la suivante, et la progression est enregistrée dans la sauvegarde. Les illustrations des adversaires sont générées par `scripts/generate-bot-art.py`, et les sons de combat par `python3 scripts/generate-sounds.py combat`.
 
+## Chance (`src/game/luck.ts`)
+
+La table des raretés ci-dessous donne les chances **de base** de chaque carte. Trois mécaniques s'y ajoutent, avec un état rangé dans la sauvegarde (`luck`).
+
+- **Paquets de départ** : dans une nouvelle partie, le 1er et le 2e paquet se terminent par une **Épique**, le 3e par une **Mythique** (exactement). Les autres cartes de ces paquets restent en dessous (Super Rare au plus), pour que la belle carte soit révélée en dernier. Ça ne se produit qu'une fois, et « Effacer ma partie de test » (navigateur) relance une partie neuve, donc ces paquets aussi.
+- **Malchance** : après 20 cartes sans Épique ou mieux, la chance d'en avoir une monte de 2,5 points par carte. Elle est garantie à la 40e carte. Même principe pour Légendaire ou mieux : la chance monte après 180 cartes, et la Légendaire est garantie à la 350e. Le compteur repart à zéro dès que la carte sort.
+- **Paquets brillants** : 1 paquet sur 20 environ (garanti au plus tard au 30e) est doré et contient une carte Super Rare ou mieux. Le sachet doré et l'annonce apparaissent avant de déchirer.
+
+Réglé par simulation (3 000 joueurs × 300 paquets) :
+
+| | Sans | Avec |
+| --- | --- | --- |
+| Épiques ou mieux par paquet | 0,48 | 0,54 |
+| Légendaires ou mieux / 100 paquets | 5 | 6 |
+| Pire attente d'une Épique | ~28 paquets | 8 paquets |
+| Pire attente d'une Légendaire | ~190 paquets | ~60 paquets |
+
+L'écran « Taux d'obtention » affiche ces règles et la progression du joueur vers chaque garantie.
+
 ## Raretés
 
 Les taux se règlent dans `src/game/rarity.ts`, en poids sur 100 000 tirages.

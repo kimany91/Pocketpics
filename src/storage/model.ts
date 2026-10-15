@@ -10,6 +10,7 @@
 import { type BattleStats, normalizeStats } from '../battle/stats';
 import type { DrawState } from '../game/draws';
 import { initialDrawState } from '../game/draws';
+import { type LuckState, initialLuck } from '../game/luck';
 import { getRarity } from '../game/rarity';
 
 export const CARD_SCHEMA_VERSION = 1;
@@ -70,6 +71,8 @@ export interface SaveState {
   musicVolume: number;
   /** Nombre d'arènes solo gagnées, dans l'ordre (ajouté après : 0 si absent). */
   arenaCleared: number;
+  /** Compteurs de chance (malchance, paquets brillants). Ajouté après : remis à zéro si absent. */
+  luck: LuckState;
   [extra: string]: unknown;
 }
 
@@ -134,7 +137,14 @@ export function createInitialState(now = Date.now()): SaveState {
     soundVolume: DEFAULT_SOUND_VOLUME,
     musicVolume: DEFAULT_MUSIC_VOLUME,
     arenaCleared: 0,
+    luck: initialLuck(),
   };
+}
+
+function migrateLuck(raw: unknown): LuckState {
+  const l = (raw && typeof raw === 'object' ? raw : {}) as Raw;
+  const n = (v: unknown) => Math.max(0, Math.floor(num(v, 0)));
+  return { ...l, sinceEpic: n(l.sinceEpic), sinceLegend: n(l.sinceLegend), packsSinceLucky: n(l.packsSinceLucky) };
 }
 
 export function migrateState(input: unknown, now = Date.now()): SaveState {
@@ -160,5 +170,6 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     soundVolume: Math.max(0, Math.min(1, num(s.soundVolume, s.soundOn === false ? 0 : DEFAULT_SOUND_VOLUME))),
     musicVolume: Math.max(0, Math.min(1, num(s.musicVolume, DEFAULT_MUSIC_VOLUME))),
     arenaCleared: Math.max(0, Math.floor(num(s.arenaCleared, 0))),
+    luck: migrateLuck(s.luck),
   };
 }

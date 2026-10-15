@@ -6,6 +6,7 @@ import Animated, {
   Easing,
   FadeIn,
   FadeInUp,
+  ZoomIn,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -33,7 +34,7 @@ import { getRarity } from '../game/rarity';
 import { useGame } from '../state/game';
 import { useDrawStatus } from '../state/useDrawStatus';
 import type { Card } from '../storage/model';
-import { CARD_RATIO, colors } from '../theme';
+import { CARD_RATIO, colors, fonts } from '../theme';
 import { haptic } from '../utils/haptics';
 
 type Phase = 'pack' | 'fan' | 'waiting' | 'reveal' | 'summary';
@@ -50,6 +51,10 @@ function PackSession({ onNext }: { onNext(): void }) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const openPack = useGame((s) => s.openPack);
+  const openingLucky = useGame((s) => s.openingLucky);
+  /** Vrai une fois ce paquet-ci lancé (avant, `openingLucky` vaut encore celui du paquet précédent). */
+  const [luckKnown, setLuckKnown] = useState(false);
+  const lucky = luckKnown && openingLucky;
   const [cards, setCards] = useState<Card[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>('pack');
@@ -76,7 +81,15 @@ function PackSession({ onNext }: { onNext(): void }) {
               : String(e),
         ),
       );
+    setLuckKnown(true);
   }, [openPack]);
+
+  // Paquet brillant : le sachet devient doré, avec son et vibration.
+  useEffect(() => {
+    if (!lucky) return;
+    playSfx('legendary', { volume: 0.55 });
+    haptic.sequence(['success', 'heavy', 'medium'], 110);
+  }, [lucky]);
 
   useEffect(() => {
     if (phase === 'waiting' && cards) setPhase('reveal');
@@ -110,8 +123,21 @@ function PackSession({ onNext }: { onNext(): void }) {
 
       {phase === 'pack' ? (
         <View style={styles.centered}>
-          <PackTear width={packW} onTorn={torn} />
+          {lucky ? (
+            <View pointerEvents="none" style={{ position: 'absolute', width: packW * 2.4, height: packW * 2.4, left: (width - packW * 2.4) / 2, top: (height - insets.top - insets.bottom - packW * 2.4) / 2 }}>
+              <Glow color="#FFC94D" size={packW * 2.4} />
+            </View>
+          ) : null}
+          <PackTear width={packW} onTorn={torn} lucky={lucky} />
         </View>
+      ) : null}
+      {phase === 'pack' && lucky ? (
+        <Animated.View entering={ZoomIn.springify().damping(11)} pointerEvents="none" style={[styles.luckyBanner, { top: insets.top + 18 }]}>
+          <AppText style={styles.luckyTitle}>✦ Paquet brillant ✦</AppText>
+          <AppText variant="caption" style={{ color: '#F5DFA0', textAlign: 'center' }}>
+            Une carte Super Rare ou mieux t'attend
+          </AppText>
+        </Animated.View>
       ) : null}
 
       {phase === 'fan' ? <CardFanOut count={cards?.length ?? CARDS_PER_PACK} cardW={cardW} fromY={height * 0.25} onDone={() => setPhase(cards ? 'reveal' : 'waiting')} /> : null}
@@ -260,6 +286,8 @@ function SummaryCard({ card, width, delay, best }: { card: Card; width: number; 
 }
 
 const styles = StyleSheet.create({
+  luckyBanner: { position: 'absolute', left: 24, right: 24, alignItems: 'center', gap: 2 },
+  luckyTitle: { fontFamily: fonts.black, fontSize: 22, color: '#FFD86B', letterSpacing: 0.5, textShadowColor: 'rgba(255,190,60,0.6)', textShadowRadius: 12 },
   root: { flex: 1, backgroundColor: '#060608' },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   centerAbs: { alignItems: 'center', justifyContent: 'center' },

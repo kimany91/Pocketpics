@@ -4,7 +4,7 @@ import { CARD_SCHEMA_VERSION, type Card } from '../storage/model';
 import { CARDS_PER_PACK } from './draws';
 import { listPhotoIds, processPhoto, type ProcessedPhoto } from './gallery';
 import { generateStats } from '../battle/stats';
-import { getRarity, rollRarity } from './rarity';
+import { type RarityId, getRarity, rollRarity } from './rarity';
 
 export interface GeneratedCard {
   card: Card;
@@ -40,6 +40,11 @@ export async function generatePack(opts: {
   drawnHashes: ReadonlySet<string>;
   count?: number;
   now?: number;
+  /**
+   * Raretés des cartes du paquet, décidées ensemble une fois les photos prêtes
+   * (démarrage, malchance, paquet brillant). Par défaut : tirage indépendant.
+   */
+  rarities?: (cards: number) => RarityId[];
 }): Promise<PackResult> {
   const count = opts.count ?? CARDS_PER_PACK;
   const now = opts.now ?? Date.now();
@@ -48,10 +53,10 @@ export async function generatePack(opts: {
 
   const packHashes = new Set<string>();
   const consumed: string[] = [];
-  const cards: GeneratedCard[] = [];
+  const photos: ProcessedPhoto[] = [];
   const maxAttempts = count * 8;
 
-  for (let i = 0; i < candidates.length && cards.length < count && i < maxAttempts; i++) {
+  for (let i = 0; i < candidates.length && photos.length < count && i < maxAttempts; i++) {
     const assetId = candidates[i];
     try {
       const res = await processPhoto(assetId, (h) => opts.drawnHashes.has(h) || packHashes.has(h));
@@ -59,31 +64,36 @@ export async function generatePack(opts: {
       consumed.push(assetId);
       if ('duplicate' in res) continue;
       packHashes.add(res.hash);
-      const id = randomUUID();
-      const rarity = rollRarity();
-      cards.push({
-        photo: res,
-        card: {
-          v: CARD_SCHEMA_VERSION,
-          id,
-          rarity,
-          name: null,
-          hash: res.hash,
-          createdAt: now,
-          obtainedAt: now,
-          origin: 'draw',
-          width: res.width,
-          height: res.height,
-          sourceId: res.assetId,
-          favorite: false,
-          battle: generateStats(id, getRarity(rarity).rank),
-        },
-      });
+      photos.push(res);
     } catch {
       // photo illisible (supprimée, corrompue…) : on passe à la suivante
     }
   }
-  if (cards.length === 0) throw new NoPhotosLeftError();
+  if (photos.length === 0) throw new NoPhotosLeftError();
+
+  const rarities = opts.rarities ? opts.rarities(photos.length) : photos.map(() => rollRarity());
+  const cards: GeneratedCard[] = photos.map((photo, i) => {
+    const id = randomUUID();
+    const rarity = rarities[i] ?? rollRarity();
+    return {
+      photo,
+      card: {
+        v: CARD_SCHEMA_VERSION,
+        id,
+        rarity,
+        name: null,
+        hash: photo.hash,
+        createdAt: now,
+        obtainedAt: now,
+        origin: 'draw',
+        width: photo.width,
+        height: photo.height,
+        sourceId: photo.assetId,
+        favorite: false,
+        battle: generateStats(id, getRarity(rarity).rank),
+      },
+    };
+  });
   // La plus rare est révélée en dernier : le suspense monte.
   cards.sort((a, b) => getRarity(a.card.rarity).rank - getRarity(b.card.rarity).rank);
   return { cards, consumedAssetIds: consumed };

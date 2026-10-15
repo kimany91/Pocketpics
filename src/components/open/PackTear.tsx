@@ -40,7 +40,7 @@ function tearNotch(step: number) {
   return haptic.medium();
 }
 
-export function PackTear({ width, onTorn }: { width: number; onTorn: () => void }) {
+export function PackTear({ width, onTorn, lucky = false }: { width: number; onTorn: () => void; lucky?: boolean }) {
   const height = width * PACK_RATIO;
   const tearY = height * TEAR_LINE;
 
@@ -151,11 +151,11 @@ export function PackTear({ width, onTorn }: { width: number; onTorn: () => void 
         <Animated.View style={[{ width, height }, wrapStyle]}>
           <Animated.View style={[styles.piece, { height: height - tearY, top: tearY }, bodyStyle]}>
             <View style={{ marginTop: -tearY }}>
-              <PackArt width={width} />
+              <PackArt width={width} lucky={lucky} />
             </View>
           </Animated.View>
           <Animated.View style={[styles.piece, { height: tearY, top: 0 }, topStyle]}>
-            <PackArt width={width} shimmer={false} />
+            <PackArt width={width} shimmer={false} lucky={lucky} />
           </Animated.View>
 
           <Glow color="#FFE8B0" size={tearY * 1.6} stretchX={(width * 1.5) / (tearY * 1.6)} opacity={leak} style={{ left: -width * 0.25, top: tearY - tearY * 0.8 }} />
