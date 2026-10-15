@@ -2,8 +2,8 @@
  * La chance du joueur, d'un paquet à l'autre.
  *
  *  - Démarrage : les 3 premiers paquets d'une nouvelle partie finissent sur une
- *    Épique, une Épique, puis une Mythique (les autres cartes de ces paquets
- *    restent en dessous, pour que la belle carte soit révélée en dernier).
+ *    Super Rare, une Super Rare, puis une Épique (les autres cartes de ces
+ *    paquets restent en dessous, pour que la belle carte soit révélée en dernier).
  *  - Malchance : plus on enchaîne de cartes sans Épique (ou sans Légendaire),
  *    plus la chance d'en avoir une monte, jusqu'à une garantie. Elle retombe
  *    à la normale dès qu'elle est sortie.
@@ -26,7 +26,7 @@ export interface LuckState {
 export const initialLuck = (): LuckState => ({ sinceEpic: 0, sinceLegend: 0, packsSinceLucky: 0 });
 
 /** Carte garantie des premiers paquets d'une nouvelle partie. */
-export const STARTER: readonly RarityId[] = ['epic', 'epic', 'mythic'];
+export const STARTER: readonly RarityId[] = ['superRare', 'superRare', 'epic'];
 
 /** Réglages, ajustés par simulation (voir tests/luck.test.ts). */
 export const LUCK = {
@@ -36,8 +36,6 @@ export const LUCK = {
   legend: { rank: 5, softAfter: 180, step: 0.0015, hard: 350 },
   /** Paquet brillant : 1 chance sur 20, garanti au plus tard au 30e paquet. */
   lucky: { chance: 1 / 20, hard: 30, minRank: 2 },
-  /** Cartes ordinaires des paquets de démarrage : pas au-dessus de Super Rare. */
-  starterMaxRank: 2,
 } as const;
 
 type Rng = () => number;
@@ -122,7 +120,7 @@ export function planPack(opts: { state: LuckState; cards: number; packIndex: num
     let id: RarityId;
     if (starter) {
       // démarrage : la dernière carte est exactement la rareté promise, les autres restent en dessous
-      id = i === opts.cards - 1 ? starter : rollRarityBetween(0, LUCK.starterMaxRank, rng);
+      id = i === opts.cards - 1 ? starter : rollRarityBetween(0, getRarity(starter).rank - 1, rng);
     } else {
       id = rollCard(state, rng, opts.lucky && i === 0 ? LUCK.lucky.minRank : 0);
     }

@@ -114,15 +114,15 @@ Chaque morceau est une vraie petite composition en boucle (48 à 84 s), pas un a
 
 **Aventure solo** (`src/battle/levels.ts`). Les 10 anciennes arènes sont devenues 10 mondes de 5 niveaux, soit 50 niveaux à refaire depuis le début : le Parc, la Plage, le Marché, la Forêt, le Port, la Montagne, le Volcan, la Tempête, le Palais, le Cosmos. Chaque monde a son adversaire et ses 4 cartes, de plus en plus rares. Le bot vise de mieux en mieux, garde ses spéciales pour le bon moment et met à l'abri ses cartes en danger (`src/battle/bot.ts`). Gagner un niveau débloque le suivant. Les illustrations des adversaires sont générées par `scripts/generate-bot-art.py`, et les sons de combat par `python3 scripts/generate-sounds.py combat`.
 
-- **Difficulté** : exigeante dès le début, très dure à la fin. L'adversaire aligne 3 cartes au niveau 1, puis 4. Les premiers mondes surclassent ses cartes (+2 rangs de rareté au Parc, à la Plage et au Marché, +1 de la Forêt à la Montagne ; les derniers mondes sont déjà très rares, jusqu'à la Divine du Cosmos). Dans un monde, chaque niveau est un peu plus fort que le précédent ; le 1er niveau rétrograde sa meilleure carte d'un cran, le 5e est un **boss** dont la meilleure carte monte d'un cran. Le bot vise bien dès le départ (4/10) et presque parfaitement à la fin. Tous ces réglages sont dans l'objet `TUNE`.
-- **Réglé par simulation** (`tests/levels.test.ts`), avec un joueur qui vise bien. Avec les cartes du départ, on bloque vers le monde 4-5 : il faut ouvrir des paquets pour aller plus loin.
+- **Difficulté** : abordable au début, de plus en plus dure, très dure à la fin. L'adversaire aligne 3 cartes au niveau 1, puis 4. Les 4 premiers mondes surclassent ses cartes d'un rang de rareté (les derniers mondes sont déjà très rares, jusqu'à la Divine du Cosmos). Dans un monde, chaque niveau est un peu plus fort que le précédent ; le 1er niveau rétrograde sa meilleure carte d'un cran, le 5e est un **boss** dont la meilleure carte monte d'un cran. Le bot vise correctement dès le départ (4/10) et presque parfaitement à la fin. Tous ces réglages sont dans l'objet `TUNE`.
+- **Réglé par simulation** (`tests/levels.test.ts`), avec un joueur qui vise bien. Avec les cartes des 3 paquets de départ, on passe les premiers mondes et on bloque vers le monde 4-6 : il faut ouvrir des paquets pour aller plus loin.
 
 | Deck du joueur | Niv. 1 | Niv. 5 (boss) | Niv. 10 (boss) | Niv. 20 (boss) | Niv. 30 (boss) | Niv. 40 (boss) | Niv. 50 (boss) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Départ (Mythique, 2 Épiques, Rare) | 100 % | 36 % | 33 % | 23 % | 1 % | 0 % | 0 % |
-| Moyen (Légendaire, Mythique, 2 Épiques) | 100 % | 81 % | 68 % | 44 % | 4 % | 0 % | 0 % |
-| Fort (Ultra Légendaire, Légendaire, 2 Mythiques) | 100 % | 99 % | 95 % | 86 % | 28 % | 10 % | 0 % |
-| Au maximum (Divine, Ultra Légendaire, 2 Légendaires) | 100 % | 100 % | 100 % | 100 % | 81 % | 39 % | 5 % |
+| Départ (Épique, 2 Super Rares, Rare) | 100 % | 85 % | 70 % | 18 % | 10 % | 0 % | 0 % |
+| Moyen (Légendaire, Mythique, 2 Épiques) | 100 % | 98 % | 98 % | 65 % | 47 % | 3 % | 0 % |
+| Fort (Ultra Légendaire, Légendaire, 2 Mythiques) | 100 % | 100 % | 100 % | 97 % | 76 % | 16 % | 1 % |
+| Au maximum (Divine, Ultra Légendaire, 2 Légendaires) | 100 % | 100 % | 100 % | 100 % | 99 % | 69 % | 14 % |
 
 - **Étoiles** : 3 si on gagne sans perdre de carte, 2 en en perdant une, 1 sinon. La meilleure note de chaque niveau est gardée (150 étoiles au total).
 
@@ -169,7 +169,7 @@ Six rangs, chacun en trois divisions : **Papier**, **Bronze**, **Argent**, **Tit
 
 La table des raretés ci-dessous donne les chances **de base** de chaque carte. Trois mécaniques s'y ajoutent, avec un état rangé dans la sauvegarde (`luck`).
 
-- **Paquets de départ** : dans une nouvelle partie, le 1er et le 2e paquet se terminent par une **Épique**, le 3e par une **Mythique** (exactement). Les autres cartes de ces paquets restent en dessous (Super Rare au plus), pour que la belle carte soit révélée en dernier. Ça ne se produit qu'une fois, et « Effacer ma partie de test » (navigateur) relance une partie neuve, donc ces paquets aussi.
+- **Paquets de départ** : dans une nouvelle partie, le 1er et le 2e paquet se terminent par une **Super Rare**, le 3e par une **Épique** (exactement). Les autres cartes de ces paquets restent en dessous (Rare au plus dans les deux premiers, Super Rare au plus dans le 3e), pour que la belle carte soit révélée en dernier. Ça ne se produit qu'une fois, et « Effacer ma partie de test » (navigateur) relance une partie neuve, donc ces paquets aussi.
 - **Malchance** : après 20 cartes sans Épique ou mieux, la chance d'en avoir une monte de 2,5 points par carte. Elle est garantie à la 40e carte. Même principe pour Légendaire ou mieux : la chance monte après 180 cartes, et la Légendaire est garantie à la 350e. Le compteur repart à zéro dès que la carte sort.
 - **Paquets brillants** : 1 paquet sur 20 environ (garanti au plus tard au 30e) est doré et contient une carte Super Rare ou mieux. Le sachet doré et l'annonce apparaissent avant de déchirer.
 

@@ -38,7 +38,7 @@ test('difficulté : dans un monde, chaque niveau est plus fort que le précéden
   assert.ok(getLevel(1)!.botLevel >= 4, 'le bot vise bien dès le départ');
 });
 
-test('simulation : exigeant dès le début, très dur à la fin même avec de très bonnes cartes', () => {
+test('simulation : abordable au début, très dur à la fin même avec de très bonnes cartes', () => {
   const deck = (rarities: string[]): FighterInput[] => rarities.map((r, i) => ({ ref: `p${i}`, name: r, rarity: r, battle: generateStats(`p${i}`, getRarity(r).rank) }));
   const rate = (n: number, me: FighterInput[], games = 120) => {
     const l = getLevel(n)!;
@@ -55,14 +55,15 @@ test('simulation : exigeant dès le début, très dur à la fin même avec de tr
     }
     return won / games;
   };
-  const starter = deck(['mythic', 'epic', 'epic', 'rare']);
+  const starter = deck(['epic', 'superRare', 'superRare', 'rare']);
   const maxed = deck(['divine', 'ultraLegendary', 'legendary', 'legendary']);
   assert.ok(rate(1, starter) > 0.9, 'niveau 1 : une mise en jambes');
-  assert.ok(rate(5, starter) < 0.65, 'premier boss déjà sérieux avec les cartes du départ');
-  assert.ok(rate(25, starter) < 0.15, 'avec les cartes du départ, on bloque avant la moitié');
-  assert.ok(rate(30, maxed) > 0.55, 'niveau 30 faisable avec un deck au maximum');
+  const boss10 = rate(10, starter);
+  assert.ok(boss10 > 0.4 && boss10 < 0.92, `boss du monde 2 : jouable mais pas gagné d'avance avec les cartes du départ (${boss10})`);
+  assert.ok(rate(30, starter) < 0.3, 'avec les cartes du départ, on bloque vers le milieu');
+  assert.ok(rate(30, maxed) > 0.85, 'niveau 30 facile avec un deck au maximum');
   const last = rate(50, maxed);
-  assert.ok(last < 0.25, `niveau 50 très dur même avec un deck au maximum (${last})`);
+  assert.ok(last > 0.02 && last < 0.3, `niveau 50 très dur même avec un deck au maximum (${last})`);
 });
 
 test('étoiles et sauvegarde : 3 sans perte, une ancienne sauvegarde repart du niveau 1', () => {

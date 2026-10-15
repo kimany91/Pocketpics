@@ -2,18 +2,18 @@
  * L'aventure solo : 10 mondes (les anciennes arènes) de 5 niveaux chacun,
  * soit 50 niveaux sur une seule carte qu'on remonte.
  *
- * Exigeant dès le début, très dur à la fin (réglé par simulation avec un
- * joueur qui vise bien, voir tests/levels.test.ts) :
+ * Abordable au début, de plus en plus dur, très dur à la fin (réglé par
+ * simulation avec un joueur qui vise bien, voir tests/levels.test.ts) :
  *  - chaque monde a ses 4 cartes, de plus en plus rares d'un monde à l'autre,
- *    et les premiers mondes les alignent surclassées (+2 rangs de rareté, puis
- *    +1, les derniers mondes étant déjà très rares) ;
+ *    et les 4 premiers mondes les alignent surclassées d'un rang de rareté
+ *    (les mondes suivants sont déjà très rares) ;
  *  - l'adversaire aligne 3 cartes au niveau 1, puis 4 ;
  *  - dans un monde, chaque niveau est un peu plus fort que le précédent ; le
  *    1er niveau affaiblit sa meilleure carte, le 5e est un boss (meilleure
  *    carte surclassée d'un rang de plus) ;
- *  - le bot vise bien dès le départ (4/10) et presque parfaitement à la fin.
- * Avec les cartes du départ, on bloque vers le monde 4-5 : il faut de
- * meilleures cartes pour aller plus loin.
+ *  - le bot vise correctement dès le départ (4/10) et presque parfaitement à la fin.
+ * Avec les cartes du départ, on passe les premiers mondes et on bloque vers
+ * le monde 4-6 : il faut de meilleures cartes pour aller plus loin.
  */
 import { getRarity, RARITIES } from '../game/rarity';
 import { ARENAS, type Arena, botCardRef } from './arenas';
@@ -47,18 +47,18 @@ const progress = (n: number) => (n - 1) / (TOTAL_LEVELS - 1);
 /** Réglages de la difficulté (ajustés par simulation, voir tests/levels.test.ts). */
 export const TUNE = {
   /** Multiplicateur des PV et de la puissance : base + croissance × p^puissance. */
-  multBase: 1.05,
-  multGrow: 0.08,
+  multBase: 1.0,
+  multGrow: 0.05,
   multPow: 1.0,
   /** Rangs de rareté ajoutés aux cartes de l'adversaire, monde par monde (les derniers mondes sont déjà très rares). */
-  worldBoost: [2, 2, 2, 1, 1, 1, 0, 0, 0, 0] as number[],
+  worldBoost: [1, 1, 1, 1, 0, 0, 0, 0, 0, 0] as number[],
   /** Boss : stats renforcées. */
   bossMult: 0.97,
   /** Montée dans un monde : chaque niveau un peu plus fort que le précédent. */
   ramp: 0.04,
   /** Habileté du bot : min + croissance × p^puissance (sur 10). */
   botMin: 4,
-  botGrow: 6,
+  botGrow: 5.5,
   botPow: 0.8,
 };
 

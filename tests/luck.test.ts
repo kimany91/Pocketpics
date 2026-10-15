@@ -7,25 +7,25 @@ import { createInitialState, migrateState } from '../src/storage/model';
 
 const rank = (id: string) => getRarity(id).rank;
 
-test('démarrage : Épique, Épique puis Mythique en dernière carte, les autres cartes en dessous', () => {
+test('démarrage : Super Rare, Super Rare puis Épique en dernière carte, les autres cartes en dessous', () => {
   for (let run = 0; run < 300; run++) {
     let state = initialLuck();
     for (let pack = 0; pack < 3; pack++) {
       assert.equal(rollLucky(state, pack), false, 'pas de paquet brillant pendant le démarrage');
       const r = planPack({ state, cards: 5, packIndex: pack, lucky: false });
       assert.equal(r.rarities[4], STARTER[pack]);
-      for (const other of r.rarities.slice(0, 4)) assert.ok(rank(other) <= LUCK.starterMaxRank);
+      for (const other of r.rarities.slice(0, 4)) assert.ok(rank(other) < rank(STARTER[pack]));
       state = r.state;
     }
   }
-  assert.deepEqual(STARTER, ['epic', 'epic', 'mythic']);
+  assert.deepEqual(STARTER, ['superRare', 'superRare', 'epic']);
 });
 
 test('le démarrage ne marche qu’une fois : dès le 4e paquet, tirage normal', () => {
   let starters = 0;
   for (let i = 0; i < 400; i++) {
     const r = planPack({ state: initialLuck(), cards: 5, packIndex: 3, lucky: false });
-    if (r.rarities[4] === 'epic' && r.rarities.slice(0, 4).every((x) => rank(x) <= 2)) starters++;
+    if (r.rarities[4] === 'superRare' && r.rarities.slice(0, 4).every((x) => rank(x) < 2)) starters++;
   }
   assert.ok(starters < 100, `${starters}`);
   // une nouvelle partie (sauvegarde neuve) repart de zéro
