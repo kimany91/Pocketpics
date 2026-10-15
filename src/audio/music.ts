@@ -5,6 +5,7 @@
  * Tempête. Le volume se règle à part de celui des effets sonores.
  */
 import { type AudioPlayer, createAudioPlayer } from 'expo-audio';
+import { Platform } from 'react-native';
 
 const TRACKS: Record<number, number> = {
   1: require('../../assets/music/world-1.m4a'),
@@ -42,7 +43,21 @@ const inBattle = () => owners.size > 0;
 let fadeTimer: ReturnType<typeof setInterval> | null = null;
 let previewTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * Navigateur sans décodeur AAC (rare : certains Chromium libres) : pas de musique,
+ * plutôt qu'une erreur de lecture.
+ */
+const supported = (() => {
+  if (Platform.OS !== 'web') return true;
+  try {
+    return typeof document !== 'undefined' && document.createElement('audio').canPlayType('audio/mp4; codecs="mp4a.40.2"') !== '';
+  } catch {
+    return false;
+  }
+})();
+
 function get(): AudioPlayer | null {
+  if (!supported) return null;
   if (player && loaded === wanted) return player;
   // autre monde : on remplace le morceau
   if (player) {
