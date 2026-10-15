@@ -1,4 +1,8 @@
-/** Illustrations des cartes des adversaires (générées par scripts/generate-bot-art.py). */
+/**
+ * Illustrations des cartes des adversaires, mondes 1 à 20 (générées par
+ * scripts/generate-bot-art.py). La carte 3 de chaque monde sert aussi de
+ * portrait rond de l'adversaire (carte du mode solo, fiche du niveau).
+ */
 
 const ART: Record<string, number> = {
   'bot:1:0': require('../../assets/bots/a1-0.jpg'),
@@ -41,6 +45,46 @@ const ART: Record<string, number> = {
   'bot:10:1': require('../../assets/bots/a10-1.jpg'),
   'bot:10:2': require('../../assets/bots/a10-2.jpg'),
   'bot:10:3': require('../../assets/bots/a10-3.jpg'),
+  'bot:11:0': require('../../assets/bots/a11-0.jpg'),
+  'bot:11:1': require('../../assets/bots/a11-1.jpg'),
+  'bot:11:2': require('../../assets/bots/a11-2.jpg'),
+  'bot:11:3': require('../../assets/bots/a11-3.jpg'),
+  'bot:12:0': require('../../assets/bots/a12-0.jpg'),
+  'bot:12:1': require('../../assets/bots/a12-1.jpg'),
+  'bot:12:2': require('../../assets/bots/a12-2.jpg'),
+  'bot:12:3': require('../../assets/bots/a12-3.jpg'),
+  'bot:13:0': require('../../assets/bots/a13-0.jpg'),
+  'bot:13:1': require('../../assets/bots/a13-1.jpg'),
+  'bot:13:2': require('../../assets/bots/a13-2.jpg'),
+  'bot:13:3': require('../../assets/bots/a13-3.jpg'),
+  'bot:14:0': require('../../assets/bots/a14-0.jpg'),
+  'bot:14:1': require('../../assets/bots/a14-1.jpg'),
+  'bot:14:2': require('../../assets/bots/a14-2.jpg'),
+  'bot:14:3': require('../../assets/bots/a14-3.jpg'),
+  'bot:15:0': require('../../assets/bots/a15-0.jpg'),
+  'bot:15:1': require('../../assets/bots/a15-1.jpg'),
+  'bot:15:2': require('../../assets/bots/a15-2.jpg'),
+  'bot:15:3': require('../../assets/bots/a15-3.jpg'),
+  'bot:16:0': require('../../assets/bots/a16-0.jpg'),
+  'bot:16:1': require('../../assets/bots/a16-1.jpg'),
+  'bot:16:2': require('../../assets/bots/a16-2.jpg'),
+  'bot:16:3': require('../../assets/bots/a16-3.jpg'),
+  'bot:17:0': require('../../assets/bots/a17-0.jpg'),
+  'bot:17:1': require('../../assets/bots/a17-1.jpg'),
+  'bot:17:2': require('../../assets/bots/a17-2.jpg'),
+  'bot:17:3': require('../../assets/bots/a17-3.jpg'),
+  'bot:18:0': require('../../assets/bots/a18-0.jpg'),
+  'bot:18:1': require('../../assets/bots/a18-1.jpg'),
+  'bot:18:2': require('../../assets/bots/a18-2.jpg'),
+  'bot:18:3': require('../../assets/bots/a18-3.jpg'),
+  'bot:19:0': require('../../assets/bots/a19-0.jpg'),
+  'bot:19:1': require('../../assets/bots/a19-1.jpg'),
+  'bot:19:2': require('../../assets/bots/a19-2.jpg'),
+  'bot:19:3': require('../../assets/bots/a19-3.jpg'),
+  'bot:20:0': require('../../assets/bots/a20-0.jpg'),
+  'bot:20:1': require('../../assets/bots/a20-1.jpg'),
+  'bot:20:2': require('../../assets/bots/a20-2.jpg'),
+  'bot:20:3': require('../../assets/bots/a20-3.jpg'),
 };
 
 /** Image d'une carte de bot à partir de sa référence `bot:<arène>:<carte>`. */
