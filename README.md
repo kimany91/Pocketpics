@@ -66,7 +66,7 @@ Les attaques n'ont pas de type et se renomment librement. Chacune a donc **son e
 | Fatigue | ×1, le prochain coup de la cible fait moitié moins mal | 3 | Commune | La cible s'affaisse et se ternit |
 | Garde | Pas de coup, −70 % de dégâts pendant 3 tours adverses | 2 | Rare | Bouclier de verre bleu devant la carte |
 | Soin | Pas de coup, +60 % des PV max (impossible à PV pleins) | 2 | Rare | Lueur verte, étincelles, « +N » |
-| Esquive | Pas de coup, 60 % d'éviter chaque attaque pendant 3 tours adverses | 2 | Super Rare | La carte se décale et se tourne, son ombre reste en place |
+| Esquive | Pas de coup, 60 % d'éviter chaque attaque pendant 2 tours adverses | 2 | Super Rare | La carte se décale et se tourne, son ombre reste en place |
 | Représailles | ×1, ou ×1,6 si la carte a été blessée au tour d'avant | 3 | Super Rare | Elle tremble et rougit de colère avant de frapper |
 | Brouillage | ×1,2, pas de spéciale pendant 2 tours adverses | 2 | Épique | Parasites qui grésillent sur la cible |
 | Poison | ×0,6, puis des dégâts au début de ses 3 tours (guéri en changeant de carte) | 2 | Épique | La cible vire au violet, des bulles en sortent |
@@ -110,7 +110,7 @@ Réglé par simulation (3 000 joueurs × 300 paquets) :
 | Pire attente d'une Épique | ~28 paquets | 8 paquets |
 | Pire attente d'une Légendaire | ~190 paquets | ~60 paquets |
 
-L'écran « Taux d'obtention » affiche ces règles et la progression du joueur vers chaque garantie.
+Ces coups de pouce restent invisibles pour le joueur : pas de compteur affiché, la surprise reste entière (seules les chances de base sont montrées dans « Taux d'obtention »).
 
 ## Raretés
 

@@ -64,9 +64,9 @@ export const BATTLE = {
   /** Garde : part des dégâts encaissés (−70 %), pendant les 3 prochains tours adverses. */
   guardFactor: 0.3,
   guardTurns: 3,
-  /** Esquive : 60 % de chances d'éviter chaque attaque, pendant les 3 prochains tours adverses. */
+  /** Esquive : 60 % de chances d'éviter chaque attaque, pendant les 2 prochains tours adverses. */
   dodgeChance: 0.6,
-  dodgeTurns: 3,
+  dodgeTurns: 2,
   /** Soin : part des PV max récupérés. */
   healRatio: 0.6,
   /** Concentration : multiplicateur du coup suivant. */
@@ -151,7 +151,7 @@ export const ATTACK_EFFECT: Record<AttackKind, string> = {
   fatigue: 'Un coup qui épuise l’adversaire : son prochain coup fait moitié moins mal.',
   guard: 'Ne frappe pas. Encaisse 70 % de dégâts en moins pendant les 3 prochains tours adverses.',
   heal: 'Ne frappe pas. Récupère 60 % des PV max.',
-  dodge: 'Ne frappe pas. Pendant les 3 prochains tours adverses, 60 % de chances d’éviter chaque attaque.',
+  dodge: 'Ne frappe pas. Pendant les 2 prochains tours adverses, 60 % de chances d’éviter chaque attaque.',
   revenge: 'Un coup normal, ×1,6 si la carte a été blessée au tour adverse juste avant.',
   jam: 'Un coup qui empêche l’adversaire d’utiliser sa spéciale pendant ses 2 prochains tours.',
   poison: 'Petit coup qui empoisonne : dégâts au début de ses 3 prochains tours (guéri s’il change de carte).',
