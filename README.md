@@ -114,15 +114,15 @@ Chaque morceau est une vraie petite composition en boucle (48 à 84 s), pas un a
 
 **Aventure solo** (`src/battle/levels.ts`). Les 10 anciennes arènes sont devenues 10 mondes de 5 niveaux, soit 50 niveaux à refaire depuis le début : le Parc, la Plage, le Marché, la Forêt, le Port, la Montagne, le Volcan, la Tempête, le Palais, le Cosmos. Chaque monde a son adversaire et ses 4 cartes, de plus en plus rares. Le bot vise de mieux en mieux, garde ses spéciales pour le bon moment et met à l'abri ses cartes en danger (`src/battle/bot.ts`). Gagner un niveau débloque le suivant. Les illustrations des adversaires sont générées par `scripts/generate-bot-art.py`, et les sons de combat par `python3 scripts/generate-sounds.py combat`.
 
-- **Difficulté** : douce au début, puis de plus en plus raide. L'adversaire n'aligne que 2 cartes aux niveaux 1-2, puis 3, puis 4. Ses PV et sa puissance sont multipliés par ×0,78 au niveau 1, jusqu'à environ ×1,05 en fin d'aventure, en plus de la rareté de ses cartes qui monte d'un monde à l'autre (Communes au Parc, Divine au Cosmos). Son habileté passe de « maladroit » à presque parfait. Le 1er niveau d'un monde est une respiration (sa meilleure carte est rétrogradée d'un cran), le 5e est un **boss** : sa meilleure carte monte d'un cran et ses stats de 6 %.
-- **Réglé par simulation** (`tests/levels.test.ts`), avec un joueur qui vise bien :
+- **Difficulté** : exigeante dès le début, très dure à la fin. L'adversaire aligne 3 cartes au niveau 1, puis 4. Les premiers mondes surclassent ses cartes (+2 rangs de rareté au Parc, à la Plage et au Marché, +1 de la Forêt à la Montagne ; les derniers mondes sont déjà très rares, jusqu'à la Divine du Cosmos). Dans un monde, chaque niveau est un peu plus fort que le précédent ; le 1er niveau rétrograde sa meilleure carte d'un cran, le 5e est un **boss** dont la meilleure carte monte d'un cran. Le bot vise bien dès le départ (4/10) et presque parfaitement à la fin. Tous ces réglages sont dans l'objet `TUNE`.
+- **Réglé par simulation** (`tests/levels.test.ts`), avec un joueur qui vise bien. Avec les cartes du départ, on bloque vers le monde 4-5 : il faut ouvrir des paquets pour aller plus loin.
 
-| Deck du joueur | Niveau 1 | Niveau 25 | Niveau 35 | Niveau 45 | Niveau 50 (boss) |
-| --- | --- | --- | --- | --- | --- |
-| Débutant (1 Épique, 1 Rare, 2 Communes) | 100 % | 2 % | — | — | — |
-| Départ (Mythique, 2 Épiques, Rare) | 100 % | 40 % | 0 % | 0 % | 0 % |
-| Fort (Ultra Légendaire, Légendaire, 2 Mythiques) | 100 % | 99 % | 49 % | 1 % | 2 % |
-| Au maximum (Divine, Ultra Légendaire, 2 Légendaires) | 100 % | 100 % | 90 % | 29 % | 24 % |
+| Deck du joueur | Niv. 1 | Niv. 5 (boss) | Niv. 10 (boss) | Niv. 20 (boss) | Niv. 30 (boss) | Niv. 40 (boss) | Niv. 50 (boss) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Départ (Mythique, 2 Épiques, Rare) | 100 % | 36 % | 33 % | 23 % | 1 % | 0 % | 0 % |
+| Moyen (Légendaire, Mythique, 2 Épiques) | 100 % | 81 % | 68 % | 44 % | 4 % | 0 % | 0 % |
+| Fort (Ultra Légendaire, Légendaire, 2 Mythiques) | 100 % | 99 % | 95 % | 86 % | 28 % | 10 % | 0 % |
+| Au maximum (Divine, Ultra Légendaire, 2 Légendaires) | 100 % | 100 % | 100 % | 100 % | 81 % | 39 % | 5 % |
 
 - **Étoiles** : 3 si on gagne sans perdre de carte, 2 en en perdant une, 1 sinon. La meilleure note de chaque niveau est gardée (150 étoiles au total).
 

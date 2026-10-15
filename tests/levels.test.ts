@@ -24,24 +24,21 @@ test('aventure : 10 mondes de 5 niveaux, un boss tous les 5 niveaux', () => {
     assert.equal(f.length, l.team);
     assert.equal(new Set(f.map((x) => x.ref)).size, f.length, 'cartes distinctes');
   }
-  assert.equal(levelFighters(getLevel(1)!).length, 2);
+  assert.equal(levelFighters(getLevel(1)!).length, 3);
   assert.equal(levelFighters(getLevel(50)!).length, 4);
   assert.equal(rankOf(levelMmr(1)).label, 'Papier I');
   assert.equal(rankOf(levelMmr(50)).label, 'Légende III');
 });
 
-test('difficulté : la force de l’adversaire grimpe de plus en plus vite', () => {
-  // d'un monde à l'autre, la force ne baisse jamais (niveau 3 de chaque monde)
-  const mid = Array.from({ length: 10 }, (_, w) => power(w * 5 + 3));
-  for (let i = 1; i < mid.length; i++) assert.ok(mid[i] > mid[i - 1], `monde ${i + 1}`);
-  // croissance accélérée : la seconde moitié de l'aventure ajoute bien plus de force que la première
-  assert.ok(mid[9] - mid[4] > 1.5 * (mid[4] - mid[0]), mid.join(' '));
-  // le boss est plus dur que les autres niveaux de son monde
-  for (let w = 0; w < 10; w++) assert.ok(power(w * 5 + 5) > power(w * 5 + 4), `boss du monde ${w + 1}`);
-  assert.ok(power(50) > power(1) * 15, `${power(1)} → ${power(50)}`);
+test('difficulté : dans un monde, chaque niveau est plus fort que le précédent, et le boss plus fort que tout le monde', () => {
+  for (let w = 0; w < 10; w++) {
+    for (let i = 2; i <= 5; i++) assert.ok(power(w * 5 + i) > power(w * 5 + i - 1), `monde ${w + 1}, niveau ${i}`);
+  }
+  assert.ok(power(50) > power(1) * 4, `${power(1)} → ${power(50)}`);
+  assert.ok(getLevel(1)!.botLevel >= 4, 'le bot vise bien dès le départ');
 });
 
-test('simulation : facile au début, très dur à la fin même avec de très bonnes cartes', () => {
+test('simulation : exigeant dès le début, très dur à la fin même avec de très bonnes cartes', () => {
   const deck = (rarities: string[]): FighterInput[] => rarities.map((r, i) => ({ ref: `p${i}`, name: r, rarity: r, battle: generateStats(`p${i}`, getRarity(r).rank) }));
   const rate = (n: number, me: FighterInput[], games = 120) => {
     const l = getLevel(n)!;
@@ -58,13 +55,14 @@ test('simulation : facile au début, très dur à la fin même avec de très bon
     }
     return won / games;
   };
-  const beginner = deck(['epic', 'rare', 'common', 'common']);
+  const starter = deck(['mythic', 'epic', 'epic', 'rare']);
   const maxed = deck(['divine', 'ultraLegendary', 'legendary', 'legendary']);
-  assert.ok(rate(1, beginner) > 0.9, 'niveau 1 facile pour un débutant');
-  assert.ok(rate(25, beginner) < 0.25, 'niveau 25 dur pour un débutant');
-  assert.ok(rate(30, maxed) > 0.9, 'niveau 30 facile avec un deck au maximum');
+  assert.ok(rate(1, starter) > 0.9, 'niveau 1 : une mise en jambes');
+  assert.ok(rate(5, starter) < 0.65, 'premier boss déjà sérieux avec les cartes du départ');
+  assert.ok(rate(25, starter) < 0.15, 'avec les cartes du départ, on bloque avant la moitié');
+  assert.ok(rate(30, maxed) > 0.55, 'niveau 30 faisable avec un deck au maximum');
   const last = rate(50, maxed);
-  assert.ok(last > 0.03 && last < 0.4, `niveau 50 très dur mais possible (${last})`);
+  assert.ok(last < 0.25, `niveau 50 très dur même avec un deck au maximum (${last})`);
 });
 
 test('étoiles et sauvegarde : 3 sans perte, une ancienne sauvegarde repart du niveau 1', () => {
