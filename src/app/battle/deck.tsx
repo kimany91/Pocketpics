@@ -1,8 +1,12 @@
-/** Avant un combat : on choisit ses 4 cartes (la première choisie commence). */
+/**
+ * Avant un combat : on choisit ses 4 cartes (la première choisie commence).
+ * En ligne (`online=1`), c'est aussi le salon : on voit l'adversaire et son
+ * rang, chacun valide ses cartes, et le combat part quand les deux sont prêts.
+ */
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, BackHandler, FlatList, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getArena } from '../../battle/arenas';
@@ -12,10 +16,15 @@ import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { Header } from '../../components/Header';
 import { CardFace } from '../../components/card/CardFace';
+import { Message } from '../../components/online/Message';
+import { RankEmblem } from '../../components/rank/RankEmblem';
+import { rankOf } from '../../game/rank';
+import { useMatch } from '../../net/match';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import type { Card } from '../../storage/model';
 import { colors, fonts } from '../../theme';
+import { confirmAction } from '../../utils/confirm';
 import { haptic } from '../../utils/haptics';
 
 const DECK_SIZE = 4;
@@ -26,8 +35,10 @@ let lastDeck: string[] = [];
 const strength = (c: Card) => c.battle.hp * (c.battle.attacks[0].power + c.battle.attacks[1].power * 0.5);
 
 export default function DeckScreen() {
-  const { arena: arenaParam } = useLocalSearchParams<{ arena: string }>();
-  const arena = getArena(Number(arenaParam));
+  const { arena: arenaParam, online: onlineParam } = useLocalSearchParams<{ arena?: string; online?: string }>();
+  const online = onlineParam === '1';
+  const arena = online ? undefined : getArena(Number(arenaParam));
+  const match = useMatch();
   const cards = useGame((s) => s.cards);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -40,9 +51,47 @@ export default function DeckScreen() {
   const gap = 12;
   const cardW = Math.floor((width - 32 - gap * (cols - 1)) / cols);
 
-  if (!arena) return null;
+  // En ligne : le combat démarre quand les deux joueurs sont prêts.
+  useEffect(() => {
+    if (online && match.phase === 'fighting') router.replace({ pathname: '/battle/fight', params: { online: '1' } });
+  }, [online, match.phase]);
+
+  const leaveOnline = () => {
+    const go = () => {
+      match.leave();
+      router.back();
+    };
+    if (match.phase !== 'lobby') return go();
+    confirmAction('Quitter le combat ?', 'Le combat n’a pas commencé : ça ne compte pas pour ton rang.', 'Quitter', go, 'Rester');
+  };
+  useEffect(() => {
+    if (!online) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      leaveOnline();
+      return true;
+    });
+    return () => sub.remove();
+  });
+
+  if (online && (match.phase === 'over' || match.phase === 'idle' || match.oppGone)) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top, alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
+        <Message
+          icon="cloud-offline-outline"
+          title="Le combat est annulé"
+          text={match.oppGone ? `${match.opp?.name ?? 'Ton adversaire'} est parti.` : (match.error ?? 'La connexion a été perdue.')}
+          onBack={() => {
+            match.leave();
+            router.back();
+          }}
+        />
+      </View>
+    );
+  }
+  if (!arena && !online) return null;
 
   const toggle = (id: string) => {
+    if (online && match.myReady) return;
     haptic.tick();
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length >= DECK_SIZE ? p : [...p, id]));
   };
@@ -52,12 +101,31 @@ export default function DeckScreen() {
   };
   const fight = () => {
     lastDeck = picked;
-    router.replace({ pathname: '/battle/fight', params: { arena: String(arena.n), deck: picked.join(',') } });
+    if (online) {
+      haptic.medium();
+      match.setDeck(picked.map((id) => cards.find((c) => c.id === id)).filter((c): c is Card => !!c));
+      return;
+    }
+    if (arena) router.replace({ pathname: '/battle/fight', params: { arena: String(arena.n), deck: picked.join(',') } });
   };
+  const opp = match.opp;
+  const oppRank = rankOf(opp?.mmr ?? 0);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <Header title={`Arène ${arena.n} · ${arena.place}`} />
+      <Header title={arena ? `Arène ${arena.n} · ${arena.place}` : 'Combat classé'} onBack={online ? leaveOnline : undefined} />
+      {online ? (
+        <View style={[styles.foe, { borderColor: `${oppRank.tier.color}55` }]}>
+          {opp ? <RankEmblem rank={oppRank} size={50} /> : <ActivityIndicator color={colors.text} />}
+          <View style={{ flex: 1, gap: 3 }}>
+            <AppText variant="heading" numberOfLines={1}>
+              {opp ? `Contre ${opp.name}` : 'Connexion…'}
+            </AppText>
+            {opp ? <AppText variant="caption" style={{ color: oppRank.tier.color }}>{oppRank.label}</AppText> : null}
+            <AppText variant="caption">{match.oppReady ? 'A choisi ses cartes ✓' : 'Choisit ses cartes…'}</AppText>
+          </View>
+        </View>
+      ) : arena ? (
       <View style={styles.foe}>
         <View style={[styles.avatar, { backgroundColor: arena.tint }]}>
           <AppText style={styles.avatarText}>{arena.bot.slice(0, 1)}</AppText>
@@ -79,6 +147,7 @@ export default function DeckScreen() {
           </View>
         </View>
       </View>
+      ) : null}
 
       <View style={styles.titleRow}>
         <View style={{ flex: 1 }}>
@@ -129,7 +198,20 @@ export default function DeckScreen() {
       )}
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <Button label={picked.length >= need && need > 0 ? 'Combattre' : `${picked.length}/${need} cartes`} size="lg" icon="flash" disabled={need === 0 || picked.length < need} onPress={fight} />
+        {online && match.myReady ? (
+          <View style={styles.waiting}>
+            <ActivityIndicator color={colors.gold} />
+            <AppText variant="heading" numberOfLines={1}>{`En attente de ${opp?.name ?? 'l’adversaire'}…`}</AppText>
+          </View>
+        ) : (
+          <Button
+            label={picked.length >= need && need > 0 ? (online ? 'Prêt !' : 'Combattre') : `${picked.length}/${need} cartes`}
+            size="lg"
+            icon="flash"
+            disabled={need === 0 || picked.length < need || (online && match.phase !== 'lobby')}
+            onPress={fight}
+          />
+        )}
       </View>
     </View>
   );
@@ -170,5 +252,6 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 6 },
   stat: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   statText: { fontFamily: fonts.bold, fontSize: 12, color: colors.text, fontVariant: ['tabular-nums'] },
+  waiting: { height: 58, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, backgroundColor: 'rgba(9,9,11,0.94)' },
 });

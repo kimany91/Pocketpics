@@ -29,6 +29,7 @@ export function InspectFighter({
   fighter,
   card,
   imageSource,
+  imageUri,
   owner,
   status,
   onClose,
@@ -36,6 +37,7 @@ export function InspectFighter({
   fighter: Fighter;
   card: StageCard;
   imageSource?: number;
+  imageUri?: string;
   /** « Carte de Léo » pour l'adversaire. */
   owner?: string;
   /** « En jeu », « Remplaçante »… */
@@ -85,7 +87,7 @@ export function InspectFighter({
           <View pointerEvents="none" style={{ position: 'absolute', left: (cardW - cardW * 2.3) / 2, top: (cardW * CARD_RATIO - cardW * 2.3) / 2, opacity: 0.45 }}>
             <Glow color={r.color} size={cardW * 2.3} />
           </View>
-          <CardStage card={card} imageSource={imageSource} backNote={owner} width={cardW} rotY={rotY} rotX={rotX} tilt={tilt} onSpin={onSpin} />
+          <CardStage card={card} imageSource={imageSource} imageUri={imageUri} backNote={owner} width={cardW} rotY={rotY} rotX={rotX} tilt={tilt} onSpin={onSpin} />
         </View>
       </View>
 

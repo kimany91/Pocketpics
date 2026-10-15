@@ -4,15 +4,15 @@ PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie ph
 
 - **Android et iOS** : Expo (React Native) + TypeScript, publiable sur le Play Store et l'App Store.
 - **Mises à jour en ligne** : EAS Update (expo-updates est déjà configuré).
-- **Multijoueur** : échange en ligne chiffré de bout en bout (ou en Wi-Fi local), via une couche de transport interchangeable.
+- **Multijoueur sans serveur à soi** : amis, défis et combats classés en ligne, échange chiffré de bout en bout (ou en Wi-Fi local). Tout passe par des relais publics, en Wi-Fi comme en 4G/5G.
 
 ## Le jeu
 
 | Onglet | Contenu |
 | --- | --- |
-| **Tirage** | Paquet animé, réserve de tirages (3 max), compte à rebours jusqu'au prochain, taux d'obtention |
+| **Tirage** | Paquet animé, réserve de tirages (3 max), compte à rebours jusqu'au prochain, taux d'obtention, solde de pièces. Sans tirage, on peut en acheter un avec des pièces |
 | **Collection** | Grille de cartes, filtres par rareté, tri récentes/rareté. On touche une carte pour l'agrandir |
-| **Combat** | 10 arènes solo contre des bots, de plus en plus dures. Multijoueur à venir |
+| **Combat** | Rang en ligne, amis, combats classés (défi, ou code / QR code), et 10 arènes solo contre des bots qui rapportent des pièces |
 | **Échange** | Héberger (QR code + code) ou rejoindre (scan QR ou saisie du code), puis échange classique |
 
 **Ouverture d'un paquet**
@@ -94,6 +94,42 @@ Les effets en cours disparaissent quand la carte quitte le terrain (sauf l'étou
 **Déroulé.** Avant le combat, on choisit 4 cartes (la première commence ; « Auto » prend les plus fortes). L'adversaire en a 4 aussi. On voit sa carte active et ses remplaçantes. Changer de carte est possible à tout moment, mais ça utilise le tour. Une carte K.O. est remplacée sans perdre de tour. Le camp qui n'a plus de carte debout perd.
 
 **Arènes solo** (`src/battle/arenas.ts`). Il y en a 10, du Parc (Communes, bot maladroit) au Cosmos (Ultra Légendaire, Divine…). Le bot vise de mieux en mieux, garde ses spéciales pour le bon moment et met à l'abri ses cartes en danger (`src/battle/bot.ts`). Gagner une arène débloque la suivante, et la progression est enregistrée dans la sauvegarde. Les illustrations des adversaires sont générées par `scripts/generate-bot-art.py`, et les sons de combat par `python3 scripts/generate-sounds.py combat`.
+
+## Pièces (`src/game/economy.ts`)
+
+Les pièces se gagnent seulement en battant les arènes solo, et servent à acheter un tirage quand la réserve est vide (200 pièces). Les tirages gratuits restent la base : un joueur assidu gagne environ un tirage de plus par jour, pas davantage.
+
+| Situation | Gain |
+| --- | --- |
+| Victoire dans l'arène n | 8 + 4 × n (12 en arène 1, 48 en arène 10) |
+| Première victoire dans une arène | + 40 + 15 × n, une seule fois |
+| Au-delà de 5 victoires dans la journée | un quart du gain |
+| Défaite, abandon, combat en ligne | rien |
+
+Toute la campagne (10 premières victoires) rapporte 1 525 pièces, soit environ 7 tirages. Rejouer l'arène 10 rapporte 240 pièces pour les 5 premières victoires du jour. Un tirage acheté s'ajoute à la réserve et se consomme après les tirages gratuits. L'écran de victoire affiche le gain, et la liste des arènes ce que chacune rapporte.
+
+## Rang en ligne (`src/game/rank.ts`)
+
+Six rangs, chacun en trois divisions : **Papier**, **Bronze**, **Argent**, **Titane**, **Diamant**, **Légende** (I, II, III). Comme dans Rocket League, une victoire ne fait pas monter d'une division d'un coup. Chaque division fait 100 points : une victoire en rapporte une partie, on remplit la barre, et on passe à la division suivante quand elle est pleine. Une défaite en retire, et on peut redescendre de la même façon (jamais sous Papier I).
+
+- **Points par combat (formule Elo)** : 25 contre un adversaire de même niveau, jusqu'à 45 contre bien plus fort, 5 au minimum contre bien plus faible. Le gagnant prend exactement ce que le perdant perd. Il faut donc 4 victoires à niveau égal pour passer une division.
+- **Abandon = défaite** : les points de la défaite sont retirés dès le début du combat, et rendus (avec le gain) en cas de victoire. Fermer l'app en plein combat compte donc comme une défaite, même sans serveur.
+- **Affichage** : une carte « Ton rang » dans l'onglet Combat (emblème, barre, bilan), le rang des deux joueurs dans l'ouverture « VS » de chaque combat (les bots solo ont un rang aussi, de Papier I en arène 1 à Légende III en arène 10), et en fin de combat en ligne la barre qui se remplit, avec « Promotion ! » ou « Rétrogradé ».
+- **Emblèmes** (`src/components/rank/RankEmblem.tsx`) : feuille, écu de bronze, écu d'argent étoilé, hexagone de titane, gemme, couronne. Plus le rang est haut, plus l'apparition est travaillée : simple pose pour le Papier, reflets pour le Bronze et l'Argent, halo et anneau qui tourne pour le Titane, rayons, onde et scintillements pour le Diamant, double onde, braises et halo changeant pour la Légende.
+
+## En ligne sans serveur : amis et combats classés
+
+**Comment font les autres jeux.** Il y a deux familles. En **pair-à-pair (WebRTC)**, les téléphones se parlent directement : un service public sert juste à se trouver (traceurs BitTorrent, relais Nostr ou MQTT, comme la bibliothèque [Trystero](https://github.com/dmotz/trystero)). Mais derrière une box ou en 4G/5G (NAT de l'opérateur), environ 15 à 25 % des connexions n'arrivent pas à se joindre directement et ont besoin d'un relais (TURN), surtout sur mobile. Il faudrait aussi un module natif en plus. L'autre famille passe **tout par un relais** : plus simple et ça marche partout, au prix d'un petit détour.
+
+**Ce que fait PocketPics.** Un combat au tour par tour échange quelques messages par tour, donc le relais suffit largement et ne coûte rien. On réutilise les relais MQTT publics déjà utilisés pour l'échange (`RELAYS`, `src/trade/online.ts`), joints en WebSocket sécurisé : ça passe en Wi-Fi comme en 4G/5G, sans ouvrir de port. Tout est chiffré de bout en bout (`tweetnacl`) : le relais ne voit ni les pseudos, ni les cartes, ni les codes.
+
+- **Amis** (`src/net/socialCore.ts`, `src/net/social.ts`) : chaque joueur a un code ami de 10 caractères (et son QR code). Ce code donne une boîte aux lettres sur le relais (demandes d'ami, défis, refus) et une **présence** : un message « en ligne » retenu par le relais, rafraîchi toutes les 45 s. Si l'app se coupe sans prévenir, le relais publie lui-même « hors ligne » (dernière volonté MQTT). L'app se connecte à tous les relais à la fois, pour que deux amis se retrouvent même si l'un n'en joint qu'un. Ajouter un ami lui envoie une demande, qu'il accepte depuis son écran Amis. S'il est hors ligne, la demande lui est renvoyée dès qu'il se connecte.
+- **Défier un ami** : on touche « Défier » sur un ami en ligne. Il reçoit, où qu'il soit dans l'app, une carte « X te défie ! » avec son rang et une minute pour répondre. Seuls les amis peuvent défier.
+- **Sans être amis** : « Créer un combat » affiche un code (et un QR code) que l'autre entre dans « Rejoindre un combat ».
+- **Le combat** (`src/net/battleNet.ts`, `src/net/match.ts`) : chacun choisit ses 4 cartes (leurs miniatures sont envoyées à l'adversaire), puis l'hôte fait tourner le moteur de combat. C'est la seule source de vérité, donc les deux écrans ne peuvent pas diverger. L'invité envoie ses choix (attaque et précision, changement de carte), et l'hôte renvoie chaque résultat à mettre en scène. Chaque joueur se voit en bas de l'écran. L'hôte recalcule les PV et la puissance des cartes reçues à partir de leur identité, pour empêcher la triche sur les stats. Qui commence est tiré au sort. Chaque coup a 40 s : sinon un coup classique mal visé part tout seul.
+- **Fiabilité** (`src/net/reliable.ts`) : un relais public peut perdre des messages. Chaque message est numéroté, confirmé et renvoyé tant qu'il n'est pas confirmé. Un coup ne se perd donc jamais, même avec 30 % de pertes (testé). Un adversaire qui ne répond plus pendant 20 s a quitté : victoire.
+
+**Limites d'un jeu sans serveur** : un défi n'arrive que si l'app de l'ami est ouverte (pas de notification quand elle est fermée), et chaque téléphone tient son propre rang (un joueur qui modifie sa sauvegarde peut tricher sur son rang affiché). Les relais publics gratuits n'offrent aucune garantie : **pour une version publiée, remplace-les par ton propre relais MQTT** (Mosquitto, EMQX, HiveMQ Cloud…). Rien d'autre à changer.
 
 ## Chance (`src/game/luck.ts`)
 
@@ -216,9 +252,10 @@ Un futur serveur de jeu pourra aussi valider les tirages, ce qui empêche la tri
 src/app/            écrans (expo-router) : onglets, ouverture, carte 3D, combat, échange
 src/battle/         stats des cartes, règles du combat, bot, arènes
 src/components/     carte (contours par rareté), sachet, effets (halo, rayons, étincelles, flash)
-src/game/           raretés, recharge des tirages, galerie, génération des paquets
+src/game/           raretés, recharge des tirages, galerie, paquets, chance, pièces, rang
 src/storage/        modèle + migrations, stockage disque (+ version web de démo)
-src/trade/          code d'échange, protocole, relais en ligne chiffré, transport TCP, session
+src/net/            en ligne : amis et présence, combat (hôte/invité), canal fiable
+src/trade/          code d'échange, protocole, relais en ligne chiffré (MQTT), transport TCP, session
 assets/fx/          textures d'effets (générées par scripts/generate-assets.py)
 assets/bots/        illustrations des cartes des adversaires (scripts/generate-bot-art.py)
 assets/music/       musique de combat (scripts/generate-music.py)
@@ -227,4 +264,4 @@ tests/              tests de logique
 
 ## À vérifier sur un vrai téléphone
 
-Le code compile (TypeScript, bundles Android/iOS/web), et le parcours complet a été testé dans la démo web : ouverture, révélations, collection, rotation 3D, renommage. L'accès à la galerie, la caméra QR, les retours haptiques et l'échange en Wi-Fi local (TCP) ne peuvent être testés que sur appareil, avec un development build. L'échange en ligne a été testé de bout en bout entre deux navigateurs via un relais local. Le module `react-native-tcp-socket` passe par la couche de compatibilité de React Native pour les anciens modules natifs : c'est le premier point à tester, avec deux téléphones sur le même Wi-Fi.
+Le code compile (TypeScript, bundles Android/iOS/web), et le parcours complet a été testé dans la démo web : ouverture, révélations, collection, rotation 3D, renommage. L'accès à la galerie, la caméra QR, les retours haptiques et l'échange en Wi-Fi local (TCP) ne peuvent être testés que sur appareil, avec un development build. L'échange en ligne a été testé de bout en bout entre deux navigateurs via un relais local, ainsi que les combats en ligne : ajout d'ami, présence, défi accepté, combat complet jusqu'au rang mis à jour, combat par code, départ d'un joueur. Le module `react-native-tcp-socket` passe par la couche de compatibilité de React Native pour les anciens modules natifs : c'est le premier point à tester, avec deux téléphones sur le même Wi-Fi.

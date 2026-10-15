@@ -16,6 +16,7 @@ import Animated, {
   Easing,
   FadeIn,
   FadeInDown,
+  withDelay,
   FadeInLeft,
   FadeInRight,
   FadeInUp,
@@ -31,7 +32,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { startBattleMusic, stopBattleMusic } from '../../audio/music';
 import { type Sfx, playSfx } from '../../audio/sfx';
-import { arenaFighters, getArena } from '../../battle/arenas';
+import { type Arena, arenaFighters, getArena } from '../../battle/arenas';
 import { botAction, botReplacement } from '../../battle/bot';
 import { botArt } from '../../battle/botArt';
 import {
@@ -53,6 +54,13 @@ import {
   resolveAttack,
 } from '../../battle/engine';
 import { ATTACK_KIND_LABEL, type Attack, type AttackKind, BATTLE, STATUS_KINDS, kindOf } from '../../battle/stats';
+import { type BattleController, type Move, type Step, applyMove } from '../../net/battleNet';
+import { useMatch } from '../../net/match';
+import { useSocial } from '../../net/social';
+import { CoinIcon } from '../../components/Coin';
+import { RankEmblem } from '../../components/rank/RankEmblem';
+import type { SoloReward } from '../../game/economy';
+import { DIVISION_POINTS, arenaMmr, rankOf, shownMmr } from '../../game/rank';
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { type ActKind, type FighterStatus, FighterView, HpBar, type Popup, type ReactKind } from '../../components/battle/FighterView';
@@ -87,27 +95,93 @@ const capParts = (parts: TextPart[]): TextPart[] => (parts.length ? [{ ...parts[
 
 const toFighter = (c: Card): FighterInput => ({ ref: c.id, name: fighterName(c), rarity: c.rarity, battle: c.battle });
 
+/** L'adversaire du mode solo : le bot de l'arène, qui « réfléchit » un instant avant de jouer. */
+class BotController implements BattleController {
+  constructor(private level: number) {}
+  async submit(move: Move, b: Battle): Promise<Step> {
+    return applyMove(b, 0, move);
+  }
+  async next(b: Battle): Promise<Step> {
+    await sleep(b.mustReplace === 1 ? 500 : 700);
+    return b.mustReplace === 1 ? replace(b, 1, botReplacement(b, 1, this.level)) : act(b, botAction(b, 1, this.level));
+  }
+}
+
+/** Qui est en face : le bot d'une arène, ou un joueur en ligne. */
+interface Foe {
+  name: string;
+  tint: string;
+  mmr: number;
+  /** Titre en haut de l'écran. */
+  label: string;
+  art?: { uri: string } | number;
+  image(ref: string): { imageSource?: number; imageUri?: string };
+}
+
+const ONLINE_TINT = '#7C9CFF';
+/** En ligne : temps pour jouer son coup, après quoi un coup est joué automatiquement. */
+const TURN_SECONDS = 40;
+
 export default function FightScreen() {
-  const params = useLocalSearchParams<{ arena: string; deck: string }>();
-  const arena = getArena(Number(params.arena));
+  const params = useLocalSearchParams<{ arena?: string; deck?: string; online?: string }>();
+  const online = params.online === '1';
+  const arena: Arena | undefined = online ? undefined : (getArena(Number(params.arena)) ?? undefined);
   const allCards = useGame((s) => s.cards);
   const winArena = useGame((s) => s.winArena);
+  const finishRanked = useGame((s) => s.finishRanked);
+  const myMmr = useGame((s) => (s.save ? shownMmr(s.save.rank) : 0));
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
 
-  // Le deck est figé au début du combat.
-  const [deck] = useState<Card[]>(() =>
-    String(params.deck ?? '')
-      .split(',')
+  // Tout est figé au début du combat : deck, adversaire, contrôleur.
+  const [setup] = useState(() => {
+    const m = useMatch.getState();
+    const ids = online ? m.myDeck : String(params.deck ?? '').split(',');
+    const deck = ids
       .map((id) => allCards.find((c) => c.id === id))
       .filter((c): c is Card => !!c)
-      .slice(0, 4),
-  );
-  const [battle, setBattle] = useState<Battle | null>(() => (arena && deck.length ? createBattle(deck.map(toFighter), arenaFighters(arena)) : null));
+      .slice(0, 4);
+    if (online) {
+      if (!m.start || !m.controller || !m.opp) return null;
+      const thumbs = new Map((m.oppDeck ?? []).map((f) => [f.ref, f.thumb ? `data:image/jpeg;base64,${f.thumb}` : '']));
+      const firstThumb = [...thumbs.values()].find(Boolean);
+      const foe: Foe = {
+        name: m.opp.name,
+        tint: ONLINE_TINT,
+        mmr: m.opp.mmr,
+        label: 'Combat classé',
+        art: firstThumb ? { uri: firstThumb } : undefined,
+        image: (ref) => ({ imageUri: thumbs.get(ref) || undefined }),
+      };
+      return { deck, foe, battle: m.start, controller: m.controller };
+    }
+    if (!arena || deck.length === 0) return null;
+    const foe: Foe = {
+      name: arena.bot,
+      tint: arena.tint,
+      mmr: arenaMmr(arena.n),
+      label: `Arène ${arena.n} · ${arena.place}`,
+      art: botArt(`bot:${arena.n}:3`),
+      image: (ref) => ({ imageSource: botArt(ref) }),
+    };
+    return { deck, foe, battle: createBattle(deck.map(toFighter), arenaFighters(arena)), controller: new BotController(arena.level) as BattleController };
+  });
+  const deck = setup?.deck ?? [];
+  const foeInfo = setup?.foe;
+  const controller = setup?.controller;
+  const [battle, setBattle] = useState<Battle | null>(setup?.battle ?? null);
   const [shown, setShown] = useState<Battle | null>(battle);
+  /** Coup de l'adversaire reçu, à mettre en scène dès que possible. */
+  const [incoming, setIncoming] = useState<Step | null>(null);
+  const asked = useRef<Battle | null>(null);
+  /** Gains en fin de combat : pièces (solo) ou points de rang (en ligne). */
+  const [reward, setReward] = useState<SoloReward | null>(null);
+  const [rankChange, setRankChange] = useState<{ before: number; after: number } | null>(null);
+  const [endReason, setEndReason] = useState<'gone' | 'lost' | null>(null);
+  const [turnLeft, setTurnLeft] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<Mode>('idle');
-  const [msg, setMsg] = useState<Msg>([{ text: arena ? `${arena.bot} te défie !` : '' }]);
+  const [msg, setMsg] = useState<Msg>([{ text: setup ? `${setup.foe.name} te défie !` : '' }]);
   /** Camp dont parle le message (couleur du cadre), et clé pour rejouer son apparition. */
   const [speaker, setSpeaker] = useState<SideId | null>(1);
   const [msgKey, setMsgKey] = useState(0);
@@ -193,11 +267,13 @@ export default function FightScreen() {
       return next;
     });
 
-  const nameParts = (name: string, side: SideId): TextPart => ({ text: name, bold: true, color: side === 0 ? colors.text : arena?.tint });
+  /** En ligne, une carte sans nom s'appelle « Carte Épique » des deux côtés : on précise « ta » ou « sa ». */
+  const who = (name: string, side: SideId) => (online && /^Carte /.test(name) ? `${side === 0 ? 'ta' : 'sa'} carte${name.slice(5)}` : name);
+  const nameParts = (name: string, side: SideId): TextPart => ({ text: who(name, side), bold: true, color: side === 0 ? colors.text : foeInfo?.tint });
 
   /** Met en scène les évènements d'une action, puis passe au nouvel état. */
   const play = async (events: BattleEvent[], final: Battle) => {
-    if (!arena) return;
+    if (!foeInfo) return;
     setBusy(true);
     setMode('idle');
     let view = shown ?? final;
@@ -322,7 +398,7 @@ export default function FightScreen() {
             doEnter(e.side);
             playSfx('swipe', { volume: 0.7 });
             if (e.side === 0) say(e.forced ? [{ text: 'À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }] : [{ text: 'Reviens ! À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }], e.side);
-            else say([{ text: `${arena.bot} ${e.forced ? 'envoie' : 'rappelle sa carte et envoie'} ` }, nameParts(e.fighter, 1), { text: ' !' }], e.side);
+            else say([{ text: `${foeInfo.name} ${e.forced ? 'envoie' : 'rappelle sa carte et envoie'} ` }, nameParts(e.fighter, 1), { text: ' !' }], e.side);
             await sleep(1000);
             break;
           case 'win':
@@ -339,29 +415,58 @@ export default function FightScreen() {
     setBusy(false);
   };
 
-  // Déroulé du combat : fin, remplacements après K.O., tour du bot ou du joueur.
+  /** Fin du combat : pièces en solo, points de rang en ligne. */
+  const finish = (winner: SideId, reason: 'gone' | 'lost' | null = null) => {
+    if (!foeInfo) return;
+    setResult(winner);
+    setEndReason(reason);
+    setMode('idle');
+    stopBattleMusic(music.current, 600);
+    if (online) setRankChange(finishRanked(winner === 0));
+    else if (winner === 0 && arena) setReward(winArena(arena.n));
+    if (winner === 0) {
+      playSfx('win');
+      haptic.success();
+    } else {
+      playSfx('lose');
+      haptic.warning();
+    }
+  };
+
+  // En ligne : l'adversaire part (victoire) ou ma connexion lâche (défaite).
+  const oppGone = useMatch((s) => s.oppGone);
+  const lostConnection = useMatch((s) => s.lostConnection);
+  useEffect(() => {
+    if (!online || result !== null) return;
+    if (oppGone) finish(0, 'gone');
+    else if (lostConnection) finish(1, 'lost');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [online, oppGone, lostConnection, result]);
+  // En quittant l'écran, on ferme la partie en ligne.
+  useEffect(() => () => {
+    if (online) useMatch.getState().leave();
+  }, [online]);
+
+  // Déroulé du combat : fin, remplacements après K.O., tour de l'adversaire ou du joueur.
   useEffect(() => {
     // En pause pendant qu'on regarde une carte ou qu'on règle le son.
-    if (!battle || !arena || busy || result !== null || inspect || soundOpen || intro) return;
+    if (!battle || !controller || busy || result !== null || inspect || soundOpen || intro) return;
     if (battle.winner !== null) {
-      setResult(battle.winner);
-      stopBattleMusic(music.current, 600);
-      if (battle.winner === 0) {
-        winArena(arena.n);
-        playSfx('win');
-        haptic.success();
-      } else {
-        playSfx('lose');
-        haptic.warning();
-      }
+      finish(battle.winner);
       return;
     }
-    if (battle.mustReplace === 1) {
-      const t = setTimeout(() => {
-        const r = replace(battle, 1, botReplacement(battle, 1, arena.level));
-        void play(r.events, r.battle);
-      }, 500);
-      return () => clearTimeout(t);
+    // Au tour de l'adversaire : on lui demande son coup une seule fois par état du combat.
+    if (battle.mustReplace === 1 || (battle.turn === 1 && battle.mustReplace === null)) {
+      setMode('idle');
+      if (asked.current !== battle) {
+        asked.current = battle;
+        if (online) say([{ text: `${foeInfo?.name ?? 'L’adversaire'} choisit son coup…` }], 1);
+        controller
+          .next(battle)
+          .then((step) => alive.current && setIncoming(step))
+          .catch((err) => console.warn('Coup adverse impossible', err));
+      }
+      return;
     }
     // Une confirmation d'envoi en cours (ex. retour de « Info ») reste affichée.
     if (mode === 'confirmSwitch') return;
@@ -370,19 +475,62 @@ export default function FightScreen() {
       say([{ text: 'Choisis ta prochaine carte' }], 0);
       return;
     }
-    if (battle.turn === 1) {
-      setMode('idle');
-      const t = setTimeout(() => {
-        const r = act(battle, botAction(battle, 1, arena.level));
-        void play(r.events, r.battle);
-      }, 700);
-      return () => clearTimeout(t);
-    }
     const me = activeOf(battle, 0);
     setMode('menu');
     say(me.stun > 0 ? [nameParts(me.name, 0), { text: ' est étourdie…' }] : [{ text: 'Que doit faire ' }, nameParts(me.name, 0), { text: ' ?' }], 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [battle, busy, result, inspect, soundOpen, intro]);
+
+  // Coup adverse arrivé : on le met en scène (après la pause éventuelle).
+  useEffect(() => {
+    if (!incoming || busy || result !== null || inspect || soundOpen || intro) return;
+    const step = incoming;
+    setIncoming(null);
+    void play(step.events, step.battle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incoming, busy, result, inspect, soundOpen, intro]);
+
+  /** Envoie le coup du joueur, puis met en scène ce qui en résulte. */
+  const submit = (move: Move) => {
+    if (!battle || !controller) return;
+    setBusy(true);
+    setMode('idle');
+    setTurnLeft(null);
+    controller
+      .submit(move, battle)
+      .then((step) => {
+        if (alive.current) void play(step.events, step.battle);
+      })
+      .catch((err) => {
+        console.warn('Coup impossible', err);
+        if (alive.current) setBusy(false);
+      });
+  };
+
+  // En ligne : un temps limité pour jouer, sinon un coup part tout seul.
+  const autoMove = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (!online || !battle || busy || result !== null || battle.winner !== null) {
+      setTurnLeft(null);
+      return;
+    }
+    const mine = battle.mustReplace === 0 || (battle.turn === 0 && battle.mustReplace === null);
+    if (!mine) {
+      setTurnLeft(null);
+      return;
+    }
+    const end = Date.now() + TURN_SECONDS * 1000;
+    setTurnLeft(TURN_SECONDS);
+    const t = setInterval(() => {
+      const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      setTurnLeft(left);
+      if (left === 0) {
+        clearInterval(t);
+        autoMove.current();
+      }
+    }, 250);
+    return () => clearInterval(t);
+  }, [online, battle, busy, result]);
 
   const endIntro = () => {
     setIntro(false);
@@ -403,7 +551,7 @@ export default function FightScreen() {
     return { cardW, foeW: cardW * 0.9, compact, msgH, benchH, actionsH, thumbW: compact ? 34 : 42 };
   }, [width, height, insets]);
 
-  if (!arena || !battle || !shown) {
+  if (!foeInfo || !battle || !shown) {
     return (
       <View style={[styles.root, styles.center, { paddingTop: insets.top }]}>
         <AppText variant="heading">Combat introuvable</AppText>
@@ -426,8 +574,7 @@ export default function FightScreen() {
     const hits = hitsOf(r.attack);
     if (hits === 0) {
       // garde, soin, esquive, concentration : pas de mini-jeu, l'effet part tout de suite
-      const res = act(battle, { type: 'attack', slot, timings: [] });
-      void play(res.events, res.battle);
+      submit({ type: 'act', action: { type: 'attack', slot, timings: [] } });
       return;
     }
     setPending({ slot, attack: r.attack, hits });
@@ -436,9 +583,9 @@ export default function FightScreen() {
 
   const onTimed = (timings: number[]) => {
     if (!pending) return;
-    const r = act(battle, { type: 'attack', slot: pending.slot, timings });
+    const slot = pending.slot;
     setPending(null);
-    void play(r.events, r.battle);
+    submit({ type: 'act', action: { type: 'attack', slot, timings } });
   };
 
   const onBench = (i: number) => {
@@ -456,9 +603,9 @@ export default function FightScreen() {
   const doSwitch = () => {
     if (switchTo === null) return;
     haptic.light();
-    const r = confirmFrom === 'replace' ? replace(battle, 0, switchTo) : act(battle, { type: 'switch', to: switchTo });
+    const to = switchTo;
     setSwitchTo(null);
-    void play(r.events, r.battle);
+    submit(confirmFrom === 'replace' ? { type: 'replace', to } : { type: 'act', action: { type: 'switch', to } });
   };
 
   const cancelSwitch = () => {
@@ -472,9 +619,22 @@ export default function FightScreen() {
     setInspect({ side, index });
   };
 
-  const doPass = () => {
-    const r = act(battle, { type: 'pass' });
-    void play(r.events, r.battle);
+  const doPass = () => submit({ type: 'act', action: { type: 'pass' } });
+
+  // Temps écoulé (en ligne) : remplaçante au hasard, ou coup classique mal visé.
+  autoMove.current = () => {
+    setInspect(null);
+    setSoundOpen(false);
+    setSwitchTo(null);
+    setPending(null);
+    if (battle.mustReplace === 0) {
+      const i = battle.sides[0].fighters.findIndex((f, k) => k !== battle.sides[0].active && f.hp > 0);
+      if (i >= 0) submit({ type: 'replace', to: i });
+      return;
+    }
+    if (activeOf(battle, 0).stun > 0) return doPass();
+    const hits = hitsOf(activeOf(battle, 0).attacks[0]);
+    submit({ type: 'act', action: { type: 'attack', slot: 0, timings: Array(Math.max(1, hits)).fill(0.4) } });
   };
 
   const special = resolveAttack(shown, 0, 1);
@@ -483,13 +643,13 @@ export default function FightScreen() {
 
   return (
     <View style={styles.root}>
-      <ArenaBackdrop art={botArt(`bot:${arena.n}:3`)} tint={arena.tint} width={width} height={height} />
+      <ArenaBackdrop art={foeInfo.art} tint={foeInfo.tint} width={width} height={height} />
       <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) }}>
         <View style={styles.header}>
           <Pressable onPress={() => setQuitting(true)} hitSlop={12} style={styles.round} accessibilityLabel="Abandonner le combat">
             <Ionicons name="close" size={20} color={colors.text} />
           </Pressable>
-          <AppText variant="label" style={{ color: colors.textDim }} numberOfLines={1}>{`Arène ${arena.n} · ${arena.place}`}</AppText>
+          <AppText variant="label" style={{ color: colors.textDim }} numberOfLines={1}>{foeInfo.label}</AppText>
           <Pressable onPress={() => setSoundOpen(true)} hitSlop={12} style={styles.round} accessibilityLabel="Régler le son">
             <Ionicons name="musical-notes" size={17} color={colors.text} />
           </Pressable>
@@ -498,9 +658,9 @@ export default function FightScreen() {
         <Animated.View style={stageStyle}>
         {/* Adversaire : infos à gauche, carte à droite */}
         <View style={[styles.row, { paddingHorizontal: 20 }]}>
-          <Nameplate width={infoW} accent={arena.tint}>
+          <Nameplate width={infoW} accent={foeInfo.tint}>
             <AppText variant="heading" numberOfLines={1}>
-              {foe.name}
+              {cap(who(foe.name, 1))}
             </AppText>
             <View style={styles.labelRow}>
               <AppText variant="label" style={{ color: getRarity(foe.rarity).color }}>
@@ -508,7 +668,7 @@ export default function FightScreen() {
               </AppText>
               <View style={styles.dots}>
                 {shown.sides[1].fighters.map((f, i) => (
-                  <View key={i} style={[styles.dot, f.hp > 0 ? { backgroundColor: arena.tint } : styles.dotKo, i === shown.sides[1].active && styles.dotActive]} />
+                  <View key={i} style={[styles.dot, f.hp > 0 ? { backgroundColor: foeInfo.tint } : styles.dotKo, i === shown.sides[1].active && styles.dotActive]} />
                 ))}
               </View>
             </View>
@@ -519,7 +679,7 @@ export default function FightScreen() {
           <FighterView
             key={foe.ref}
             card={{ id: foe.ref, rarity: foe.rarity, name: foe.name }}
-            imageSource={botArt(foe.ref)}
+            {...foeInfo.image(foe.ref)}
             width={layout.foeW}
             facing={-1}
             act={acts[1]}
@@ -533,7 +693,7 @@ export default function FightScreen() {
         </View>
 
         <View style={[styles.message, { height: layout.msgH }]}>
-          <View style={[styles.messageBar, { backgroundColor: speaker === 1 ? arena.tint : speaker === 0 ? getRarity(me.rarity).color : colors.textFaint }]} />
+          <View style={[styles.messageBar, { backgroundColor: speaker === 1 ? foeInfo.tint : speaker === 0 ? getRarity(me.rarity).color : colors.textFaint }]} />
           <Animated.View key={msgKey} entering={(speaker === 1 ? FadeInRight : FadeInLeft).duration(200)} style={styles.messageInner}>
             {Array.isArray(msg) ? (
               <FitText parts={capParts(msg)} lines={layout.compact ? 2 : 3} maxSize={layout.compact ? 24 : 30} minSize={14} initialWidth={width - 80} />
@@ -547,7 +707,7 @@ export default function FightScreen() {
               />
             )}
           </Animated.View>
-          {!intro && result === null ? <TurnTab mine={shown.turn === 0 || shown.mustReplace === 0} bot={arena.bot} tint={arena.tint} /> : null}
+          {!intro && result === null ? <TurnTab mine={shown.turn === 0 || shown.mustReplace === 0} bot={foeInfo.name} tint={foeInfo.tint} left={turnLeft} /> : null}
         </View>
 
         {/* Joueur : carte à gauche, infos à droite */}
@@ -570,7 +730,7 @@ export default function FightScreen() {
           ) : null}
           <Nameplate width={infoW} accent={getRarity(me.rarity).color} right>
             <AppText variant="heading" numberOfLines={2} style={{ textAlign: 'right' }}>
-              {cap(me.name)}
+              {cap(who(me.name, 0))}
             </AppText>
             <AppText variant="label" style={{ color: getRarity(me.rarity).color }}>
               {getRarity(me.rarity).label}
@@ -678,14 +838,20 @@ export default function FightScreen() {
       </View>
 
       <Flash trigger={flashN} peak={0.22} />
-      {intro ? <VsIntro arenaLabel={`Arène ${arena.n} · ${arena.place}`} bot={arena.bot} tint={arena.tint} width={width} onDone={endIntro} /> : null}
+      {intro ? <VsIntro arenaLabel={foeInfo.label} bot={foeInfo.name} tint={foeInfo.tint} width={width} myMmr={myMmr} foeMmr={foeInfo.mmr} onDone={endIntro} /> : null}
 
       {inspect ? (
-        <InspectOverlay inspect={inspect} battle={shown} deck={deck} bot={arena.bot} onClose={() => setInspect(null)} />
+        <InspectOverlay inspect={inspect} battle={shown} deck={deck} foe={foeInfo} onClose={() => setInspect(null)} />
       ) : null}
       {soundOpen ? <SoundSheet onClose={() => setSoundOpen(false)} /> : null}
 
-      {result !== null ? <ResultOverlay won={result === 0} arenaN={arena.n} deck={deck.map((c) => c.id).join(',')} /> : null}
+      {result !== null ? (
+        online ? (
+          <OnlineResult won={result === 0} change={rankChange} opp={foeInfo.name} reason={endReason} />
+        ) : arena ? (
+          <ResultOverlay won={result === 0} arenaN={arena.n} deck={deck.map((c) => c.id).join(',')} reward={reward} />
+        ) : null
+      ) : null}
       {quitting ? (
         <Animated.View entering={FadeIn.duration(150)} style={[StyleSheet.absoluteFill, styles.overlay]}>
           <Animated.View entering={ZoomIn.duration(200)} style={styles.dialog}>
@@ -693,11 +859,22 @@ export default function FightScreen() {
               Abandonner ?
             </AppText>
             <AppText variant="caption" style={{ textAlign: 'center', marginTop: 6 }}>
-              Le combat sera perdu. Tes cartes ne risquent rien.
+              {online ? 'Le combat sera perdu, avec ses points de rang. Tes cartes ne risquent rien.' : 'Le combat sera perdu. Tes cartes ne risquent rien.'}
             </AppText>
             <View style={[styles.twoButtons, { marginTop: 18 }]}>
               <Button label="Continuer" kind="secondary" style={{ flex: 1 }} onPress={() => setQuitting(false)} />
-              <Button label="Abandonner" kind="danger" style={{ flex: 1 }} onPress={() => router.back()} />
+              <Button
+                label="Abandonner"
+                kind="danger"
+                style={{ flex: 1 }}
+                onPress={() => {
+                  if (online) {
+                    useMatch.getState().quit();
+                    finishRanked(false);
+                  }
+                  router.back();
+                }}
+              />
             </View>
           </Animated.View>
         </Animated.View>
@@ -710,13 +887,13 @@ function InspectOverlay({
   inspect,
   battle,
   deck,
-  bot,
+  foe,
   onClose,
 }: {
   inspect: { side: SideId; index: number };
   battle: Battle;
   deck: Card[];
-  bot: string;
+  foe: Foe;
   onClose(): void;
 }) {
   const side = battle.sides[inspect.side];
@@ -732,8 +909,8 @@ function InspectOverlay({
     <InspectFighter
       fighter={f}
       card={{ id: f.ref, rarity: f.rarity, name: f.name }}
-      imageSource={botArt(f.ref)}
-      owner={`Carte de ${bot}`}
+      {...foe.image(f.ref)}
+      owner={`Carte de ${foe.name}`}
       status={status}
       onClose={onClose}
     />
@@ -821,12 +998,17 @@ function Nameplate({ width, accent, right, children }: { width: number; accent: 
   );
 }
 
-/** Onglet au-dessus du message : à qui est le tour. */
-function TurnTab({ mine, bot, tint }: { mine: boolean; bot: string; tint: string }) {
+/** Onglet au-dessus du message : à qui est le tour (et, en ligne, le temps qu'il reste). */
+function TurnTab({ mine, bot, tint, left = null }: { mine: boolean; bot: string; tint: string; left?: number | null }) {
+  const hurry = mine && left !== null && left <= 10;
   return (
-    <Animated.View key={mine ? 'me' : 'bot'} entering={ZoomIn.duration(180)} style={[styles.turnTab, mine ? { left: 14, backgroundColor: colors.gold } : { right: 14, backgroundColor: tint }]}>
+    <Animated.View
+      key={mine ? 'me' : 'bot'}
+      entering={ZoomIn.duration(180)}
+      style={[styles.turnTab, mine ? { left: 14, backgroundColor: hurry ? colors.danger : colors.gold } : { right: 14, backgroundColor: tint }]}
+    >
       <AppText style={styles.turnText} numberOfLines={1}>
-        {mine ? 'Ton tour' : `Tour de ${bot}`}
+        {mine ? (left !== null ? `Ton tour · ${left} s` : 'Ton tour') : `Tour de ${bot}`}
       </AppText>
     </Animated.View>
   );
@@ -961,7 +1143,7 @@ function AttackButton({
   );
 }
 
-function ResultOverlay({ won, arenaN, deck }: { won: boolean; arenaN: number; deck: string }) {
+function ResultOverlay({ won, arenaN, deck, reward }: { won: boolean; arenaN: number; deck: string; reward: SoloReward | null }) {
   const next = getArena(arenaN + 1);
   return (
     <Animated.View entering={FadeIn.duration(250)} style={[StyleSheet.absoluteFill, styles.overlay]}>
@@ -981,6 +1163,23 @@ function ResultOverlay({ won, arenaN, deck }: { won: boolean; arenaN: number; de
           {won ? (next ? `Arène ${arenaN} gagnée. L'arène ${next.n} est débloquée !` : 'Tu as gagné la dernière arène. Bravo !') : 'Change de cartes ou vise mieux la cible, et retente ta chance.'}
         </AppText>
       </Animated.View>
+      {won && reward ? (
+        <View style={{ alignItems: 'center', marginTop: 18, gap: 6 }}>
+          <Animated.View entering={ZoomIn.delay(450).springify().damping(9)} style={styles.coinsWon}>
+            <CoinIcon size={26} />
+            <AppText style={styles.coinsText}>{`+${reward.coins}`}</AppText>
+          </Animated.View>
+          <Animated.View entering={FadeIn.delay(700)}>
+            <AppText variant="caption" style={{ textAlign: 'center', paddingHorizontal: 32 }}>
+              {reward.bonus
+                ? `dont ${reward.bonus} de bonus pour ta première victoire ici`
+                : reward.reduced
+                  ? 'Gains réduits : tu as déjà gagné 5 combats aujourd’hui.'
+                  : 'pièces gagnées'}
+            </AppText>
+          </Animated.View>
+        </View>
+      ) : null}
       <Animated.View entering={FadeInDown.delay(350)} style={{ alignSelf: 'stretch', gap: 10, marginTop: 30, paddingHorizontal: 32 }}>
         {won && next ? (
           <Button label={`Arène ${next.n} · ${next.place}`} size="lg" icon="arrow-forward" onPress={() => router.replace({ pathname: '/battle/deck', params: { arena: String(next.n) } })} />
@@ -992,8 +1191,95 @@ function ResultOverlay({ won, arenaN, deck }: { won: boolean; arenaN: number; de
   );
 }
 
+/** Fin d'un combat en ligne : le rang avant/après, la barre qui se remplit (ou se vide), promotion éventuelle. */
+function OnlineResult({ won, change, opp, reason }: { won: boolean; change: { before: number; after: number } | null; opp: string; reason: 'gone' | 'lost' | null }) {
+  const before = change?.before ?? 0;
+  const after = change?.after ?? before;
+  const rb = rankOf(before);
+  const ra = rankOf(after);
+  const delta = after - before;
+  const promoted = ra.index > rb.index;
+  const demoted = ra.index < rb.index;
+  const [second, setSecond] = useState(false);
+  const fill = useSharedValue(rb.progress);
+  useEffect(() => {
+    const ease = { duration: 900, easing: Easing.out(Easing.cubic) };
+    if (!promoted && !demoted) {
+      fill.value = withDelay(500, withTiming(ra.progress, ease));
+      return;
+    }
+    // on remplit (ou vide) la division, puis on passe à la suivante
+    fill.value = withDelay(500, withTiming(promoted ? 1 : 0, ease));
+    const t = setTimeout(() => {
+      setSecond(true);
+      fill.value = promoted ? 0 : 1;
+      fill.value = withTiming(ra.progress, ease);
+      if (promoted) {
+        playSfx('up2');
+        haptic.success();
+      } else haptic.warning();
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [fill, promoted, demoted, ra.progress]);
+  const fillStyle = useAnimatedStyle(() => ({ width: `${Math.max(0, Math.min(1, fill.value)) * 100}%` }));
+  const shownRank = second ? ra : rb;
+
+  return (
+    <Animated.View entering={FadeIn.duration(250)} style={[StyleSheet.absoluteFill, styles.overlay]}>
+      <View style={{ alignItems: 'center', justifyContent: 'center', height: 150 }}>
+        {won ? (
+          <View style={{ position: 'absolute' }}>
+            <Burst trigger={1} colors={[colors.gold, '#FFF3C2', shownRank.tier.color]} count={30} radius={160} />
+          </View>
+        ) : null}
+        <RankEmblem key={shownRank.index} rank={shownRank} size={110} />
+      </View>
+      <Animated.View entering={FadeInDown.delay(200)} style={{ alignItems: 'center', marginTop: 18, paddingHorizontal: 32, gap: 6 }}>
+        <AppText variant="display">{won ? 'Victoire !' : 'Défaite'}</AppText>
+        {reason ? (
+          <AppText variant="caption" style={{ textAlign: 'center' }}>
+            {reason === 'gone' ? `${opp} a quitté le combat.` : 'Connexion perdue : le combat compte comme une défaite.'}
+          </AppText>
+        ) : null}
+        {second && (promoted || demoted) ? (
+          <Animated.View entering={ZoomIn.springify().damping(9)} style={[styles.promo, { backgroundColor: promoted ? shownRank.tier.color : colors.surface2 }]}>
+            <AppText style={[styles.promoText, { color: promoted ? '#141414' : colors.text }]}>{promoted ? `Promotion : ${ra.label} !` : `Rétrogradé : ${ra.label}`}</AppText>
+          </Animated.View>
+        ) : (
+          <AppText style={[styles.rankLabel, { color: shownRank.tier.color }]}>{shownRank.label}</AppText>
+        )}
+        <View style={styles.rankTrack}>
+          <Animated.View style={[styles.rankFill, { backgroundColor: shownRank.tier.color }, fillStyle]} />
+        </View>
+        <AppText style={[styles.delta, { color: delta > 0 ? colors.success : delta < 0 ? colors.danger : colors.textDim }]}>
+          {!change ? '' : delta === 0 && !won ? 'Aucun point perdu : tu es au plus bas' : `${delta >= 0 ? '+' : '−'}${Math.abs(delta)} points de rang`}
+        </AppText>
+        {change ? <AppText variant="caption">{`${ra.points}/${DIVISION_POINTS} dans ${ra.label}`}</AppText> : null}
+      </Animated.View>
+      <Animated.View entering={FadeInDown.delay(350)} style={{ alignSelf: 'stretch', gap: 10, marginTop: 28, paddingHorizontal: 32 }}>
+        <Button
+          label="Retour"
+          size="lg"
+          onPress={() => {
+            useSocial.getState().announce();
+            router.back();
+          }}
+        />
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
+  coinsWon: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 18, height: 52, borderRadius: 26, backgroundColor: 'rgba(247,201,72,0.14)', borderWidth: 1.5, borderColor: 'rgba(247,201,72,0.5)' },
+  coinsText: { fontFamily: fonts.black, fontSize: 28, color: colors.gold },
+  promo: { paddingHorizontal: 14, height: 34, borderRadius: 8, justifyContent: 'center', transform: [{ skewX: '-10deg' }] },
+  promoText: { fontFamily: fonts.black, fontSize: 16, letterSpacing: 0.3 },
+  rankLabel: { fontFamily: fonts.black, fontSize: 22 },
+  rankTrack: { alignSelf: 'stretch', height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginTop: 6 },
+  rankFill: { height: 10, borderRadius: 5 },
+  delta: { fontFamily: fonts.bold, fontSize: 16, marginTop: 4 },
   center: { alignItems: 'center', justifyContent: 'center' },
   header: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
   round: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },

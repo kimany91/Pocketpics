@@ -133,6 +133,8 @@ export function HpBar({ hp, maxHp, width, compact }: { hp: number; maxHp: number
 interface Props {
   card: CardLike;
   imageSource?: number;
+  /** Photo reçue (carte d'un adversaire en ligne). */
+  imageUri?: string;
   width: number;
   /** 1 = la carte attaque vers le haut (joueur), -1 vers le bas (adversaire). */
   facing: 1 | -1;
@@ -150,7 +152,7 @@ const POISON = '#B26BFF';
 const FOCUS = '#F7C948';
 const HEAL = '#4FE0A8';
 
-export function FighterView({ card, imageSource, width, facing, ko, enter, status, act, react, popups }: Props) {
+export function FighterView({ card, imageSource, imageUri, width, facing, ko, enter, status, act, react, popups }: Props) {
   const r = getRarity(card.rarity);
   const height = width * CARD_RATIO;
   /** Côté vers lequel la carte esquive (vers le bord de l'écran). */
@@ -435,7 +437,7 @@ export function FighterView({ card, imageSource, width, facing, ko, enter, statu
         <Glow color={r.color} size={width * 1.9} />
       </View>
       <Animated.View pointerEvents="none" style={[styles.abs, { left: 0, top: 0 }, trailStyle]}>
-        <CardFace card={card} width={width} imageSource={imageSource} quality="thumb" animated={false} />
+        <CardFace card={card} width={width} imageSource={imageSource} imageUri={imageUri} quality="thumb" animated={false} />
       </Animated.View>
       {/* Concentration : aura dorée qui pulse derrière la carte */}
       <Animated.View pointerEvents="none" style={[styles.abs, { left: -width * 0.6, top: (height - width * 2.2) / 2 }, auraStyle]}>
@@ -446,11 +448,11 @@ export function FighterView({ card, imageSource, width, facing, ko, enter, statu
       </Animated.View>
       {/* Esquive : l'ombre de la carte reste à sa place */}
       <Animated.View pointerEvents="none" style={[styles.abs, { left: 0, top: 0 }, ghostStyle]}>
-        <CardFace card={card} width={width} imageSource={imageSource} quality="thumb" animated={false} />
+        <CardFace card={card} width={width} imageSource={imageSource} imageUri={imageUri} quality="thumb" animated={false} />
       </Animated.View>
 
       <Animated.View style={style}>
-        <CardFace card={card} width={width} imageSource={imageSource} quality={width > 120 ? 'full' : 'thumb'} />
+        <CardFace card={card} width={width} imageSource={imageSource} imageUri={imageUri} quality={width > 120 ? 'full' : 'thumb'} />
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#3A4058', borderRadius: radius }, weakStyle]} />
         {/* Concentration : cadre doré qui pulse autour de la carte gonflée */}
         <Animated.View pointerEvents="none" style={[styles.abs, styles.focusRing, { left: -5, top: -5, right: -5, bottom: -5, borderRadius: radius + 5 }, ringStyle]} />

@@ -46,6 +46,7 @@ interface Props {
   card: StageCard;
   /** Image intégrée (cartes des adversaires du mode solo). */
   imageSource?: number;
+  imageUri?: string;
   /** Texte au dos à la place des dates (ex. « Carte de Léo »). */
   backNote?: string;
   width: number;
@@ -65,7 +66,7 @@ const noop = () => {};
 /** Petit choc quand on retourne la carte d'un double-tap. */
 const flipFeel = () => haptic.medium();
 
-export function CardStage({ card, imageSource, backNote, width, rotY, rotX, tilt, burning = false, onBurnt = noop, onSpin, onZoomChange }: Props) {
+export function CardStage({ card, imageSource, imageUri, backNote, width, rotY, rotX, tilt, burning = false, onBurnt = noop, onSpin, onZoomChange }: Props) {
   const r = getRarity(card.rarity);
   const height = width * CARD_RATIO;
   const m = width * 0.14; // marge de découpe (ornements de la Divine compris)
@@ -237,7 +238,7 @@ export function CardStage({ card, imageSource, backNote, width, rotY, rotX, tilt
         >
           <Animated.View style={[{ position: 'absolute', left: m, top: m, width, height }, zoomStyle]}>
             <Animated.View style={[StyleSheet.absoluteFill, styles.face, frontStyle]}>
-              <CardFace card={card} width={width} tilt={tilt} imageSource={imageSource} />
+              <CardFace card={card} width={width} tilt={tilt} imageSource={imageSource} imageUri={imageUri} />
             </Animated.View>
             <Animated.View style={[StyleSheet.absoluteFill, styles.face, backStyle]}>
               <CardBack width={width}>

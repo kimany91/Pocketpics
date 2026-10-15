@@ -4,10 +4,12 @@ import { MAX_STORED_DRAWS, computeDraws, consumeDraw, type DrawStatus } from '..
 import { setMusicVolume } from '../audio/music';
 import { setSfxVolume } from '../audio/sfx';
 import { ATTACK_NAME_MAX } from '../battle/stats';
+import { DRAW_PRICE, type SoloReward, soloReward } from '../game/economy';
 import { planPack, rollLucky } from '../game/luck';
+import { finishMatch, settleAbandoned, startMatch } from '../game/rank';
 import { generatePack } from '../game/pack';
 import * as disk from '../storage/disk';
-import type { Card, SaveState } from '../storage/model';
+import type { Card, Friend, SaveState } from '../storage/model';
 
 interface GameStore {
   ready: boolean;
@@ -26,8 +28,19 @@ interface GameStore {
   renameCard(id: string, name: string): void;
   /** Renomme l'attaque classique (0) ou spéciale (1) d'une carte. Un nom vide est ignoré. */
   renameAttack(id: string, slot: 0 | 1, name: string): void;
-  /** Note une victoire dans l'arène `n` (débloque la suivante). */
-  winArena(n: number): void;
+  /** Note une victoire dans l'arène `n` (débloque la suivante) et verse les pièces gagnées. */
+  winArena(n: number): SoloReward | null;
+  /** Achète un tirage avec des pièces (seulement quand il n'en reste plus). */
+  buyDraw(): boolean;
+  /** Début d'un combat en ligne classé : la défaite est comptée d'avance. */
+  startRanked(oppMmr: number, opp: string): void;
+  /** Fin d'un combat en ligne classé. */
+  finishRanked(won: boolean): { before: number; after: number } | null;
+  /** Donne un code ami au joueur s'il n'en a pas encore. */
+  ensureFriendCode(make: () => string): string;
+  /** Ajoute ou met à jour un ami. */
+  upsertFriend(friend: Pick<Friend, 'code' | 'name'> & Partial<Friend>): void;
+  removeFriend(code: string): void;
   toggleFavorite(id: string): void;
   setPlayerName(name: string): void;
   /** `persist: false` pendant qu'on fait glisser le réglage, `true` au relâchement. */
@@ -76,7 +89,9 @@ export const useGame = create<GameStore>((set, get) => ({
           changed = true;
         }
       }
-      const save = changed ? { ...state, drawnHashes: [...hashes] } : state;
+      const base = changed ? { ...state, drawnHashes: [...hashes] } : state;
+      // Un combat en ligne resté en cours (app fermée) compte comme une défaite.
+      const save = base.rank.pending ? { ...base, rank: settleAbandoned(base.rank) } : base;
       persistState(save);
       setSfxVolume(save.soundVolume);
       setMusicVolume(save.musicVolume);
@@ -99,7 +114,9 @@ export const useGame = create<GameStore>((set, get) => ({
     const save = get().save;
     if (!save) throw new Error('Sauvegarde non chargée');
     const now = Date.now();
-    if (!consumeDraw(save.draws, now)) throw new Error('Aucun tirage disponible');
+    // Les tirages gratuits d'abord, puis ceux achetés avec des pièces.
+    const useBonus = !consumeDraw(save.draws, now);
+    if (useBonus && save.bonusDraws <= 0) throw new Error('Aucun tirage disponible');
 
     // Chance : démarrage garanti, malchance, paquet brillant (décidé avant l'ouverture pour le montrer).
     const packIndex = save.totalPacksOpened;
@@ -128,9 +145,11 @@ export const useGame = create<GameStore>((set, get) => ({
 
     // 2) puis on consomme le tirage
     const latest = get().save ?? save;
+    const regular = useBonus ? null : consumeDraw(latest.draws, Date.now());
     const next: SaveState = {
       ...latest,
-      draws: consumeDraw(latest.draws, Date.now()) ?? latest.draws,
+      draws: regular ?? latest.draws,
+      bonusDraws: regular ? latest.bonusDraws : Math.max(0, latest.bonusDraws - 1),
       drawnAssetIds: [...new Set([...latest.drawnAssetIds, ...pack.consumedAssetIds])],
       drawnHashes: [...new Set([...latest.drawnHashes, ...written.map((c) => c.hash)])],
       totalPacksOpened: latest.totalPacksOpened + 1,
@@ -173,8 +192,74 @@ export const useGame = create<GameStore>((set, get) => ({
 
   winArena(n) {
     const save = get().save;
-    if (!save || n <= save.arenaCleared) return;
-    const next = { ...save, arenaCleared: Math.max(save.arenaCleared, n) };
+    if (!save) return null;
+    const reward = soloReward({ arena: n, firstClear: n > save.arenaCleared, day: save.soloDay, now: Date.now() });
+    const next: SaveState = { ...save, arenaCleared: Math.max(save.arenaCleared, n), coins: save.coins + reward.coins, soloDay: reward.day };
+    persistState(next);
+    set({ save: next });
+    return reward;
+  },
+
+  buyDraw() {
+    const save = get().save;
+    if (!save || save.coins < DRAW_PRICE || save.bonusDraws > 0 || computeDraws(save.draws, Date.now()).charges > 0) return false;
+    const next: SaveState = { ...save, coins: save.coins - DRAW_PRICE, bonusDraws: save.bonusDraws + 1 };
+    persistState(next);
+    set({ save: next });
+    return true;
+  },
+
+  startRanked(oppMmr, opp) {
+    const save = get().save;
+    if (!save) return;
+    const next: SaveState = { ...save, rank: startMatch(save.rank, oppMmr, opp) };
+    persistState(next);
+    set({ save: next });
+  },
+
+  finishRanked(won) {
+    const save = get().save;
+    if (!save || !save.rank.pending) return null;
+    const r = finishMatch(save.rank, won);
+    const next: SaveState = { ...save, rank: r.state };
+    persistState(next);
+    set({ save: next });
+    return { before: r.before, after: r.after };
+  },
+
+  ensureFriendCode(make) {
+    const save = get().save;
+    if (!save) return '';
+    if (save.friendCode) return save.friendCode;
+    const next: SaveState = { ...save, friendCode: make() };
+    persistState(next);
+    set({ save: next });
+    return next.friendCode as string;
+  },
+
+  upsertFriend(f) {
+    const save = get().save;
+    if (!save || f.code === save.friendCode) return;
+    const old = save.friends.find((x) => x.code === f.code);
+    const merged: Friend = {
+      ...old,
+      ...f,
+      name: (f.name || old?.name || 'Ami').slice(0, 24),
+      mmr: f.mmr ?? old?.mmr ?? 0,
+      addedAt: old?.addedAt ?? Date.now(),
+      mutual: f.mutual ?? old?.mutual ?? false,
+    };
+    if (old && old.name === merged.name && old.mmr === merged.mmr && old.mutual === merged.mutual) return;
+    const friends = old ? save.friends.map((x) => (x.code === f.code ? merged : x)) : [...save.friends, merged];
+    const next: SaveState = { ...save, friends };
+    persistState(next);
+    set({ save: next });
+  },
+
+  removeFriend(code) {
+    const save = get().save;
+    if (!save) return;
+    const next: SaveState = { ...save, friends: save.friends.filter((x) => x.code !== code) };
     persistState(next);
     set({ save: next });
   },

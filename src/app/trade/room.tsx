@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, FlatList, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, BackHandler, FlatList, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 
 import { AppText } from '../../components/AppText';
@@ -16,6 +16,7 @@ import type { Card } from '../../storage/model';
 import { MAX_OFFER, type OfferCard } from '../../trade/protocol';
 import { useTrade } from '../../trade/session';
 import { colors, fonts } from '../../theme';
+import { confirmAction } from '../../utils/confirm';
 import { haptic } from '../../utils/haptics';
 
 export default function RoomScreen() {
@@ -33,10 +34,7 @@ export default function RoomScreen() {
   const askExit = () => {
     if (t.phase === 'done' || t.phase === 'ended') return exit();
     if (t.phase === 'transferring') return;
-    Alert.alert("Quitter l'échange ?", "L'échange sera annulé pour vous deux.", [
-      { text: 'Rester', style: 'cancel' },
-      { text: 'Quitter', style: 'destructive', onPress: exit },
-    ]);
+    confirmAction("Quitter l'échange ?", "L'échange sera annulé pour vous deux.", 'Quitter', exit, 'Rester');
   };
 
   useEffect(() => {

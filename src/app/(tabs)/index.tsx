@@ -13,6 +13,7 @@ import Animated, {
 
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
+import { CoinChip, CoinIcon } from '../../components/Coin';
 import { GalleryImportSheet } from '../../components/GalleryImportSheet';
 import { SoundSheet, volumeIcon } from '../../components/SoundSheet';
 import { DEFAULT_SOUND_VOLUME } from '../../storage/model';
@@ -20,6 +21,7 @@ import { Glow } from '../../components/fx';
 import { PACK_RATIO, PackArt } from '../../components/PackArt';
 import { Screen } from '../../components/Screen';
 import { DRAW_INTERVAL_MS, MAX_STORED_DRAWS, formatCountdown } from '../../game/draws';
+import { DRAW_PRICE } from '../../game/economy';
 import { galleryPhotoCount, isDesktopBrowser, openLimitedPicker } from '../../game/gallery';
 import { RARITIES, getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
@@ -33,8 +35,10 @@ export default function DrawScreen() {
   const cards = useGame((s) => s.cards);
   const refillDrawsForDemo = useGame((s) => s.refillDrawsForDemo);
   const soundVolume = useGame((s) => s.save?.soundVolume ?? DEFAULT_SOUND_VOLUME);
+  const coins = useGame((s) => s.save?.coins ?? 0);
+  const buyDraw = useGame((s) => s.buyDraw);
   const [soundOpen, setSoundOpen] = useState(false);
-  const { charges, nextAt, now } = useDrawStatus();
+  const { charges, available, nextAt, now } = useDrawStatus();
   const { access, request, pickDemo, importFolder } = useGalleryAccess();
   const isWeb = Platform.OS === 'web';
   // Version navigateur : la fenêtre d'import s'ouvre à chaque arrivée sur le jeu.
@@ -43,7 +47,7 @@ export default function DrawScreen() {
     if (isWeb) setImportOpen(true);
   }, [isWeb]);
   const packW = Math.min(width * 0.5, (height * 0.36) / PACK_RATIO, 240);
-  const canOpen = charges > 0 && (access === 'granted' || access === 'limited');
+  const canOpen = available > 0 && (access === 'granted' || access === 'limited');
   const best = RARITIES[cards.reduce((m, c) => Math.max(m, getRarity(c.rarity).rank), -1)];
 
   const float = useSharedValue(0);
@@ -83,6 +87,7 @@ export default function DrawScreen() {
           </AppText>
         </View>
         <View style={styles.headerBtns}>
+          <CoinChip amount={coins} style={{ marginTop: 4 }} />
           <Pressable
             hitSlop={8}
             onPress={() => setSoundOpen(true)}
@@ -118,7 +123,7 @@ export default function DrawScreen() {
           ))}
         </View>
         <AppText variant="heading" style={{ textAlign: 'center' }}>
-          {charges === 0 ? 'Plus de tirage pour le moment' : charges === 1 ? '1 tirage disponible' : `${charges} tirages disponibles`}
+          {available === 0 ? 'Plus de tirage pour le moment' : available === 1 ? '1 tirage disponible' : `${available} tirages disponibles`}
         </AppText>
         <AppText variant="caption" style={styles.timer}>
           {nextAt ? `Prochain tirage dans ${formatCountdown(nextAt - now)}` : 'Réserve pleine — ouvre un paquet !'}
@@ -148,7 +153,17 @@ export default function DrawScreen() {
           <Permission text="Chaque carte est une photo de ta galerie, tirée au hasard." action="Autoriser l'accès aux photos" onPress={() => request()} />
         ) : (
           <>
-            <Button label="Ouvrir un paquet" icon="sparkles" size="lg" disabled={!canOpen} onPress={open} />
+            {available === 0 ? (
+              <BuyDraw
+                coins={coins}
+                onBuy={() => {
+                  if (!buyDraw()) return;
+                  haptic.success();
+                }}
+              />
+            ) : (
+              <Button label="Ouvrir un paquet" icon="sparkles" size="lg" disabled={!canOpen} onPress={open} />
+            )}
             {isWeb ? (
               <View style={[styles.limited, { flexWrap: 'wrap', rowGap: 6 }]}>
                 <AppText variant="caption">{galleryPhotoCount() ? `${galleryPhotoCount()} photos en jeu   ·   ` : 'Photos de démo   ·   '}</AppText>
@@ -186,6 +201,31 @@ export default function DrawScreen() {
         />
       ) : null}
     </Screen>
+  );
+}
+
+/** Plus de tirage : on peut en acheter un avec les pièces gagnées en solo. */
+function BuyDraw({ coins, onBuy }: { coins: number; onBuy(): void }) {
+  const missing = DRAW_PRICE - coins;
+  return (
+    <View style={{ gap: 8 }}>
+      <Pressable
+        onPress={onBuy}
+        disabled={missing > 0}
+        accessibilityRole="button"
+        accessibilityLabel={`Acheter un tirage pour ${DRAW_PRICE} pièces`}
+        style={({ pressed }) => [styles.buy, missing > 0 && { opacity: 0.45 }, pressed && styles.buyPressed]}
+      >
+        <AppText style={styles.buyText}>Acheter un tirage</AppText>
+        <View style={styles.price}>
+          <CoinIcon size={18} />
+          <AppText style={styles.buyText}>{DRAW_PRICE}</AppText>
+        </View>
+      </Pressable>
+      <AppText variant="caption" style={{ textAlign: 'center' }}>
+        {missing > 0 ? `Il te manque ${missing} pièces : gagne-les en battant les arènes solo.` : 'Ou attends le prochain tirage gratuit.'}
+      </AppText>
+    </View>
   );
 }
 
@@ -231,4 +271,18 @@ const styles = StyleSheet.create({
   pipFill: { height: '100%', backgroundColor: 'rgba(247,201,72,0.35)' },
   timer: { textAlign: 'center', marginBottom: 14, fontFamily: fonts.medium, fontVariant: ['tabular-nums'] },
   limited: { flexDirection: 'row', justifyContent: 'center', marginTop: 10 },
+  buy: {
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: colors.gold,
+    borderBottomWidth: 4,
+    borderBottomColor: '#B8861E',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+  },
+  buyPressed: { borderBottomWidth: 1, transform: [{ translateY: 3 }] },
+  buyText: { fontFamily: fonts.bold, fontSize: 17, color: '#141414' },
+  price: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.12)' },
 });

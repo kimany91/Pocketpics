@@ -10,11 +10,13 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { AppState, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { initSfx } from '../audio/sfx';
 import { AppText } from '../components/AppText';
+import { ChallengeOverlay } from '../components/ChallengeOverlay';
+import { useSocial } from '../net/social';
 import { useGame } from '../state/game';
 import { colors } from '../theme';
 
@@ -30,6 +32,17 @@ export default function RootLayout() {
     initSfx();
     void init();
   }, [init]);
+
+  // Amis en ligne : connecté tant que l'app est ouverte (présence, défis).
+  useEffect(() => {
+    if (!ready) return;
+    useSocial.getState().start();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') useSocial.getState().start();
+      else if (state === 'background') useSocial.getState().stop();
+    });
+    return () => sub.remove();
+  }, [ready]);
 
   const fontsDone = fontsLoaded || !!fontError;
   useEffect(() => {
@@ -62,7 +75,12 @@ export default function RootLayout() {
         <Stack.Screen name="trade/join" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="trade/scan" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="trade/room" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
+        <Stack.Screen name="friends" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="online/host" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
+        <Stack.Screen name="online/join" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
+        <Stack.Screen name="online/scan" options={{ animation: 'slide_from_bottom' }} />
       </Stack>
+      <ChallengeOverlay />
     </GestureHandlerRootView>
   );
 }

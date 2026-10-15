@@ -5,13 +5,13 @@
  */
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, type ImageSourcePropType, StyleSheet, View } from 'react-native';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 
 import { colors } from '../../theme';
 import { Embers, Glow } from '../fx';
 
-export function ArenaBackdrop({ art, tint, width, height }: { art?: number; tint: string; width: number; height: number }) {
+export function ArenaBackdrop({ art, tint, width, height }: { art?: ImageSourcePropType; tint: string; width: number; height: number }) {
   // Lente respiration de la lumière : le décor vit sans attirer l'œil.
   const drift = useSharedValue(0);
   useEffect(() => {

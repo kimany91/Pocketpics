@@ -10,7 +10,9 @@
 import { type BattleStats, normalizeStats } from '../battle/stats';
 import type { DrawState } from '../game/draws';
 import { initialDrawState } from '../game/draws';
+import { type SoloDay } from '../game/economy';
 import { type LuckState, initialLuck } from '../game/luck';
+import { type RankState, initialRank, migrateRank } from '../game/rank';
 import { getRarity } from '../game/rarity';
 
 export const CARD_SCHEMA_VERSION = 1;
@@ -73,7 +75,29 @@ export interface SaveState {
   arenaCleared: number;
   /** Compteurs de chance (malchance, paquets brillants). Ajouté après : remis à zéro si absent. */
   luck: LuckState;
+  /** Pièces gagnées en solo (ajouté après : 0 si absent). */
+  coins: number;
+  /** Tirages achetés pas encore utilisés (ajouté après : 0 si absent). */
+  bonusDraws: number;
+  /** Victoires solo du jour, pour réduire les gains au-delà de 5 (ajouté après). */
+  soloDay: SoloDay | null;
+  /** Rang en ligne (ajouté après : Papier I si absent). */
+  rank: RankState;
+  /** Code ami, créé au premier lancement en ligne (ajouté après : `null` si absent). */
+  friendCode: string | null;
+  /** Amis ajoutés (ajouté après : liste vide si absent). */
+  friends: Friend[];
   [extra: string]: unknown;
+}
+
+export interface Friend {
+  code: string;
+  name: string;
+  /** Points de rang vus la dernière fois. */
+  mmr: number;
+  addedAt: number;
+  /** L'ami nous a ajouté lui aussi. */
+  mutual: boolean;
 }
 
 type Raw = Record<string, unknown>;
@@ -138,7 +162,33 @@ export function createInitialState(now = Date.now()): SaveState {
     musicVolume: DEFAULT_MUSIC_VOLUME,
     arenaCleared: 0,
     luck: initialLuck(),
+    coins: 0,
+    bonusDraws: 0,
+    soloDay: null,
+    rank: initialRank(),
+    friendCode: null,
+    friends: [],
   };
+}
+
+const FRIEND_CODE = /^[0-9A-Z]{10}$/;
+
+function migrateFriends(raw: unknown): Friend[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Friend[] = [];
+  for (const f of raw) {
+    if (!f || typeof f !== 'object') continue;
+    const r = f as Raw;
+    if (typeof r.code !== 'string' || !FRIEND_CODE.test(r.code) || out.some((x) => x.code === r.code)) continue;
+    out.push({ ...r, code: r.code, name: str(r.name, 'Ami').slice(0, 24), mmr: Math.max(0, num(r.mmr, 0)), addedAt: num(r.addedAt, 0), mutual: r.mutual === true });
+  }
+  return out;
+}
+
+function migrateSoloDay(raw: unknown): SoloDay | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Raw;
+  return typeof r.day === 'string' ? { day: r.day, wins: Math.max(0, Math.floor(num(r.wins, 0))) } : null;
 }
 
 function migrateLuck(raw: unknown): LuckState {
@@ -171,5 +221,11 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     musicVolume: Math.max(0, Math.min(1, num(s.musicVolume, DEFAULT_MUSIC_VOLUME))),
     arenaCleared: Math.max(0, Math.floor(num(s.arenaCleared, 0))),
     luck: migrateLuck(s.luck),
+    coins: Math.max(0, Math.floor(num(s.coins, 0))),
+    bonusDraws: Math.max(0, Math.floor(num(s.bonusDraws, 0))),
+    soloDay: migrateSoloDay(s.soloDay),
+    rank: migrateRank(s.rank),
+    friendCode: typeof s.friendCode === 'string' && FRIEND_CODE.test(s.friendCode) ? s.friendCode : null,
+    friends: migrateFriends(s.friends),
   };
 }

@@ -12,6 +12,8 @@ export function useDrawStatus(intervalMs = 1000) {
     return () => clearInterval(t);
   }, [intervalMs]);
   // `save` en dépendance implicite : recalcul quand un tirage est consommé.
-  void save;
-  return { ...drawStatus(now), now };
+  const status = drawStatus(now);
+  const bonus = save?.bonusDraws ?? 0;
+  /** `available` : tirages gratuits + tirages achetés. */
+  return { ...status, bonus, available: status.charges + bonus, now };
 }

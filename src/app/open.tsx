@@ -199,7 +199,7 @@ function WaitingStack({ cardW }: { cardW: number }) {
 
 function Summary({ cards, onClose, onNext }: { cards: Card[]; onClose(): void; onNext(): void }) {
   const { width } = useWindowDimensions();
-  const { charges } = useDrawStatus();
+  const { available: charges } = useDrawStatus();
   const cols = cards.length <= 4 ? 2 : 3;
   const gap = 14;
   const cardW = Math.min((width - 40 - gap * (cols - 1)) / cols, 170);

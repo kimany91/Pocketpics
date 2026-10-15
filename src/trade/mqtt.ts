@@ -3,7 +3,8 @@
  * Sert à passer par un relais public pour échanger en ligne : les deux
  * téléphones s'y connectent en sortie, donc pas besoin d'être sur le même réseau.
  *
- * Ne gère que ce dont l'échange a besoin : connexion, abonnement, publication QoS 0, ping.
+ * Ne gère que ce dont le jeu a besoin : connexion, abonnements, publication QoS 0
+ * (éventuellement « retenue » par le relais), dernière volonté, ping.
  */
 
 /* ------------------------------ Encodage binaire ----------------------------- */
@@ -76,13 +77,32 @@ function packet(header: number, body: Uint8Array): Uint8Array {
 
 /* -------------------------------- Paquets MQTT -------------------------------- */
 
-export const encodeConnect = (clientId: string, keepAlive: number) =>
-  packet(0x10, concat([str16('MQTT'), Uint8Array.of(4, 0x02, keepAlive >> 8, keepAlive & 255), str16(clientId)]));
+/** Dernière volonté : message publié par le relais si la connexion tombe sans au revoir. */
+export interface MqttWill {
+  topic: string;
+  payload: Uint8Array;
+  retain: boolean;
+}
 
-export const encodeSubscribe = (packetId: number, topic: string) =>
-  packet(0x82, concat([Uint8Array.of(packetId >> 8, packetId & 255), str16(topic), Uint8Array.of(0)]));
+function bin16(b: Uint8Array): Uint8Array {
+  return concat([Uint8Array.of(b.length >> 8, b.length & 255), b]);
+}
 
-export const encodePublish = (topic: string, payload: Uint8Array) => packet(0x30, concat([str16(topic), payload]));
+export const encodeConnect = (clientId: string, keepAlive: number, will?: MqttWill) => {
+  // 0x02 : session propre ; 0x04 : dernière volonté ; 0x20 : volonté retenue
+  const flags = 0x02 | (will ? 0x04 | (will.retain ? 0x20 : 0) : 0);
+  const payload = will ? [str16(clientId), str16(will.topic), bin16(will.payload)] : [str16(clientId)];
+  return packet(0x10, concat([str16('MQTT'), Uint8Array.of(4, flags, keepAlive >> 8, keepAlive & 255), ...payload]));
+};
+
+export const encodeSubscribe = (packetId: number, topics: string | string[]) =>
+  packet(
+    0x82,
+    concat([Uint8Array.of(packetId >> 8, packetId & 255), ...(Array.isArray(topics) ? topics : [topics]).flatMap((t) => [str16(t), Uint8Array.of(0)])]),
+  );
+
+/** `retain` : le relais garde le dernier message du sujet et le donne à chaque nouvel abonné. */
+export const encodePublish = (topic: string, payload: Uint8Array, retain = false) => packet(retain ? 0x31 : 0x30, concat([str16(topic), payload]));
 
 export const PINGREQ = Uint8Array.of(0xc0, 0);
 export const DISCONNECT = Uint8Array.of(0xe0, 0);
@@ -135,7 +155,9 @@ export function decodePublish(p: MqttPacket): { topic: string; payload: Uint8Arr
 /* --------------------------------- Connexion --------------------------------- */
 
 export interface MqttConnection {
-  publish(topic: string, payload: Uint8Array): void;
+  publish(topic: string, payload: Uint8Array, retain?: boolean): void;
+  /** Abonnement supplémentaire après la connexion. */
+  subscribe?(topics: string | string[]): void;
   onMessage(cb: (topic: string, payload: Uint8Array) => void): void;
   onClose(cb: (reason: string) => void): void;
   close(): void;
@@ -143,8 +165,15 @@ export interface MqttConnection {
 
 const KEEP_ALIVE = 30;
 
-/** Se connecte au relais et s'abonne au sujet. Rejette si le relais ne répond pas. */
-export function connectMqtt(url: string, clientId: string, topic: string, timeoutMs = 8000): Promise<MqttConnection> {
+/** Se connecte au relais et s'abonne au(x) sujet(s). Rejette si le relais ne répond pas. */
+export function connectMqtt(
+  url: string,
+  clientId: string,
+  topic: string | string[],
+  opts: { timeoutMs?: number; will?: MqttWill } = {},
+): Promise<MqttConnection> {
+  const timeoutMs = opts.timeoutMs ?? 8000;
+  let packetId = 1;
   return new Promise((resolve, reject) => {
     let settled = false;
     let closed = false;
@@ -184,7 +213,10 @@ export function connectMqtt(url: string, clientId: string, topic: string, timeou
     };
 
     const conn: MqttConnection = {
-      publish: (t, payload) => send(encodePublish(t, payload)),
+      publish: (t, payload, retain) => send(encodePublish(t, payload, retain)),
+      subscribe: (topics) => {
+        if (!Array.isArray(topics) || topics.length) send(encodeSubscribe(++packetId, topics));
+      },
       onMessage: (cb) => (messageCb = cb),
       onClose: (cb) => (closeCb = cb),
       close: () => {
@@ -193,7 +225,7 @@ export function connectMqtt(url: string, clientId: string, topic: string, timeou
       },
     };
 
-    ws.onopen = () => send(encodeConnect(clientId, KEEP_ALIVE));
+    ws.onopen = () => send(encodeConnect(clientId, KEEP_ALIVE, opts.will));
     ws.onerror = () => fail('Connexion au relais impossible');
     ws.onclose = () => fail('Connexion au relais perdue');
     ws.onmessage = (ev: MessageEvent) => {
@@ -202,7 +234,7 @@ export function connectMqtt(url: string, clientId: string, topic: string, timeou
         if (p.type === 2) {
           // CONNACK
           if (p.body[1] !== 0) return fail('Le relais a refusé la connexion');
-          send(encodeSubscribe(1, topic));
+          send(encodeSubscribe(1, Array.isArray(topic) && topic.length === 0 ? ['pocketpics/v1/noop'] : topic));
         } else if (p.type === 9) {
           // SUBACK : prêt
           if (settled) continue;

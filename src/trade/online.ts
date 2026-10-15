@@ -4,7 +4,7 @@ import nacl from 'tweetnacl';
 
 import type { HostHandle, TradeLink } from './link';
 import { connectMqtt } from './mqtt';
-import { type RelayDeps, hostOnline as hostCore, joinOnline as joinCore } from './relayCore';
+import { type RelayDeps, type RoomOptions, hostOnline as hostCore, joinOnline as joinCore } from './relayCore';
 
 // Hasard cryptographique fourni par Expo (fonctionne sur iOS, Android et web).
 nacl.setPRNG((x, n) => {
@@ -18,7 +18,7 @@ nacl.setPRNG((x, n) => {
  */
 export const RELAYS = ['wss://broker.hivemq.com:8884/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
 
-function deps(): RelayDeps {
+export function deps(): RelayDeps {
   // Permet de pointer vers un relais de test (ex. relais local) sans recompiler.
   const override = (globalThis as { __pocketpicsRelays?: unknown }).__pocketpicsRelays;
   const urls = Array.isArray(override) && override.every((u) => typeof u === 'string') ? (override as string[]) : RELAYS;
@@ -27,3 +27,7 @@ function deps(): RelayDeps {
 
 export const hostOnline = (onGuest: (link: TradeLink) => void): Promise<HostHandle> => hostCore(deps(), onGuest);
 export const joinOnline = (code: string): Promise<TradeLink> => joinCore(deps(), code);
+
+/** Salon générique (combats) : même relais, même chiffrement, autre espace de noms. */
+export const hostRoom = <M,>(onGuest: (link: TradeLink<M>) => void, opts: RoomOptions): Promise<HostHandle> => hostCore<M>(deps(), onGuest, opts);
+export const joinRoom = <M,>(code: string, opts: RoomOptions): Promise<TradeLink<M>> => joinCore<M>(deps(), code, opts);

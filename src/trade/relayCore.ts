@@ -37,12 +37,25 @@ export const formatOnlineCode = (code: string) => code.replace(/(.{3})(?=.)/g, '
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
 
-export function roomKey(code: string): Uint8Array {
-  return nacl.hash(utf8Encode(`pocketpics/key/${code}`)).slice(0, nacl.secretbox.keyLength);
+/**
+ * Clé et sujet d'un salon. `ns` sépare les usages (échange, combat…) : un code
+ * d'échange tapé dans « rejoindre un combat » ne tombe pas dans un échange.
+ */
+export function roomKey(code: string, ns = ''): Uint8Array {
+  return nacl.hash(utf8Encode(`pocketpics/key/${ns}${code}`)).slice(0, nacl.secretbox.keyLength);
 }
 
-export function roomTopic(code: string): string {
-  return `pocketpics/v1/${hex(nacl.hash(utf8Encode(`pocketpics/room/${code}`)).slice(0, 12))}`;
+export function roomTopic(code: string, ns = ''): string {
+  return `pocketpics/v1/${hex(nacl.hash(utf8Encode(`pocketpics/room/${ns}${code}`)).slice(0, 12))}`;
+}
+
+export interface RoomOptions {
+  /** Code imposé (ex. défi entre amis) ; sinon tiré au hasard. */
+  code?: string;
+  /** Espace de noms du salon (vide pour l'échange, « battle/ » pour les combats). */
+  ns?: string;
+  /** Ce qu'on rejoint, pour les messages d'erreur (« échange », « combat »). */
+  what?: string;
 }
 
 /* ------------------------------- Enveloppes ------------------------------- */
@@ -89,9 +102,9 @@ export function chunkMessage(json: string, size = CHUNK): string[] {
 
 /* --------------------------------- Liaison -------------------------------- */
 
-class RelayLink implements TradeLink {
-  private messageCb: ((m: TradeMessage) => void) | null = null;
-  private queue: TradeMessage[] = [];
+class RelayLink<M = TradeMessage> implements TradeLink<M> {
+  private messageCb: ((m: M) => void) | null = null;
+  private queue: M[] = [];
   private closeCb: (e?: string) => void = () => {};
   private parts = new Map<string, string[]>();
   private lastSeen = Date.now();
@@ -130,18 +143,18 @@ class RelayLink implements TradeLink {
     try {
       const msg = JSON.parse(list.join(''));
       if (!isTradeMessage(msg)) return;
-      if (this.messageCb) this.messageCb(msg);
-      else this.queue.push(msg);
+      if (this.messageCb) this.messageCb(msg as M);
+      else this.queue.push(msg as M);
     } catch {}
   }
 
-  send(msg: TradeMessage) {
+  send(msg: M) {
     const id = `${this.me.slice(0, 6)}${this.seq++}`;
     const chunks = chunkMessage(JSON.stringify(msg));
     chunks.forEach((d, i) => this.post({ f: this.me, t: this.peer, k: 'm', id, i, n: chunks.length, d }));
   }
 
-  onMessage(cb: (m: TradeMessage) => void) {
+  onMessage(cb: (m: M) => void) {
     this.messageCb = cb;
     const pending = this.queue;
     this.queue = [];
@@ -186,13 +199,13 @@ async function connectAny(deps: RelayDeps, clientId: string, topic: string): Pro
 const newId = (deps: RelayDeps) => hex(deps.randomBytes(8));
 
 /** Ouvre un salon en ligne ; `onGuest` est appelé au premier joueur qui le rejoint. */
-export async function hostOnline(deps: RelayDeps, onGuest: (link: TradeLink) => void): Promise<HostHandle> {
-  const code = newOnlineCode(deps.randomBytes);
-  const key = roomKey(code);
-  const topic = roomTopic(code);
+export async function hostOnline<M = TradeMessage>(deps: RelayDeps, onGuest: (link: TradeLink<M>) => void, opts: RoomOptions = {}): Promise<HostHandle> {
+  const code = opts.code ?? newOnlineCode(deps.randomBytes);
+  const key = roomKey(code, opts.ns);
+  const topic = roomTopic(code, opts.ns);
   const me = newId(deps);
   const conn = await connectAny(deps, `pp-${me}`, topic);
-  let link: RelayLink | null = null;
+  let link: RelayLink<M> | null = null;
   const post = (env: Envelope) => conn.publish(topic, seal(env, key));
 
   conn.onMessage((_t, payload) => {
@@ -200,7 +213,7 @@ export async function hostOnline(deps: RelayDeps, onGuest: (link: TradeLink) => 
     if (!env || env.f === me) return;
     if (env.k === 'knock') {
       if (!link) {
-        link = new RelayLink(conn, topic, key, me, env.f);
+        link = new RelayLink<M>(conn, topic, key, me, env.f);
         post({ f: me, t: env.f, k: 'w' });
         onGuest(link);
       } else if (env.f === link.peer) {
@@ -222,14 +235,15 @@ export async function hostOnline(deps: RelayDeps, onGuest: (link: TradeLink) => 
 }
 
 /** Rejoint le salon correspondant au code. */
-export async function joinOnline(deps: RelayDeps, rawCode: string): Promise<TradeLink> {
+export async function joinOnline<M = TradeMessage>(deps: RelayDeps, rawCode: string, opts: RoomOptions = {}): Promise<TradeLink<M>> {
+  const what = opts.what ?? 'échange';
   const code = rawCode.toUpperCase().replace(/[^0-9A-Z]/g, '');
-  const key = roomKey(code);
-  const topic = roomTopic(code);
+  const key = roomKey(code, opts.ns);
+  const topic = roomTopic(code, opts.ns);
   const me = newId(deps);
   const conn = await connectAny(deps, `pp-${me}`, topic);
   return new Promise((resolve, reject) => {
-    let link: RelayLink | null = null;
+    let link: RelayLink<M> | null = null;
     const knock = () => conn.publish(topic, seal({ f: me, k: 'knock' }, key));
     const stop = (error: string) => {
       clearInterval(knocking);
@@ -238,7 +252,10 @@ export async function joinOnline(deps: RelayDeps, rawCode: string): Promise<Trad
       reject(new Error(error));
     };
     const knocking = setInterval(knock, KNOCK_MS);
-    const timeout = setTimeout(() => stop("Aucun échange trouvé avec ce code. Vérifie le code, et que l'autre joueur attend bien sur l'écran de l'échange."), JOIN_TIMEOUT_MS);
+    const timeout = setTimeout(
+      () => stop(`Aucun ${what} trouvé avec ce code. Vérifie le code, et que l'autre joueur attend bien sur l'écran ${what === 'échange' ? "de l'échange" : `du ${what}`}.`),
+      JOIN_TIMEOUT_MS,
+    );
     conn.onMessage((_t, payload) => {
       const env = unseal(payload, key);
       if (!env || env.f === me || env.t !== me) return;
@@ -246,11 +263,11 @@ export async function joinOnline(deps: RelayDeps, rawCode: string): Promise<Trad
         if (env.f === link.peer) link.handle(env);
         return;
       }
-      if (env.k === 'full') return stop('Cet échange a déjà un autre joueur.');
+      if (env.k === 'full') return stop(`Ce ${what} a déjà un autre joueur.`);
       if (env.k === 'w') {
         clearInterval(knocking);
         clearTimeout(timeout);
-        link = new RelayLink(conn, topic, key, me, env.f);
+        link = new RelayLink<M>(conn, topic, key, me, env.f);
         resolve(link);
       }
     });
