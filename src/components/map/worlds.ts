@@ -40,7 +40,8 @@ export type DecorKind =
   | 'fountain'
   | 'planet'
   | 'asteroid'
-  | 'star';
+  | 'star'
+  | 'grass';
 
 /** Grand décor d'un monde, posé à côté de la route. */
 export type HeroKind = 'pond' | 'sea' | 'market' | 'bigTree' | 'lighthouse' | 'mountains' | 'volcano' | 'storm' | 'castle' | 'ringPlanet';
@@ -65,13 +66,13 @@ export const OUTLINE = '#2B1B12';
 
 export const WORLD_LOOKS: WorldLook[] = [
   // 1 · Le Parc
-  { ground: '#7CCB5B', speck: '#5FB044', road: '#F1E2B0', roadEdge: '#A88A50', roadLine: '#FFFFFF', node: '#3FA34D', hero: 'pond', texture: 'tuft', decor: [['tree', 5], ['bush', 4], ['flower', 6], ['bench', 1], ['lamp', 1]] },
+  { ground: '#7CCB5B', speck: '#5FB044', road: '#F1E2B0', roadEdge: '#A88A50', roadLine: '#FFFFFF', node: '#3FA34D', hero: 'pond', texture: 'tuft', decor: [['tree', 5], ['bush', 4], ['flower', 6], ['grass', 5], ['bench', 1], ['lamp', 1]] },
   // 2 · La Plage
-  { ground: '#F5D78E', speck: '#E3BE6A', road: '#D9A86A', roadEdge: '#8F6234', roadLine: '#F6D9A8', node: '#E58A2E', hero: 'sea', texture: 'dot', decor: [['palm', 5], ['parasol', 3], ['sandcastle', 2], ['shell', 3], ['starfish', 3]] },
+  { ground: '#F5D78E', speck: '#E3BE6A', road: '#D9A86A', roadEdge: '#8F6234', roadLine: '#F6D9A8', node: '#E58A2E', hero: 'sea', texture: 'dot', decor: [['palm', 5], ['parasol', 3], ['sandcastle', 2], ['shell', 3], ['starfish', 3], ['grass', 2]] },
   // 3 · Le Marché
   { ground: '#E9B47E', speck: '#D69860', road: '#CFC6B6', roadEdge: '#857A68', roadLine: '#F3EEE4', node: '#D9543A', hero: 'market', texture: 'pebble', decor: [['stall', 4], ['crate', 4], ['barrel', 3], ['flower', 2], ['lamp', 1]] },
   // 4 · La Forêt
-  { ground: '#3F9C5C', speck: '#2F8549', road: '#C9A274', roadEdge: '#7E5E3A', roadLine: '#E9D2AE', node: '#2E7D4F', hero: 'bigTree', texture: 'tuft', decor: [['pine', 6], ['mushroom', 4], ['log', 2], ['fern', 4], ['bush', 2]] },
+  { ground: '#3F9C5C', speck: '#2F8549', road: '#C9A274', roadEdge: '#7E5E3A', roadLine: '#E9D2AE', node: '#2E7D4F', hero: 'bigTree', texture: 'tuft', decor: [['pine', 6], ['mushroom', 4], ['log', 2], ['fern', 4], ['bush', 2], ['grass', 4]] },
   // 5 · Le Port
   { ground: '#A3BBCC', speck: '#8BA4B7', road: '#C99A62', roadEdge: '#7C5630', roadLine: '#E7C796', node: '#2F7FC1', hero: 'lighthouse', texture: 'pebble', decor: [['crate', 4], ['barrel', 3], ['bollard', 4], ['buoy', 2], ['boat', 2]] },
   // 6 · La Montagne

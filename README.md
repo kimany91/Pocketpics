@@ -89,7 +89,26 @@ Les effets en cours disparaissent quand la carte quitte le terrain (sauf l'étou
 
 **Mise en scène.** Le décor est l'illustration du monde, floutée sous un voile sombre (`src/components/battle/ArenaBackdrop.tsx`). Le combat s'ouvre sur un écran « VS » d'environ 1,6 s (un toucher le passe), puis les cartes tombent sur leur socle. Au repos, elles flottent doucement. Une carte qui attaque fonce en diagonale vers l'adversaire en laissant une traînée. La carte touchée prend un éclat, une onde et des étincelles, sa jauge clignote, et l'écran tremble selon la part de PV perdue. Un critique ou un coup de grâce ajoute un éclair blanc. Le cadre du message prend la couleur du camp dont il parle, et un onglet dit à qui est le tour.
 
-**Musique.** Une boucle de combat (`assets/music/battle.wav`, générée par `scripts/generate-music.py`) démarre en fondu au début du combat et s'arrête en fondu à la fin. Son volume se règle à part (45 % par défaut, enregistré dans la sauvegarde) dans la fenêtre « Son », ouverte depuis l'icône 🔊 de l'accueil ou depuis l'icône ♪ en combat.
+**Musique.** Chaque monde a sa propre musique de combat, composée par `python3 scripts/generate-music.py` (tout est synthétisé, rien sous licence) et encodée en AAC (`assets/music/world-<n>.m4a`, 3,9 Mo pour les 10). Les combats en ligne prennent celle de la Tempête. La musique démarre en fondu au début du combat et s'arrête en fondu à la fin. Son volume se règle à part (45 % par défaut, enregistré dans la sauvegarde) dans la fenêtre « Son », ouverte depuis l'icône 🔊 de l'accueil ou depuis l'icône ♪ en combat.
+
+Chaque morceau est une vraie petite composition en boucle (48 à 84 s), pas un accord qui se répète :
+
+- **4 parties de 8 mesures** : A (le thème), B (le développement, sur une autre grille d'accords), A' (le thème à l'octave avec une seconde voix à la tierce) et C (un pont plus calme, sur une troisième grille, qui remonte vers le début). Breaks de batterie en fin de partie, cymbale au début de la suivante.
+- **Des mélodies construites** : un motif de 2 mesures qui suit un contour (arche, montée, vague…), sa réponse transposée sur les accords suivants (fin ouverte), la reprise du motif, puis une conclusion qui descend sur la tonique. Les temps forts tombent sur des notes de l'accord.
+- **Basse et accompagnement écrits par style** (rebond, reggae, oum-pa, marche, pompe électronique, galop métal…), avec des accords qui s'enchaînent par le plus court chemin.
+
+| Monde | Tonalité, tempo | Couleur | Instruments |
+| --- | --- | --- | --- |
+| Le Parc | Fa majeur, 124 | Promenade joyeuse | Glockenspiel, sifflet, ukulélé, claps |
+| La Plage | Do majeur, 112 | Calypso | Steel drum, marimba en contretemps, bongos |
+| Le Marché | Ré mineur harmonique, 144 | Tarentelle | Accordéon, violon, mandoline, tambourin |
+| La Forêt | Mi dorien, 100 | Aventure mystérieuse | Flûte, harpe, chœur, toms, wood-block |
+| Le Port | Sol majeur, 118 (balancé) | Chant de marins | Violon, accordéon, tuba, cloche de bateau |
+| La Montagne | Ré lydien, 92 | Souffle épique | Cor, célesta, chœur, timbales, grelots |
+| Le Volcan | Do# phrygien, 152 | Lourd et menaçant | Guitares saturées, cuivres, taïkos |
+| La Tempête | Si mineur, 160 | Électrique | Supersaw, arpèges, basse pompée, tonnerre |
+| Le Palais | Sib majeur, 112 | Fanfare royale | Cuivres, clavecin en basse d'Alberti, caisse claire de marche |
+| Le Cosmos | La mineur, 128 | Synthwave spatiale | Cloche, synthés, nappes, écho |
 
 **Déroulé.** Avant le combat, on choisit 4 cartes (la première commence ; « Auto » prend les plus fortes). L'adversaire en a 4 aussi. On voit sa carte active et ses remplaçantes. Changer de carte est possible à tout moment, mais ça utilise le tour. Une carte K.O. est remplacée sans perdre de tour. Le camp qui n'a plus de carte debout perd.
 
@@ -107,22 +126,21 @@ Les effets en cours disparaissent quand la carte quitte le terrain (sauf l'étou
 
 - **Étoiles** : 3 si on gagne sans perdre de carte, 2 en en perdant une, 1 sinon. La meilleure note de chaque niveau est gardée (150 étoiles au total).
 
-**La carte** (`src/components/map/`). Une longue route qui serpente vers le haut, comme dans les jeux « saga » : niveau 1 en bas, on remonte la carte pour voir les mondes suivants. Chaque monde a son sol, sa route (sable, pavés, planches, tapis rouge, route d'étoiles…), ses décors dessinés façon dessin animé (contour sombre, reflets, arbres avec des yeux), un grand décor (mare et son canard, mer, halle du marché, arbre géant, phare, montagnes, volcan, nuage d'orage, château, planète à anneaux) et son panneau. Le passage d'un monde à l'autre se fait par un bord ondulé. Ça bouge : braises et lueur du volcan, éclairs de la tempête, étoiles qui scintillent dans le Cosmos, lumière du phare. Le portrait de l'adversaire de chaque monde attend à côté de son boss.
+**La carte** (`src/components/map/`). Une longue route qui serpente vers le haut, comme dans les jeux « saga » : niveau 1 en bas, on remonte la carte pour voir les mondes suivants. Chaque monde a son sol, sa route (sable, pavés, planches, tapis rouge, route d'étoiles…), ses décors dessinés façon dessin animé (contour sombre, reflets, arbres avec des yeux), un grand décor (mare et son canard, mer, halle du marché, arbre géant, phare, montagnes, volcan, nuage d'orage, château, planète à anneaux) et son panneau. Le passage d'un monde à l'autre se fait par un bord ondulé. Le portrait de l'adversaire de chaque monde attend à côté de son boss.
 
-Les niveaux sont des pastilles dorées avec leur numéro, et leurs étoiles au-dessus une fois gagnés. Les boss sont plus grands, avec une couronne et le portrait de l'adversaire. Un repère à ton initiale sautille au-dessus du niveau à jouer, et la carte s'ouvre centrée dessus. Toucher un niveau ouvre sa fiche : adversaire et son rang, difficulté (1 à 5 flammes), ses cartes, gains, étoiles obtenues, puis « Jouer ». La carte est calculée une fois (positions, route, décors placés au hasard mais toujours au même endroit, jamais sur la route) et dessinée monde par monde en SVG.
+**Tout est vivant** (`src/components/map/live.tsx`) : herbes hautes, fleurs, arbres, palmiers, sapins et parasols ondulent, chacun à son rythme ; un arbre sur deux a des yeux qui regardent à gauche, à droite et clignent (l'arbre géant de la forêt aussi) ; des passants traversent le marché, le parc, la plage et le port, des gardes marchent devant le palais ; le canard nage dans la mare ; oiseaux, papillons et mouettes volent ; bateaux et bouées tanguent, les vagues vont et viennent ; le faisceau du phare tourne ; les drapeaux du château flottent ; le chalet fume ; il neige sur la montagne et il pleut dans la tempête ; la lave bouillonne et le volcan fume ; les cristaux et les étoiles scintillent, les planètes flottent, des étoiles filantes traversent le Cosmos. Pour rester fluide sur téléphone, seuls les mondes proches de l'écran sont animés ; les autres sont dessinés immobiles.
+
+Les niveaux sont des pastilles dorées avec leur numéro, et leurs étoiles au-dessus une fois gagnés. Les boss sont plus grands, avec une couronne et le portrait de l'adversaire. Un repère à ton initiale sautille au-dessus du niveau à jouer, et la carte s'ouvre centrée dessus. Toucher un niveau ouvre sa fiche : adversaire et son rang, difficulté (1 à 5 flammes), ses cartes, gains, étoiles obtenues, puis « Jouer ». Les niveaux pas encore débloqués s'ouvrent aussi, pour tout voir à l'avance : seul « Jouer » est bloqué. La carte est calculée une fois (positions, route, décors placés au hasard mais toujours au même endroit, jamais sur la route) et dessinée monde par monde en SVG.
 
 ## Pièces (`src/game/economy.ts`)
 
-Les pièces se gagnent seulement en battant les niveaux de l'aventure solo, et servent à acheter un tirage quand la réserve est vide (200 pièces). Les tirages gratuits restent la base : un joueur assidu gagne environ un tirage de plus par jour, pas davantage.
+Les pièces se gagnent seulement en battant les niveaux de l'aventure solo, et servent à acheter un tirage quand la réserve est vide (200 pièces). Les tirages gratuits restent la base.
 
-| Situation | Gain |
-| --- | --- |
-| Victoire au niveau n | 6 + 0,85 × n (7 au niveau 1, 49 au niveau 50) |
-| Première victoire à un niveau | + 5 + 0,8 × n, une seule fois |
-| Au-delà de 5 victoires dans la journée | un quart du gain |
-| Défaite, abandon, combat en ligne | rien |
+- **Chaque niveau rapporte 20 pièces, une seule fois** : à sa première victoire. Le montant est le même du niveau 1 au niveau 50.
+- **Rejouer un niveau déjà gagné ne rapporte rien** : ça sert seulement à améliorer ses étoiles. Impossible donc de « farmer » des pièces.
+- Une défaite, un abandon ou un combat en ligne ne rapportent rien.
 
-Toute l'aventure (50 premières victoires) rapporte environ 2 650 pièces, soit une douzaine de tirages, étalés sur toute la progression. Rejouer le niveau 50 rapporte 245 pièces pour les 5 premières victoires du jour. Un tirage acheté s'ajoute à la réserve et se consomme après les tirages gratuits. L'écran de victoire affiche le gain, et la fiche de chaque niveau ce qu'il rapporte.
+Toute l'aventure rapporte donc 1 000 pièces, soit 5 tirages, étalés sur toute la progression. Un tirage acheté s'ajoute à la réserve et se consomme après les tirages gratuits. L'écran de victoire affiche le gain (ou « pièces déjà gagnées »), et la fiche de chaque niveau ce qu'il rapporte.
 
 ## Rang en ligne (`src/game/rank.ts`)
 
@@ -275,7 +293,7 @@ src/net/            en ligne : amis et présence, combat (hôte/invité), canal 
 src/trade/          code d'échange, protocole, relais en ligne chiffré (MQTT), transport TCP, session
 assets/fx/          textures d'effets (générées par scripts/generate-assets.py)
 assets/bots/        illustrations des cartes des adversaires (scripts/generate-bot-art.py)
-assets/music/       musique de combat (scripts/generate-music.py)
+assets/music/       une musique de combat par monde (scripts/generate-music.py)
 tests/              tests de logique
 ```
 

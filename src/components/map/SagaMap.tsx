@@ -9,7 +9,7 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import Svg, { G, Path, Rect } from 'react-native-svg';
@@ -21,6 +21,7 @@ import { colors, fonts } from '../../theme';
 import { AppText } from '../AppText';
 import { Embers, Glow, Twinkles } from '../fx';
 import { DecorSprite, HeroDecor, Texture } from './decor';
+import { WorldLive, isLive } from './live';
 import { type MapLayout, ROAD_W, type WorldArea, mapLayout } from './mapLayout';
 import { OUTLINE, WORLD_LOOKS } from './worlds';
 
@@ -29,7 +30,8 @@ const portraitOf = (w: number) => botArt(botCardRef(w, 3));
 
 /* --------------------------------- Mondes --------------------------------- */
 
-const WorldSection = memo(function WorldSection({ area, layout }: { area: WorldArea; layout: MapLayout }) {
+/** `alive` : le monde est près de l'écran, ses décors s'animent (sinon, dessin immobile, plus léger). */
+const WorldSection = memo(function WorldSection({ area, layout, alive }: { area: WorldArea; layout: MapLayout; alive: boolean }) {
   const look = WORLD_LOOKS[area.w - 1];
   const next = WORLD_LOOKS[area.w] ?? null;
   const h = area.bottom - area.top;
@@ -55,18 +57,17 @@ const WorldSection = memo(function WorldSection({ area, layout }: { area: WorldA
             <Path d={wave} fill="none" stroke="rgba(0,0,0,0.18)" strokeWidth={3} />
           </G>
         ) : null}
-        <HeroDecor kind={area.hero.kind} x={area.hero.x} y={area.hero.y} side={area.hero.side} width={W} />
+        <HeroDecor kind={area.hero.kind} x={area.hero.x} y={area.hero.y} side={area.hero.side} width={W} live={alive} />
         {/* route : ombre, bordure, chaussée, pointillés */}
         <Path d={layout.road} stroke="rgba(0,0,0,0.22)" strokeWidth={ROAD_W + 14} fill="none" strokeLinecap="round" transform="translate(0 5)" />
         <Path d={layout.road} stroke={OUTLINE} strokeWidth={ROAD_W + 10} fill="none" strokeLinecap="round" />
         <Path d={layout.road} stroke={look.roadEdge} strokeWidth={ROAD_W + 5} fill="none" strokeLinecap="round" />
         <Path d={layout.road} stroke={look.road} strokeWidth={ROAD_W - 3} fill="none" strokeLinecap="round" />
         <Path d={layout.road} stroke={look.roadLine} strokeWidth={3} fill="none" strokeDasharray="3 15" strokeLinecap="round" opacity={0.75} />
-        {area.decor.map((d, i) => (
-          <DecorSprite key={i} {...d} seed={i + area.w * 13} />
-        ))}
+        {area.decor.map((d, i) => (alive && isLive(d.kind) ? null : <DecorSprite key={i} {...d} seed={i + area.w * 13} />))}
       </Svg>
       <WorldLife area={area} width={W} />
+      {alive ? <WorldLive area={area} width={W} liveDecor={area.decor.flatMap((d, i) => (isLive(d.kind) ? [{ d, seed: i + area.w * 13 }] : []))} /> : null}
     </View>
   );
 });
@@ -264,19 +265,38 @@ export function SagaMap({
   const layout = mapLayout(width);
   const scroll = useRef<ScrollView>(null);
   const current = Math.min(TOTAL_LEVELS, cleared + 1);
+  const startY = Math.max(0, Math.min(layout.height - height, layout.nodes[current - 1].y - height * 0.55));
+
+  // Mondes animés : ceux qui touchent l'écran (avec une marge), recalculés au défilement.
+  const aliveFor = (y: number) =>
+    layout.worlds
+      .filter((a) => a.bottom > y - 250 && a.top < y + height + 250)
+      .map((a) => a.w)
+      .join(',');
+  const [alive, setAlive] = useState(() => aliveFor(startY));
+  const aliveSet = new Set(alive.split(',').map(Number));
 
   // Au départ, on centre la carte sur le niveau à jouer.
   useEffect(() => {
-    const y = layout.nodes[current - 1].y - height * 0.55;
-    const t = setTimeout(() => scroll.current?.scrollTo({ y: Math.max(0, Math.min(layout.height - height, y)), animated: false }), 30);
+    const t = setTimeout(() => scroll.current?.scrollTo({ y: startY, animated: false }), 30);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [width]);
 
   return (
-    <ScrollView ref={scroll} style={{ flex: 1, backgroundColor: WORLD_LOOKS[0].ground }} contentContainerStyle={{ height: layout.height }} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      ref={scroll}
+      style={{ flex: 1, backgroundColor: WORLD_LOOKS[0].ground }}
+      contentContainerStyle={{ height: layout.height }}
+      showsVerticalScrollIndicator={false}
+      scrollEventThrottle={120}
+      onScroll={(e) => {
+        const next = aliveFor(e.nativeEvent.contentOffset.y);
+        if (next !== alive) setAlive(next);
+      }}
+    >
       {layout.worlds.map((a) => (
-        <WorldSection key={a.w} area={a} layout={layout} />
+        <WorldSection key={a.w} area={a} layout={layout} alive={aliveSet.has(a.w)} />
       ))}
       {layout.worlds.map((a) => (
         <WorldSign key={`s${a.w}`} area={a} />

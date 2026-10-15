@@ -55,7 +55,7 @@ const Trunk = ({ h, w = 9, color = '#8A5A2E' }: { h: number; w?: number; color?:
   <Path d={`M${-w / 2} 0 L${-w / 2 + 1.5} ${-h} L${w / 2 - 1.5} ${-h} L${w / 2} 0 Z`} fill={color} stroke={OL} strokeWidth={SW} strokeLinejoin="round" />
 );
 
-function Pine({ snow, face }: { snow?: boolean; face?: boolean }) {
+function Pine({ snow, face, sleepy = true }: { snow?: boolean; face?: boolean; sleepy?: boolean }) {
   const tiers = [
     [0, 26, 22],
     [-14, 21, 20],
@@ -72,7 +72,7 @@ function Pine({ snow, face }: { snow?: boolean; face?: boolean }) {
           {snow ? <Path d={`M${-half * 0.62} ${y - 6 - h * 0.55} L0 ${y - 6 - h - 8} L${half * 0.62} ${y - 6 - h * 0.55} q${-half * 0.3} 5 ${-half * 0.62} 1 q${-half * 0.3} 5 ${-half * 0.62} -1 Z`} fill="#FFFFFF" stroke={OL} strokeWidth={1.6} strokeLinejoin="round" /> : null}
         </G>
       ))}
-      {face ? <Eyes y={-16} sleepy /> : null}
+      {face ? <Eyes y={-16} sleepy={sleepy} /> : null}
     </G>
   );
 }
@@ -161,8 +161,12 @@ function Rock({ color = '#9AA3AD', light = '#C9D0D7' }: { color?: string; light?
   );
 }
 
-export function DecorSprite({ kind, x, y, scale, flip, seed }: { kind: DecorKind; x: number; y: number; scale: number; flip: boolean; seed: number }) {
-  const face = seed % 4 === 0;
+/** Arbre ou sapin avec un visage : 1 sur 2 ; les yeux ouverts s'animent à part (voir live.tsx), les endormis restent dessinés. */
+export const hasFace = (seed: number) => seed % 2 === 0;
+export const isSleepy = (seed: number) => seed % 10 === 0;
+
+export function DecorSprite({ kind, x, y, scale, flip, seed, noEyes }: { kind: DecorKind; x: number; y: number; scale: number; flip: boolean; seed: number; noEyes?: boolean }) {
+  const face = hasFace(seed) && !(noEyes && !isSleepy(seed));
   let body: React.ReactNode = null;
   switch (kind) {
     case 'tree':
@@ -171,7 +175,7 @@ export function DecorSprite({ kind, x, y, scale, flip, seed }: { kind: DecorKind
           <Shadow rx={24} />
           <Trunk h={22} />
           <Blob c={[[-12, -32, 15], [12, -32, 15], [0, -46, 18], [0, -30, 14]]} fill="#4CAF50" dark="#357A38" light="#8BD982" />
-          {face ? <Eyes y={-36} sleepy={seed % 8 === 0} /> : null}
+          {face ? <Eyes y={-36} sleepy={isSleepy(seed)} /> : null}
         </G>
       );
       break;
@@ -263,10 +267,10 @@ export function DecorSprite({ kind, x, y, scale, flip, seed }: { kind: DecorKind
       body = <Barrel />;
       break;
     case 'pine':
-      body = <Pine face={face} />;
+      body = <Pine face={face} sleepy={isSleepy(seed)} />;
       break;
     case 'snowPine':
-      body = <Pine snow face={face} />;
+      body = <Pine snow face={face} sleepy={isSleepy(seed)} />;
       break;
     case 'mushroom':
       body = (
@@ -474,12 +478,30 @@ export function DecorSprite({ kind, x, y, scale, flip, seed }: { kind: DecorKind
     case 'star':
       body = <Path d="M0 -22 L3 -13 L12 -10 L3 -7 L0 2 L-3 -7 L-12 -10 L-3 -13 Z" fill="#FFF3B0" opacity={0.9} />;
       break;
+    case 'grass':
+      body = (
+        <G>
+          <Ellipse cx={0} cy={1} rx={10} ry={2.5} fill="rgba(0,0,0,0.15)" />
+          {[-8, -4, 0, 4, 8].map((bx, i) => (
+            <Path
+              key={bx}
+              d={`M${bx - 2} 0 Q${bx + (i % 2 ? 4 : -4)} ${-10 - (i % 3) * 3} ${bx + (i % 2 ? 6 : -5)} ${-20 - ((i * 7) % 9)} Q${bx + 1} ${-9} ${bx + 2} 0 Z`}
+              fill={i % 2 ? '#5DBB4F' : '#4AA63D'}
+              stroke={OL}
+              strokeWidth={1.6}
+              strokeLinejoin="round"
+            />
+          ))}
+        </G>
+      );
+      break;
   }
   return <G transform={`translate(${x} ${y}) scale(${flip ? -scale : scale} ${scale})`}>{body}</G>;
 }
 
 /** Grands décors, un par monde. `side` : -1 = bord gauche, 1 = bord droit. */
-export function HeroDecor({ kind, x, y, side, width }: { kind: HeroKind; x: number; y: number; side: -1 | 1; width: number }) {
+/** `live` : les parties animées (canard, drapeaux, yeux de l'arbre géant) sont dessinées à part, en mouvement. */
+export function HeroDecor({ kind, x, y, side, width, live = false }: { kind: HeroKind; x: number; y: number; side: -1 | 1; width: number; live?: boolean }) {
   switch (kind) {
     case 'pond':
       return (
@@ -490,12 +512,12 @@ export function HeroDecor({ kind, x, y, side, width }: { kind: HeroKind; x: numb
           <Path d="M18 6 a9 6 0 1 1 1 0 Z" fill="#43A047" stroke={OL} strokeWidth={1.8} />
           <Path d="M-30 8 a7 5 0 1 1 1 0 Z" fill="#43A047" stroke={OL} strokeWidth={1.8} />
           {/* canard */}
-          <G transform="translate(20 -6)">
+          {live ? null : <G transform="translate(20 -6)">
             <Ellipse cx={0} cy={0} rx={10} ry={6} fill="#FFE082" stroke={OL} strokeWidth={2} />
             <Circle cx={7} cy={-7} r={5} fill="#FFE082" stroke={OL} strokeWidth={2} />
             <Path d="M11 -7 L16 -6 L11 -4 Z" fill="#FF8A3D" stroke={OL} strokeWidth={1.2} />
             <Circle cx={8} cy={-8} r={1.2} fill={OL} />
-          </G>
+          </G>}
         </G>
       );
     case 'sea': {
@@ -534,7 +556,7 @@ export function HeroDecor({ kind, x, y, side, width }: { kind: HeroKind; x: numb
           <Shadow rx={30} />
           <Trunk h={30} w={14} color="#7A4B26" />
           <Blob c={[[-18, -40, 18], [18, -40, 18], [0, -58, 22], [-8, -36, 14], [10, -34, 14]]} fill="#2E8B47" dark="#1F6633" light="#66C17A" />
-          <Eyes y={-44} />
+          {live ? null : <Eyes y={-44} />}
           <Path d="M-6 -34 q6 5 12 0" stroke={OL} strokeWidth={2} fill="none" strokeLinecap="round" />
         </G>
       );
@@ -595,7 +617,7 @@ export function HeroDecor({ kind, x, y, side, width }: { kind: HeroKind; x: numb
               <Rect x={tx} y={-100} width={20} height={100} fill="#E8DCC6" stroke={OL} strokeWidth={SW} />
               <Path d={`M${tx - 4} -100 L${tx + 10} -126 L${tx + 24} -100 Z`} fill="#C8283C" stroke={OL} strokeWidth={SW} strokeLinejoin="round" />
               <Line x1={tx + 10} y1={-126} x2={tx + 10} y2={-140} stroke={OL} strokeWidth={2} />
-              <Path d={`M${tx + 10} -140 L${tx + 22} -136 L${tx + 10} -132 Z`} fill="#F7C948" stroke={OL} strokeWidth={1.4} />
+              {live ? null : <Path d={`M${tx + 10} -140 L${tx + 22} -136 L${tx + 10} -132 Z`} fill="#F7C948" stroke={OL} strokeWidth={1.4} />}
             </G>
           ))}
           {[-40, -22, -4, 14].map((bx) => (

@@ -145,7 +145,7 @@ function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Lev
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
             <Button label="Fermer" kind="secondary" style={{ flex: 1 }} onPress={onClose} />
             <Button
-              label={locked ? `Gagne le niveau ${level.n - 1}` : done ? 'Rejouer' : 'Jouer'}
+              label={locked ? `Après le niv. ${level.n - 1}` : done ? 'Rejouer' : 'Jouer'}
               icon={locked ? 'lock-closed' : 'flash'}
               size="lg"
               disabled={locked}
