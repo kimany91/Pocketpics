@@ -3,13 +3,30 @@
  * scène les évènements un par un (message, élan, coup, jauge, K.O.), on fait
  * jouer le bot, et on propose au joueur ses actions : attaque classique,
  * attaque spéciale (mini-jeu de précision), ou changer de carte.
+ *
+ * Mise en scène : décor flou de l'arène, ouverture « VS », l'écran tremble à
+ * chaque coup (plus fort sur un critique), et le cadre du message prend la
+ * couleur du camp dont on parle.
  */
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
-import Animated, { FadeIn, FadeInDown, FadeInUp, ZoomIn } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInDown,
+  FadeInLeft,
+  FadeInRight,
+  FadeInUp,
+  ZoomIn,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { startBattleMusic, stopBattleMusic } from '../../audio/music';
@@ -41,11 +58,13 @@ import { Button } from '../../components/Button';
 import { type ActKind, type FighterStatus, FighterView, HpBar, type Popup, type ReactKind } from '../../components/battle/FighterView';
 import { KIND_LOOK, STATUS_LOOK, activeStatuses, attackHint } from '../../components/battle/kinds';
 import { FitLines, FitText, type TextPart, fitFontSize } from '../../components/battle/FitText';
+import { ArenaBackdrop } from '../../components/battle/ArenaBackdrop';
 import { InspectFighter } from '../../components/battle/InspectFighter';
 import { QUALITY_LABEL, TimingBar } from '../../components/battle/TimingBar';
+import { VsIntro } from '../../components/battle/VsIntro';
 import { SoundSheet } from '../../components/SoundSheet';
 import { CardFace } from '../../components/card/CardFace';
-import { Burst } from '../../components/fx';
+import { Burst, Flash } from '../../components/fx';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import type { Card } from '../../storage/model';
@@ -89,6 +108,35 @@ export default function FightScreen() {
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<Mode>('idle');
   const [msg, setMsg] = useState<Msg>([{ text: arena ? `${arena.bot} te défie !` : '' }]);
+  /** Camp dont parle le message (couleur du cadre), et clé pour rejouer son apparition. */
+  const [speaker, setSpeaker] = useState<SideId | null>(1);
+  const [msgKey, setMsgKey] = useState(0);
+  const say = (m: Msg, side: SideId | null) => {
+    setMsg(m);
+    setSpeaker(side);
+    setMsgKey((k) => k + 1);
+  };
+  /** Ouverture « VS » : le combat attend qu'elle soit finie. */
+  const [intro, setIntro] = useState(true);
+  /** Éclair blanc plein écran (critique, coup de grâce, K.O.). */
+  const [flashN, setFlashN] = useState(0);
+  const shakeX = useSharedValue(0);
+  const shakeY = useSharedValue(0);
+  /** L'écran tremble, d'autant plus que le coup est fort. */
+  const shake = (power: number) => {
+    const a = Math.min(14, power);
+    const seq = (k: number) =>
+      withSequence(
+        withTiming(a * k, { duration: 35 }),
+        withTiming(-a * 0.8 * k, { duration: 45 }),
+        withTiming(a * 0.5 * k, { duration: 45 }),
+        withTiming(-a * 0.25 * k, { duration: 45 }),
+        withTiming(0, { duration: 60, easing: Easing.out(Easing.quad) }),
+      );
+    shakeX.value = seq(1);
+    shakeY.value = seq(-0.6);
+  };
+  const stageStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }, { translateY: shakeY.value }] }));
   const [pending, setPending] = useState<{ slot: 0 | 1; attack: Attack; hits: number } | null>(null);
   const [switchTo, setSwitchTo] = useState<number | null>(null);
   const [result, setResult] = useState<SideId | null>(null);
@@ -109,11 +157,12 @@ export default function FightScreen() {
     { key: 0, kind: 'basic' },
     { key: 0, kind: 'basic' },
   ]);
-  const [reacts, setReacts] = useState<[{ key: number; kind: ReactKind }, { key: number; kind: ReactKind }]>([
+  const [reacts, setReacts] = useState<[{ key: number; kind: ReactKind; strong?: boolean }, { key: number; kind: ReactKind; strong?: boolean }]>([
     { key: 0, kind: 'hurt' },
     { key: 0, kind: 'hurt' },
   ]);
-  const [enters, setEnters] = useState<[number, number]>([1, 1]);
+  // 0 : les cartes arrivent sur le terrain à la fin de l'ouverture
+  const [enters, setEnters] = useState<[number, number]>([0, 0]);
   const [popups, setPopups] = useState<[Popup[], Popup[]]>([[], []]);
   const fxKey = useRef(0);
   const alive = useRef(true);
@@ -130,10 +179,10 @@ export default function FightScreen() {
       next[side] = { key: ++fxKey.current, kind };
       return next;
     });
-  const doReact = (side: SideId, kind: ReactKind) =>
+  const doReact = (side: SideId, kind: ReactKind, strong = false) =>
     setReacts((a) => {
       const next: typeof a = [a[0], a[1]];
-      next[side] = { key: ++fxKey.current, kind };
+      next[side] = { key: ++fxKey.current, kind, strong };
       return next;
     });
   const doEnter = (side: SideId) => setEnters((e) => (side === 0 ? [e[0] + 1, e[1]] : [e[0], e[1] + 1]));
@@ -160,7 +209,7 @@ export default function FightScreen() {
         switch (e.t) {
           case 'use': {
             const kind = kindOf(e.attack);
-            setMsg({ top: [nameParts(e.fighter, e.side), { text: e.copied ? ' copie' : ' utilise' }], attack: `${e.attack.name} !` });
+            say({ top: [nameParts(e.fighter, e.side), { text: e.copied ? ' copie' : ' utilise' }], attack: `${e.attack.name} !` }, e.side);
             setShown(view);
             if (e.copied) {
               doAct(e.side, 'mirror');
@@ -173,7 +222,13 @@ export default function FightScreen() {
           }
           case 'hit': {
             setShown(view);
-            if (e.damage > 0) doReact(e.side, e.execute ? 'execute' : e.guarded ? 'guarded' : e.kind === 'slap' ? 'slapped' : 'hurt');
+            const strong = e.quality === 'crit' || !!e.execute;
+            if (e.damage > 0) {
+              doReact(e.side, e.execute ? 'execute' : e.guarded ? 'guarded' : e.kind === 'slap' ? 'slapped' : 'hurt', strong);
+              // l'écran tremble selon la part de PV perdue ; un critique fait aussi un éclair
+              shake(e.guarded ? 2 : 3 + Math.min(1, e.damage / Math.max(1, before.sides[e.side].fighters[before.sides[e.side].active].maxHp)) * 16 + (strong ? 5 : 0));
+              if (strong) setFlashN((n) => n + 1);
+            }
             const q = QUALITY_LABEL[e.quality];
             const tag = hitTag(e);
             popup(e.side, {
@@ -187,14 +242,14 @@ export default function FightScreen() {
             else if (e.quality === 'crit' || e.execute) playSfx('crit');
             else playSfx(e.kind === 'slap' ? 'slap' : 'hit', { volume: e.quality === 'weak' || e.guarded ? 0.6 : 1 });
             if (e.guarded) playSfx('shield', { volume: 0.6 });
-            if (e.damage > 0) (e.quality === 'crit' || e.execute ? haptic.heavy : haptic.medium)();
-            await sleep(e.execute ? 950 : 700);
+            if (e.damage > 0) (strong ? haptic.heavy : haptic.medium)();
+            await sleep(e.execute ? 950 : strong ? 820 : 700);
             break;
           }
           case 'status': {
             setShown(view);
             const look = STATUS_TEXT[e.status];
-            setMsg([nameParts(e.fighter, e.side), { text: look.text }]);
+            say([nameParts(e.fighter, e.side), { text: look.text }], e.side);
             playSfx(look.sound, { volume: 0.8 });
             if (e.status === 'guard') doAct(e.side, 'guard');
             await sleep(1150);
@@ -204,7 +259,7 @@ export default function FightScreen() {
             setShown(view);
             doReact(e.side, 'heal');
             popup(e.side, { main: `+${e.amount}`, color: colors.success, sub: 'Soin' , subColor: colors.success });
-            setMsg([nameParts(e.fighter, e.side), { text: ` récupère ${e.amount} PV !` }]);
+            say([nameParts(e.fighter, e.side), { text: ` récupère ${e.amount} PV !` }], e.side);
             playSfx('heal');
             haptic.success();
             await sleep(1150);
@@ -213,20 +268,21 @@ export default function FightScreen() {
             setShown(view);
             doReact(e.side, 'dodged');
             popup(e.side, { main: 'Esquivé !', color: '#5EE6D6' });
-            setMsg([nameParts(e.fighter, e.side), { text: ' esquive l’attaque !' }]);
+            say([nameParts(e.fighter, e.side), { text: ' esquive l’attaque !' }], e.side);
             playSfx('swipe', { volume: 0.9 });
             haptic.light();
             await sleep(1100);
             break;
           case 'dodgeFail':
-            setMsg([nameParts(e.fighter, e.side), { text: ' n’arrive pas à esquiver !' }]);
+            say([nameParts(e.fighter, e.side), { text: ' n’arrive pas à esquiver !' }], e.side);
             await sleep(550);
             break;
           case 'recoil':
             setShown(view);
             doReact(e.side, 'recoil');
             popup(e.side, { main: `-${e.damage}`, color: '#FF8A7A', sub: 'Contrecoup', subColor: '#FF8A7A' });
-            setMsg([nameParts(e.fighter, e.side), { text: ' encaisse le contrecoup !' }]);
+            shake(4);
+            say([nameParts(e.fighter, e.side), { text: ' encaisse le contrecoup !' }], e.side);
             playSfx('hit', { volume: 0.6 });
             await sleep(950);
             break;
@@ -234,36 +290,39 @@ export default function FightScreen() {
             setShown(view);
             doReact(e.side, 'poison');
             popup(e.side, { main: `-${e.damage}`, color: '#D9A6FF', sub: 'Poison', subColor: '#D9A6FF' });
-            setMsg([nameParts(e.fighter, e.side), { text: ' souffre du poison !' }]);
+            shake(3);
+            say([nameParts(e.fighter, e.side), { text: ' souffre du poison !' }], e.side);
             playSfx('poison');
             haptic.light();
             await sleep(1100);
             break;
           case 'stun':
             setShown(view);
-            setMsg([nameParts(e.fighter, e.side), { text: ` est étourdie pendant ${e.turns} tour${e.turns > 1 ? 's' : ''} !` }]);
+            say([nameParts(e.fighter, e.side), { text: ` est étourdie pendant ${e.turns} tour${e.turns > 1 ? 's' : ''} !` }], e.side);
             playSfx('stun', { volume: 0.8 });
             await sleep(1200);
             break;
           case 'stunned':
             setShown(view);
-            setMsg([nameParts(e.fighter, e.side), { text: e.left > 0 ? ' est étourdie et ne peut pas attaquer !' : ' est étourdie… mais reprend ses esprits !' }]);
+            say([nameParts(e.fighter, e.side), { text: e.left > 0 ? ' est étourdie et ne peut pas attaquer !' : ' est étourdie… mais reprend ses esprits !' }], e.side);
             playSfx('stun', { volume: 0.5 });
             await sleep(1300);
             break;
           case 'ko':
             setShown(view);
-            setMsg([nameParts(e.fighter, e.side), { text: ' est K.O. !' }]);
+            say([nameParts(e.fighter, e.side), { text: ' est K.O. !' }], e.side);
             playSfx('ko');
             haptic.heavy();
+            shake(10);
+            setFlashN((n) => n + 1);
             await sleep(1300);
             break;
           case 'switch':
             setShown(view);
             doEnter(e.side);
             playSfx('swipe', { volume: 0.7 });
-            if (e.side === 0) setMsg(e.forced ? [{ text: 'À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }] : [{ text: 'Reviens ! À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }]);
-            else setMsg([{ text: `${arena.bot} ${e.forced ? 'envoie' : 'rappelle sa carte et envoie'} ` }, nameParts(e.fighter, 1), { text: ' !' }]);
+            if (e.side === 0) say(e.forced ? [{ text: 'À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }] : [{ text: 'Reviens ! À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }], e.side);
+            else say([{ text: `${arena.bot} ${e.forced ? 'envoie' : 'rappelle sa carte et envoie'} ` }, nameParts(e.fighter, 1), { text: ' !' }], e.side);
             await sleep(1000);
             break;
           case 'win':
@@ -283,7 +342,7 @@ export default function FightScreen() {
   // Déroulé du combat : fin, remplacements après K.O., tour du bot ou du joueur.
   useEffect(() => {
     // En pause pendant qu'on regarde une carte ou qu'on règle le son.
-    if (!battle || !arena || busy || result !== null || inspect || soundOpen) return;
+    if (!battle || !arena || busy || result !== null || inspect || soundOpen || intro) return;
     if (battle.winner !== null) {
       setResult(battle.winner);
       stopBattleMusic(music.current, 600);
@@ -308,7 +367,7 @@ export default function FightScreen() {
     if (mode === 'confirmSwitch') return;
     if (battle.mustReplace === 0) {
       setMode('replace');
-      setMsg([{ text: 'Choisis ta prochaine carte' }]);
+      say([{ text: 'Choisis ta prochaine carte' }], 0);
       return;
     }
     if (battle.turn === 1) {
@@ -321,9 +380,16 @@ export default function FightScreen() {
     }
     const me = activeOf(battle, 0);
     setMode('menu');
-    setMsg(me.stun > 0 ? [nameParts(me.name, 0), { text: ' est étourdie…' }] : [{ text: 'Que doit faire ' }, nameParts(me.name, 0), { text: ' ?' }]);
+    say(me.stun > 0 ? [nameParts(me.name, 0), { text: ' est étourdie…' }] : [{ text: 'Que doit faire ' }, nameParts(me.name, 0), { text: ' ?' }], 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [battle, busy, result, inspect, soundOpen]);
+  }, [battle, busy, result, inspect, soundOpen, intro]);
+
+  const endIntro = () => {
+    setIntro(false);
+    // l'adversaire arrive, puis ta carte
+    doEnter(1);
+    setTimeout(() => alive.current && doEnter(0), 260);
+  };
 
   const layout = useMemo(() => {
     const avail = height - insets.top - insets.bottom;
@@ -332,7 +398,7 @@ export default function FightScreen() {
     const msgH = compact ? 76 : 96;
     const benchH = compact ? 64 : 84;
     const actionsH = compact ? 114 : 140;
-    const fixed = 48 + msgH + 12 + benchH + actionsH + 20;
+    const fixed = 48 + msgH + 22 + benchH + actionsH + 20;
     const cardW = Math.max(78, Math.min(width * 0.4, 168, (avail - fixed) / (CARD_RATIO * 1.9)));
     return { cardW, foeW: cardW * 0.9, compact, msgH, benchH, actionsH, thumbW: compact ? 34 : 42 };
   }, [width, height, insets]);
@@ -417,7 +483,7 @@ export default function FightScreen() {
 
   return (
     <View style={styles.root}>
-      <LinearGradient colors={[`${arena.tint}33`, colors.bg, colors.bg]} locations={[0, 0.45, 1]} style={StyleSheet.absoluteFill} />
+      <ArenaBackdrop art={botArt(`bot:${arena.n}:3`)} tint={arena.tint} width={width} height={height} />
       <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) }}>
         <View style={styles.header}>
           <Pressable onPress={() => setQuitting(true)} hitSlop={12} style={styles.round} accessibilityLabel="Abandonner le combat">
@@ -429,9 +495,10 @@ export default function FightScreen() {
           </Pressable>
         </View>
 
+        <Animated.View style={stageStyle}>
         {/* Adversaire : infos à gauche, carte à droite */}
         <View style={[styles.row, { paddingHorizontal: 20 }]}>
-          <View style={{ width: infoW, gap: 5 }}>
+          <Nameplate width={infoW} accent={arena.tint}>
             <AppText variant="heading" numberOfLines={1}>
               {foe.name}
             </AppText>
@@ -445,9 +512,9 @@ export default function FightScreen() {
                 ))}
               </View>
             </View>
-            <HpBar hp={foe.hp} maxHp={foe.maxHp} width={Math.min(infoW, 190)} />
+            <HpBar hp={foe.hp} maxHp={foe.maxHp} width={Math.min(infoW - 26, 190)} />
             <StatusChips fighter={foe} />
-          </View>
+          </Nameplate>
           <Pressable onPress={() => look(1, shown.sides[1].active)} disabled={mode === 'timing'} accessibilityLabel={`Voir ${foe.name}`}>
           <FighterView
             key={foe.ref}
@@ -466,17 +533,21 @@ export default function FightScreen() {
         </View>
 
         <View style={[styles.message, { height: layout.msgH }]}>
-          {Array.isArray(msg) ? (
-            <FitText parts={capParts(msg)} lines={layout.compact ? 2 : 3} maxSize={layout.compact ? 24 : 30} minSize={14} initialWidth={width - 72} />
-          ) : (
-            <FitLines
-              initialWidth={width - 72}
-              lines={[
-                { parts: capParts(msg.top), maxSize: layout.compact ? 17 : 21, minSize: 11 },
-                { parts: [{ text: msg.attack, bold: true, color: colors.gold }], maxSize: layout.compact ? 30 : 38, minSize: 14 },
-              ]}
-            />
-          )}
+          <View style={[styles.messageBar, { backgroundColor: speaker === 1 ? arena.tint : speaker === 0 ? getRarity(me.rarity).color : colors.textFaint }]} />
+          <Animated.View key={msgKey} entering={(speaker === 1 ? FadeInRight : FadeInLeft).duration(200)} style={styles.messageInner}>
+            {Array.isArray(msg) ? (
+              <FitText parts={capParts(msg)} lines={layout.compact ? 2 : 3} maxSize={layout.compact ? 24 : 30} minSize={14} initialWidth={width - 80} />
+            ) : (
+              <FitLines
+                initialWidth={width - 80}
+                lines={[
+                  { parts: capParts(msg.top), maxSize: layout.compact ? 17 : 21, minSize: 11 },
+                  { parts: [{ text: msg.attack, bold: true, color: colors.gold }], maxSize: layout.compact ? 30 : 38, minSize: 14 },
+                ]}
+              />
+            )}
+          </Animated.View>
+          {!intro && result === null ? <TurnTab mine={shown.turn === 0 || shown.mustReplace === 0} bot={arena.bot} tint={arena.tint} /> : null}
         </View>
 
         {/* Joueur : carte à gauche, infos à droite */}
@@ -497,17 +568,18 @@ export default function FightScreen() {
             />
             </Pressable>
           ) : null}
-          <View style={{ width: infoW, gap: 6, alignItems: 'flex-end' }}>
+          <Nameplate width={infoW} accent={getRarity(me.rarity).color} right>
             <AppText variant="heading" numberOfLines={2} style={{ textAlign: 'right' }}>
               {cap(me.name)}
             </AppText>
             <AppText variant="label" style={{ color: getRarity(me.rarity).color }}>
               {getRarity(me.rarity).label}
             </AppText>
-            <HpBar hp={me.hp} maxHp={me.maxHp} width={Math.min(infoW, 190)} />
+            <HpBar hp={me.hp} maxHp={me.maxHp} width={Math.min(infoW - 26, 190)} />
             <StatusChips fighter={me} align="flex-end" />
-          </View>
+          </Nameplate>
         </View>
+        </Animated.View>
 
         {/* Remplaçantes : un toucher pour changer de carte (ça utilise le tour) */}
         <View style={[styles.bench, { height: layout.benchH }]}>
@@ -604,6 +676,9 @@ export default function FightScreen() {
           )}
         </View>
       </View>
+
+      <Flash trigger={flashN} peak={0.22} />
+      {intro ? <VsIntro arenaLabel={`Arène ${arena.n} · ${arena.place}`} bot={arena.bot} tint={arena.tint} width={width} onDone={endIntro} /> : null}
 
       {inspect ? (
         <InspectOverlay inspect={inspect} battle={shown} deck={deck} bot={arena.bot} onClose={() => setInspect(null)} />
@@ -736,6 +811,27 @@ function hitTag(e: HitFlags): string | null {
   return null;
 }
 
+/** Plaque d'infos d'une carte (nom, rareté, PV) : un bloc sombre incliné, liseré de la couleur du camp. */
+function Nameplate({ width, accent, right, children }: { width: number; accent: string; right?: boolean; children: ReactNode }) {
+  return (
+    <View style={{ width }}>
+      <View style={[StyleSheet.absoluteFill, styles.plate, right ? { borderRightWidth: 3, borderRightColor: accent } : { borderLeftWidth: 3, borderLeftColor: accent }]} />
+      <View style={[styles.plateInner, right && { alignItems: 'flex-end' }]}>{children}</View>
+    </View>
+  );
+}
+
+/** Onglet au-dessus du message : à qui est le tour. */
+function TurnTab({ mine, bot, tint }: { mine: boolean; bot: string; tint: string }) {
+  return (
+    <Animated.View key={mine ? 'me' : 'bot'} entering={ZoomIn.duration(180)} style={[styles.turnTab, mine ? { left: 14, backgroundColor: colors.gold } : { right: 14, backgroundColor: tint }]}>
+      <AppText style={styles.turnText} numberOfLines={1}>
+        {mine ? 'Ton tour' : `Tour de ${bot}`}
+      </AppText>
+    </Animated.View>
+  );
+}
+
 /** Icônes des effets en cours (avec le nombre de tours restants). */
 function StatusChips({ fighter, align = 'flex-start' }: { fighter: Fighter; align?: 'flex-start' | 'flex-end' }) {
   const list = activeStatuses(fighter);
@@ -812,6 +908,20 @@ function AttackButton({
   // Deux boutons côte à côte : le nom de l'attaque doit toujours tenir en entier.
   const inner = (width - 42) / 2 - 30;
   const nameSize = Math.floor(fitFontSize([{ text: attack.name }], inner, 2, compact ? 16 : 17, 11));
+  const hot = hint.hot && !disabled;
+  // Bon moment pour cette attaque : le liseré doré respire.
+  const glow = useSharedValue(0);
+  useEffect(() => {
+    if (!hot) {
+      cancelAnimation(glow);
+      glow.value = 0;
+      return;
+    }
+    glow.value = withRepeat(withTiming(1, { duration: 750, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(glow);
+  }, [hot, glow]);
+  const glowStyle = useAnimatedStyle(() => ({ opacity: 0.35 + glow.value * 0.65 }));
+  const edge = hot ? colors.gold : accent;
   return (
     <Pressable
       onPress={onPress}
@@ -821,12 +931,14 @@ function AttackButton({
       style={({ pressed }) => [
         styles.attack,
         compact && { minHeight: 70, paddingVertical: 8 },
-        { borderColor: hint.hot && !disabled ? colors.gold : `${accent}55` },
-        hint.hot && !disabled && styles.attackHot,
+        // bouton « physique » : une lèvre en bas qui s'enfonce quand on appuie
+        { borderColor: `${edge}55`, borderBottomColor: `${edge}AA` },
+        hot && styles.attackHot,
         disabled && { opacity: 0.4 },
-        pressed && { transform: [{ scale: 0.97 }] },
+        pressed && styles.attackPressed,
       ]}
     >
+      {hot ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.attackGlow, glowStyle]} /> : null}
       <View style={styles.attackTagRow}>
         {kind ? <Ionicons name={KIND_LOOK[kind].icon} size={12} color={KIND_LOOK[kind].color} /> : null}
         <AppText style={[styles.attackTag, { color: accent, flex: 1 }]} numberOfLines={1}>
@@ -893,16 +1005,20 @@ const styles = StyleSheet.create({
   dotActive: { transform: [{ scale: 1.3 }] },
   message: {
     marginHorizontal: 16,
-    marginVertical: 6,
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    marginTop: 16,
+    marginBottom: 6,
+    borderRadius: 14,
+    backgroundColor: 'rgba(10,10,13,0.86)',
     borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: 'rgba(255,255,255,0.09)',
+    flexDirection: 'row',
   },
+  messageBar: { width: 4, alignSelf: 'stretch', borderTopLeftRadius: 13, borderBottomLeftRadius: 13 },
+  messageInner: { flex: 1, paddingHorizontal: 16, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  turnTab: { position: 'absolute', top: -11, height: 22, paddingHorizontal: 10, borderRadius: 4, justifyContent: 'center', transform: [{ skewX: '-12deg' }] },
+  turnText: { fontFamily: fonts.black, fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: '#141414' },
+  plate: { backgroundColor: 'rgba(10,10,13,0.72)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', transform: [{ skewX: '-8deg' }] },
+  plateInner: { paddingHorizontal: 12, paddingVertical: 9, gap: 5 },
   bench: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20 },
   benchCards: { flexDirection: 'row', gap: 10 },
   benchItem: { alignItems: 'center', gap: 4, padding: 3, borderRadius: 8, borderWidth: 1.5, borderColor: 'transparent' },
@@ -914,14 +1030,17 @@ const styles = StyleSheet.create({
   attack: {
     flex: 1,
     minHeight: 84,
-    borderRadius: 18,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: colors.surface,
+    backgroundColor: '#18181D',
     borderWidth: 1.5,
+    borderBottomWidth: 5,
     justifyContent: 'center',
     gap: 3,
   },
+  attackPressed: { borderBottomWidth: 2, transform: [{ translateY: 3 }], backgroundColor: '#1F1F26' },
+  attackGlow: { borderRadius: 16, borderWidth: 2, borderColor: colors.gold, margin: -1.5 },
   attackTag: { fontFamily: fonts.semibold, fontSize: 11, letterSpacing: 0.4, textTransform: 'uppercase' },
   attackTagRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   attackHot: { backgroundColor: 'rgba(247,201,72,0.08)' },

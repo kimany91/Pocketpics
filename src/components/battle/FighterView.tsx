@@ -12,6 +12,10 @@
  *  - poison : la carte vire au violet et des bulles en sortent ;
  *  - enchaînement : un compteur ×N grossit à chaque coup de la série ;
  *  - étourdissement : des étoiles tournent au-dessus.
+ *
+ * Et pour que chaque coup se sente : la carte flotte sur un socle d'ombre,
+ * fonce en diagonale vers l'adversaire (avec une traînée), et la carte touchée
+ * prend un éclat, une onde et des étincelles ; plus fort sur un coup critique.
  */
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
@@ -36,7 +40,7 @@ import { getRarity } from '../../game/rarity';
 import { CARD_RATIO, colors, fonts } from '../../theme';
 import { AppText } from '../AppText';
 import { CardFace, type CardLike } from '../card/CardFace';
-import { Burst, Glow } from '../fx';
+import { Burst, Glow, Shockwave } from '../fx';
 
 export interface Popup {
   key: number;
@@ -85,20 +89,36 @@ export function HpBar({ hp, maxHp, width, compact }: { hp: number; maxHp: number
   const ratio = Math.max(0, Math.min(1, hp / maxHp));
   const fill = useSharedValue(ratio);
   const lag = useSharedValue(ratio);
+  const hit = useSharedValue(0);
+  const last = useSharedValue(ratio);
   useEffect(() => {
+    // perte : la jauge clignote en blanc ; gain : elle remonte simplement
+    if (ratio < last.value) hit.value = withSequence(withTiming(1, { duration: 50 }), withTiming(0, { duration: 380 }));
+    last.value = ratio;
     fill.value = withTiming(ratio, { duration: 380, easing: Easing.out(Easing.cubic) });
     // traînée claire qui rattrape la jauge, pour bien voir ce qu'on a perdu
     lag.value = withSequence(withTiming(lag.value, { duration: 350 }), withTiming(ratio, { duration: 520 }));
-  }, [ratio, fill, lag]);
+  }, [ratio, fill, lag, hit, last]);
   const color = ratio > 0.5 ? colors.success : ratio > 0.2 ? colors.gold : colors.danger;
-  const h = compact ? 5 : 9;
+  const h = compact ? 5 : 10;
   const fillStyle = useAnimatedStyle(() => ({ width: fill.value * width }));
   const lagStyle = useAnimatedStyle(() => ({ width: lag.value * width }));
+  const hitStyle = useAnimatedStyle(() => ({ opacity: hit.value * 0.85 }));
   return (
     <View style={{ width }}>
       <View style={[styles.track, { height: h, borderRadius: h / 2 }]}>
         <Animated.View style={[styles.fill, { backgroundColor: 'rgba(255,255,255,0.45)', borderRadius: h / 2 }, lagStyle]} />
         <Animated.View style={[styles.fill, { backgroundColor: color, borderRadius: h / 2 }, fillStyle]} />
+        {compact ? null : (
+          <>
+            {/* reflet en haut de la jauge et repères tous les quarts */}
+            <View style={[styles.fill, { right: 0, bottom: h / 2, backgroundColor: 'rgba(255,255,255,0.18)' }]} />
+            {[0.25, 0.5, 0.75].map((q) => (
+              <View key={q} style={[styles.tick, { left: q * width }]} />
+            ))}
+          </>
+        )}
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF' }, hitStyle]} />
       </View>
       {compact ? null : (
         <AppText style={styles.hpText}>
@@ -120,7 +140,8 @@ interface Props {
   enter: number;
   status: FighterStatus;
   act: { key: number; kind: ActKind };
-  react: { key: number; kind: ReactKind };
+  /** `strong` : coup critique ou coup de grâce, l'impact est plus gros. */
+  react: { key: number; kind: ReactKind; strong?: boolean };
   popups: Popup[];
 }
 
@@ -148,6 +169,18 @@ export function FighterView({ card, imageSource, width, facing, ko, enter, statu
   const shieldHit = useSharedValue(0);
   const hop = useSharedValue(0);
   const [burst, setBurst] = useState<{ n: number; colors: string[] }>({ n: 0, colors: [HEAL] });
+  /** Impact sur la carte touchée : éclat, onde, étincelles. */
+  const [impact, setImpact] = useState<{ n: number; color: string; strong: boolean }>({ n: 0, color: '#FFFFFF', strong: false });
+  const spark = useSharedValue(0);
+  /** Arrivée sur le terrain (0 = pas encore là). */
+  const entry = useSharedValue(enter > 0 ? 1 : 0);
+  const [landed, setLanded] = useState(0);
+  /** Flottement au repos, décalé entre les deux camps pour ne pas battre en rythme. */
+  const bob = useSharedValue(0);
+  useEffect(() => {
+    bob.value = withDelay(facing === 1 ? 0 : 700, withRepeat(withTiming(1, { duration: 2300, easing: Easing.inOut(Easing.sin) }), -1, true));
+    return () => cancelAnimation(bob);
+  }, [bob, facing]);
 
   // États qui durent : chacun a sa valeur animée (0 → 1)
   const guardV = useSharedValue(status.guard ? 1 : 0);
@@ -181,8 +214,19 @@ export function FighterView({ card, imageSource, width, facing, ko, enter, statu
     setTintColor(color);
     tint.value = withSequence(withTiming(peak, { duration: 60 }), withTiming(0, { duration: ms }));
   };
-  const lunge = (dist: number, wind = 10, ms = 130) =>
-    withSequence(withTiming(wind * facing, { duration: 110 }), withTiming(-dist * facing, { duration: ms, easing: Easing.in(Easing.quad) }), withSpring(0, { damping: 13 }));
+  /** Élan vers l'adversaire, en diagonale (il est en face, de l'autre côté de l'écran). Renvoie le mouvement vertical. */
+  const lunge = (dist: number, wind = 10, ms = 130) => {
+    x.value = withSequence(
+      withTiming(-wind * 0.5 * facing, { duration: 110 }),
+      withTiming(dist * 0.45 * facing, { duration: ms, easing: Easing.in(Easing.quad) }),
+      withSpring(0, { damping: 13 }),
+    );
+    return withSequence(withTiming(wind * facing, { duration: 110 }), withTiming(-dist * facing, { duration: ms, easing: Easing.in(Easing.quad) }), withSpring(0, { damping: 13 }));
+  };
+  const hitFx = (color: string, strong = false) => {
+    setImpact((i) => ({ n: i.n + 1, color, strong }));
+    spark.value = withSequence(withTiming(1, { duration: 60 }), withTiming(0, { duration: strong ? 420 : 300, easing: Easing.out(Easing.quad) }));
+  };
 
   // Animation de la carte qui agit
   useEffect(() => {
@@ -267,21 +311,25 @@ export function FighterView({ card, imageSource, width, facing, ko, enter, statu
       withSequence(withTiming(a, { duration: 40 }), withTiming(-a * 0.9, { duration: 50 }), withTiming(a * 0.6, { duration: 50 }), withTiming(-a * 0.4, { duration: 50 }), withTiming(0, { duration: 60 }));
     switch (react.kind) {
       case 'hurt':
-        x.value = shake(12);
+        hitFx(react.strong ? colors.gold : '#FFFFFF', react.strong);
+        x.value = shake(react.strong ? 18 : 12);
         flash.value = withSequence(withTiming(0.85, { duration: 50 }), withTiming(0, { duration: 260 }));
         break;
       case 'slapped':
+        hitFx(react.strong ? colors.gold : '#FFD1E0', react.strong);
         // la tête qui tourne sous la gifle
         rot.value = withSequence(withTiming(-22 * side, { duration: 70 }), withTiming(9 * side, { duration: 140 }), withSpring(0, { damping: 9 }));
         x.value = shake(10);
         flash.value = withSequence(withTiming(0.8, { duration: 50 }), withTiming(0, { duration: 260 }));
         break;
       case 'execute':
+        hitFx('#FF2E3F', true);
         slash.value = withSequence(withTiming(1, { duration: 160, easing: Easing.out(Easing.cubic) }), withDelay(380, withTiming(2, { duration: 300 })), withTiming(0, { duration: 0 }));
         x.value = shake(18);
         doFlash('#FF2E3F', 0.6, 500);
         break;
       case 'guarded':
+        hitFx(SHIELD);
         shieldHit.value = withSequence(withTiming(1, { duration: 60 }), withTiming(0, { duration: 420 }));
         x.value = shake(5);
         break;
@@ -298,6 +346,7 @@ export function FighterView({ card, imageSource, width, facing, ko, enter, statu
         x.value = shake(5);
         break;
       case 'recoil':
+        hitFx('#FF8A7A');
         doFlash('#FF3B2E', 0.5, 380);
         x.value = shake(8);
         break;
@@ -306,30 +355,62 @@ export function FighterView({ card, imageSource, width, facing, ko, enter, statu
   }, [react.key]);
 
   useEffect(() => {
-    fall.value = ko ? withTiming(1, { duration: 650, easing: Easing.in(Easing.cubic) }) : 0;
+    if (!ko) {
+      fall.value = 0;
+      return;
+    }
+    // K.O. : éclair blanc, éclats, puis la carte bascule et tombe
+    doFlash('#FFFFFF', 0.9, 260);
+    setBurst((b) => ({ n: b.n + 1, colors: ['#FFFFFF', r.color, '#8A8A96'] }));
+    fall.value = withDelay(220, withTiming(1, { duration: 700, easing: Easing.in(Easing.cubic) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ko, fall]);
 
   useEffect(() => {
     if (!enter) return;
-    scale.value = 0.6;
+    // arrivée : la carte tombe sur son socle et soulève une onde
+    entry.value = withTiming(1, { duration: 140 });
+    scale.value = 0.7;
     scale.value = withSpring(1, { damping: 12, stiffness: 180 });
-  }, [enter, scale]);
+    y.value = -46;
+    y.value = withSpring(0, { damping: 11, stiffness: 200 });
+    const t = setTimeout(() => setLanded((n) => n + 1), 170);
+    return () => clearTimeout(t);
+  }, [enter, scale, y, entry]);
 
+  const float = () => {
+    'worklet';
+    return (bob.value - 0.5) * 7 * (1 - fall.value);
+  };
   const style = useAnimatedStyle(() => {
     const dodge = dodgeV.value + hop.value * 0.8;
     return {
-      opacity: 1 - fall.value,
+      opacity: (1 - fall.value) * entry.value,
       transform: [
         { perspective: 900 },
         { translateX: x.value + dodge * width * 0.16 * side },
-        { translateY: y.value + fall.value * 40 * facing * -1 + weakV.value * 7 },
-        { rotate: `${rot.value + fall.value * 12 - dodge * 5 * side + weakV.value * 3 * side}deg` },
+        { translateY: y.value + float() + fall.value * 60 * facing * -1 + weakV.value * 7 },
+        { rotate: `${rot.value + fall.value * 22 * side * -1 - dodge * 5 * side + weakV.value * 3 * side}deg` },
         { rotateY: `${dodge * 24 * side}deg` },
         { scaleX: flip.value },
-        { scale: scale.value * (1 - fall.value * 0.15) * (1 + focusV.value * (0.1 + pulse.value * 0.025)) },
+        { scale: scale.value * (1 - fall.value * 0.2) * (1 + focusV.value * (0.1 + pulse.value * 0.025)) },
       ],
     };
   });
+  // Traînée : un reflet à mi-chemin, visible seulement pendant l'élan
+  const trailStyle = useAnimatedStyle(() => {
+    const d = Math.abs(y.value) + Math.abs(x.value) * 0.6;
+    return {
+      opacity: Math.min(0.32, Math.max(0, (d - 14) / 110)) * entry.value,
+      transform: [{ translateX: x.value * 0.5 }, { translateY: y.value * 0.5 + float() }, { rotate: `${rot.value * 0.5}deg` }],
+    };
+  });
+  // Socle d'ombre : se resserre quand la carte monte, disparaît au K.O.
+  const shadowStyle = useAnimatedStyle(() => ({
+    opacity: (0.85 - (bob.value - 0.5) * 0.25) * (1 - fall.value) * entry.value,
+    transform: [{ translateX: x.value * 0.4 }, { scaleX: 1 - (0.5 - bob.value) * 0.08 - Math.min(0.25, Math.abs(y.value) / 200) }],
+  }));
+  const sparkStyle = useAnimatedStyle(() => ({ opacity: spark.value, transform: [{ scale: 0.5 + (1 - spark.value) * 0.9 }] }));
   const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
   const tintStyle = useAnimatedStyle(() => ({ opacity: tint.value }));
   const ghostStyle = useAnimatedStyle(() => ({ opacity: dodgeV.value * 0.22 * (1 - fall.value) }));
@@ -340,9 +421,22 @@ export function FighterView({ card, imageSource, width, facing, ko, enter, statu
 
   return (
     <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }}>
+      {/* Socle : une ombre au sol et un reflet de la couleur de rareté */}
+      <Animated.View pointerEvents="none" style={[styles.abs, { left: -width * 0.2, top: height - width * 0.1, width: width * 1.4, height: width * 0.3 }, shadowStyle]}>
+        <View style={[styles.abs, { left: 0, top: 0, width: width * 1.4, height: width * 0.3, alignItems: 'center', justifyContent: 'center' }]}>
+          <Glow color={r.color} size={width * 0.5} stretchX={2.6} />
+        </View>
+        <View style={[styles.platform, { left: width * 0.12, top: width * 0.07, width: width * 1.16, height: width * 0.17, borderRadius: width }]} />
+      </Animated.View>
+      <View style={[styles.abs, { left: width / 2, top: height - width * 0.02, width: 0, height: 0, alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
+        <Shockwave trigger={landed} color="rgba(255,255,255,0.55)" size={width * 0.7} />
+      </View>
       <View pointerEvents="none" style={[styles.abs, { left: -width * 0.45, top: (height - width * 1.9) / 2, opacity: ko ? 0 : 0.35 }]}>
         <Glow color={r.color} size={width * 1.9} />
       </View>
+      <Animated.View pointerEvents="none" style={[styles.abs, { left: 0, top: 0 }, trailStyle]}>
+        <CardFace card={card} width={width} imageSource={imageSource} quality="thumb" animated={false} />
+      </Animated.View>
       {/* Concentration : aura dorée qui pulse derrière la carte */}
       <Animated.View pointerEvents="none" style={[styles.abs, { left: -width * 0.6, top: (height - width * 2.2) / 2 }, auraStyle]}>
         <Glow color={FOCUS} size={width * 2.2} />
@@ -392,6 +486,14 @@ export function FighterView({ card, imageSource, width, facing, ko, enter, statu
 
       <View pointerEvents="none" style={[styles.abs, { left: width / 2, top: height / 2, width: 0, height: 0 }]}>
         <Burst trigger={burst.n} colors={burst.colors} count={18} radius={width * 0.9} />
+      </View>
+      {/* Impact : éclat au centre, onde, étincelles */}
+      <View pointerEvents="none" style={[styles.abs, { left: width / 2, top: height * 0.45, width: 0, height: 0, alignItems: 'center', justifyContent: 'center' }]}>
+        <Animated.View style={[styles.abs, { left: -width * 0.6, top: -width * 0.6 }, sparkStyle]}>
+          <Glow color={impact.color} size={width * 1.2} />
+        </Animated.View>
+        <Shockwave trigger={impact.n} color={impact.color} size={width * (impact.strong ? 0.9 : 0.6)} />
+        <Burst trigger={impact.n} colors={[impact.color, '#FFFFFF']} count={impact.strong ? 14 : 8} radius={width * (impact.strong ? 0.95 : 0.7)} />
       </View>
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
         {popups.map((p) => (
@@ -537,18 +639,25 @@ function StaticLine({ i, t, width, height }: { i: number; t: SharedValue<number>
 }
 
 function FloatPopup({ popup, offset }: { popup: Popup; offset: number }) {
+  // le chiffre claque (il grossit trop puis se pose), tient un instant, puis monte et s'efface
+  const pop = useSharedValue(0);
   const t = useSharedValue(0);
   useEffect(() => {
-    t.value = withTiming(1, { duration: 1200, easing: Easing.out(Easing.cubic) });
-  }, [t]);
+    pop.value = withSequence(withTiming(popup.big ? 1.5 : 1.3, { duration: 110, easing: Easing.out(Easing.quad) }), withSpring(1, { damping: 8, stiffness: 260 }));
+    t.value = withDelay(320, withTiming(1, { duration: 950, easing: Easing.in(Easing.quad) }));
+  }, [pop, t, popup.big]);
   const style = useAnimatedStyle(() => ({
-    opacity: t.value < 0.75 ? 1 : 1 - (t.value - 0.75) / 0.25,
-    transform: [{ translateY: -t.value * 60 }, { translateX: offset * 18 }, { scale: 0.6 + Math.min(1, t.value * 4) * 0.5 }],
+    opacity: 1 - t.value,
+    transform: [{ translateY: -10 - t.value * 46 }, { translateX: offset * 18 }, { scale: pop.value }, { rotate: popup.big ? '-7deg' : '0deg' }],
   }));
   return (
     <Animated.View style={[styles.popup, style]}>
-      <AppText style={[styles.damage, { fontSize: popup.big ? 38 : 30, color: popup.color }]}>{popup.main}</AppText>
-      {popup.sub ? <AppText style={[styles.popupLabel, { color: popup.subColor ?? colors.text }]}>{popup.sub}</AppText> : null}
+      <AppText style={[styles.damage, { fontSize: popup.big ? 42 : 32, lineHeight: popup.big ? 48 : 38, color: popup.color }]}>{popup.main}</AppText>
+      {popup.sub ? (
+        <View style={[styles.popupPill, { borderColor: popup.subColor ?? colors.text }]}>
+          <AppText style={[styles.popupLabel, { color: popup.subColor ?? colors.text }]}>{popup.sub}</AppText>
+        </View>
+      ) : null}
     </Animated.View>
   );
 }
@@ -583,14 +692,18 @@ function Star({ index, spin, r }: { index: number; spin: SharedValue<number>; r:
 
 const styles = StyleSheet.create({
   abs: { position: 'absolute' },
-  track: { backgroundColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' },
+  track: { backgroundColor: 'rgba(0,0,0,0.45)', overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  tick: { position: 'absolute', top: 0, bottom: 0, width: 1.5, backgroundColor: 'rgba(0,0,0,0.35)' },
   fill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
   hpText: { fontFamily: fonts.bold, fontSize: 13, color: colors.text, marginTop: 4, fontVariant: ['tabular-nums'] },
   hpMax: { fontFamily: fonts.medium, fontSize: 11, color: colors.textDim },
   flash: { backgroundColor: '#FFFFFF' },
   popup: { position: 'absolute', alignItems: 'center' },
-  damage: { fontFamily: fonts.black, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 8 },
-  popupLabel: { fontFamily: fonts.bold, fontSize: 13, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 6 },
+  // ombre dure décalée : un chiffre « imprimé », lisible sur n'importe quelle photo
+  damage: { fontFamily: fonts.black, letterSpacing: -1, textShadowColor: '#000', textShadowOffset: { width: 2, height: 3 }, textShadowRadius: 0 },
+  popupPill: { marginTop: 1, paddingHorizontal: 7, paddingVertical: 1, borderRadius: 6, borderWidth: 1, backgroundColor: 'rgba(8,8,10,0.82)' },
+  popupLabel: { fontFamily: fonts.bold, fontSize: 12 },
+  platform: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.6)' },
   stars: { position: 'absolute', left: 0, right: 0, height: 30, alignItems: 'center', justifyContent: 'center' },
   star: { position: 'absolute' },
   badge: { position: 'absolute', width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.bg },
