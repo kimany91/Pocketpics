@@ -33,7 +33,7 @@ import { type Attack, kindOf, powerLabel } from '../../battle/stats';
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { FighterView, HpBar, type Popup } from '../../components/battle/FighterView';
-import { FitText, type TextPart, fitFontSize } from '../../components/battle/FitText';
+import { FitLines, FitText, type TextPart, fitFontSize } from '../../components/battle/FitText';
 import { InspectFighter } from '../../components/battle/InspectFighter';
 import { TimingBar } from '../../components/battle/TimingBar';
 import { SoundSheet } from '../../components/SoundSheet';
@@ -54,6 +54,9 @@ const fighterName = (c: Card) => c.name ?? `ta carte ${getRarity(c.rarity).label
 
 /** Majuscule en début de phrase (« ta carte Rare » → « Ta carte Rare »). */
 const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+/** Message du combat : une phrase, ou « Carte utilise » + le nom de l'attaque seul sur sa ligne. */
+type Msg = TextPart[] | { top: TextPart[]; attack: string };
+
 const capParts = (parts: TextPart[]): TextPart[] => (parts.length ? [{ ...parts[0], text: cap(parts[0].text) }, ...parts.slice(1)] : parts);
 
 const toFighter = (c: Card): FighterInput => ({ ref: c.id, name: fighterName(c), rarity: c.rarity, battle: c.battle });
@@ -78,7 +81,7 @@ export default function FightScreen() {
   const [shown, setShown] = useState<Battle | null>(battle);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<Mode>('idle');
-  const [msg, setMsg] = useState<TextPart[]>([{ text: arena ? `${arena.bot} te défie !` : '' }]);
+  const [msg, setMsg] = useState<Msg>([{ text: arena ? `${arena.bot} te défie !` : '' }]);
   const [pending, setPending] = useState<{ slot: 0 | 1; attack: Attack; hits: number } | null>(null);
   const [switchTo, setSwitchTo] = useState<number | null>(null);
   const [result, setResult] = useState<SideId | null>(null);
@@ -127,8 +130,7 @@ export default function FightScreen() {
       switch (e.t) {
         case 'use': {
           lastKind = kindOf(e.attack);
-          const atk: TextPart = { text: e.attack.name, bold: true, color: colors.gold };
-          setMsg(e.copied ? [nameParts(e.fighter, e.side), { text: ' copie ' }, atk, { text: ' !' }] : [nameParts(e.fighter, e.side), { text: ' utilise ' }, atk, { text: ' !' }]);
+          setMsg({ top: [nameParts(e.fighter, e.side), { text: e.copied ? ' copie' : ' utilise' }], attack: `${e.attack.name} !` });
           setShown(view);
           bump('lunge', e.side);
           playSfx('swipe', { volume: 0.5 });
@@ -366,7 +368,17 @@ export default function FightScreen() {
         </View>
 
         <View style={[styles.message, { height: layout.msgH }]}>
-          <FitText parts={capParts(msg)} lines={layout.compact ? 2 : 3} maxSize={layout.compact ? 24 : 30} minSize={14} initialWidth={width - 72} />
+          {Array.isArray(msg) ? (
+            <FitText parts={capParts(msg)} lines={layout.compact ? 2 : 3} maxSize={layout.compact ? 24 : 30} minSize={14} initialWidth={width - 72} />
+          ) : (
+            <FitLines
+              initialWidth={width - 72}
+              lines={[
+                { parts: capParts(msg.top), maxSize: layout.compact ? 17 : 21, minSize: 11 },
+                { parts: [{ text: msg.attack, bold: true, color: colors.gold }], maxSize: layout.compact ? 30 : 38, minSize: 14 },
+              ]}
+            />
+          )}
         </View>
 
         {/* Joueur : carte à gauche, infos à droite */}

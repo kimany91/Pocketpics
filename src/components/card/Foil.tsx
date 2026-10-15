@@ -28,8 +28,22 @@ const SETTINGS: Record<FoilKind, { bands: string[]; band: number; glitter: numbe
   divine: { bands: DIVINE, band: 0.48, glitter: 0.6, glare: 0.6, tint: '#FFF6DA', second: true },
 };
 
-export function Foil({ kind, tilt, width, height }: { kind: FoilKind; tilt: SharedValue<number>; width: number; height: number }) {
-  const cfg = SETTINGS[kind];
+export function Foil({
+  kind,
+  tilt,
+  width,
+  height,
+  intensity = 1,
+}: {
+  kind: FoilKind;
+  tilt: SharedValue<number>;
+  width: number;
+  height: number;
+  /** Atténuation (miniatures : on garde la photo bien lisible). */
+  intensity?: number;
+}) {
+  const base = SETTINGS[kind];
+  const cfg = { ...base, band: base.band * intensity, glitter: base.glitter * intensity, glare: base.glare * intensity };
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Bands colors={cfg.bands} tilt={tilt} width={width} height={height} strength={cfg.band} angle={-28} direction={1} />

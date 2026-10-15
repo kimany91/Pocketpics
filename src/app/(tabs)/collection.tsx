@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, type SharedValue, useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 
 import { AppText } from '../../components/AppText';
 import { CardFace } from '../../components/card/CardFace';
@@ -13,6 +13,7 @@ import { useGame } from '../../state/game';
 import type { Card } from '../../storage/model';
 import { colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
+import { useMotionTilt } from '../../utils/motionTilt';
 
 type Sort = 'recent' | 'rarity';
 
@@ -23,6 +24,17 @@ export default function CollectionScreen() {
   const { width } = useWindowDimensions();
   const cards = useGame((s) => s.cards);
   const [filter, setFilter] = useState<string | null>(null);
+  // Inclinaison du téléphone pour les reflets, captée seulement quand l'onglet est à l'écran
+  // et qu'il y a des cartes chromatiques à faire briller.
+  const motion = useSharedValue(0);
+  const [focused, setFocused] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, []),
+  );
+  const hasHolo = useMemo(() => cards.some((c) => ['chromatic', 'divine'].includes(getRarity(c.rarity).frameStyle)), [cards]);
   const favCount = useMemo(() => cards.filter((c) => c.favorite).length, [cards]);
   // Plus aucun favori : on revient à toutes les cartes plutôt que d'afficher une grille vide.
   useEffect(() => {
@@ -93,6 +105,7 @@ export default function CollectionScreen() {
         </View>
       ) : (
         <FlatList
+          ListHeaderComponent={focused && hasHolo ? <MotionFeed target={motion} /> : null}
           data={data}
           key={cols}
           numColumns={cols}
@@ -101,15 +114,29 @@ export default function CollectionScreen() {
           columnWrapperStyle={{ gap }}
           initialNumToRender={18}
           windowSize={7}
-          renderItem={({ item }) => <Thumb card={item} width={cardW} order={data} />}
+          renderItem={({ item }) => <Thumb card={item} width={cardW} order={data} motion={motion} />}
         />
       )}
     </Screen>
   );
 }
 
-function Thumb({ card, width, order }: { card: Card; width: number; order: Card[] }) {
+/** Capte l'inclinaison du téléphone, seulement tant que l'onglet est affiché. */
+function MotionFeed({ target }: { target: SharedValue<number> }) {
+  const tilt = useMotionTilt();
+  useAnimatedReaction(
+    () => tilt.value,
+    (v) => {
+      target.value = v;
+    },
+  );
+  return null;
+}
+
+function Thumb({ card, width, order, motion }: { card: Card; width: number; order: Card[]; motion: SharedValue<number> }) {
   const r = getRarity(card.rarity);
+  // Cartes chromatiques (Ultra Légendaire, Divine) : le reflet suit les mouvements du téléphone.
+  const holo = r.frameStyle === 'chromatic' || r.frameStyle === 'divine';
   return (
     <Animated.View entering={FadeIn.duration(250)}>
       <Pressable
@@ -120,7 +147,7 @@ function Thumb({ card, width, order }: { card: Card; width: number; order: Card[
         }}
         style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.96 : 1 }] })}
       >
-        <CardFace card={card} width={width} quality="thumb" animated={r.rank >= 6} />
+        <CardFace card={card} width={width} quality="thumb" animated={r.rank >= 6} tilt={holo ? motion : undefined} />
         {card.favorite ? (
           <View style={styles.favBadge} pointerEvents="none">
             <Ionicons name="star" size={11} color="#1A1406" />

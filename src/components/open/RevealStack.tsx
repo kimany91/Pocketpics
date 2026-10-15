@@ -104,7 +104,7 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
   const onHiddenTap = () => {
     if (level < rarity.rank) {
       const now = Date.now();
-      if (now - lastUp.current < 250) return; // laisse chaque palier se voir
+      if (now - lastUp.current < 250) return haptic.tick(); // laisse chaque palier se voir
       lastUp.current = now;
       const next = level + 1;
       setLevelState({ index, level: next });

@@ -103,7 +103,7 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
         {rarity.frameStyle === 'chromatic' && !tilt ? <Holo colors={CHROMA_HOLO} opacity={0.18} animated={animated} width={width} height={height} /> : null}
         {rarity.frameStyle === 'divine' && !tilt ? <Holo colors={DIVINE_HOLO} opacity={0.42} animated={animated} width={width} height={height} /> : null}
         {fx === 'mythic' && tilt ? <HoloFoil tilt={tilt} width={width} height={height} {...FOILS[fx]} /> : null}
-        {fx && fx !== 'mythic' && tilt ? <Foil kind={fx} tilt={tilt} width={width} height={height} /> : null}
+        {fx && fx !== 'mythic' && tilt ? <Foil kind={fx} tilt={tilt} width={width} height={height} intensity={quality === 'thumb' ? 0.55 : 1} /> : null}
         {rarity.frameStyle === 'divine' && animated ? <Sweep width={width} height={height} duration={3200} intensity={0.45} /> : null}
         {fx && animated && large ? <Twinkles width={width - border * 2} height={height - border * 2} {...SPARKS[fx]} /> : null}
         {rarity.frameStyle === 'divine' && animated && !large && width >= 100 ? <Twinkles width={width - border * 2} height={height - border * 2} /> : null}

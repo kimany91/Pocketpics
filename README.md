@@ -27,6 +27,10 @@ PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie ph
 
 **Sons** (synthétisés par `scripts/generate-sounds.py`, y compris coup, critique, gifle, raté, étourdi, K.O., victoire et défaite pour les combats) : l'icône 🔊 de l'accueil ouvre deux curseurs, effets sonores (55 % par défaut) et musique de combat (45 %), enregistrés dans la sauvegarde. Sons : déchirure, éventail, glissement de carte, 7 paliers de montée de niveau, révélation (Commune à Super Rare), son spécial Épique/Mythique, son spécial Légendaire, son spécial Ultra Légendaire/Divine, suspense, briquet et feu.
 
+**Retours haptiques** (`src/utils/haptics.ts`) : en déchirant le sachet, un cran à chaque avancée du doigt, de plus en plus marqué, puis un claquement sec juste avant que ça cède et un gros « crac » avec un grondement. Chaque toucher sur une carte (montée de niveau, retournement, carte qu'on envoie) vibre. Une Mythique ou mieux déclenche une longue vibration : 0,8 s pour une Mythique, jusqu'à 2,1 s pour une Divine. Sur iPhone, c'est une suite d'impacts très rapprochés ; sur Android, le moteur vibre en continu ; dans un navigateur qui le permet, `navigator.vibrate`.
+
+**Reflets qui suivent le téléphone** (`src/utils/motionTilt.ts`) : dans la carte agrandie (et en combat), les reflets holographiques bougent quand on incline le téléphone, comme une vraie carte en main. Dans la collection, les cartes chromatiques (Ultra Légendaire, Divine) brillent aussi selon l'inclinaison, plus discrètement. Le capteur ne tourne que quand l'onglet est affiché. Dans le navigateur, on passe par `deviceorientation` (Safari demande l'autorisation au premier toucher).
+
 **Carte agrandie** : on la fait tourner au doigt en semi-3D, avec de l'inertie. Un double-tap retourne la carte, et son dos affiche ses infos. On peut aussi la renommer. Le nom s'affiche sur la carte et la suit lors d'un échange.
 
 - **Changer de carte** : glisser à côté de la carte (au-dessus, en dessous, sur les côtés), ou toucher les flèches. L'ordre suit celui de la collection (tri et filtre compris).

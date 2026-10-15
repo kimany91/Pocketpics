@@ -37,6 +37,7 @@ import { useCollectionView } from '../../state/collectionView';
 import { useGame } from '../../state/game';
 import { CARD_RATIO, colors, fonts } from '../../theme';
 import { haptic, revealHaptics } from '../../utils/haptics';
+import { useMotionTilt } from '../../utils/motionTilt';
 
 export default function CardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -80,7 +81,9 @@ export default function CardScreen() {
   const rotX = useSharedValue(0);
   const pageX = useSharedValue(0);
   /** -1 → 1 selon l'angle, pour le reflet holographique et la parallaxe du décor. */
-  const tilt = useDerivedValue(() => Math.sin((rotY.value * Math.PI) / 180) * 1.2 + rotX.value / 40);
+  // Les reflets suivent aussi les mouvements du téléphone, comme une vraie carte en main.
+  const motion = useMotionTilt();
+  const tilt = useDerivedValue(() => Math.sin((rotY.value * Math.PI) / 180) * 1.2 + rotX.value / 40 + motion.value);
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/collection'));
 
@@ -156,7 +159,7 @@ export default function CardScreen() {
     lastSpin.current = now;
     setSpin((n) => n + 1);
     playRaritySound(r.hype, 0.9);
-    revealHaptics(r.hype);
+    revealHaptics(r.hype, { long: false });
   };
 
   const onBurnt = () => {

@@ -114,10 +114,10 @@ export const RevealCard = forwardRef<RevealCardHandle, Props>(function RevealCar
   const startReveal = () => {
     if (state !== 'hidden') return;
     setState('revealing');
+    haptic.rigid(); // le toucher qui lance le retournement
     const suspense = suspenseFor(rarity.hype);
     onRevealStart(suspense);
     if (suspense === 0) {
-      haptic.light();
       doFlip();
       return;
     }

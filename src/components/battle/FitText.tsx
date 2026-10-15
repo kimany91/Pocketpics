@@ -62,3 +62,42 @@ export function FitText({
     </View>
   );
 }
+
+export interface FitLine {
+  parts: TextPart[];
+  maxSize: number;
+  minSize?: number;
+}
+
+/**
+ * Plusieurs lignes imposées, chacune sur une seule ligne et aussi grande que
+ * possible dans la largeur (ex. « Ta carte utilise » puis, en grand, le nom de l'attaque).
+ */
+export function FitLines({ lines, initialWidth = 300, style }: { lines: FitLine[]; initialWidth?: number; style?: StyleProp<TextStyle> }) {
+  const [width, setWidth] = useState(initialWidth);
+  return (
+    <View style={{ alignSelf: 'stretch', alignItems: 'center' }} onLayout={(e) => setWidth(Math.max(40, e.nativeEvent.layout.width))}>
+      {lines.map((line, i) => {
+        const chars = Math.max(1, line.parts.reduce((n, p) => n + p.text.length, 0));
+        // Les lignes en gras (police extra-grasse) sont plus larges.
+        const charW = line.parts.some((p) => p.bold) ? CHAR_W * 1.12 : CHAR_W;
+        const size = Math.floor(Math.max(line.minSize ?? 11, Math.min(line.maxSize, (width * 0.96) / (chars * charW))));
+        return (
+          <Text
+            key={i}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
+            style={[{ fontFamily: fonts.semibold, fontSize: size, lineHeight: Math.round(size * 1.2), color: colors.text, textAlign: 'center' }, style]}
+          >
+            {line.parts.map((p, j) => (
+              <Text key={j} style={[p.color ? { color: p.color } : null, p.bold ? { fontFamily: fonts.black } : null]}>
+                {p.text}
+              </Text>
+            ))}
+          </Text>
+        );
+      })}
+    </View>
+  );
+}

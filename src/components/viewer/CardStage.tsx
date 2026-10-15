@@ -62,6 +62,8 @@ interface Props {
 
 const MAX_ZOOM = 4;
 const noop = () => {};
+/** Petit choc quand on retourne la carte d'un double-tap. */
+const flipFeel = () => haptic.medium();
 
 export function CardStage({ card, imageSource, backNote, width, rotY, rotX, tilt, burning = false, onBurnt = noop, onSpin, onZoomChange }: Props) {
   const r = getRarity(card.rarity);
@@ -184,6 +186,7 @@ export function CardStage({ card, imageSource, backNote, width, rotY, rotX, tilt
     .enabled(!burning)
     .numberOfTaps(2)
     .onEnd(() => {
+      scheduleOnRN(flipFeel);
       rotY.value = withTiming(Math.round(rotY.value / 180) * 180 + 180, { duration: 520, easing: Easing.out(Easing.cubic) });
     });
 

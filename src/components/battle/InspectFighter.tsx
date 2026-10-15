@@ -16,6 +16,7 @@ import { ATTACK_EFFECT, ATTACK_KIND_LABEL, type Attack, kindOf, powerLabel } fro
 import { getRarity } from '../../game/rarity';
 import { CARD_RATIO, colors, fonts } from '../../theme';
 import { revealHaptics } from '../../utils/haptics';
+import { useMotionTilt } from '../../utils/motionTilt';
 import { AppText } from '../AppText';
 import { ViewerEnvironment, hasEnvironment } from '../card/ViewerEnvironment';
 import { Glow } from '../fx';
@@ -47,7 +48,9 @@ export function InspectFighter({
   const cardW = Math.min(width * 0.6, (height * 0.4) / CARD_RATIO, 300) * (divine ? 0.84 : 1);
   const rotY = useSharedValue(0);
   const rotX = useSharedValue(0);
-  const tilt = useDerivedValue(() => Math.sin((rotY.value * Math.PI) / 180) * 1.2 + rotX.value / 40);
+  // Les reflets suivent aussi les mouvements du téléphone, comme une vraie carte en main.
+  const motion = useMotionTilt();
+  const tilt = useDerivedValue(() => Math.sin((rotY.value * Math.PI) / 180) * 1.2 + rotX.value / 40 + motion.value);
   const lastSpin = useRef(0);
   const ko = fighter.hp <= 0;
 
@@ -57,7 +60,7 @@ export function InspectFighter({
     if (now - lastSpin.current < spinCooldown(r.rank)) return;
     lastSpin.current = now;
     playRaritySound(r.hype, 0.9);
-    revealHaptics(r.hype);
+    revealHaptics(r.hype, { long: false });
   };
 
   return (

@@ -25,7 +25,20 @@ import { PACK_RATIO, PackArt, TEAR_LINE } from '../PackArt';
 
 const COMPLETE_AT = 0.72;
 const GRAB = 44;
-const tick = haptic.tick;
+/** Nombre de « crans » ressentis le long de la déchirure. */
+const NOTCHES = 22;
+
+/**
+ * Un cran de déchirure sous le doigt : de plus en plus marqué à mesure qu'on
+ * avance, un claquement sec quand le sachet est sur le point de céder.
+ */
+function tearNotch(step: number) {
+  const p = step / NOTCHES;
+  if (step === Math.ceil(COMPLETE_AT * NOTCHES)) return haptic.rigid();
+  if (p < 0.3) return haptic.tick();
+  if (p < 0.55) return haptic.light();
+  return haptic.medium();
+}
 
 export function PackTear({ width, onTorn }: { width: number; onTorn: () => void }) {
   const height = width * PACK_RATIO;
@@ -51,7 +64,10 @@ export function PackTear({ width, onTorn }: { width: number; onTorn: () => void 
   const finish = () => {
     setBoom(1);
     playSfx('tear');
-    haptic.sequence(['heavy', 'medium'], 70);
+    // Le sachet cède : gros impact, petit grondement, puis la satisfaction.
+    haptic.heavy();
+    setTimeout(() => haptic.rumble(220), 40);
+    setTimeout(() => haptic.success(), 320);
     onTorn();
   };
 
@@ -64,10 +80,11 @@ export function PackTear({ width, onTorn }: { width: number; onTorn: () => void 
       if (done.value) return;
       if (progress.value === 0 && e.translationX !== 0) dir.value = e.translationX > 0 ? 1 : -1;
       progress.value = Math.min(1, Math.max(0, (e.translationX * dir.value) / (width * 0.85)));
-      const step = Math.floor(progress.value * 12);
-      if (step !== lastTick.value) {
+      // Un cran à chaque avancée (pas en revenant en arrière).
+      const step = Math.floor(progress.value * NOTCHES);
+      if (step > lastTick.value) {
         lastTick.value = step;
-        scheduleOnRN(tick);
+        scheduleOnRN(tearNotch, step);
       }
     })
     .onEnd(() => {
