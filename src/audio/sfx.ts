@@ -31,6 +31,13 @@ const SOURCES = {
   ko: require('../../assets/sfx/ko.wav'),
   win: require('../../assets/sfx/win.wav'),
   lose: require('../../assets/sfx/lose.wav'),
+  shield: require('../../assets/sfx/shield.wav'),
+  heal: require('../../assets/sfx/heal.wav'),
+  poison: require('../../assets/sfx/poison.wav'),
+  focus: require('../../assets/sfx/focus.wav'),
+  jam: require('../../assets/sfx/jam.wav'),
+  lockon: require('../../assets/sfx/lockon.wav'),
+  weaken: require('../../assets/sfx/weaken.wav'),
 } as const;
 
 export type Sfx = keyof typeof SOURCES;

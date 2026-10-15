@@ -431,12 +431,99 @@ COMBAT = (
 )
 
 
+# --- Garde : bouclier de verre qui se lève (scintillement aigu + souffle)
+def make_shield():
+    dur = 0.9
+    buf = np.zeros(int(SR * dur))
+    for i, n in enumerate((88, 95, 100)):
+        place(buf, bell(note(n), 0.6, 0.35, bright=0.9), i * 0.035)
+    place(buf, whoosh(0.35, 1500, 5000, 2500, 0.35), 0)
+    return reverb(buf, 0.3, tail=0.4)
+
+
+# --- Soin : arpège doux qui monte
+def make_heal():
+    dur = 1.0
+    buf = np.zeros(int(SR * dur))
+    for i, n in enumerate((72, 76, 79, 84, 88)):
+        place(buf, bell(note(n), 0.7, 0.4, bright=0.5), i * 0.07)
+    place(buf, pad([note(72), note(76), note(79)], 0.8, 0.12, attack=0.1), 0.05)
+    return reverb(buf, 0.3, tail=0.5)
+
+
+# --- Poison : bulles qui éclatent
+def make_poison():
+    dur = 0.8
+    buf = np.zeros(int(SR * dur))
+    for _ in range(9):
+        f0 = rng.uniform(300, 700)
+        t = t_axis(0.07)
+        blip = np.sin(2 * math.pi * np.cumsum(f0 + 900 * t / 0.07) / SR) * np.exp(-t * 40)
+        place(buf, blip * rng.uniform(0.3, 0.7), rng.uniform(0, 0.6))
+    return reverb(buf, 0.15, tail=0.2)
+
+
+# --- Concentration : souffle qui monte, la carte se gonfle
+def make_focus():
+    dur = 1.0
+    t = t_axis(dur)
+    f = 120 + 260 * (t / dur) ** 2
+    hum = np.sin(2 * math.pi * np.cumsum(f) / SR) * 0.5 + np.sin(2 * math.pi * np.cumsum(f * 2.01) / SR) * 0.25
+    hum *= np.clip(t / 0.15, 0, 1) * np.clip((dur - t) / 0.12, 0, 1)
+    buf = hum + whoosh(dur, 300, 2500, 3200, 0.3, q=0.8)
+    return reverb(buf, 0.2, tail=0.3)
+
+
+# --- Brouillage : grésillement électrique
+def make_jam():
+    dur = 0.6
+    t = t_axis(dur)
+    nz = noise(dur) * (np.sin(2 * math.pi * 31 * t) > 0) * 0.8
+    nz = biquad(nz, "bp", 2400, q=0.7)
+    buzz = np.sign(np.sin(2 * math.pi * 110 * t)) * 0.25
+    return (nz + buzz) * np.clip((dur - t) / 0.2, 0, 1)
+
+
+# --- Cible : verrouillage (deux bips)
+def make_lockon():
+    dur = 0.45
+    buf = np.zeros(int(SR * dur))
+    for i, f in enumerate((1600, 2100)):
+        t = t_axis(0.08)
+        place(buf, np.sin(2 * math.pi * f * t) * np.exp(-t * 25) * 0.7, i * 0.12)
+    return reverb(buf, 0.12, tail=0.15)
+
+
+# --- Fatigue : note qui descend, molle
+def make_weaken():
+    dur = 0.7
+    t = t_axis(dur)
+    f = 520 * np.exp(-t * 1.6)
+    s = np.sin(2 * math.pi * np.cumsum(f) / SR) * np.exp(-t * 3) * 0.7
+    return reverb(biquad(s, "lp", 1600), 0.15, tail=0.2)
+
+
+EFFECTS = (
+    ("shield", make_shield),
+    ("heal", make_heal),
+    ("poison", make_poison),
+    ("focus", make_focus),
+    ("jam", make_jam),
+    ("lockon", make_lockon),
+    ("weaken", make_weaken),
+)
+
+
 if __name__ == "__main__":
     import sys
 
     if sys.argv[1:] == ["combat"]:
         # Seulement les sons de combat (les autres restent identiques).
         for name, fn in COMBAT:
+            save(name, fn())
+        sys.exit(0)
+    if sys.argv[1:] == ["effets"]:
+        for name, fn in EFFECTS:
             save(name, fn())
         sys.exit(0)
     for lvl in range(1, 8):
@@ -455,4 +542,6 @@ if __name__ == "__main__":
     ):
         save(name, fn())
     for name, fn in COMBAT:
+        save(name, fn())
+    for name, fn in EFFECTS:
         save(name, fn())

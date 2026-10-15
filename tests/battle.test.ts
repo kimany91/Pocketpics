@@ -4,7 +4,7 @@ import test from 'node:test';
 import { ARENAS, arenaFighters } from '../src/battle/arenas';
 import { botAction, botReplacement, botTimings } from '../src/battle/bot';
 import { type Battle, type FighterInput, act, createBattle, qualityOf, replace, resolveAttack, timingMultiplier } from '../src/battle/engine';
-import { type Attack, type BattleStats, MIRROR_MIN_RANK, generateStats, normalizeStats } from '../src/battle/stats';
+import { type Attack, type BattleStats, MIRROR_MIN_RANK, SPECIAL, generateStats, minRankOf, normalizeStats } from '../src/battle/stats';
 import { RARITIES } from '../src/game/rarity';
 import { migrateCard, migrateState } from '../src/storage/model';
 
@@ -32,7 +32,7 @@ test('le Miroir n’apparaît qu’à partir de Légendaire', () => {
     let mirrors = 0;
     for (let i = 0; i < 300; i++) if (generateStats(`m${i}`, r.rank).attacks[1].kind === 'mirror') mirrors++;
     if (r.rank < MIRROR_MIN_RANK) assert.equal(mirrors, 0, r.id);
-    else assert.ok(mirrors > 30, r.id);
+    else assert.ok(mirrors > 10, r.id);
   }
 });
 
@@ -177,4 +177,172 @@ test('la précision du bot progresse avec son niveau', () => {
     return t.reduce((a, b) => a + b, 0) / t.length;
   };
   assert.ok(avg(10) > avg(1) + 0.2);
+});
+
+/* ------------------------- Nouvelles attaques spéciales ------------------------- */
+
+const atk = (kind: Attack['kind'], power = 10): Attack => ({ kind, name: kind, power });
+const duel = (mine: Attack, theirs: Attack = atk('basic', 10), hp = 500) =>
+  createBattle([fighter('a', stats(hp, mine, 9)), fighter('b', stats(hp, mine, 9))], [fighter('x', stats(hp, theirs, 9)), fighter('y', stats(hp, theirs, 9))]);
+const hitsIn = (r: { events: { t: string }[] }) => r.events.filter((e): e is Extract<(typeof r.events)[number], { t: 'hit' }> & { damage: number } => e.t === 'hit') as unknown as { damage: number }[];
+const half = () => 0.5;
+
+test('rareté minimale : les attaques fortes n’apparaissent pas sur les petites raretés', () => {
+  for (const r of RARITIES) {
+    for (let i = 0; i < 400; i++) {
+      const k = generateStats(`r${i}`, r.rank).attacks[1].kind;
+      assert.ok(minRankOf(k) <= r.rank, `${k} sur ${r.id}`);
+    }
+  }
+  // l'attaque classique reste toujours un coup simple
+  assert.equal(generateStats('z', 7).attacks[0].kind, 'basic');
+});
+
+test('garde : −70 % pendant les 3 tours adverses, puis plus rien', () => {
+  let b = duel(atk('guard', 0));
+  b = act(b, { type: 'attack', slot: 1, timings: [] }).battle;
+  const guarded = hitsIn(act(b, { type: 'attack', slot: 0, timings: [1] }, half))[0].damage;
+  assert.equal(guarded, 3); // 10 × 0,3
+  for (let i = 0; i < 3; i++) {
+    b = act(b, { type: 'attack', slot: 0, timings: [1] }, half).battle; // adversaire
+    b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle; // moi, je rate exprès
+  }
+  assert.equal(hitsIn(act(b, { type: 'attack', slot: 0, timings: [1] }, half))[0].damage, 10);
+});
+
+test('esquive : peut éviter toute une attaque', () => {
+  let b = duel(atk('dodge', 0));
+  b = act(b, { type: 'attack', slot: 1, timings: [] }).battle;
+  const dodged = act(b, { type: 'attack', slot: 0, timings: [1] }, () => 0.1);
+  assert.ok(dodged.events.some((e) => e.t === 'dodged'));
+  assert.equal(dodged.battle.sides[0].fighters[0].hp, 500);
+  const failed = act(b, { type: 'attack', slot: 0, timings: [1] }, () => 0.9);
+  assert.ok(failed.events.some((e) => e.t === 'dodgeFail'));
+  assert.ok(failed.battle.sides[0].fighters[0].hp < 500);
+});
+
+test('soin : jamais au-dessus des PV max, impossible à PV pleins', () => {
+  let b = duel(atk('heal', 0), atk('basic', 100), 200);
+  assert.equal(resolveAttack(b, 0, 1), null);
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  b = act(b, { type: 'attack', slot: 0, timings: [1] }, half).battle; // −100
+  const r = act(b, { type: 'attack', slot: 1, timings: [] });
+  assert.equal(r.battle.sides[0].fighters[0].hp, 200); // 100 + 120 plafonné à 200
+});
+
+test('concentration : le coup suivant ×3,5, perdu si la carte change', () => {
+  let b = duel(atk('focus', 0));
+  b = act(b, { type: 'attack', slot: 1, timings: [] }).battle;
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  assert.equal(hitsIn(act(b, { type: 'attack', slot: 0, timings: [1] }, half))[0].damage, 35);
+  b = act(b, { type: 'switch', to: 1 }).battle;
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  b = act(b, { type: 'switch', to: 0 }).battle;
+  assert.equal(b.sides[0].fighters[0].focus, false);
+});
+
+test('cible et fatigue', () => {
+  let b = duel(atk('mark', 10));
+  b = act(b, { type: 'attack', slot: 1, timings: [1] }, half).battle;
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  assert.equal(hitsIn(act(b, { type: 'attack', slot: 0, timings: [1] }, half))[0].damage, 20); // double
+  let f = duel(atk('fatigue', 10));
+  f = act(f, { type: 'attack', slot: 1, timings: [1] }, half).battle;
+  assert.equal(hitsIn(act(f, { type: 'attack', slot: 0, timings: [1] }, half))[0].damage, 5); // moitié
+});
+
+test('brouillage : pas de spéciale pendant 2 tours adverses', () => {
+  let b = duel(atk('jam', 10), atk('basic', 20));
+  b = act(b, { type: 'attack', slot: 1, timings: [1] }, half).battle;
+  assert.equal(resolveAttack(b, 1, 1), null);
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  assert.equal(resolveAttack(b, 1, 1), null);
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  assert.notEqual(resolveAttack(b, 1, 1), null);
+});
+
+test('poison : 3 tours de dégâts, guéri en changeant de carte, peut mettre K.O.', () => {
+  let b = duel(atk('poison', 10));
+  b = act(b, { type: 'attack', slot: 1, timings: [1] }, half).battle;
+  assert.equal(b.sides[1].fighters[0].hp, 490 - 10); // coup + premier tour de poison
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  assert.equal(b.sides[1].fighters[0].hp, 460); // coup 10 + 3 tours de poison à 10
+  assert.equal(b.sides[1].fighters[0].poison, 0);
+  // guérison en changeant de carte
+  let c = duel(atk('poison', 10));
+  c = act(c, { type: 'attack', slot: 1, timings: [1] }, half).battle;
+  c = act(c, { type: 'switch', to: 1 }).battle;
+  assert.equal(c.sides[1].fighters[0].poison, 0);
+  // K.O. par le poison
+  let k = createBattle([fighter('a', stats(500, atk('poison', 10)))], [fighter('x', stats(25, atk('basic', 1)))]);
+  k = act(k, { type: 'attack', slot: 1, timings: [1] }, half).battle; // 25 → 15 → 5 (poison)
+  k = act(k, { type: 'attack', slot: 0, timings: [0] }).battle;
+  const end = act(k, { type: 'attack', slot: 0, timings: [0] });
+  assert.equal(end.battle.winner, 0);
+});
+
+test('coup de grâce, représailles, charge', () => {
+  let g = duel(atk('finisher', 10), atk('basic', 1), 100);
+  assert.equal(hitsIn(act(g, { type: 'attack', slot: 1, timings: [1] }, half))[0].damage, 10);
+  g = act(g, { type: 'attack', slot: 0, timings: [1.5] }, half).battle; // 100 → 85 (classique 10 × 1,5)
+  g = act(g, { type: 'attack', slot: 0, timings: [0] }).battle;
+  g.sides[1].fighters[0].hp = 40;
+  assert.equal(hitsIn(act(g, { type: 'attack', slot: 1, timings: [1] }, half))[0].damage, 22);
+  let r = duel(atk('revenge', 10));
+  assert.equal(hitsIn(act(r, { type: 'attack', slot: 1, timings: [1] }, half))[0].damage, 10);
+  r = act(r, { type: 'attack', slot: 0, timings: [0] }).battle;
+  r = act(r, { type: 'attack', slot: 0, timings: [1] }, half).battle; // je suis blessée
+  assert.equal(hitsIn(act(r, { type: 'attack', slot: 1, timings: [1] }, half))[0].damage, 16);
+  // la charge ne met jamais sa propre carte K.O.
+  const c = createBattle([fighter('a', stats(10, atk('recoil', 10)))], [fighter('x', stats(500, atk('basic', 1)))]);
+  c.sides[0].fighters[0].hp = 1;
+  const after = act(c, { type: 'attack', slot: 1, timings: [1] }, half);
+  assert.equal(after.battle.sides[0].fighters[0].hp, 1);
+  const c2 = createBattle([fighter('a', stats(100, atk('recoil', 10)))], [fighter('x', stats(500, atk('basic', 1)))]);
+  assert.equal(act(c2, { type: 'attack', slot: 1, timings: [1] }, half).battle.sides[0].fighters[0].hp, 85);
+});
+
+test('enchaînement : faible au début, monte seulement si on relance exactement la même attaque', () => {
+  let b = duel(atk('combo', 10));
+  const dmg: number[] = [];
+  for (let i = 0; i < 5; i++) {
+    const r = act(b, { type: 'attack', slot: 1, timings: [1] }, half);
+    dmg.push(hitsIn(r)[0].damage);
+    b = act(r.battle, { type: 'attack', slot: 0, timings: [0] }).battle;
+  }
+  assert.deepEqual(dmg, [10, 22, 34, 46, 46]); // ×1, ×2,2, ×3,4, ×4,6 (plafond)
+  // une autre action casse la série
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  assert.equal(hitsIn(act(b, { type: 'attack', slot: 1, timings: [1] }, half))[0].damage, 10);
+  assert.ok(SPECIAL.combo.uses >= 5);
+});
+
+test('miroir : renvoie l’attaque copiée ×1,3', () => {
+  let b = createBattle([fighter('a', stats(500, atk('mirror', 0), 2))], [fighter('x', stats(500, atk('basic', 20)))]);
+  b = act(b, { type: 'attack', slot: 0, timings: [0] }).battle;
+  b = act(b, { type: 'attack', slot: 1, timings: [1] }, half).battle;
+  assert.equal(resolveAttack(b, 0, 1)?.attack.power, 26);
+});
+
+test('toutes les arènes se terminent avec les nouvelles attaques', () => {
+  for (const arena of ARENAS) {
+    for (let g = 0; g < 20; g++) {
+      let b = createBattle(arenaFighters(ARENAS[(arena.n + 3) % 10]), arenaFighters(arena));
+      let guard = 0;
+      while (b.winner === null) {
+        if (++guard > 2000) throw new Error(`partie infinie, arène ${arena.n}`);
+        if (b.mustReplace !== null) {
+          b = replace(b, b.mustReplace, botReplacement(b, b.mustReplace, arena.level)).battle;
+          continue;
+        }
+        b = act(b, botAction(b, b.turn, arena.level)).battle;
+      }
+    }
+  }
 });

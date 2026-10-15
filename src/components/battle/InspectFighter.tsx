@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { playRaritySound } from '../../audio/sfx';
 import type { Fighter } from '../../battle/engine';
-import { ATTACK_EFFECT, ATTACK_KIND_LABEL, type Attack, kindOf, powerLabel } from '../../battle/stats';
+import { type Attack, kindEffect, kindLabel, kindOf, powerLabel } from '../../battle/stats';
 import { getRarity } from '../../game/rarity';
 import { CARD_RATIO, colors, fonts } from '../../theme';
 import { revealHaptics } from '../../utils/haptics';
@@ -23,6 +23,7 @@ import { Glow } from '../fx';
 import { CardStage, type StageCard } from '../viewer/CardStage';
 import { spinCooldown } from '../viewer/SpinFx';
 import { HpBar } from './FighterView';
+import { KIND_LOOK, STATUS_LOOK, activeStatuses } from './kinds';
 
 export function InspectFighter({
   fighter,
@@ -111,6 +112,18 @@ export function InspectFighter({
               <HpBar hp={fighter.hp} maxHp={fighter.maxHp} width={width - 36 - 26} />
             </View>
           </View>
+          {activeStatuses(fighter).length > 0 ? (
+            <View style={styles.effects}>
+              {activeStatuses(fighter).map(({ key, count }) => (
+                <View key={key} style={[styles.effect, { borderColor: `${STATUS_LOOK[key].color}66` }]}>
+                  <Ionicons name={STATUS_LOOK[key].icon} size={12} color={STATUS_LOOK[key].color} />
+                  <AppText style={[styles.effectText, { color: STATUS_LOOK[key].color }]}>
+                    {count !== undefined && key !== 'chain' ? `${STATUS_LOOK[key].label} · ${count}` : key === 'chain' ? `Série ×${(count ?? 0) + 1}` : STATUS_LOOK[key].label}
+                  </AppText>
+                </View>
+              ))}
+            </View>
+          ) : null}
           <AttackLine attack={fighter.attacks[0]} title="Classique" uses="Illimitée" accent={colors.text} />
           <AttackLine
             attack={fighter.attacks[1]}
@@ -125,7 +138,8 @@ export function InspectFighter({
 }
 
 function AttackLine({ attack, title, uses, accent }: { attack: Attack; title: string; uses: string; accent: string }) {
-  const kind = kindOf(attack);
+  const special = title !== 'Classique';
+  const look = KIND_LOOK[kindOf(attack)];
   return (
     <View style={[styles.attack, { borderColor: `${accent}40` }]}>
       <View style={styles.attackHead}>
@@ -141,7 +155,10 @@ function AttackLine({ attack, title, uses, accent }: { attack: Attack; title: st
           <AppText style={styles.powerText}>{powerLabel(attack)}</AppText>
         </View>
       </View>
-      <AppText variant="caption" numberOfLines={2}>{`${ATTACK_KIND_LABEL[kind]} · ${ATTACK_EFFECT[kind]}`}</AppText>
+      <View style={styles.kindRow}>
+        {special ? <Ionicons name={look.icon} size={13} color={look.color} /> : null}
+        <AppText variant="caption" numberOfLines={3} style={{ flex: 1 }}>{`${kindLabel(attack, special)} · ${kindEffect(attack, special)}`}</AppText>
+      </View>
     </View>
   );
 }
@@ -163,5 +180,9 @@ const styles = StyleSheet.create({
   attackMain: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   attackName: { flex: 1, fontFamily: fonts.bold, fontSize: 17, color: colors.text },
   power: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  kindRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  effects: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  effect: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, height: 24, borderRadius: 12, borderWidth: 1 },
+  effectText: { fontFamily: fonts.semibold, fontSize: 12 },
   powerText: { fontFamily: fonts.bold, fontSize: 14, color: colors.text, fontVariant: ['tabular-nums'] },
 });

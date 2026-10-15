@@ -10,7 +10,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { ATTACK_EFFECT, ATTACK_KIND_LABEL, ATTACK_NAME_MAX, type Attack, MAX_HP, MAX_POWER, kindOf, powerLabel } from '../../battle/stats';
+import { ATTACK_NAME_MAX, type Attack, MAX_HP, MAX_POWER, STATUS_KINDS, kindEffect, kindLabel, kindOf, powerLabel } from '../../battle/stats';
+import { KIND_LOOK } from '../battle/kinds';
 import { getRarity } from '../../game/rarity';
 import type { Card } from '../../storage/model';
 import { colors, fonts } from '../../theme';
@@ -127,7 +128,7 @@ function AttackRow({
     } else setDraft(attack.name);
     setEditing(false);
   };
-  const power = kind === 'mirror' ? null : Math.min(1, (attack.power * (kind === 'double' ? 2 : 1)) / MAX_POWER);
+  const power = kind === 'mirror' || STATUS_KINDS.includes(kind) ? null : Math.min(1, (attack.power * (kind === 'double' ? 2 : 1)) / MAX_POWER);
   return (
     <View style={[styles.attack, { borderColor: `${accent}40` }]}>
       <View style={styles.attackHead}>
@@ -169,11 +170,12 @@ function AttackRow({
         </Pressable>
       )}
       <View style={styles.effectRow}>
-        <View style={styles.kind}>
-          <AppText style={styles.kindText}>{ATTACK_KIND_LABEL[kind]}</AppText>
+        <View style={[styles.kind, slot === 1 && { borderColor: `${KIND_LOOK[kind].color}66`, borderWidth: 1 }]}>
+          {slot === 1 ? <Ionicons name={KIND_LOOK[kind].icon} size={12} color={KIND_LOOK[kind].color} /> : null}
+          <AppText style={styles.kindText}>{kindLabel(attack, slot === 1)}</AppText>
         </View>
         <AppText variant="caption" style={{ flex: 1 }}>
-          {ATTACK_EFFECT[kind]}
+          {kindEffect(attack, slot === 1)}
         </AppText>
       </View>
       <View style={styles.powerRow}>
@@ -228,7 +230,7 @@ const styles = StyleSheet.create({
   },
   ok: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center' },
   effectRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  kind: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: colors.surface2 },
+  kind: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: colors.surface2 },
   kindText: { fontFamily: fonts.semibold, fontSize: 11, color: colors.text },
   powerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   powerText: { fontFamily: fonts.bold, fontSize: 14, color: colors.text, fontVariant: ['tabular-nums'] },

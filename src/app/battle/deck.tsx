@@ -6,7 +6,8 @@ import { FlatList, Pressable, StyleSheet, View, useWindowDimensions } from 'reac
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getArena } from '../../battle/arenas';
-import { powerLabel } from '../../battle/stats';
+import { ATTACK_KIND_LABEL, kindOf, powerLabel } from '../../battle/stats';
+import { KIND_LOOK } from '../../components/battle/kinds';
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { Header } from '../../components/Header';
@@ -119,6 +120,7 @@ export default function DeckScreen() {
                 <View style={styles.stats}>
                   <Stat icon="heart" value={String(b.hp)} color={colors.danger} />
                   <Stat icon="flash" value={powerLabel(b.attacks[0])} color={colors.gold} />
+                  <Ionicons name={KIND_LOOK[kindOf(b.attacks[1])].icon} size={12} color={KIND_LOOK[kindOf(b.attacks[1])].color} accessibilityLabel={ATTACK_KIND_LABEL[kindOf(b.attacks[1])]} />
                 </View>
               </Pressable>
             );

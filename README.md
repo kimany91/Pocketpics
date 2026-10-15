@@ -52,13 +52,30 @@ Chaque rareté haute a sa mise en scène :
 
 **Stats d'une carte.** Chaque carte a des PV et deux attaques, qui dépendent de sa rareté (`src/battle/stats.ts`). Elles sont tirées à partir de l'identifiant de la carte : une même carte a toujours les mêmes stats. Les anciennes cartes les reçoivent donc à la mise à jour, sans rien perdre, et un échange les transporte avec la carte. Dans la collection, on glisse vers le haut (ou on touche « Stats de combat ») pour les voir. On peut y **renommer les deux attaques**, puisqu'elles n'ont pas de type : en combat, on lira « <carte> utilise <attaque> ! ».
 
-| Attaque | Effet |
-| --- | --- |
-| Classique | Un coup simple, illimité |
-| Spéciale : coup simple | 1,6 × plus fort, 3 fois par combat |
-| Spéciale : double frappe | Deux coups à 0,62 × chacun, 3 fois par combat |
-| Spéciale : gifle | 0,75 ×, 1 chance sur 3 d'étourdir l'adversaire 1 à 2 tours (il ne peut plus attaquer), 2 fois par combat |
-| Spéciale : miroir | Copie la dernière attaque de l'adversaire, 2 fois par combat. Seulement Légendaire et au-dessus |
+L'attaque classique est toujours un coup simple, illimité. Tous les effets sont réservés à l'attaque **spéciale** (utilisations limitées). Les plus puissants n'apparaissent qu'à partir d'une certaine rareté. Les chiffres ont été réglés par simulation : des milliers de combats bot contre bot, pour qu'aucune spéciale n'écrase les autres (`src/battle/stats.ts`, objets `BATTLE` et `SPECIAL`).
+
+Les attaques n'ont pas de type et se renomment librement. Chacune a donc **son effet visuel**, pour qu'on comprenne ce qu'elle fait sans lire son nom. On retrouve aussi son icône sur le bouton, dans les stats et dans les effets en cours.
+
+| Spéciale | Effet | Utilisations | Dès | Visuel en combat |
+| --- | --- | --- | --- | --- |
+| Coup puissant | Puissance ×1,6 | 3 | Commune | Élan, éclat blanc, gros coup |
+| Double frappe | 2 coups à ×0,8, chacun avec sa visée | 3 | Commune | Deux coups rapides |
+| Gifle | ×1,1, 1 chance sur 3 d'étourdir 1 à 2 tours | 3 | Commune | Revers de côté, la cible pivote, étoiles |
+| Enchaînement | ×0,9, puis +120 % à chaque relance d'affilée, jusqu'à ×4,6. Toute autre action casse la série | 6 | Commune | Petits coups rapides, compteur ×N qui grossit |
+| Cible | ×0,9, le prochain coup reçu par la cible fait double dégâts | 3 | Commune | Viseur rouge qui tourne sur la cible |
+| Fatigue | ×1, le prochain coup de la cible fait moitié moins mal | 3 | Commune | La cible s'affaisse et se ternit |
+| Garde | Pas de coup, −70 % de dégâts pendant 3 tours adverses | 2 | Rare | Bouclier de verre bleu devant la carte |
+| Soin | Pas de coup, +60 % des PV max (impossible à PV pleins) | 2 | Rare | Lueur verte, étincelles, « +N » |
+| Esquive | Pas de coup, 60 % d'éviter chaque attaque pendant 3 tours adverses | 2 | Super Rare | La carte se décale et se tourne, son ombre reste en place |
+| Représailles | ×1, ou ×1,6 si la carte a été blessée au tour d'avant | 3 | Super Rare | Elle tremble et rougit de colère avant de frapper |
+| Brouillage | ×1,2, pas de spéciale pendant 2 tours adverses | 2 | Épique | Parasites qui grésillent sur la cible |
+| Poison | ×0,6, puis des dégâts au début de ses 3 tours (guéri en changeant de carte) | 2 | Épique | La cible vire au violet, des bulles en sortent |
+| Coup de grâce | ×1,1, ou ×2,2 si la cible a moins de 50 % de PV | 2 | Épique | Grande entaille rouge en croix |
+| Charge | ×2,1, la carte perd 15 % de ses PV (jamais K.O. par ce contrecoup) | 2 | Mythique | Gros recul puis elle fonce très loin |
+| Concentration | Pas de coup, le prochain coup fait ×3,5 (perdu si la carte change) | 2 | Mythique | La carte gonfle, cadre et aura dorés qui pulsent |
+| Miroir | Copie la dernière attaque adverse et la renvoie ×1,3 | 2 | Légendaire | La carte se retourne comme un miroir |
+
+Les effets en cours disparaissent quand la carte quitte le terrain (sauf l'étourdissement). Les attaques qui ne frappent pas n'ont pas de mini-jeu de précision. Sur le bouton de la spéciale, une ligne dit ce qu'elle va faire maintenant. Elle passe en doré quand son bonus est prêt (« achève-la ! », « elle est blessée ! », « Série ×3,4 ! »).
 
 | Rareté | PV | Puissance |
 | --- | --- | --- |

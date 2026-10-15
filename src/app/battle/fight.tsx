@@ -13,29 +13,36 @@ import Animated, { FadeIn, FadeInDown, FadeInUp, ZoomIn } from 'react-native-rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { startBattleMusic, stopBattleMusic } from '../../audio/music';
-import { playSfx } from '../../audio/sfx';
+import { type Sfx, playSfx } from '../../audio/sfx';
 import { arenaFighters, getArena } from '../../battle/arenas';
 import { botAction, botReplacement } from '../../battle/bot';
 import { botArt } from '../../battle/botArt';
 import {
   type Battle,
   type BattleEvent,
+  type Fighter,
   type FighterInput,
+  type HitFlags,
   type SideId,
+  type StatusName,
   act,
   activeOf,
+  canExecute,
   createBattle,
   hitsOf,
+  isEnraged,
+  other,
   replace,
   resolveAttack,
 } from '../../battle/engine';
-import { type Attack, kindOf, powerLabel } from '../../battle/stats';
+import { ATTACK_KIND_LABEL, type Attack, type AttackKind, BATTLE, STATUS_KINDS, kindOf } from '../../battle/stats';
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
-import { FighterView, HpBar, type Popup } from '../../components/battle/FighterView';
+import { type ActKind, type FighterStatus, FighterView, HpBar, type Popup, type ReactKind } from '../../components/battle/FighterView';
+import { KIND_LOOK, STATUS_LOOK, activeStatuses, attackHint } from '../../components/battle/kinds';
 import { FitLines, FitText, type TextPart, fitFontSize } from '../../components/battle/FitText';
 import { InspectFighter } from '../../components/battle/InspectFighter';
-import { TimingBar } from '../../components/battle/TimingBar';
+import { QUALITY_LABEL, TimingBar } from '../../components/battle/TimingBar';
 import { SoundSheet } from '../../components/SoundSheet';
 import { CardFace } from '../../components/card/CardFace';
 import { Burst } from '../../components/fx';
@@ -97,9 +104,18 @@ export default function FightScreen() {
     const token = music.current;
     return () => stopBattleMusic(token, 500);
   }, []);
-  const [fx, setFx] = useState({ lunge: [0, 0], hurt: [0, 0], enter: [1, 1] });
+  // Animations : une « action » (la carte qui agit) et une « réaction » (la carte qui subit) par camp.
+  const [acts, setActs] = useState<[{ key: number; kind: ActKind }, { key: number; kind: ActKind }]>([
+    { key: 0, kind: 'basic' },
+    { key: 0, kind: 'basic' },
+  ]);
+  const [reacts, setReacts] = useState<[{ key: number; kind: ReactKind }, { key: number; kind: ReactKind }]>([
+    { key: 0, kind: 'hurt' },
+    { key: 0, kind: 'hurt' },
+  ]);
+  const [enters, setEnters] = useState<[number, number]>([1, 1]);
   const [popups, setPopups] = useState<[Popup[], Popup[]]>([[], []]);
-  const popupKey = useRef(0);
+  const fxKey = useRef(0);
   const alive = useRef(true);
   useEffect(
     () => () => {
@@ -108,11 +124,24 @@ export default function FightScreen() {
     [],
   );
 
-  const bump = (k: 'lunge' | 'hurt' | 'enter', side: SideId) =>
-    setFx((f) => {
-      const next = [...f[k]];
-      next[side]++;
-      return { ...f, [k]: next };
+  const doAct = (side: SideId, kind: ActKind) =>
+    setActs((a) => {
+      const next: typeof a = [a[0], a[1]];
+      next[side] = { key: ++fxKey.current, kind };
+      return next;
+    });
+  const doReact = (side: SideId, kind: ReactKind) =>
+    setReacts((a) => {
+      const next: typeof a = [a[0], a[1]];
+      next[side] = { key: ++fxKey.current, kind };
+      return next;
+    });
+  const doEnter = (side: SideId) => setEnters((e) => (side === 0 ? [e[0] + 1, e[1]] : [e[0], e[1] + 1]));
+  const popup = (side: SideId, p: Omit<Popup, 'key'>) =>
+    setPopups((all) => {
+      const next: [Popup[], Popup[]] = [all[0], all[1]];
+      next[side] = [...all[side].slice(-3), { ...p, key: ++fxKey.current }];
+      return next;
     });
 
   const nameParts = (name: string, side: SideId): TextPart => ({ text: name, bold: true, color: side === 0 ? colors.text : arena?.tint });
@@ -123,36 +152,92 @@ export default function FightScreen() {
     setBusy(true);
     setMode('idle');
     let view = shown ?? final;
-    let lastKind = 'basic';
     for (const e of events) {
       if (!alive.current) return;
+      const before = view;
       view = applyEvent(view, e);
       switch (e.t) {
         case 'use': {
-          lastKind = kindOf(e.attack);
+          const kind = kindOf(e.attack);
           setMsg({ top: [nameParts(e.fighter, e.side), { text: e.copied ? ' copie' : ' utilise' }], attack: `${e.attack.name} !` });
           setShown(view);
-          bump('lunge', e.side);
-          playSfx('swipe', { volume: 0.5 });
-          await sleep(e.side === 0 ? 650 : 900);
+          if (e.copied) {
+            doAct(e.side, 'mirror');
+            await sleep(380);
+          }
+          doAct(e.side, actFor(kind, e.special, before, e.side));
+          playSfx(soundFor(kind), { volume: 0.6 });
+          await sleep(STATUS_KINDS.includes(kind) ? 500 : e.side === 0 ? 650 : 900);
           break;
         }
         case 'hit': {
           setShown(view);
-          if (e.damage > 0) bump('hurt', e.side);
-          const key = ++popupKey.current;
-          setPopups((p) => {
-            const next: [Popup[], Popup[]] = [p[0], p[1]];
-            next[e.side] = [...p[e.side].slice(-3), { key, damage: e.damage, quality: e.quality }];
-            return next;
+          if (e.damage > 0) doReact(e.side, e.execute ? 'execute' : e.guarded ? 'guarded' : e.kind === 'slap' ? 'slapped' : 'hurt');
+          const q = QUALITY_LABEL[e.quality];
+          const tag = hitTag(e);
+          popup(e.side, {
+            main: e.damage > 0 ? `-${e.damage}` : '0',
+            color: e.damage <= 0 ? colors.textDim : e.quality === 'crit' || e.execute ? colors.gold : '#FFFFFF',
+            sub: tag ?? q.text,
+            subColor: tag ? colors.gold : q.color,
+            big: e.quality === 'crit' || !!e.execute,
           });
           if (e.quality === 'miss') playSfx('miss');
-          else if (e.quality === 'crit') playSfx('crit');
-          else playSfx(lastKind === 'slap' ? 'slap' : 'hit', { volume: e.quality === 'weak' ? 0.7 : 1 });
-          if (e.damage > 0) (e.quality === 'crit' ? haptic.heavy : haptic.medium)();
-          await sleep(700);
+          else if (e.quality === 'crit' || e.execute) playSfx('crit');
+          else playSfx(e.kind === 'slap' ? 'slap' : 'hit', { volume: e.quality === 'weak' || e.guarded ? 0.6 : 1 });
+          if (e.guarded) playSfx('shield', { volume: 0.6 });
+          if (e.damage > 0) (e.quality === 'crit' || e.execute ? haptic.heavy : haptic.medium)();
+          await sleep(e.execute ? 950 : 700);
           break;
         }
+        case 'status': {
+          setShown(view);
+          const look = STATUS_TEXT[e.status];
+          setMsg([nameParts(e.fighter, e.side), { text: look.text }]);
+          playSfx(look.sound, { volume: 0.8 });
+          if (e.status === 'guard') doAct(e.side, 'guard');
+          await sleep(1150);
+          break;
+        }
+        case 'heal':
+          setShown(view);
+          doReact(e.side, 'heal');
+          popup(e.side, { main: `+${e.amount}`, color: colors.success, sub: 'Soin' , subColor: colors.success });
+          setMsg([nameParts(e.fighter, e.side), { text: ` récupère ${e.amount} PV !` }]);
+          playSfx('heal');
+          haptic.success();
+          await sleep(1150);
+          break;
+        case 'dodged':
+          setShown(view);
+          doReact(e.side, 'dodged');
+          popup(e.side, { main: 'Esquivé !', color: '#5EE6D6' });
+          setMsg([nameParts(e.fighter, e.side), { text: ' esquive l’attaque !' }]);
+          playSfx('swipe', { volume: 0.9 });
+          haptic.light();
+          await sleep(1100);
+          break;
+        case 'dodgeFail':
+          setMsg([nameParts(e.fighter, e.side), { text: ' n’arrive pas à esquiver !' }]);
+          await sleep(550);
+          break;
+        case 'recoil':
+          setShown(view);
+          doReact(e.side, 'recoil');
+          popup(e.side, { main: `-${e.damage}`, color: '#FF8A7A', sub: 'Contrecoup', subColor: '#FF8A7A' });
+          setMsg([nameParts(e.fighter, e.side), { text: ' encaisse le contrecoup !' }]);
+          playSfx('hit', { volume: 0.6 });
+          await sleep(950);
+          break;
+        case 'poisonTick':
+          setShown(view);
+          doReact(e.side, 'poison');
+          popup(e.side, { main: `-${e.damage}`, color: '#D9A6FF', sub: 'Poison', subColor: '#D9A6FF' });
+          setMsg([nameParts(e.fighter, e.side), { text: ' souffre du poison !' }]);
+          playSfx('poison');
+          haptic.light();
+          await sleep(1100);
+          break;
         case 'stun':
           setShown(view);
           setMsg([nameParts(e.fighter, e.side), { text: ` est étourdie pendant ${e.turns} tour${e.turns > 1 ? 's' : ''} !` }]);
@@ -174,7 +259,7 @@ export default function FightScreen() {
           break;
         case 'switch':
           setShown(view);
-          bump('enter', e.side);
+          doEnter(e.side);
           playSfx('swipe', { volume: 0.7 });
           if (e.side === 0) setMsg(e.forced ? [{ text: 'À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }] : [{ text: 'Reviens ! À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }]);
           else setMsg([{ text: `${arena.bot} ${e.forced ? 'envoie' : 'rappelle sa carte et envoie'} ` }, nameParts(e.fighter, 1), { text: ' !' }]);
@@ -267,7 +352,14 @@ export default function FightScreen() {
     const r = resolveAttack(battle, 0, slot);
     if (!r) return;
     haptic.light();
-    setPending({ slot, attack: r.attack, hits: hitsOf(r.attack) });
+    const hits = hitsOf(r.attack);
+    if (hits === 0) {
+      // garde, soin, esquive, concentration : pas de mini-jeu, l'effet part tout de suite
+      const res = act(battle, { type: 'attack', slot, timings: [] });
+      void play(res.events, res.battle);
+      return;
+    }
+    setPending({ slot, attack: r.attack, hits });
     setMode('timing');
   };
 
@@ -349,6 +441,7 @@ export default function FightScreen() {
               </View>
             </View>
             <HpBar hp={foe.hp} maxHp={foe.maxHp} width={Math.min(infoW, 190)} />
+            <StatusChips fighter={foe} />
           </View>
           <Pressable onPress={() => look(1, shown.sides[1].active)} disabled={mode === 'timing'} accessibilityLabel={`Voir ${foe.name}`}>
           <FighterView
@@ -357,11 +450,11 @@ export default function FightScreen() {
             imageSource={botArt(foe.ref)}
             width={layout.foeW}
             facing={-1}
-            lunge={fx.lunge[1]}
-            hurt={fx.hurt[1]}
-            enter={fx.enter[1]}
+            act={acts[1]}
+            react={reacts[1]}
+            enter={enters[1]}
             ko={foe.hp <= 0}
-            stunned={foe.stun > 0}
+            status={statusOf(foe)}
             popups={popups[1]}
           />
           </Pressable>
@@ -390,11 +483,11 @@ export default function FightScreen() {
               card={myCard}
               width={layout.cardW}
               facing={1}
-              lunge={fx.lunge[0]}
-              hurt={fx.hurt[0]}
-              enter={fx.enter[0]}
+              act={acts[0]}
+              react={reacts[0]}
+              enter={enters[0]}
               ko={me.hp <= 0}
-              stunned={me.stun > 0}
+              status={statusOf(me)}
               popups={popups[0]}
             />
             </Pressable>
@@ -407,9 +500,7 @@ export default function FightScreen() {
               {getRarity(me.rarity).label}
             </AppText>
             <HpBar hp={me.hp} maxHp={me.maxHp} width={Math.min(infoW, 190)} />
-            {stunned ? (
-              <AppText variant="caption" style={{ color: colors.gold }}>{`Étourdie · ${me.stun} tour${me.stun > 1 ? 's' : ''}`}</AppText>
-            ) : null}
+            <StatusChips fighter={me} align="flex-end" />
           </View>
         </View>
 
@@ -477,7 +568,7 @@ export default function FightScreen() {
               <AttackButton
                 attack={me.attacks[0]}
                 tag="Classique"
-                detail={`Puissance ${powerLabel(me.attacks[0])}`}
+                hint={attackHint(shown, me, foe, me.attacks[0], false)}
                 accent={colors.text}
                 compact={layout.compact}
                 disabled={!canPlay}
@@ -485,15 +576,19 @@ export default function FightScreen() {
               />
               <AttackButton
                 attack={me.attacks[1]}
-                tag={`Spéciale · ${me.usesLeft}/${myCard?.battle.uses ?? me.usesLeft}`}
-                detail={
+                tag="Spéciale"
+                kind={specialKind}
+                uses={`${me.usesLeft}/${me.maxUses}`}
+                hint={
                   me.usesLeft <= 0
-                    ? 'Plus d’utilisation'
-                    : specialKind === 'mirror'
-                      ? special
-                        ? `Copie ${special.attack.name}`
-                        : 'Rien à copier'
-                      : `Puissance ${powerLabel(me.attacks[1])}`
+                    ? { text: 'Plus d’utilisation', hot: false }
+                    : me.jammed > 0
+                      ? { text: `Brouillée · ${me.jammed} tour${me.jammed > 1 ? 's' : ''}`, hot: false }
+                      : specialKind === 'mirror'
+                        ? special
+                          ? { text: `Copie ${special.attack.name} ×1,3`, hot: true }
+                          : { text: 'Rien à copier', hot: false }
+                        : attackHint(shown, me, foe, me.attacks[1], true)
                 }
                 accent={getRarity(me.rarity).color}
                 compact={layout.compact}
@@ -565,6 +660,96 @@ function InspectOverlay({
   );
 }
 
+/** États qui durent, pour l'affichage de la carte. */
+const statusOf = (f: Fighter): FighterStatus => ({
+  guard: f.guard > 0,
+  dodge: f.dodge > 0,
+  focus: f.focus,
+  marked: f.marked,
+  weak: f.weak,
+  jammed: f.jammed > 0,
+  poison: f.poison > 0,
+  chain: f.chain,
+  stunned: f.stun > 0,
+});
+
+/** Animation de la carte qui lance une attaque, selon ce que fait l'attaque. */
+function actFor(kind: AttackKind, special: boolean, b: Battle, side: SideId): ActKind {
+  switch (kind) {
+    case 'basic':
+      return special ? 'power' : 'basic';
+    case 'double':
+    case 'slap':
+    case 'combo':
+    case 'recoil':
+    case 'heal':
+    case 'guard':
+    case 'dodge':
+    case 'focus':
+      return kind;
+    case 'revenge':
+      return isEnraged(b, activeOf(b, side)) ? 'rage' : 'basic';
+    case 'finisher':
+      return canExecute(activeOf(b, other(side))) ? 'finisher' : 'basic';
+    case 'mark':
+    case 'fatigue':
+    case 'jam':
+    case 'poison':
+      return 'small';
+    default:
+      return 'basic';
+  }
+}
+
+/** Son au lancement de l'attaque. */
+function soundFor(kind: AttackKind): Sfx {
+  if (kind === 'focus') return 'focus';
+  if (kind === 'heal' || kind === 'guard') return 'up2';
+  return 'swipe';
+}
+
+/** Ce que l'effet en cours change, en une phrase et un son. */
+const STATUS_TEXT: Record<StatusName, { text: string; sound: Sfx }> = {
+  guard: { text: ' lève sa garde : −70 % de dégâts pendant 3 tours !', sound: 'shield' },
+  dodge: { text: ' se met de côté, prête à esquiver !', sound: 'swipe' },
+  focus: { text: ' se concentre… son prochain coup sera énorme !', sound: 'focus' },
+  mark: { text: ' est dans le viseur : le prochain coup fera double dégâts !', sound: 'lockon' },
+  weak: { text: ' est épuisée : son prochain coup sera moitié moins fort !', sound: 'weaken' },
+  jam: { text: ' est brouillée : plus de spéciale pendant 2 tours !', sound: 'jam' },
+  poison: { text: ' est empoisonnée !', sound: 'poison' },
+};
+
+/** Petite ligne sous les dégâts : ce qui a rendu le coup spécial. */
+function hitTag(e: HitFlags): string | null {
+  if (e.execute) return 'Coup de grâce ×2,2';
+  if (e.combo && e.combo > 1) return `Série ×${String(Math.round((1 + BATTLE.comboStep * (e.combo - 1)) * 10) / 10).replace('.', ',')}`;
+  if (e.focused) return 'Concentré ×3,5';
+  if (e.marked) return 'Dans le viseur ×2';
+  if (e.enraged) return 'Représailles ×1,6';
+  if (e.guarded) return 'Garde −70 %';
+  if (e.weakened) return 'Épuisée ×0,5';
+  return null;
+}
+
+/** Icônes des effets en cours (avec le nombre de tours restants). */
+function StatusChips({ fighter, align = 'flex-start' }: { fighter: Fighter; align?: 'flex-start' | 'flex-end' }) {
+  const list = activeStatuses(fighter);
+  if (list.length === 0) return null;
+  return (
+    <View style={[styles.chips, { justifyContent: align }]}>
+      {list.map(({ key, count }) => {
+        const look = STATUS_LOOK[key];
+        return (
+          <Animated.View key={key} entering={ZoomIn.duration(200)} style={[styles.chip, { borderColor: `${look.color}66` }]} accessibilityLabel={look.label}>
+            <Ionicons name={look.icon} size={11} color={look.color} />
+            {count !== undefined ? <AppText style={[styles.chipText, { color: look.color }]}>{key === 'chain' ? `×${count + 1}` : count}</AppText> : null}
+          </Animated.View>
+        );
+      })}
+    </View>
+  );
+}
+
 /** Applique un évènement à l'état affiché (les jauges bougent au bon moment). */
 function applyEvent(b: Battle, e: BattleEvent): Battle {
   const next: Battle = {
@@ -577,8 +762,19 @@ function applyEvent(b: Battle, e: BattleEvent): Battle {
   const side = 'side' in e ? next.sides[e.side] : null;
   if (!side) return next;
   const f = side.fighters[side.active];
-  if (e.t === 'hit') f.hp = e.hp;
-  else if (e.t === 'stun') f.stun = e.turns;
+  if (e.t === 'hit' || e.t === 'heal' || e.t === 'recoil' || e.t === 'poisonTick') f.hp = e.hp;
+  if (e.t === 'hit' && e.marked) f.marked = false;
+  if (e.t === 'status') {
+    if (e.status === 'guard') f.guard = BATTLE.guardTurns;
+    if (e.status === 'dodge') f.dodge = BATTLE.dodgeTurns;
+    if (e.status === 'focus') f.focus = true;
+    if (e.status === 'mark') f.marked = true;
+    if (e.status === 'weak') f.weak = true;
+    if (e.status === 'jam') f.jammed = BATTLE.jamTurns;
+    if (e.status === 'poison') f.poison = BATTLE.poisonTurns;
+  }
+  if (e.t === 'poisonTick') f.poison = e.left;
+  if (e.t === 'stun') f.stun = e.turns;
   else if (e.t === 'stunned') f.stun = e.left;
   else if (e.t === 'switch') side.active = e.to;
   return next;
@@ -587,7 +783,9 @@ function applyEvent(b: Battle, e: BattleEvent): Battle {
 function AttackButton({
   attack,
   tag,
-  detail,
+  kind,
+  uses,
+  hint,
   accent,
   compact,
   disabled,
@@ -595,7 +793,11 @@ function AttackButton({
 }: {
   attack: Attack;
   tag: string;
-  detail: string;
+  /** Type de l'attaque spéciale : son icône dit ce qu'elle fait, quel que soit son nom. */
+  kind?: AttackKind;
+  /** Utilisations restantes de la spéciale (« 2/3 »). */
+  uses?: string;
+  hint: { text: string; hot: boolean };
   accent: string;
   compact: boolean;
   disabled: boolean;
@@ -611,11 +813,22 @@ function AttackButton({
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={attack.name}
-      style={({ pressed }) => [styles.attack, compact && { minHeight: 70, paddingVertical: 8 }, { borderColor: `${accent}55` }, disabled && { opacity: 0.4 }, pressed && { transform: [{ scale: 0.97 }] }]}
+      style={({ pressed }) => [
+        styles.attack,
+        compact && { minHeight: 70, paddingVertical: 8 },
+        { borderColor: hint.hot && !disabled ? colors.gold : `${accent}55` },
+        hint.hot && !disabled && styles.attackHot,
+        disabled && { opacity: 0.4 },
+        pressed && { transform: [{ scale: 0.97 }] },
+      ]}
     >
-      <AppText style={[styles.attackTag, { color: accent }]} numberOfLines={1}>
-        {tag}
-      </AppText>
+      <View style={styles.attackTagRow}>
+        {kind ? <Ionicons name={KIND_LOOK[kind].icon} size={12} color={KIND_LOOK[kind].color} /> : null}
+        <AppText style={[styles.attackTag, { color: accent, flex: 1 }]} numberOfLines={1}>
+          {kind ? (kind === 'basic' ? 'Coup puissant' : ATTACK_KIND_LABEL[kind]) : tag}
+        </AppText>
+        {uses ? <AppText style={[styles.attackTag, { color: colors.textDim }]}>{uses}</AppText> : null}
+      </View>
       <AppText
         style={[styles.attackName, { fontSize: nameSize, lineHeight: Math.round(nameSize * 1.2) }]}
         numberOfLines={2}
@@ -624,8 +837,8 @@ function AttackButton({
       >
         {attack.name}
       </AppText>
-      <AppText variant="caption" numberOfLines={1}>
-        {detail}
+      <AppText variant="caption" numberOfLines={1} style={hint.hot && !disabled ? { color: colors.gold } : undefined}>
+        {hint.text}
       </AppText>
     </Pressable>
   );
@@ -705,6 +918,11 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   attackTag: { fontFamily: fonts.semibold, fontSize: 11, letterSpacing: 0.4, textTransform: 'uppercase' },
+  attackTagRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  attackHot: { backgroundColor: 'rgba(247,201,72,0.08)' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 2 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 5, height: 18, borderRadius: 9, borderWidth: 1, backgroundColor: 'rgba(0,0,0,0.25)' },
+  chipText: { fontFamily: fonts.bold, fontSize: 10 },
   attackName: { fontFamily: fonts.bold, fontSize: 17, color: colors.text },
   overlay: { backgroundColor: 'rgba(5,5,7,0.88)', alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   dialog: { width: '86%', maxWidth: 380, padding: 22, borderRadius: 24, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
