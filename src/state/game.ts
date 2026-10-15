@@ -193,11 +193,11 @@ export const useGame = create<GameStore>((set, get) => ({
   winLevel(n, stars) {
     const save = get().save;
     if (!save || n < 1 || n > save.soloLevel + 1) return null;
-    const reward = soloReward({ level: n, firstClear: n > save.soloLevel, day: save.soloDay, now: Date.now() });
+    const reward = soloReward(n > save.soloLevel);
     const soloStars = [...save.soloStars];
     while (soloStars.length < n) soloStars.push(0);
     soloStars[n - 1] = Math.max(soloStars[n - 1], Math.max(1, Math.min(3, stars)));
-    const next: SaveState = { ...save, soloLevel: Math.max(save.soloLevel, n), soloStars, coins: save.coins + reward.coins, soloDay: reward.day };
+    const next: SaveState = { ...save, soloLevel: Math.max(save.soloLevel, n), soloStars, coins: save.coins + reward.coins };
     persistState(next);
     set({ save: next });
     return reward;

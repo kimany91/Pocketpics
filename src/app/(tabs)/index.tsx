@@ -223,7 +223,7 @@ function BuyDraw({ coins, onBuy }: { coins: number; onBuy(): void }) {
         </View>
       </Pressable>
       <AppText variant="caption" style={{ textAlign: 'center' }}>
-        {missing > 0 ? `Il te manque ${missing} pièces : gagne-les en battant les arènes solo.` : 'Ou attends le prochain tirage gratuit.'}
+        {missing > 0 ? `Il te manque ${missing} pièces : gagne-les en battant de nouveaux niveaux de l’aventure.` : 'Ou attends le prochain tirage gratuit.'}
       </AppText>
     </View>
   );

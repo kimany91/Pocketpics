@@ -1,13 +1,31 @@
 /**
- * Musique de combat (générée par scripts/generate-music.py) : une boucle qui
- * démarre en fondu au début du combat et s'arrête en fondu à la fin. Son
- * volume se règle à part de celui des effets sonores.
+ * Musiques de combat (composées par scripts/generate-music.py) : une par monde
+ * de l'aventure, en boucle, qui démarre en fondu au début du combat et
+ * s'arrête en fondu à la fin. Les combats en ligne prennent celle de la
+ * Tempête. Le volume se règle à part de celui des effets sonores.
  */
 import { type AudioPlayer, createAudioPlayer } from 'expo-audio';
 
-const SOURCE = require('../../assets/music/battle.wav');
+const TRACKS: Record<number, number> = {
+  1: require('../../assets/music/world-1.m4a'),
+  2: require('../../assets/music/world-2.m4a'),
+  3: require('../../assets/music/world-3.m4a'),
+  4: require('../../assets/music/world-4.m4a'),
+  5: require('../../assets/music/world-5.m4a'),
+  6: require('../../assets/music/world-6.m4a'),
+  7: require('../../assets/music/world-7.m4a'),
+  8: require('../../assets/music/world-8.m4a'),
+  9: require('../../assets/music/world-9.m4a'),
+  10: require('../../assets/music/world-10.m4a'),
+};
+/** Morceau des combats en ligne. */
+export const ONLINE_TRACK = 8;
 
 let player: AudioPlayer | null = null;
+/** Monde du morceau chargé dans `player`. */
+let loaded = 0;
+/** Morceau voulu (le dernier combat, ou le Parc pour l'aperçu). */
+let wanted = 1;
 /** Volume réglé par le joueur (0 = coupée). */
 let volume = 0.45;
 /** Niveau du fondu en cours, de 0 à 1. */
@@ -25,10 +43,20 @@ let fadeTimer: ReturnType<typeof setInterval> | null = null;
 let previewTimer: ReturnType<typeof setTimeout> | null = null;
 
 function get(): AudioPlayer | null {
-  if (player) return player;
+  if (player && loaded === wanted) return player;
+  // autre monde : on remplace le morceau
+  if (player) {
+    try {
+      player.pause();
+      player.remove();
+    } catch {}
+    player = null;
+    playing = false;
+  }
   try {
-    player = createAudioPlayer(SOURCE);
+    player = createAudioPlayer(TRACKS[wanted] ?? TRACKS[1]);
     player.loop = true;
+    loaded = wanted;
   } catch {
     player = null;
   }
@@ -89,11 +117,15 @@ export function setMusicVolume(v: number) {
   apply();
 }
 
-/** Lance la musique de combat ; renvoie un jeton à rendre avec `stopBattleMusic`. */
-export function startBattleMusic(): number {
+/** Lance la musique du monde `world` ; renvoie un jeton à rendre avec `stopBattleMusic`. */
+export function startBattleMusic(world = 1): number {
   const token = nextOwner++;
   owners.add(token);
   if (previewTimer) clearTimeout(previewTimer);
+  if (world !== loaded) {
+    wanted = world;
+    get();
+  }
   start(!playing);
   return token;
 }

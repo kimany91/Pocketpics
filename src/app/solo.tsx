@@ -18,7 +18,7 @@ import { CoinChip, CoinIcon } from '../components/Coin';
 import { SagaMap } from '../components/map/SagaMap';
 import { OUTLINE, WORLD_LOOKS } from '../components/map/worlds';
 import { RankEmblem } from '../components/rank/RankEmblem';
-import { firstClearBonus, winReward } from '../game/economy';
+import { LEVEL_REWARD } from '../game/economy';
 import { rankOf } from '../game/rank';
 import { useGame } from '../state/game';
 import { colors, fonts } from '../theme';
@@ -31,17 +31,11 @@ export default function SoloScreen() {
   const coins = useGame((s) => s.save?.coins ?? 0);
   const name = useGame((s) => s.save?.playerName ?? '?');
   const [open, setOpen] = useState<Level | null>(null);
-  const [locked, setLocked] = useState<number | null>(null);
   const totalStars = stars.reduce((a, b) => a + b, 0);
   const current = Math.min(TOTAL_LEVELS, cleared + 1);
 
+  // Tous les niveaux s'ouvrent, même verrouillés : on peut voir l'adversaire et ses cartes, pas y jouer.
   const pick = (n: number) => {
-    if (n > cleared + 1) {
-      haptic.warning();
-      setLocked(n);
-      setTimeout(() => setLocked((l) => (l === n ? null : l)), 1800);
-      return;
-    }
     haptic.light();
     setOpen(getLevel(n));
   };
@@ -62,13 +56,6 @@ export default function SoloScreen() {
         <CoinChip amount={coins} style={styles.coins} />
       </View>
 
-      {locked ? (
-        <Animated.View entering={FadeIn} exiting={FadeOut} style={[styles.toast, { top: insets.top + 64 }]} pointerEvents="none">
-          <Ionicons name="lock-closed" size={14} color="#141414" />
-          <AppText style={styles.toastText}>{`Gagne le niveau ${locked - 1} pour débloquer celui-ci`}</AppText>
-        </Animated.View>
-      ) : null}
-
       {cleared < TOTAL_LEVELS && !open ? (
         <View style={[styles.playWrap, { bottom: Math.max(insets.bottom, 14) + 6 }]}>
           <Pressable onPress={() => pick(current)} style={({ pressed }) => [styles.play, pressed && styles.playPressed]} accessibilityRole="button" accessibilityLabel={`Jouer le niveau ${current}`}>
@@ -78,12 +65,12 @@ export default function SoloScreen() {
         </View>
       ) : null}
 
-      {open ? <LevelSheet level={open} best={stars[open.n - 1] ?? 0} done={open.n <= cleared} onClose={() => setOpen(null)} bottom={insets.bottom} /> : null}
+      {open ? <LevelSheet level={open} best={stars[open.n - 1] ?? 0} done={open.n <= cleared} locked={open.n > cleared + 1} onClose={() => setOpen(null)} bottom={insets.bottom} /> : null}
     </View>
   );
 }
 
-function LevelSheet({ level, best, done, onClose, bottom }: { level: Level; best: number; done: boolean; onClose(): void; bottom: number }) {
+function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Level; best: number; done: boolean; locked: boolean; onClose(): void; bottom: number }) {
   const foes = useMemo(() => levelFighters(level), [level]);
   const look = WORLD_LOOKS[level.world.n - 1];
   const rank = rankOf(levelMmr(level.n));
@@ -98,11 +85,18 @@ function LevelSheet({ level, best, done, onClose, bottom }: { level: Level; best
             <AppText style={styles.sheetKicker}>{`Monde ${level.world.n} · ${level.world.place}`}</AppText>
             <AppText style={styles.sheetTitle}>{level.boss ? `Boss · Niveau ${level.n}` : `Niveau ${level.n}`}</AppText>
           </View>
-          <View style={styles.bestStars}>
-            {[0, 1, 2].map((i) => (
-              <Ionicons key={i} name="star" size={22} color={i < best ? '#FFD54F' : 'rgba(0,0,0,0.3)'} />
-            ))}
-          </View>
+          {locked ? (
+            <View style={styles.lockBadge}>
+              <Ionicons name="lock-closed" size={14} color="#FFFFFF" />
+              <AppText style={styles.lockText}>Verrouillé</AppText>
+            </View>
+          ) : (
+            <View style={styles.bestStars}>
+              {[0, 1, 2].map((i) => (
+                <Ionicons key={i} name="star" size={22} color={i < best ? '#FFD54F' : 'rgba(0,0,0,0.3)'} />
+              ))}
+            </View>
+          )}
         </View>
 
         <View style={styles.sheetBody}>
@@ -135,19 +129,26 @@ function LevelSheet({ level, best, done, onClose, bottom }: { level: Level; best
           </View>
 
           <View style={styles.rewards}>
-            <AppText variant="caption">Victoire :</AppText>
-            <CoinIcon size={16} />
-            <AppText style={styles.rewardText}>{`+${winReward(level.n) + (done ? 0 : firstClearBonus(level.n))}`}</AppText>
-            {!done ? <AppText variant="caption">{`(dont ${firstClearBonus(level.n)} de bonus la 1re fois)`}</AppText> : null}
+            {done ? (
+              <AppText variant="caption">Pièces déjà gagnées : rejoue pour améliorer tes étoiles.</AppText>
+            ) : (
+              <>
+                <AppText variant="caption">Première victoire :</AppText>
+                <CoinIcon size={16} />
+                <AppText style={styles.rewardText}>{`+${LEVEL_REWARD}`}</AppText>
+                <AppText variant="caption">(une seule fois)</AppText>
+              </>
+            )}
           </View>
           <AppText variant="caption">3 étoiles si tu gagnes sans perdre de carte, 2 en en perdant une.</AppText>
 
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
             <Button label="Fermer" kind="secondary" style={{ flex: 1 }} onPress={onClose} />
             <Button
-              label={done ? 'Rejouer' : 'Jouer'}
-              icon="flash"
+              label={locked ? `Gagne le niveau ${level.n - 1}` : done ? 'Rejouer' : 'Jouer'}
+              icon={locked ? 'lock-closed' : 'flash'}
               size="lg"
+              disabled={locked}
               style={{ flex: 1.6 }}
               onPress={() => {
                 haptic.medium();
@@ -169,8 +170,8 @@ const styles = StyleSheet.create({
   pill: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 38, paddingHorizontal: 12, borderRadius: 19, backgroundColor: 'rgba(14,12,20,0.82)', borderWidth: 2, borderColor: OUTLINE, marginLeft: 'auto' },
   pillText: { fontFamily: fonts.black, fontSize: 14, color: colors.text },
   coins: { backgroundColor: 'rgba(14,12,20,0.82)', borderWidth: 2, borderColor: OUTLINE },
-  toast: { position: 'absolute', alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 36, borderRadius: 18, backgroundColor: '#FFFFFF', borderWidth: 2.5, borderColor: OUTLINE },
-  toastText: { fontFamily: fonts.bold, fontSize: 13, color: '#141414' },
+  lockBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.35)', borderWidth: 2, borderColor: OUTLINE },
+  lockText: { fontFamily: fonts.black, fontSize: 12, color: '#FFFFFF' },
   playWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   play: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 54, paddingHorizontal: 28, borderRadius: 27, backgroundColor: colors.gold, borderWidth: 3, borderColor: OUTLINE, borderBottomWidth: 7 },
   playPressed: { borderBottomWidth: 3, transform: [{ translateY: 4 }] },

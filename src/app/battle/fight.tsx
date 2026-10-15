@@ -30,7 +30,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { startBattleMusic, stopBattleMusic } from '../../audio/music';
+import { ONLINE_TRACK, startBattleMusic, stopBattleMusic } from '../../audio/music';
 import { type Sfx, playSfx } from '../../audio/sfx';
 import { type Level, TOTAL_LEVELS, getLevel, levelFighters, levelMmr, starsFor } from '../../battle/levels';
 import { botAction, botReplacement } from '../../battle/bot';
@@ -223,7 +223,7 @@ export default function FightScreen() {
   const [confirmFrom, setConfirmFrom] = useState<'menu' | 'replace'>('menu');
   const music = useRef(0);
   useEffect(() => {
-    music.current = startBattleMusic();
+    music.current = startBattleMusic(online ? ONLINE_TRACK : (level?.world.n ?? 1));
     const token = music.current;
     return () => stopBattleMusic(token, 500);
   }, []);
@@ -1185,21 +1185,25 @@ function ResultOverlay({ won, levelN, deck, reward, stars }: { won: boolean; lev
         </AppText>
       </Animated.View>
       {won && reward ? (
-        <View style={{ alignItems: 'center', marginTop: 18, gap: 6 }}>
-          <Animated.View entering={ZoomIn.delay(450).springify().damping(9)} style={styles.coinsWon}>
-            <CoinIcon size={26} />
-            <AppText style={styles.coinsText}>{`+${reward.coins}`}</AppText>
-          </Animated.View>
-          <Animated.View entering={FadeIn.delay(700)}>
+        reward.coins > 0 ? (
+          <View style={{ alignItems: 'center', marginTop: 18, gap: 6 }}>
+            <Animated.View entering={ZoomIn.delay(450).springify().damping(9)} style={styles.coinsWon}>
+              <CoinIcon size={26} />
+              <AppText style={styles.coinsText}>{`+${reward.coins}`}</AppText>
+            </Animated.View>
+            <Animated.View entering={FadeIn.delay(700)}>
+              <AppText variant="caption" style={{ textAlign: 'center', paddingHorizontal: 32 }}>
+                pièces gagnées pour ta première victoire ici
+              </AppText>
+            </Animated.View>
+          </View>
+        ) : (
+          <Animated.View entering={FadeIn.delay(600)} style={{ marginTop: 16 }}>
             <AppText variant="caption" style={{ textAlign: 'center', paddingHorizontal: 32 }}>
-              {reward.bonus
-                ? `dont ${reward.bonus} de bonus pour ta première victoire ici`
-                : reward.reduced
-                  ? 'Gains réduits : tu as déjà gagné 5 combats aujourd’hui.'
-                  : 'pièces gagnées'}
+              Pièces déjà gagnées sur ce niveau : rejouer sert à améliorer tes étoiles.
             </AppText>
           </Animated.View>
-        </View>
+        )
       ) : null}
       <Animated.View entering={FadeInDown.delay(350)} style={{ alignSelf: 'stretch', gap: 10, marginTop: 30, paddingHorizontal: 32 }}>
         {won && next ? (
