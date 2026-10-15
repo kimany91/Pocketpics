@@ -6,7 +6,7 @@
  * Chaque niveau rapporte la même somme, une seule fois : à sa première
  * victoire. Rejouer un niveau déjà gagné ne rapporte plus rien (on peut
  * seulement y améliorer ses étoiles). Toute l'aventure rapporte donc
- * 50 × 20 = 1 000 pièces, soit 5 tirages : un vrai coup de pouce, mais les
+ * 100 × 20 = 2 000 pièces, soit 10 tirages : un vrai coup de pouce, mais les
  * tirages gratuits restent la base.
  */
 

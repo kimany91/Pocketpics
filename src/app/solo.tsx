@@ -1,5 +1,5 @@
 /**
- * Aventure solo : la carte des 10 mondes. On touche un niveau débloqué pour
+ * Aventure solo : la carte des 20 mondes. On touche un niveau débloqué pour
  * voir l'adversaire, ses cartes et ce qu'il rapporte, puis « Jouer ».
  */
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { Image, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { portraitRef } from '../battle/arenas';
 import { botArt } from '../battle/botArt';
 import { type Level, TOTAL_LEVELS, getLevel, levelFighters, levelMmr } from '../battle/levels';
 import { AppText } from '../components/AppText';
@@ -65,7 +66,7 @@ export default function SoloScreen() {
         </View>
       ) : null}
 
-      {open ? <LevelSheet level={open} best={stars[open.n - 1] ?? 0} done={open.n <= cleared} locked={open.n > cleared + 1} onClose={() => setOpen(null)} bottom={insets.bottom} /> : null}
+      {open ? <LevelSheet level={open} best={stars[open.n - 1] ?? 0} done={(stars[open.n - 1] ?? 0) > 0} locked={open.n > cleared + 1} onClose={() => setOpen(null)} bottom={insets.bottom} /> : null}
     </View>
   );
 }
@@ -101,7 +102,7 @@ function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Lev
 
         <View style={styles.sheetBody}>
           <View style={styles.oppRow}>
-            <Image source={botArt(`bot:${level.world.n}:3`)} style={[styles.oppImg, { borderColor: look.node }]} />
+            <Image source={botArt(portraitRef(level.world))} style={[styles.oppImg, { borderColor: look.node }]} />
             <View style={{ flex: 1, gap: 2 }}>
               <AppText variant="heading">{level.world.bot}</AppText>
               <View style={styles.flames}>

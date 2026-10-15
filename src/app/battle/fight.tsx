@@ -34,6 +34,7 @@ import { ONLINE_TRACK, startBattleMusic, stopBattleMusic } from '../../audio/mus
 import { type Sfx, playSfx } from '../../audio/sfx';
 import { type Level, TOTAL_LEVELS, getLevel, levelFighters, levelMmr, starsFor } from '../../battle/levels';
 import { botAction, botReplacement } from '../../battle/bot';
+import { portraitRef } from '../../battle/arenas';
 import { botArt } from '../../battle/botArt';
 import {
   type Battle,
@@ -161,7 +162,7 @@ export default function FightScreen() {
       tint: level.world.tint,
       mmr: levelMmr(level.n),
       label: `${level.boss ? 'Boss · ' : ''}Monde ${level.world.n} · Niveau ${level.n}`,
-      art: botArt(`bot:${level.world.n}:3`),
+      art: botArt(portraitRef(level.world)),
       image: (ref) => ({ imageSource: botArt(ref) }),
     };
     return { deck, foe, battle: createBattle(deck.map(toFighter), levelFighters(level)), controller: new BotController(level.botLevel) as BattleController };
@@ -223,7 +224,7 @@ export default function FightScreen() {
   const [confirmFrom, setConfirmFrom] = useState<'menu' | 'replace'>('menu');
   const music = useRef(0);
   useEffect(() => {
-    music.current = startBattleMusic(online ? ONLINE_TRACK : (level?.world.n ?? 1));
+    music.current = startBattleMusic(online ? ONLINE_TRACK : (level?.world.id ?? 1));
     const token = music.current;
     return () => stopBattleMusic(token, 500);
   }, []);

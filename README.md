@@ -12,7 +12,7 @@ PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie ph
 | --- | --- |
 | **Tirage** | Paquet animé, réserve de tirages (3 max), compte à rebours jusqu'au prochain, taux d'obtention, solde de pièces. Sans tirage, on peut en acheter un avec des pièces |
 | **Collection** | Grille de cartes, filtres par rareté, tri récentes/rareté. On touche une carte pour l'agrandir |
-| **Combat** | Un menu à deux grands panneaux : **Aventure solo** (carte de 10 mondes, 50 niveaux, qui rapportent des pièces) et **Multijoueur** (rang, amis, combats classés par défi ou par code / QR code) |
+| **Combat** | Un menu à deux grands panneaux : **Aventure solo** (carte de 20 mondes, 100 niveaux, qui rapportent des pièces) et **Multijoueur** (rang, amis, combats classés par défi ou par code / QR code) |
 | **Échange** | Héberger (QR code + code) ou rejoindre (scan QR ou saisie du code), puis échange classique |
 
 **Ouverture d'un paquet**
@@ -112,19 +112,43 @@ Chaque morceau est une vraie petite composition en boucle (48 à 84 s), pas un a
 
 **Déroulé.** Avant le combat, on choisit 4 cartes (la première commence ; « Auto » prend les plus fortes). L'adversaire en a 4 aussi. On voit sa carte active et ses remplaçantes. Changer de carte est possible à tout moment, mais ça utilise le tour. Une carte K.O. est remplacée sans perdre de tour. Le camp qui n'a plus de carte debout perd.
 
-**Aventure solo** (`src/battle/levels.ts`). Les 10 anciennes arènes sont devenues 10 mondes de 5 niveaux, soit 50 niveaux à refaire depuis le début : le Parc, la Plage, le Marché, la Forêt, le Port, la Montagne, le Volcan, la Tempête, le Palais, le Cosmos. Chaque monde a son adversaire et ses 4 cartes, de plus en plus rares. Le bot vise de mieux en mieux, garde ses spéciales pour le bon moment et met à l'abri ses cartes en danger (`src/battle/bot.ts`). Gagner un niveau débloque le suivant. Les illustrations des adversaires sont générées par `scripts/generate-bot-art.py`, et les sons de combat par `python3 scripts/generate-sounds.py combat`.
+**Aventure solo** (`src/battle/levels.ts`, mondes dans `src/battle/arenas.ts`). 20 mondes de 5 niveaux, soit 100 niveaux, du bas vers le haut de la carte : le Parc, le Lac, la Plage, la Foire, le Marché, la Ferme, la Forêt, le Manoir, le Port, les Pirates, le Désert, la Montagne, les Mines, le Volcan, la Tempête, l'Archipel, le Palais, Néon, le Cosmos et la Lune. Aux 10 premiers mondes se sont ajoutés 10 nouveaux, glissés entre eux là où ils tombent logiquement. Chaque monde a son adversaire et ses 4 cartes, de plus en plus rares. Le bot vise de mieux en mieux, garde ses spéciales pour le bon moment et met à l'abri ses cartes en danger (`src/battle/bot.ts`). Gagner un niveau débloque le suivant. Les illustrations des adversaires sont générées par `scripts/generate-bot-art.py`, et les sons de combat par `python3 scripts/generate-sounds.py combat`.
 
-- **Difficulté** : abordable au début, de plus en plus dure, très dure à la fin. L'adversaire aligne 3 cartes au niveau 1, puis 4. Les 4 premiers mondes surclassent ses cartes d'un rang de rareté (les derniers mondes sont déjà très rares, jusqu'à la Divine du Cosmos). Dans un monde, chaque niveau est un peu plus fort que le précédent ; le 1er niveau rétrograde sa meilleure carte d'un cran, le 5e est un **boss** dont la meilleure carte monte d'un cran. Le bot vise correctement dès le départ (4/10) et presque parfaitement à la fin. Tous ces réglages sont dans l'objet `TUNE`.
-- **Réglé par simulation** (`tests/levels.test.ts`), avec un joueur qui vise bien. Avec les cartes des 3 paquets de départ, on passe les premiers mondes et on bloque vers le monde 4-6 : il faut ouvrir des paquets pour aller plus loin.
+| # | Monde | Adversaire | Cartes |
+| --- | --- | --- | --- |
+| 1 | Le Parc | Léo | Banc public (Commune), Pigeon fier (Commune), Toboggan (Commune), Cerf-volant (Rare) |
+| 2 | Le Lac | Théo | Nénuphar (Commune), Grenouille (Rare), Pédalo (Commune), Héron (Rare) |
+| 3 | La Plage | Nina | Château de sable (Commune), Crabe pressé (Rare), Parasol (Rare), Coucher doré (Rare) |
+| 4 | La Foire | Lola | Barbe à papa (Rare), Ticket d'or (Rare), Autos tamponneuses (Rare), Grande roue (Rare) |
+| 5 | Le Marché | Sam | Tomate géante (Rare), Baguette (Rare), Fromager (Rare), Pastèque (Super Rare) |
+| 6 | La Ferme | Jules | Botte de foin (Rare), Tracteur (Super Rare), Vache (Rare), Coq chanteur (Super Rare) |
+| 7 | La Forêt | Maya | Vieux chêne (Rare), Champignon (Super Rare), Renard roux (Super Rare), Clairière (Super Rare) |
+| 8 | Le Manoir | Morgane | Chauve-souris (Super Rare), Portrait hanté (Super Rare), Chandelier (Super Rare), Fantôme (Super Rare) |
+| 9 | Le Port | Hugo | Mouette (Super Rare), Phare (Épique), Chalutier (Super Rare), Ancre (Super Rare) |
+| 10 | Les Pirates | Rox | Perroquet (Super Rare), Longue-vue (Super Rare), Canon (Épique), Coffre au trésor (Épique) |
+| 11 | Le Désert | Yasmine | Cactus (Super Rare), Chameau (Épique), Mirage (Épique), Pyramide (Épique) |
+| 12 | La Montagne | Inès | Chamois (Épique), Sommet (Épique), Avalanche (Épique), Refuge (Épique) |
+| 13 | Les Mines | Gaspard | Wagonnet (Épique), Lanterne (Épique), Pépite d'or (Épique), Géode (Mythique) |
+| 14 | Le Volcan | Kenji | Coulée de lave (Épique), Cendres (Mythique), Cratère (Mythique), Obsidienne (Épique) |
+| 15 | La Tempête | Zoé | Éclair (Mythique), Ouragan (Mythique), Grêle (Épique), Œil du cyclone (Légendaire) |
+| 16 | L'Archipel | Célia | Dirigeable (Mythique), Arc-en-ciel (Mythique), Cascade céleste (Légendaire), Île flottante (Légendaire) |
+| 17 | Le Palais | Victor | Couronne (Légendaire), Trône (Mythique), Lustre (Mythique), Salle des glaces (Ultra Légendaire) |
+| 18 | Néon | Kai | Hologramme (Mythique), Voiture volante (Légendaire), Gratte-ciel (Ultra Légendaire), Androïde (Ultra Légendaire) |
+| 19 | Le Cosmos | Astra | Nébuleuse (Ultra Légendaire), Comète (Légendaire), Supernova (Divine), Lune rousse (Mythique) |
+| 20 | La Lune | Séléna | Rover (Légendaire), Astronaute (Ultra Légendaire), Base lunaire (Divine), Clair de Terre (Divine) |
 
-| Deck du joueur | Niv. 1 | Niv. 5 (boss) | Niv. 10 (boss) | Niv. 20 (boss) | Niv. 30 (boss) | Niv. 40 (boss) | Niv. 50 (boss) |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Départ (Épique, 2 Super Rares, Rare) | 100 % | 85 % | 70 % | 18 % | 10 % | 0 % | 0 % |
-| Moyen (Légendaire, Mythique, 2 Épiques) | 100 % | 98 % | 98 % | 65 % | 47 % | 3 % | 0 % |
-| Fort (Ultra Légendaire, Légendaire, 2 Mythiques) | 100 % | 100 % | 100 % | 97 % | 76 % | 16 % | 1 % |
-| Au maximum (Divine, Ultra Légendaire, 2 Légendaires) | 100 % | 100 % | 100 % | 100 % | 99 % | 69 % | 14 % |
+- **Difficulté** : abordable au début, de plus en plus dure, **ultra dure sur la Lune**. Chaque monde est plus fort que celui d'avant : ses cartes sont un peu plus rares (la somme de leurs rangs de rareté monte d'au moins 1 à chaque monde), et les stats des cartes du bot sont ramenées à la moyenne de leur rareté, pour que le hasard ne rende jamais un monde plus facile que le précédent. Les premiers mondes, aux cartes très communes, sont renforcés (+12 % au niveau 1, qui fond jusqu'au milieu de l'aventure). L'adversaire aligne 3 cartes au niveau 1, puis 4. Dans un monde, chaque niveau est un peu plus fort que le précédent ; le 1er niveau rétrograde sa meilleure carte d'un cran, le 5e est un **boss** dont la meilleure carte monte d'un cran. La Lune surclasse toutes ses cartes d'un rang de plus (au-delà de la Divine, chaque rang en trop devient un bonus de stats) et renforce encore leurs stats. Le bot vise correctement dès le départ (4/10) et parfaitement à la fin. Tous ces réglages sont dans l'objet `TUNE`.
+- **Réglé par simulation** (`tests/levels.test.ts`), avec un joueur qui vise bien. Avec les cartes des 3 paquets de départ, on passe les premiers mondes et on bloque vers le Manoir ou le Port : il faut ouvrir des paquets pour aller plus loin. Même avec le meilleur deck possible, le boss de la Lune ne tombe qu'environ 1 fois sur 30.
 
-- **Étoiles** : 3 si on gagne sans perdre de carte, 2 en en perdant une, 1 sinon. La meilleure note de chaque niveau est gardée (150 étoiles au total).
+| Deck du joueur (boss de…) | Parc | Plage | Marché | Forêt | Port | Désert | Mines | Tempête | Palais | Cosmos | Lune (niv. 96) | Lune (boss) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Départ (Épique, 2 Super Rares, Rare) | 85 % | 64 % | 30 % | 35 % | 6 % | 9 % | 1 % | 0 % | 0 % | 0 % | 0 % | 0 % |
+| Moyen (Légendaire, Mythique, 2 Épiques) | 100 % | 95 % | 90 % | 84 % | 70 % | 61 % | 37 % | 5 % | 3 % | 0 % | 0 % | 0 % |
+| Fort (Ultra Légendaire, Légendaire, 2 Mythiques) | 100 % | 99 % | 99 % | 100 % | 96 % | 95 % | 81 % | 17 % | 7 % | 1 % | 1 % | 0 % |
+| Au maximum (Divine, Ultra Légendaire, 2 Légendaires) | 100 % | 99 % | 100 % | 100 % | 100 % | 99 % | 97 % | 73 % | 55 % | 21 % | 31 % | 3 % |
+
+- **Étoiles** : 3 si on gagne sans perdre de carte, 2 en en perdant une, 1 sinon. La meilleure note de chaque niveau est gardée (300 étoiles au total).
+- **Anciennes sauvegardes** (`src/storage/model.ts`) : une partie commencée sur l'ancienne carte de 10 mondes garde ses étoiles, chaque niveau à sa nouvelle place, et reprend là où elle en était. Les nouveaux mondes glissés derrière le joueur sont ouverts : on peut y revenir quand on veut pour gagner leurs étoiles et leurs pièces.
 
 **La carte** (`src/components/map/`). Une longue route qui serpente vers le haut, comme dans les jeux « saga » : niveau 1 en bas, on remonte la carte pour voir les mondes suivants. Chaque monde a son sol, sa route (sable, pavés, planches, tapis rouge, route d'étoiles…), ses décors dessinés façon dessin animé (contour sombre, reflets, arbres avec des yeux), un grand décor (mare et son canard, mer, halle du marché, arbre géant, phare, montagnes, volcan, nuage d'orage, château, planète à anneaux) et son panneau. Le passage d'un monde à l'autre se fait par un bord ondulé. Le portrait de l'adversaire de chaque monde attend à côté de son boss.
 
@@ -136,11 +160,11 @@ Les niveaux sont des pastilles dorées avec leur numéro, et leurs étoiles au-d
 
 Les pièces se gagnent seulement en battant les niveaux de l'aventure solo, et servent à acheter un tirage quand la réserve est vide (200 pièces). Les tirages gratuits restent la base.
 
-- **Chaque niveau rapporte 20 pièces, une seule fois** : à sa première victoire. Le montant est le même du niveau 1 au niveau 50.
+- **Chaque niveau rapporte 20 pièces, une seule fois** : à sa première victoire. Le montant est le même du niveau 1 au niveau 100.
 - **Rejouer un niveau déjà gagné ne rapporte rien** : ça sert seulement à améliorer ses étoiles. Impossible donc de « farmer » des pièces.
 - Une défaite, un abandon ou un combat en ligne ne rapportent rien.
 
-Toute l'aventure rapporte donc 1 000 pièces, soit 5 tirages, étalés sur toute la progression. Un tirage acheté s'ajoute à la réserve et se consomme après les tirages gratuits. L'écran de victoire affiche le gain (ou « pièces déjà gagnées »), et la fiche de chaque niveau ce qu'il rapporte.
+Toute l'aventure rapporte donc 2 000 pièces, soit 10 tirages, étalés sur toute la progression. Un tirage acheté s'ajoute à la réserve et se consomme après les tirages gratuits. L'écran de victoire affiche le gain (ou « pièces déjà gagnées »), et la fiche de chaque niveau ce qu'il rapporte.
 
 ## Rang en ligne (`src/game/rank.ts`)
 
@@ -148,7 +172,7 @@ Six rangs, chacun en trois divisions : **Papier**, **Bronze**, **Argent**, **Tit
 
 - **Points par combat (formule Elo)** : 25 contre un adversaire de même niveau, jusqu'à 45 contre bien plus fort, 5 au minimum contre bien plus faible. Le gagnant prend exactement ce que le perdant perd. Il faut donc 4 victoires à niveau égal pour passer une division.
 - **Abandon = défaite** : les points de la défaite sont retirés dès le début du combat, et rendus (avec le gain) en cas de victoire. Fermer l'app en plein combat compte donc comme une défaite, même sans serveur.
-- **Affichage** : une carte « Ton rang » dans l'onglet Combat (emblème, barre, bilan), le rang des deux joueurs dans l'ouverture « VS » de chaque combat (les bots solo ont un rang aussi, de Papier I au niveau 1 à Légende III au niveau 50), et en fin de combat en ligne la barre qui se remplit, avec « Promotion ! » ou « Rétrogradé ».
+- **Affichage** : une carte « Ton rang » dans l'onglet Combat (emblème, barre, bilan), le rang des deux joueurs dans l'ouverture « VS » de chaque combat (les bots solo ont un rang aussi, de Papier I au niveau 1 à Légende III au niveau 100), et en fin de combat en ligne la barre qui se remplit, avec « Promotion ! » ou « Rétrogradé ».
 - **Emblèmes** (`src/components/rank/RankEmblem.tsx`) : feuille, écu de bronze, écu d'argent étoilé, hexagone de titane, gemme, couronne. Plus le rang est haut, plus l'apparition est travaillée : simple pose pour le Papier, reflets pour le Bronze et l'Argent, halo et anneau qui tourne pour le Titane, rayons, onde et scintillements pour le Diamant, double onde, braises et halo changeant pour la Légende.
 
 ## En ligne sans serveur : amis et combats classés
@@ -212,7 +236,7 @@ npx eas-cli@latest build --profile development --platform android
 npm start                     # puis ouvrir l'app de dev sur le téléphone
 ```
 
-Version navigateur de test (l'échange en ligne y fonctionne aussi, sauf dans une fenêtre qui bloque les WebSockets) : `npm run web`, ou `node scripts/build-web-demo.mjs` pour obtenir un seul fichier `dist-demo/pocketpics.html` à héberger n'importe où.
+Version navigateur de test (l'échange en ligne y fonctionne aussi, sauf dans une fenêtre qui bloque les WebSockets) : `npm run web`, ou `node scripts/build-web-demo.mjs` pour obtenir `dist-demo/pocketpics.html` (images et polices intégrées) et, à côté, le dossier `dist-demo/music/` des 20 musiques de combat : à héberger ensemble n'importe où (sans le dossier, le jeu marche mais sans musique).
 - **Fenêtre d'import** : à chaque arrivée sur la version navigateur, une fenêtre propose d'ajouter tes photos. Sur ordinateur (Chrome, Edge, Safari, Firefox), on importe un dossier entier, sous-dossiers compris, sans choisir les photos une par une. Sur téléphone, le navigateur ne donne pas accès à la galerie entière : on sélectionne les photos avec le sélecteur. « Rouvrir la fenêtre d'import » sur l'accueil la fait revenir.
 - **Limite** : une page web ne peut pas lire la galerie seule. La version navigateur reste donc un test ; le jeu complet sur téléphone (`expo run`, ou build de développement EAS) lit toute la galerie automatiquement, sans choix.
 - **Galerie** : un navigateur ne laisse aucun site lire la galerie tout seul. « Ouvrir ma galerie » ouvre le sélecteur de photos de l'appareil, où l'on peut tout sélectionner. Sur ordinateur, « Importer un dossier » ajoute un dossier entier. Des photos de démo générées sont aussi disponibles. Si le sélecteur est bloqué (fenêtre intégrée, webview), on peut aussi coller des photos (Ctrl+V) ou les glisser sur la page.

@@ -146,10 +146,10 @@ test('changer de carte utilise le tour', () => {
   assert.throws(() => act(b, { type: 'switch', to: 0 }));
 });
 
-test('les arènes : 10 combats qui deviennent plus durs, et le bot finit toujours ses parties', () => {
-  assert.equal(ARENAS.length, 10);
+test('les arènes : 20 mondes de plus en plus durs, et le bot finit toujours ses parties', () => {
+  assert.equal(ARENAS.length, 20);
   const power = (n: number) => arenaFighters(ARENAS[n - 1]).reduce((s, f) => s + f.battle.hp * f.battle.attacks[0].power, 0);
-  for (let n = 2; n <= 10; n++) assert.ok(power(n) >= power(n - 1) * 0.95, `arène ${n}`);
+  for (let n = 2; n <= ARENAS.length; n++) assert.ok(power(n) >= power(n - 1) * 0.95, `arène ${n}`);
   // bot de niveau 10 contre bot de niveau 1 avec les mêmes cartes : le meilleur gagne nettement plus souvent
   let strongWins = 0;
   const games = 300;
@@ -333,15 +333,15 @@ test('miroir : renvoie l’attaque copiée ×1,3', () => {
 test('toutes les arènes se terminent avec les nouvelles attaques', () => {
   for (const arena of ARENAS) {
     for (let g = 0; g < 20; g++) {
-      let b = createBattle(arenaFighters(ARENAS[(arena.n + 3) % 10]), arenaFighters(arena));
+      let b = createBattle(arenaFighters(ARENAS[(arena.n + 3) % ARENAS.length]), arenaFighters(arena));
       let guard = 0;
       while (b.winner === null) {
         if (++guard > 2000) throw new Error(`partie infinie, arène ${arena.n}`);
         if (b.mustReplace !== null) {
-          b = replace(b, b.mustReplace, botReplacement(b, b.mustReplace, arena.level)).battle;
+          b = replace(b, b.mustReplace, botReplacement(b, b.mustReplace, Math.ceil(arena.n / 2))).battle;
           continue;
         }
-        b = act(b, botAction(b, b.turn, arena.level)).battle;
+        b = act(b, botAction(b, b.turn, Math.ceil(arena.n / 2))).battle;
       }
     }
   }

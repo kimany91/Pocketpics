@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, BackHandler, FlatList, Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { portraitRef } from '../../battle/arenas';
 import { botArt } from '../../battle/botArt';
 import { getLevel, levelFighters } from '../../battle/levels';
 import { ATTACK_KIND_LABEL, kindOf, powerLabel } from '../../battle/stats';
@@ -129,7 +130,7 @@ export default function DeckScreen() {
         </View>
       ) : level ? (
       <View style={[styles.foe, { borderColor: `${level.world.tint}66` }]}>
-        <Image source={botArt(`bot:${level.world.n}:3`)} style={[styles.avatar, { borderWidth: 3, borderColor: level.world.tint }]} />
+        <Image source={botArt(portraitRef(level.world))} style={[styles.avatar, { borderWidth: 3, borderColor: level.world.tint }]} />
         <View style={{ flex: 1, gap: 4 }}>
           <AppText variant="heading">{level.boss ? `Boss : ${level.world.bot}` : `${level.world.bot} t'attend`}</AppText>
           <View style={styles.flames}>

@@ -23,6 +23,11 @@ export const DEFAULT_SOUND_VOLUME = 0.55;
 export const DEFAULT_MUSIC_VOLUME = 0.45;
 export const STATE_SCHEMA_VERSION = 1;
 
+/** Nombre de niveaux de l'aventure (20 mondes de 5 niveaux). */
+const SOLO_LEVELS = 100;
+/** Version de la carte solo (2 = 20 mondes). */
+const SOLO_MAP = 2;
+
 export type CardOrigin = 'draw' | 'trade';
 
 export interface Card {
@@ -73,10 +78,15 @@ export interface SaveState {
   musicVolume: number;
   /** Nombre d'arènes solo gagnées, dans l'ordre (ancien mode solo, conservé ; ajouté après : 0 si absent). */
   arenaCleared: number;
-  /** Aventure solo : niveaux terminés dans l'ordre, de 0 à 50 (ajouté après : 0 si absent). */
+  /**
+   * Aventure solo : niveau le plus haut atteint, de 0 à 100 ; tous les niveaux
+   * jusqu'au suivant sont jouables (ajouté après : 0 si absent).
+   */
   soloLevel: number;
-  /** Meilleures étoiles par niveau (index = niveau - 1, 0 à 3). Ajouté après : vide si absent. */
+  /** Meilleures étoiles par niveau (index = niveau - 1, 0 à 3 ; 0 = jamais gagné). Ajouté après : vide si absent. */
   soloStars: number[];
+  /** Version de la carte solo de la sauvegarde : 2 = 20 mondes (absent = l'ancienne carte de 10 mondes). */
+  soloMap: number;
   /** Compteurs de chance (malchance, paquets brillants). Ajouté après : remis à zéro si absent. */
   luck: LuckState;
   /** Pièces gagnées en solo (ajouté après : 0 si absent). */
@@ -167,6 +177,7 @@ export function createInitialState(now = Date.now()): SaveState {
     arenaCleared: 0,
     soloLevel: 0,
     soloStars: [],
+    soloMap: SOLO_MAP,
     luck: initialLuck(),
     coins: 0,
     bonusDraws: 0,
@@ -203,6 +214,33 @@ function migrateLuck(raw: unknown): LuckState {
   return { ...l, sinceEpic: n(l.sinceEpic), sinceLegend: n(l.sinceLegend), packsSinceLucky: n(l.packsSinceLucky) };
 }
 
+/**
+ * Place sur la nouvelle carte des 10 mondes de l'ancienne (Parc, Plage, Marché,
+ * Forêt, Port, Montagne, Volcan, Tempête, Palais, Cosmos) : les nouveaux mondes
+ * se sont glissés entre eux.
+ */
+export const OLD_WORLD_PLACES = [1, 3, 5, 7, 9, 12, 14, 15, 17, 19];
+/** Niveau de l'ancienne carte (1 à 50) → niveau de la nouvelle. */
+export const fromOldLevel = (n: number) => (OLD_WORLD_PLACES[Math.ceil(n / 5) - 1] - 1) * 5 + ((n - 1) % 5) + 1;
+
+/**
+ * Sauvegarde de l'ancienne carte : chaque niveau gagné garde ses étoiles à sa
+ * nouvelle place, et le joueur reprend là où il en était. Les nouveaux mondes
+ * glissés derrière lui sont ouverts, à gagner (étoiles et pièces) quand il veut.
+ */
+function migrateSoloMap(s: Raw): Raw {
+  if (num(s.soloMap, 1) >= SOLO_MAP) return s;
+  const level = Math.max(0, Math.min(50, Math.floor(num(s.soloLevel, 0))));
+  const old = Array.isArray(s.soloStars) ? s.soloStars.slice(0, 50) : [];
+  const stars: unknown[] = [];
+  old.forEach((x, i) => {
+    const n = fromOldLevel(i + 1);
+    while (stars.length < n) stars.push(0);
+    stars[n - 1] = x;
+  });
+  return { ...s, soloLevel: level ? fromOldLevel(level) : 0, soloStars: stars, soloMap: SOLO_MAP };
+}
+
 export function migrateState(input: unknown, now = Date.now()): SaveState {
   const base = createInitialState(now);
   if (!input || typeof input !== 'object') return base;
@@ -212,6 +250,7 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     s = STATE_MIGRATIONS[v](s);
     v = num(s.v, v + 1);
   }
+  s = migrateSoloMap(s);
   const draws = (s.draws && typeof s.draws === 'object' ? s.draws : {}) as Raw;
   return {
     ...s,
@@ -226,8 +265,9 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     soundVolume: Math.max(0, Math.min(1, num(s.soundVolume, s.soundOn === false ? 0 : DEFAULT_SOUND_VOLUME))),
     musicVolume: Math.max(0, Math.min(1, num(s.musicVolume, DEFAULT_MUSIC_VOLUME))),
     arenaCleared: Math.max(0, Math.floor(num(s.arenaCleared, 0))),
-    soloLevel: Math.max(0, Math.min(50, Math.floor(num(s.soloLevel, 0)))),
-    soloStars: Array.isArray(s.soloStars) ? s.soloStars.slice(0, 50).map((x) => Math.max(0, Math.min(3, Math.floor(num(x, 0))))) : [],
+    soloLevel: Math.max(0, Math.min(SOLO_LEVELS, Math.floor(num(s.soloLevel, 0)))),
+    soloStars: Array.isArray(s.soloStars) ? s.soloStars.slice(0, SOLO_LEVELS).map((x) => Math.max(0, Math.min(3, Math.floor(num(x, 0))))) : [],
+    soloMap: SOLO_MAP,
     luck: migrateLuck(s.luck),
     coins: Math.max(0, Math.floor(num(s.coins, 0))),
     bonusDraws: Math.max(0, Math.floor(num(s.bonusDraws, 0))),

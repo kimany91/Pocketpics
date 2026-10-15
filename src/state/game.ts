@@ -193,7 +193,8 @@ export const useGame = create<GameStore>((set, get) => ({
   winLevel(n, stars) {
     const save = get().save;
     if (!save || n < 1 || n > save.soloLevel + 1) return null;
-    const reward = soloReward(n > save.soloLevel);
+    // pièces à la première victoire (un niveau déjà gagné a au moins 1 étoile)
+    const reward = soloReward(!((save.soloStars[n - 1] ?? 0) > 0));
     const soloStars = [...save.soloStars];
     while (soloStars.length < n) soloStars.push(0);
     soloStars[n - 1] = Math.max(soloStars[n - 1], Math.max(1, Math.min(3, stars)));

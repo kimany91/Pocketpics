@@ -1,12 +1,15 @@
 /**
- * Construit la version navigateur de test en UN seul fichier HTML autonome
- * (JS + images + polices intégrés), facile à héberger ou à partager.
+ * Construit la version navigateur de test : un fichier HTML autonome (JS +
+ * images + polices intégrés), facile à héberger ou à partager, et à côté de
+ * lui le dossier `music/` (les 20 musiques de combat, trop lourdes pour tenir
+ * dans la page). Héberger les deux ensemble ; sans le dossier, le jeu marche
+ * mais sans musique.
  *
  *   node scripts/build-web-demo.mjs [dossier-de-sortie]
  */
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { extname, join, resolve } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, extname, join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const outDir = resolve(process.argv[2] ?? join(root, 'dist-demo'));
@@ -27,10 +30,19 @@ const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.mp3': 'audio/mpeg', 
 // Polices d'icônes jamais affichées : on ne les embarque pas.
 const keepFont = (p) => !p.includes('react-native-vector-icons/Fonts/') || p.includes('/Ionicons.');
 let inlined = 0;
+const music = [];
+mkdirSync(join(outDir, 'music'), { recursive: true });
 js = js.replace(/"(\/assets\/[^"]+)"/g, (m, path) => {
   const file = join(exportDir, path);
   if (!existsSync(file)) return m;
   if (!keepFont(path)) return '"data:,"';
+  if (extname(path) === '.m4a') {
+    // musique : fichier à côté de la page (world-3.<empreinte>.m4a → music/world-3.m4a)
+    const name = `${basename(path).split('.')[0]}.m4a`;
+    copyFileSync(file, join(outDir, 'music', name));
+    music.push(name);
+    return `(self.__ppBase+"music/${name}")`;
+  }
   inlined++;
   return `"data:${MIME[extname(path)] ?? 'application/octet-stream'};base64,${readFileSync(file).toString('base64')}"`;
 });
@@ -48,6 +60,8 @@ const page = `<title>PocketPics</title>
 </style>
 <div id="root"></div>
 <script>
+  // Dossier de la page, retenu avant de changer l'adresse : les musiques sont à côté (music/).
+  self.__ppBase = new URL('.', location.href).href;
   // Le jeu démarre toujours sur l'accueil, quelle que soit l'adresse d'hébergement.
   try { if (location.pathname !== '/') history.replaceState(null, '', '/'); } catch (e) {}
 </script>
@@ -56,4 +70,4 @@ const page = `<title>PocketPics</title>
 mkdirSync(outDir, { recursive: true });
 const target = join(outDir, 'pocketpics.html');
 writeFileSync(target, page);
-console.log(`\n${inlined} ressources intégrées → ${target} (${(Buffer.byteLength(page) / 1e6).toFixed(1)} Mo)`);
+console.log(`\n${inlined} ressources intégrées → ${target} (${(Buffer.byteLength(page) / 1e6).toFixed(1)} Mo), ${music.length} musiques dans ${join(outDir, 'music')}`);
