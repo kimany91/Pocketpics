@@ -1,17 +1,22 @@
 """Musiques de combat de PocketPics : une par monde de l'aventure.
 
-    python3 scripts/generate-music.py            # les 10 mondes
-    python3 scripts/generate-music.py 3 7        # seulement les mondes 3 et 7
+    python3 scripts/generate-music.py            # les 20 mondes
+    python3 scripts/generate-music.py 3 17       # seulement les mondes 3 et 17 (par id)
+
+Le rendu est déterministe : relancer un monde redonne exactement le même fichier.
 
 Tout est synthétisé ici (aucun son sous licence), puis encodé en AAC (.m4a)
 avec ffmpeg. Chaque morceau est une vraie petite composition, en boucle :
 
   - une tonalité, un mode, un tempo et un groove propres au monde ;
   - des instruments qui collent au lieu (steel drum à la plage, accordéon au
-    marché, flûte et harpe en forêt, cuivres au palais, synthés au cosmos…) ;
-  - 4 parties de 8 mesures : A (le thème), B (le développement, d'autres
-    accords), A' (le thème varié, à l'octave, avec une seconde voix) et C (un
-    pont plus calme qui remonte vers le début) ;
+    marché, flûte et harpe en forêt, cuivres au palais, synthés au cosmos,
+    orgue de manège à la foire, banjo à la ferme, thérémine au manoir, oud et
+    darbouka au désert, chœur sombre et glas sur la Lune…) ;
+  - 4 parties de 8 mesures (en 4/4, ou en 12/8 pour la gigue des pirates) :
+    A (le thème), B (le développement, d'autres accords), A' (le thème varié,
+    à l'octave, avec une seconde voix) et C (un pont plus calme qui remonte
+    vers le début) ;
   - des mélodies construites comme en vrai : un motif de 2 mesures, sa
     réponse transposée sur les accords suivants (fin « ouverte »), la
     reprise, puis une conclusion qui retombe sur la tonique ;
@@ -248,12 +253,11 @@ def i_strings(m, dur, vel, rng, attack=0.25):
     return lowpass(sig, 2600) * envelope(n, a=attack, d=0.3, s=0.85, r=0.35) * vel * 0.18
 
 
-def i_choir(m, dur, vel, rng):
-    """Chœur « ah » : harmoniques pondérées par les formants de la voix."""
+def i_choir(m, dur, vel, rng, formants=((750, 1.0, 120), (1150, 0.5, 140), (2600, 0.25, 200)), attack=0.35):
+    """Chœur « ah » : harmoniques pondérées par les formants de la voix (« oh » sombre avec d'autres formants)."""
     f0 = hz(m)
     n = int(SR * (dur + 0.5))
     sig = np.zeros(n)
-    formants = ((750, 1.0, 120), (1150, 0.5, 140), (2600, 0.25, 200))
     for det in (-0.005, 0.004):
         ph = phase(f0 * (1 + det), n, vib_rate=5 + det * 100, vib_depth=0.006, vib_delay=0.15)
         amps = []
@@ -261,7 +265,7 @@ def i_choir(m, dur, vel, rng):
             fk = f0 * k
             amps.append(sum(a * math.exp(-((fk - fc) / bw) ** 2 / 2) for fc, a, bw in formants) + 0.05 / k)
         sig += additive(ph, f0, amps)
-    return sig * envelope(n, a=0.35, d=0.3, s=0.85, r=0.45) * vel * 0.2
+    return sig * envelope(n, a=attack, d=0.3, s=0.85, r=0.45) * vel * 0.2
 
 
 def i_supersaw(m, dur, vel, rng, cutoff=3800):
@@ -345,6 +349,145 @@ def i_tuba(m, dur, vel, rng):
     return i_brass(m, dur, vel, rng, soft=0.6) * 1.6
 
 
+def i_organ(m, dur, vel, rng, drawbars=(1, 0.55, 0.4, 0.3, 0, 0.18, 0, 0.12), trem=0.0):
+    """Orgue à tirettes : harmoniques fixes, léger chorus, petit clic de touche, trémolo éventuel."""
+    f0 = hz(m)
+    n = int(SR * (dur + 0.06))
+    t = taxis(n)
+    ph = phase(f0, n)
+    sig = additive(ph, f0, list(drawbars)) + 0.5 * additive(ph, f0, list(drawbars), detune=0.0016)
+    sig += noise(n, rng) * np.exp(-t * 900) * 0.08
+    if trem:
+        sig *= 1 + trem * np.sin(TWO_PI * 6.2 * t)
+    return sig * envelope(n, a=0.008, d=0.05, s=1, r=0.05) * vel * 0.3
+
+
+def i_calliope(m, dur, vel, rng):
+    """Orgue de manège à vapeur : tuyau sifflant, vibrato rapide, souffle."""
+    f0 = hz(m)
+    n = int(SR * (dur + 0.06))
+    t = taxis(n)
+    ph = phase(f0, n, vib_rate=7, vib_depth=0.007, vib_delay=0.04, scoop=0.02)
+    sig = additive(ph, f0, [1, 0.5, 0.28, 0.12, 0.06])
+    sig += bandpass(noise(n, rng), f0 * 3, q=1.5) * 0.12
+    sig *= 1 + 0.12 * np.sin(TWO_PI * 7 * t)
+    return sig * envelope(n, a=0.02, d=0.1, s=0.9, r=0.05) * vel * 0.75
+
+
+def i_banjo(m, dur, vel, rng):
+    """Banjo : corde pincée près du chevalet, peau qui claque, s'éteint vite."""
+    sig = i_pluck(m, dur, vel, rng, bright=1, sustain=0.4, pos=0.07)
+    sig = sig + 0.6 * bandpass(sig, 2600, q=1.3)
+    return np.tanh(sig * 2.5) / 2.5 * 2.0  # crête de l'attaque arrondie : il passe devant sans claquer
+
+
+def i_harmonica(m, dur, vel, rng):
+    """Harmonica : anche nasillarde, attaque qui glisse un peu par en dessous."""
+    f0 = hz(m)
+    n = int(SR * (dur + 0.08))
+    t = taxis(n)
+    ph = phase(f0, n, vib_rate=5.5, vib_depth=0.004, vib_delay=0.2, scoop=0.035)
+    amps = [1 / k**0.8 if k % 2 else 0.45 / k**0.8 for k in range(1, 14)]
+    sig = additive(ph, f0, amps)
+    sig = bandpass(sig, 1500, q=0.8) + 0.3 * sig
+    return sig * (1 + 0.06 * np.sin(TWO_PI * 4.5 * t)) * envelope(n, a=0.03, d=0.12, s=0.85, r=0.06) * vel * 0.45
+
+
+def i_theremin(m, dur, vel, rng):
+    """Thérémine : sinus presque pur, grand vibrato, et la note glisse en place."""
+    f0 = hz(m)
+    n = int(SR * (dur + 0.15))
+    ph = phase(f0, n, vib_rate=5.4, vib_depth=0.016, vib_delay=0.08, glide=lambda tt: 1 - 0.05 * np.exp(-tt * 14))
+    sig = np.sin(TWO_PI * ph) + 0.14 * np.sin(TWO_PI * 2 * ph) + 0.05 * np.sin(TWO_PI * 3 * ph)
+    return sig * envelope(n, a=0.06, d=0.2, s=0.95, r=0.14) * vel * 0.9
+
+
+def i_xylo(m, dur, vel, rng):
+    """Xylophone (squelette) : sec et brillant, partiel accordé à la douzième."""
+    f0 = hz(m)
+    n = int(SR * (dur + 0.25))
+    t = taxis(n)
+    sig = np.sin(TWO_PI * f0 * t) * np.exp(-t * 13) + 0.35 * np.sin(TWO_PI * f0 * 3.0 * t) * np.exp(-t * 28) + 0.1 * np.sin(TWO_PI * f0 * 6.1 * t) * np.exp(-t * 60)
+    sig += noise(n, rng) * np.exp(-t * 700) * 0.3
+    return np.tanh(sig * vel * 2) / 2 * 1.8
+
+
+def i_vibes(m, dur, vel, rng):
+    """Vibraphone : lames de métal qui résonnent, trémolo du moteur."""
+    f0 = hz(m)
+    n = int(SR * (dur + 1.0))
+    t = taxis(n)
+    sig = np.sin(TWO_PI * f0 * t) * np.exp(-t * 1.6) + 0.25 * np.sin(TWO_PI * f0 * 4 * t) * np.exp(-t * 5) + 0.05 * np.sin(TWO_PI * f0 * 10 * t) * np.exp(-t * 20)
+    sig *= 1 + 0.22 * np.sin(TWO_PI * 5.5 * t)
+    sig += noise(n, rng) * np.exp(-t * 800) * 0.12
+    return sig * envelope(n, a=0.002, d=1, s=1, r=0.3, hold=dur + 0.6) * vel * 0.85
+
+
+def i_oud(m, dur, vel, rng):
+    """Oud : corde grave et nasale, attaque au plectre qui glisse vers la note."""
+    f0 = hz(m)
+    n = int(SR * (dur + 0.45))
+    t = taxis(n)
+    ph = phase(f0, n, glide=lambda tt: 1 - 0.018 * np.exp(-tt * 25))
+    amps = [abs(math.sin(k * math.pi * 0.17)) / k**1.05 for k in range(1, 20)]
+    dec = [2.6 + 0.7 * k**1.4 for k in range(1, 20)]
+    sig = additive(ph, f0, amps, dec)
+    sig = 0.6 * sig + 0.7 * bandpass(sig, 1100, q=1.2)
+    sig += noise(n, rng) * np.exp(-t * 500) * 0.12
+    return sig * envelope(n, a=0.002, d=0.5, s=1, r=0.1, hold=dur + 0.25) * vel
+
+
+def i_crystal(m, dur, vel, rng):
+    """Cristal : partiels de verre inharmoniques qui battent doucement."""
+    f0 = hz(m)
+    n = int(SR * (dur + 1.4))
+    t = taxis(n)
+    sig = np.zeros(n)
+    for ratio, amp, dec in ((1, 1, 2.0), (2.32, 0.4, 4.5), (4.25, 0.18, 9), (6.63, 0.08, 15)):
+        sig += amp * (np.sin(TWO_PI * f0 * ratio * t) + 0.6 * np.sin(TWO_PI * f0 * ratio * 1.003 * t)) * np.exp(-t * dec)
+    sig += noise(n, rng) * np.exp(-t * 1200) * 0.08
+    return sig * vel * 0.55
+
+
+def i_acid(m, dur, vel, rng):
+    """Basse « acide » : dent de scie, filtre résonant qui se referme à chaque note."""
+    f0 = hz(m)
+    n = int(SR * (dur + 0.04))
+    t = taxis(n)
+    ph = phase(f0, n)
+    fc = f0 * (1.5 + 12 * np.exp(-t * 14))
+    sig = np.zeros(n)
+    for k in range(1, 26):
+        fk = f0 * k
+        if fk > SR * 0.45:
+            break
+        g = 1 / (1 + (fk / fc) ** 4) + 1.4 * np.exp(-(((fk - fc) / (0.18 * fc)) ** 2))
+        sig += g * np.sin(TWO_PI * k * ph) / k
+    return np.tanh(sig * 1.4) * envelope(n, a=0.003, d=0.15, s=0.7, r=0.03) * vel * 0.6
+
+
+def i_spicc(m, dur, vel, rng):
+    """Cordes en spiccato : coups d'archet courts et serrés (ostinato épique)."""
+    f0 = hz(m)
+    n = int(SR * (min(dur, 0.25) + 0.12))
+    sig = np.zeros(n)
+    for det in (-0.004, 0.0, 0.0045):
+        sig += additive(phase(f0 * (1 + det), n) + rng.uniform(), f0, saw_amps(14, 1.1))
+    return lowpass(sig, 3200) * envelope(n, a=0.008, d=0.08, s=0.3, r=0.06) * vel * 0.2
+
+
+def i_drone(m, dur, vel, rng):
+    """Bourdon : cordes graves tenues qui respirent lentement."""
+    f0 = hz(m)
+    n = int(SR * (dur + 1.0))
+    t = taxis(n)
+    sig = np.zeros(n)
+    for det in (-0.003, 0.0, 0.0035):
+        sig += additive(phase(f0 * (1 + det), n) + rng.uniform(), f0, saw_amps(14, 1.25))
+    sig = lowpass(sig, 1300) * (1 + 0.2 * np.sin(TWO_PI * 0.25 * t))
+    return sig * envelope(n, a=0.8, d=0.5, s=1, r=1.0) * vel * 0.15
+
+
 INSTRUMENTS = {
     'pluck': i_pluck,
     'uke': lambda m, d, v, r: i_pluck(m, d, v, r, bright=1, sustain=0.5, pos=0.25),
@@ -373,6 +516,24 @@ INSTRUMENTS = {
     'pizz': i_bass_pizz,
     'distbass': i_bass_dist,
     'tuba': i_tuba,
+    # mondes 11 à 20
+    'organ': i_organ,
+    'bandorgan': lambda m, d, v, r: i_organ(m, d, v, r, drawbars=(1, 0.8, 0.6, 0.5, 0.3, 0.3, 0.15, 0.2), trem=0.12),
+    'calliope': i_calliope,
+    'banjo': i_banjo,
+    'harmonica': i_harmonica,
+    'theremin': i_theremin,
+    'xylo': i_xylo,
+    'vibes': i_vibes,
+    'oud': i_oud,
+    'ney': lambda m, d, v, r: i_flute(m, d, v, r, breath=0.32),
+    'crystal': i_crystal,
+    'acid': i_acid,
+    'spicc': i_spicc,
+    'violins': lambda m, d, v, r: i_strings(m, d, v, r, attack=0.07) * 1.6,
+    'choirlead': lambda m, d, v, r: i_choir(m, d, v, r, formants=((520, 1.0, 110), (900, 0.5, 130), (2500, 0.15, 200)), attack=0.09) * 1.3,
+    'choiroo': lambda m, d, v, r: i_choir(m, d, v, r, formants=((400, 1.0, 100), (800, 0.45, 120), (2400, 0.1, 200))),
+    'drone': i_drone,
 }
 
 
@@ -509,6 +670,87 @@ def d_riser(v, rng, dur=2.0):
     return sig * k**2 * v * 0.5
 
 
+def d_dum(v, rng):
+    """Darbouka, coup grave au centre de la peau."""
+    n = int(SR * 0.35)
+    t = taxis(n)
+    fr = 92 * (1 + 0.35 * np.exp(-t * 40))
+    return (np.sin(TWO_PI * np.cumsum(fr) / SR) * np.exp(-t * 9) + lowpass(noise(n, rng), 900) * np.exp(-t * 60) * 0.3) * v
+
+
+def d_tek(v, rng):
+    """Darbouka, coup sec sur le bord."""
+    n = int(SR * 0.08)
+    t = taxis(n)
+    return (bandpass(noise(n, rng), 3200, q=1.5) * 0.8 + np.sin(TWO_PI * 640 * t) * 0.5) * np.exp(-t * 70) * v * 0.7
+
+
+def d_cowbell(v, rng):
+    n = int(SR * 0.3)
+    t = taxis(n)
+    sig = np.sign(np.sin(TWO_PI * 545 * t)) + np.sign(np.sin(TWO_PI * 815 * t))
+    return bandpass(sig, 900, q=1.2) * (np.exp(-t * 28) * 0.7 + np.exp(-t * 9) * 0.3) * v * 0.35
+
+
+def d_anvil(v, rng):
+    """Pioche sur la roche / enclume : métal inharmonique, très court."""
+    n = int(SR * 0.3)
+    t = taxis(n)
+    sig = np.zeros(n)
+    for f, a, dec in ((820, 1, 18), (1310, 0.7, 22), (2150, 0.5, 30), (3380, 0.3, 40)):
+        sig += a * np.sin(TWO_PI * f * t) * np.exp(-t * dec)
+    sig += highpass(noise(n, rng), 2000) * np.exp(-t * 120) * 0.6
+    return sig * v * 0.35
+
+
+def d_zills(v, rng):
+    """Cymbalettes à doigts."""
+    n = int(SR * 0.7)
+    t = taxis(n)
+    sig = sum(a * np.sin(TWO_PI * f * t) * np.exp(-t * d) for f, a, d in ((2630, 1, 5), (3950, 0.6, 7), (5270, 0.35, 9)))
+    return sig * v * 0.18
+
+
+def d_zap(v, rng):
+    """Laser électro : sinus qui plonge."""
+    n = int(SR * 0.14)
+    t = taxis(n)
+    fr = 220 + 2200 * np.exp(-t * 30)
+    return np.sin(TWO_PI * np.cumsum(fr) / SR) * np.exp(-t * 18) * v * 0.45
+
+
+def d_cannon(v, rng):
+    """Coup de canon : détonation grave et souffle qui retombe."""
+    n = int(SR * 1.6)
+    t = taxis(n)
+    fr = 48 * (1 + 1.2 * np.exp(-t * 20))
+    boom = np.sin(TWO_PI * np.cumsum(fr) / SR) * np.exp(-t * 3)
+    blast = lowpass(noise(n, rng), 700) * (np.exp(-t * 6) + 0.2 * np.exp(-t * 1.5))
+    return np.tanh((boom * 1.4 + blast * 1.2) * 1.5) * v
+
+
+def d_toll(v, rng, m=46):
+    """Glas : grosse cloche grave (bourdon, prime, tierce mineure, quinte, octave), longue tenue."""
+    f0 = hz(m)
+    n = int(SR * 4.0)
+    t = taxis(n)
+    sig = np.zeros(n)
+    for ratio, amp, dec in ((0.5, 0.6, 0.6), (1, 1, 0.9), (1.19, 0.5, 1.3), (1.5, 0.35, 1.6), (2.0, 0.4, 1.8), (2.61, 0.2, 2.6), (3.95, 0.1, 4)):
+        sig += amp * np.sin(TWO_PI * f0 * ratio * t + rng.uniform() * TWO_PI) * np.exp(-t * dec)
+    sig += noise(n, rng) * np.exp(-t * 200) * 0.2
+    return sig * np.clip(t / 0.004, 0, 1) * v * 0.5
+
+
+def d_slide(v, rng, up=True):
+    """Sifflet à coulisse (glissando de dessin animé)."""
+    n = int(SR * 0.55)
+    t = taxis(n)
+    k = t / (n / SR)
+    fr = (700 + 1300 * k**0.8) if up else (1900 - 1300 * k**0.8)
+    fr = fr * (1 + 0.012 * np.sin(TWO_PI * 9 * t))
+    return np.sin(TWO_PI * np.cumsum(fr) / SR) * envelope(n, a=0.03, d=0.1, s=0.9, r=0.1) * v * 0.4
+
+
 DRUMS = {
     'K': d_kick,
     'S': d_snare,
@@ -528,6 +770,12 @@ DRUMS = {
     'r': d_rim,
     'Z': d_crash,
     'j': d_sleigh,
+    'U': d_dum,
+    'k': d_tek,
+    'c': d_cowbell,
+    'A': d_anvil,
+    'Y': d_zills,
+    'Q': d_zap,
 }
 
 
@@ -543,6 +791,7 @@ MODES = {
     'lydian': [0, 2, 4, 6, 7, 9, 11],
     'phrygian': [0, 1, 3, 5, 7, 8, 10],
     'harmonic': [0, 2, 3, 5, 7, 8, 11],
+    'hijaz': [0, 1, 4, 5, 7, 8, 10],  # phrygien dominant (maqâm hijaz)
 }
 ROMAN = {'I': 0, 'II': 2, 'III': 4, 'IV': 5, 'V': 7, 'VI': 9, 'VII': 11}
 
@@ -581,6 +830,10 @@ CELLS = {
     'march': [[4, 4], [3, 1, 4], [4, 2, 2], [6, 2], [2, 2, 4], [8]],
     'calm': [[8], [6, 2], [4, 4], [12, 4], [4, 8, 4]],
     'drive': [[2, 2, 2, 2], [3, 3, 2], [2, 2, 4], [1, 1, 2, 2, 2], [4, 2, 2], [2, 4, 2]],
+    'epic': [[8], [6, 2], [4, 4], [4, 2, 2], [3, 3, 2], [12, 4], [2, 2, 4]],
+    # mesures à 12/8 : ici l'unité est la croche (3 par temps, 12 par mesure)
+    'jig': [[1, 1, 1], [2, 1], [1, 1, 1], [2, 1, 1, 1, 1], [3], [1, 1, 1, 3], [2, 1, 2, 1]],
+    'jigcalm': [[6], [3, 3], [6, 3, 3], [9, 3], [12]],
 }
 
 
@@ -606,11 +859,12 @@ class Scale:
         return idx if best is None else best
 
 
-def rhythm(rng, style, bars=2, rest_end=True):
+def rhythm(rng, style, bars=2, rest_end=True, bl=16):
+    """`bl` = pas par mesure (16 doubles croches en 4/4, 12 croches en 12/8)."""
     cells = CELLS[style]
     out = []
     pos = 0
-    total = 16 * bars
+    total = bl * bars
     while pos < total:
         cell = cells[rng.integers(len(cells))]
         for d in cell:
@@ -620,14 +874,14 @@ def rhythm(rng, style, bars=2, rest_end=True):
             out.append((pos, d))
             pos += d
     # une respiration à la fin du motif
-    if rest_end and len(out) > 3 and out[-1][1] <= 4:
+    if rest_end and len(out) > 3 and out[-1][1] <= bl // 4:
         out = out[:-1]
     return out
 
 
-def motif(rng, style, bars=2, shape=None):
+def motif(rng, style, bars=2, shape=None, bl=16):
     """Un motif = un rythme + un contour mélodique (arche, montée, descente ou vague), en degrés de la gamme."""
-    r = rhythm(rng, style, bars)
+    r = rhythm(rng, style, bars, bl=bl)
     n = len(r)
     shape = shape or ['arch', 'rise', 'wave', 'arch', 'fall'][rng.integers(5)]
     height = int(rng.integers(3, 6))
@@ -650,22 +904,23 @@ def motif(rng, style, bars=2, shape=None):
     return r, moves
 
 
-def realize(scale, mot, bar0, chords, start_idx, lo, hi, cadence=None):
+def realize(scale, mot, bar0, chords, start_idx, lo, hi, cadence=None, bl=16):
     """Pose un motif sur des accords à partir du degré start_idx : temps forts sur des notes de l'accord."""
     r, moves = mot
     root, tones = chords[bar0 % len(chords)]
     idx = scale.chord_degrees_near(start_idx, root, tones)
     out = []
     lo_i, hi_i = scale.index_near(lo), scale.index_near(hi)
+    half = bl // 2
     for i, ((pos, dur), mv) in enumerate(zip(r, moves)):
-        bar = bar0 + pos // 16
+        bar = bar0 + pos // bl
         root, tones = chords[bar % len(chords)]
         idx += mv
         if idx > hi_i:
             idx -= 2 * (idx - hi_i)
         if idx < lo_i:
             idx += 2 * (lo_i - idx)
-        if pos % 8 == 0 or dur >= 6:
+        if pos % half == 0 or dur >= half * 3 // 4:
             idx = scale.chord_degrees_near(idx, root, tones, span=2)
         if i == len(r) - 1 and cadence:
             pcs = [(root + t) % 12 for t in tones]
@@ -675,28 +930,55 @@ def realize(scale, mot, bar0, chords, start_idx, lo, hi, cadence=None):
                 if 0 <= j < len(scale.notes) and scale.notes[j] % 12 in want:
                     idx = j
                     break
-        out.append((bar * 16 + pos % 16, dur, scale.notes[idx]))
+        out.append((bar * bl + pos % bl, dur, scale.notes[idx]))
     if cadence and out:
         # la note finale tient jusqu'au bout de la phrase
         p, d, m = out[-1]
-        end = (bar0 + 2) * 16
+        end = (bar0 + 2) * bl
         out[-1] = (p, max(d, end - p - 1), m)
     return out
 
 
-def section_melody(rng, scale, chords, bar0, style, center, rng_range=9):
+def section_melody(rng, scale, chords, bar0, style, center, rng_range=9, bl=16, max_run=None):
     """8 mesures : motif, sa réponse transposée (fin ouverte), reprise du motif, conclusion qui descend sur la tonique."""
     lo, hi = center - rng_range, center + rng_range
     c = scale.index_near(center)
-    m1 = motif(rng, style)
-    tail = motif(rng, style, shape='fall')
+    m1 = motif(rng, style, bl=bl)
+    tail = motif(rng, style, shape='fall', bl=bl)
     shift = int(rng.choice([2, 1, -1, 3]))
     notes = []
-    notes += realize(scale, m1, bar0 + 0, chords, c, lo, hi)
-    notes += realize(scale, m1, bar0 + 2, chords, c + shift, lo, hi, cadence='open')
-    notes += realize(scale, m1, bar0 + 4, chords, c, lo, hi)
-    notes += realize(scale, tail, bar0 + 6, chords, c + 1, lo, hi, cadence='close')
+    notes += realize(scale, m1, bar0 + 0, chords, c, lo, hi, bl=bl)
+    notes += realize(scale, m1, bar0 + 2, chords, c + shift, lo, hi, cadence='open', bl=bl)
+    notes += realize(scale, m1, bar0 + 4, chords, c, lo, hi, bl=bl)
+    notes += realize(scale, tail, bar0 + 6, chords, c + 1, lo, hi, cadence='close', bl=bl)
+    if max_run:
+        notes = limit_runs(scale, notes, max_run)
     return notes
+
+
+def limit_runs(scale, notes, max_run):
+    """Pas plus de `max_run` fois la même note d'affilée : la suivante passe au degré voisin
+    (vers la note d'après), la dernière note (la cadence) n'est jamais touchée."""
+    out = list(notes)
+    run = 1
+    for i in range(1, len(out)):
+        if out[i][2] != out[i - 1][2]:
+            run = 1
+            continue
+        run += 1
+        if run <= max_run:
+            continue
+        if i == len(out) - 1:
+            # la cadence reste : c'est la note d'avant qui devient une broderie
+            p, d, m = out[i - 1]
+            out[i - 1] = (p, d, scale.notes[scale.index_near(m) + 1])
+            break
+        p, d, m = out[i]
+        j = scale.index_near(m)
+        nxt = next((n for _, _, n in out[i + 1 :] if n != m), m + 1)
+        out[i] = (p, d, scale.notes[j + 1 if nxt > m else j - 1])
+        run = 1
+    return out
 
 
 def harmonize(scale, notes, below=True):
@@ -708,12 +990,12 @@ def harmonize(scale, notes, below=True):
     return out
 
 
-def sparse(notes):
+def sparse(notes, bl=16):
     """Version longue et calme d'une mélodie (pour le pont)."""
     out = []
     for p, d, m in notes:
-        if p % 8 == 0:
-            out.append((p, 8, m))
+        if p % (bl // 2) == 0:
+            out.append((p, bl // 2, m))
     return out
 
 
@@ -750,6 +1032,14 @@ COMP = {
     'arp16': [(i, 1, [0, 1, 2, 3, 2, 1][i % 6]) for i in range(16)],
     'alberti': [(i * 2, 2, [0, 2, 1, 2][i % 4]) for i in range(8)],
     'chug': [(i * 2, 2, 'all') for i in range(8)],
+    'roll': [(i * 2, 2, [0, 1, 2, 0, 1, 2, 0, 2][i]) for i in range(8)],  # roulement de banjo (3 contre 4)
+    'maqsum': [(0, 2, 'all'), (2, 2, 'all'), (6, 2, 'all'), (8, 2, 'all'), (12, 2, 'all')],
+    'stab': [(0, 3, 'all'), (6, 2, 'all'), (10, 2, 'all')],
+    'hits': [(0, 6, 'all'), (12, 4, 'all')],
+    # 12/8
+    'jig': [(0, 2, 'all'), (2, 1, 'all'), (3, 2, 'all'), (5, 1, 'all'), (6, 2, 'all'), (8, 1, 'all'), (9, 2, 'all'), (11, 1, 'all')],
+    'stab12': [(0, 2, 'all'), (3, 1, 'all'), (9, 2, 'all')],
+    'half12': [(0, 6, 'all'), (6, 6, 'all')],
 }
 
 BASS = {
@@ -762,11 +1052,22 @@ BASS = {
     'walk': [(0, 4, 'R'), (4, 4, 'F'), (8, 4, 'O'), (12, 4, 'A')],
     'chug': [(i * 2, 2, 'R') for i in range(8)],
     'gallop': [(0, 2, 'R'), (3, 1, 'R'), (4, 2, 'R'), (8, 2, 'R'), (11, 1, 'R'), (12, 2, 'F'), (14, 2, 'A')],
+    'polka': [(0, 3, 'R'), (4, 3, 'F'), (8, 3, 'R'), (12, 3, 'A')],
+    'twostep': [(0, 4, 'R'), (8, 4, 'F'), (12, 2, 'O'), (14, 2, 'A')],
+    'creep': [(0, 2, 'R'), (3, 1, 'R'), (6, 2, 'F'), (8, 2, 'O'), (11, 1, 'F'), (14, 2, 'A')],
+    'maqsum': [(0, 3, 'R'), (3, 1, 'R'), (6, 2, 'F'), (8, 4, 'R'), (14, 2, 'O')],
+    'cart': [(0, 2, 'R'), (2, 2, 'R'), (4, 2, 'O'), (6, 2, 'R'), (8, 2, 'R'), (10, 2, 'F'), (12, 2, 'O'), (14, 2, 'A')],
+    'soar': [(0, 6, 'R'), (6, 2, 'F'), (8, 6, 'O'), (14, 2, 'A')],
+    'acid': [(0, 2, 'R'), (2, 1, 'O'), (3, 1, 'R'), (4, 2, 'R'), (6, 1, 'F'), (7, 1, 'O'), (8, 2, 'R'), (10, 1, 'O'), (11, 1, 'R'), (12, 2, 'F'), (14, 1, 'O'), (15, 1, 'A')],
+    'heavy': [(0, 6, 'R'), (6, 2, 'R'), (8, 6, 'F'), (14, 2, 'A')],
+    # 12/8
+    'jig': [(0, 2, 'R'), (3, 2, 'F'), (6, 2, 'O'), (9, 2, 'F'), (11, 1, 'A')],
+    'long12': [(0, 10, 'R'), (10, 2, 'A')],
 }
 
 
 # ------------------------------------------------------------------------------
-# Les 10 mondes
+# Les 20 mondes (clé = id fixe du monde, pas sa place sur la carte)
 # ------------------------------------------------------------------------------
 
 WORLDS = {
@@ -850,6 +1151,91 @@ WORLDS = {
         drums={'A': {'K': 'x...x...x...x...', 'C': '....x.......x...', 'h': '..x...x...x...x.'}, 'B': {'K': 'x...x...x...x...', 'C': '....x.......x...', 'h': '..x...x...x...x.', 'x': 'xxxxxxxxxxxxxxxx'}, 'C': {'K': 'x.......x.......', 'h': '..x...x...x...x.'}},
         fill='HMLL', duck=True, echo=True, mix=dict(lead=0.85, counter=0.45, comp=0.4, bass=0.85, pad=0.55, drums=0.75), reverb=0.4,
     ),
+    # --- mondes 11 à 20 (dans l'ordre des id, pas de la carte)
+    11: dict(  # Le Lac : balade sur l'eau
+        max_run=3, name='Le Lac', key=63, mode='mixolydian', bpm=108, swing=0.12, style='song',
+        prog={'A': ['I', 'bVII', 'IV', 'I'], 'B': ['IV', 'v', 'vi', 'bVII', 'IV', 'v', 'ii', 'bVII'], 'C': ['vi', 'bVII', 'IV', 'I', 'ii', 'IV', 'bVII', 'Vsus']},
+        lead='vibes', lead2='flute', counter='marimba', comp=('pluck', 'arp16'), comp_c=('vibes', 'half'), bass=('pizz', 'bounce'), pad='strings',
+        center=75,
+        drums={'A': {'K': 'x.....x.........', 'r': '....x.......x...', 'x': 'x.x.x.x.x.x.x.x.'}, 'B': {'K': 'x.....x...x.....', 'r': '....x.......x...', 'x': 'xxxxxxxxxxxxxxxx', 'B': '..............x.'}, 'C': {'x': 'x.x.x.x.x.x.x.x.', 'K': 'x...............'}},
+        fill='rrMM', mix=dict(lead=0.9, counter=0.4, comp=0.5, bass=0.85, pad=0.35, drums=0.65), reverb=0.3,
+    ),
+    12: dict(  # La Foire : galop de manège
+        max_run=3, name='La Foire', key=61, mode='major', bpm=140, swing=0.0, style='dance',
+        prog={'A': ['I', 'vi', 'ii', 'V7'], 'B': ['IV', 'I', 'V', 'I', 'IV', 'I', 'II', 'V7'], 'C': ['IV', 'iv', 'I', 'vi', 'ii', 'V', 'bVI', 'V7']},
+        lead='calliope', lead2='glock', counter='bandorgan', comp=('bandorgan', 'skank'), comp_c=('celesta', 'alberti'), bass=('tuba', 'polka'), pad=None,
+        center=77,
+        drums={'A': {'K': 'x...x...x...x...', 'S': '..x...x...x...x.'}, 'B': {'K': 'x...x...x...x...', 'S': '..x...x...x...x.', 'o': '..x...x...x...x.', 'T': 'x.x.x.x.x.x.x.x.'}, 'C': {'K': 'x.......x.......', 'T': '..x...x...x...x.'}},
+        fill='SSSS', slide=[(7, 8, True), (23, 8, False)], mix=dict(lead=0.9, counter=0.4, comp=0.5, bass=0.9, pad=0.0, drums=0.7, fx=0.45), reverb=0.2,
+    ),
+    13: dict(  # La Ferme : hoedown
+        max_run=3, name='La Ferme', key=57, mode='major', bpm=156, swing=0.0, style='drive',
+        prog={'A': ['I', 'IV', 'I', 'V'], 'B': ['IV', 'IV', 'I', 'vi', 'II', 'II', 'V', 'V7'], 'C': ['vi', 'IV', 'I', 'V', 'IV', 'I', 'ii', 'V7']},
+        lead='banjo', lead2='fiddle', counter='harmonica', comp=('pluck', 'oompah'), comp_c=('banjo', 'roll'), bass=('bass', 'twostep'), pad=None,
+        layers=[dict(inst='mando', pattern='roll', sections=('B', "A'"), vel=0.4)],
+        center=76,
+        drums={'A': {'K': 'x.......x.......', 'C': '....x.......x...', 'x': 'x.x.x.x.x.x.x.x.'}, 'B': {'K': 'x.......x.......', 'C': '....x.......x...', 'x': 'xxxxxxxxxxxxxxxx', 'c': 'x.x...x.x.x...x.'}, 'C': {'x': 'x.x.x.x.x.x.x.x.', 'c': 'x.......x.......'}},
+        fill='ccSS', intro_keep=('c',), mix=dict(lead=0.95, counter=0.45, comp=0.5, bass=0.9, pad=0.0, drums=0.75, layer=0.3), reverb=0.18,
+    ),
+    14: dict(  # Le Manoir : frissons pour rire
+        max_run=3, name='Le Manoir', key=60, mode='harmonic', bpm=132, swing=0.25, style='dance',
+        prog={'A': ['i', 'bVI', 'iv', 'V'], 'B': ['iv', 'i', 'bII', 'V', 'bVI', 'iv', 'vii°', 'V7'], 'C': ['bVI', 'V', 'i', 'iv', 'bVI', 'iv', 'V', 'V7']},
+        lead='theremin', lead2='xylo', counter='celesta', comp=('harpsi', 'arp8'), comp_c=('harpsi', 'half'), bass=('pizz', 'creep'), bass_c='creep', pad='organ',
+        center=74,
+        drums={'A': {'w': '..x...x...x...x.', 'r': 'x...x...x...x...', 'K': 'x.......x.......'}, 'B': {'w': '..x...x...x...x.', 'r': 'x...x...x...x...', 'K': 'x.......x.......', 'L': 'x..x....x..x....', 'S': '....x.......x...'}, 'C': {'w': 'x...x...x...x...', 'r': '..x...x...x...x.', 'K': 'x.......x.......'}},
+        fill='wwLL', mix=dict(lead=0.85, counter=0.45, comp=0.5, bass=0.9, pad=0.4, drums=0.65), reverb=0.36,
+    ),
+    15: dict(  # Les Pirates : gigue de corsaires (12/8)
+        max_run=3, name='Les Pirates', key=55, mode='minor', bpm=116, swing=0.0, sub=3, style='jig', style_c='jigcalm',
+        prog={'A': ['i', 'bVII', 'bVI', 'V'], 'B': ['iv', 'i', 'bVII', 'bIII', 'iv', 'i', 'V', 'V'], 'C': ['bVI', 'bIII', 'bVII', 'i', 'iv', 'bVI', 'V', 'V7']},
+        lead='fiddle', lead2='brass', counter='whistle', comp=('mando', 'jig'), comp_c=('accordion', 'half12'), bass=('bass', 'jig'), bass_c='long12', pad=None,
+        layers=[dict(inst='brass', pattern='stab12', sections=('A', "A'"), vel=0.45, shift=-12)],
+        center=74,
+        drums={'A': {'K': 'x.....x.....', 'L': '...x.....x..', 'T': '..x..x..x..x'}, 'B': {'K': 'x.....x.....', 'D': 'x.....x.....', 'L': '...x..x..x..', 'M': '.....x.....x', 'S': '...x.....x..', 'T': '.xx.xx.xx.xx'}, 'C': {'L': 'x.....x.....', 'T': '..x.....x...'}},
+        fill='HMDD', cannon=[8, 16], mix=dict(lead=0.95, counter=0.4, comp=0.5, bass=0.9, pad=0.0, drums=0.8, layer=0.35, fx=0.55), reverb=0.24,
+    ),
+    16: dict(  # Le Désert : maqâm hijaz
+        max_run=3, name='Le Désert', key=64, mode='hijaz', bpm=104, swing=0.15, style='dance',
+        prog={'A': ['I', 'bII', 'bvii', 'I'], 'B': ['iv', 'bvii', 'I', 'bII', 'iv', 'bII', 'I', 'I'], 'C': ['bII', 'I', 'iv', 'I', 'bvii', 'bII', 'I', 'bII']},
+        lead='oud', lead2='ney', counter='harp', comp=('mando', 'maqsum'), comp_c=('harp', 'arp8'), bass=('bass', 'maqsum'), pad=None,
+        drone=dict(inst='drone', notes=[12, 19], vel=0.5),
+        center=76,
+        drums={'A': {'U': 'x.......x.......', 'k': '..x...x.....x...', 'T': 'x.x.x.x.x.x.x.x.'}, 'B': {'U': 'x.......x.....x.', 'k': '..x.x.x...x.x.x.', 'T': 'x.x.x.x.x.x.x.x.', 'Y': 'x...............'}, 'C': {'U': 'x.......x.......', 'k': '......x.....x...'}},
+        fill='kkUU', intro_keep=('U', 'k'), mix=dict(lead=0.95, counter=0.45, comp=0.45, bass=0.85, pad=0.0, drums=0.75, drone=0.3), reverb=0.28,
+    ),
+    17: dict(  # Les Mines : wagonnets et cristaux
+        max_run=3, name='Les Mines', key=66, mode='dorian', bpm=136, swing=0.0, style='drive',
+        prog={'A': ['i', 'bIII', 'bVII', 'IV'], 'B': ['bIII', 'IV', 'i', 'v', 'bIII', 'IV', 'ii', 'IV'], 'C': ['bVII', 'i', 'bIII', 'IV', 'bVII', 'i', 'v', 'v']},
+        lead='crystal', lead2='brass', counter='glock', comp=('glock', 'arp8'), comp_c=('celesta', 'arp8'), bass=('synthbass', 'cart'), pad='pad',
+        center=76,
+        drums={'A': {'K': 'x.......x.......', 'A': '....x.......x...', 'h': 'xxxxxxxxxxxxxxxx', 'M': '......x.......x.'}, 'B': {'K': 'x.....x.x.......', 'S': '....x.......x...', 'A': '..x...x...x...x.', 'h': 'xxxxxxxxxxxxxxxx'}, 'C': {'h': 'x.x.x.x.x.x.x.x.', 'A': '....x.......x...'}},
+        fill='AMLL', echo=True, drops=True, intro_keep=('A',), mix=dict(lead=0.85, counter=0.45, comp=0.45, bass=0.85, pad=0.4, drums=0.8, texture=0.25), reverb=0.34,
+    ),
+    18: dict(  # L'Archipel : îles dans le ciel
+        max_run=3, name="L'Archipel", key=56, mode='lydian', bpm=96, swing=0.0, style='song',
+        prog={'A': ['I', 'II', 'V', 'vi'], 'B': ['vi', 'iii', 'II', 'V', 'vi', 'V', 'II', 'II'], 'C': ['iii', 'vi', 'II', 'I', 'iii', 'vi', 'V', 'Vsus']},
+        lead='violins', lead2='horn', counter='celesta', comp=('harp', 'arp16'), comp_c=('celesta', 'arp8'), bass=('bass', 'soar'), pad='choir',
+        center=75,
+        drums={'A': {'K': 'x.....x...x.....', 'T': '....x.......x...', 'x': 'xxxxxxxxxxxxxxxx'}, 'B': {'K': 'x.....x...x.....', 'S': '....x.......x...', 'x': 'xxxxxxxxxxxxxxxx', 'M': '..........x..x..'}, 'C': {'x': 'x.x.x.x.x.x.x.x.', 'K': 'x...............'}},
+        fill='HMLL', wind=True, mix=dict(lead=0.95, counter=0.5, comp=0.5, bass=0.8, pad=0.5, drums=0.6, texture=0.12), reverb=0.42,
+    ),
+    19: dict(  # Néon : ville cyberpunk
+        max_run=3, name='Néon', key=65, mode='minor', bpm=148, swing=0.0, style='drive',
+        prog={'A': ['i', 'bVII', 'bVI', 'bVII'], 'B': ['bVI', 'bIII', 'bVII', 'i', 'bVI', 'bIII', 'v', 'bVII'], 'C': ['iv', 'i', 'bVI', 'bVII', 'iv', 'bVI', 'V', 'V']},
+        lead='chip', lead2='supersaw', counter='bell', comp=('supersaw', 'skank'), comp_c=('pad', 'block'), bass=('acid', 'acid'), bass_c='pump', pad='pad',
+        center=77,
+        drums={'A': {'K': 'x...x...x...x...', 'C': '....x.......x...', 'h': 'xxxxxxxxxxxxxxxx', 'o': '..x...x...x...x.'}, 'B': {'K': 'x...x...x...x...', 'C': '....x.......x...', 'h': 'xxxxxxxxxxxxxxxx', 'o': '..x...x...x...x.', 'Q': '.......x......x.'}, 'C': {'K': 'x.......x.......', 'h': 'xxxxxxxxxxxxxxxx'}},
+        fill='QQSS', duck=True, echo=True, mix=dict(lead=0.8, counter=0.4, comp=0.4, bass=0.9, pad=0.45, drums=0.85), reverb=0.24,
+    ),
+    20: dict(  # La Lune : le combat final
+        max_run=3, name='La Lune', key=58, mode='phrygian', bpm=94, swing=0.0, style='epic',
+        prog={'A': ['i', 'bVI', 'bII', 'i'], 'B': ['iv', 'bVI', 'bVII', 'i', 'bII', 'bVII', 'V', 'V'], 'C': ['bVI', 'bVII', 'iv', 'i', 'bII', 'bII', 'V', 'V']},
+        lead='choirlead', lead2='brass', counter='strings', comp=('spicc', 'arp16'), comp_c=('celesta', 'arp8'), bass=('tuba', 'heavy'), pad='choiroo',
+        layers=[dict(inst='brass', pattern='hits', sections=('B', "A'"), vel=0.5, shift=-12), dict(inst='celesta', pattern='arp8', sections=('A', 'C'), vel=0.35, shift=12)],
+        center=70,
+        drums={'A': {'D': 'x.....x...x.....', 'S': '........x.......', 'h': '..x...x...x...x.'}, 'B': {'D': 'x.....x...x...x.', 'K': 'x.....x...x.....', 'S': '........x.......', 'M': '............x.x.', 'h': 'x.x.x.x.x.x.x.x.'}, 'C': {'D': 'x.......x.......'}},
+        fill='MLDD', intro_keep=('D',), timpani=True, toll=[0, 8, 16, 24], echo=True, echo_buses=('layer',), mix=dict(lead=0.9, counter=0.45, comp=0.5, bass=0.85, pad=0.5, drums=0.85, layer=0.35, fx=0.45), reverb=0.4,
+    ),
 }
 
 
@@ -861,8 +1247,11 @@ WORLDS = {
 def render(wid):
     spec = WORLDS[wid]
     rng = np.random.default_rng(1000 + wid)
+    # pas par temps : 4 doubles croches (4/4) ou 3 croches (12/8, gigue)
+    sub = spec.get('sub', 4)
+    BL = 4 * sub
+    HALF = BL // 2
     beat = 60 / spec['bpm']
-    sixteenth = beat / 4
     bars = 32
     loop = bars * 4 * beat
     tail = 2.5
@@ -871,14 +1260,14 @@ def render(wid):
     swing = spec['swing']
 
     def at(step):
-        """Position (en s) d'une double croche, avec le swing sur les contretemps."""
-        b, s = divmod(step, 4)
-        frac = s / 4
+        """Position (en s) d'un pas de la grille, avec le swing sur les contretemps."""
+        b, s = divmod(step, sub)
+        frac = s / sub
         if swing:
             frac = frac * (1 + swing) if frac < 0.5 else 0.5 + swing / 2 + (frac - 0.5) * (1 - swing)
         return (b + frac) * beat
 
-    buses = {k: np.zeros(n_total) for k in ('lead', 'counter', 'comp', 'bass', 'pad', 'drums', 'fx')}
+    buses = {k: np.zeros(n_total) for k in ('lead', 'counter', 'comp', 'bass', 'pad', 'drums', 'fx', 'layer', 'drone', 'texture')}
 
     def add(bus, sig, t):
         i = int(round(t * SR))
@@ -902,41 +1291,61 @@ def render(wid):
         all_chords += ch
 
     center = spec['center']
-    melody_a = section_melody(rng, scale, chords_of('A'), 0, spec['style'], center)
-    melody_b = section_melody(rng, scale, chords_of('B'), 0, spec['style'], center + 3)
-    melody_c = section_melody(rng, scale, chords_of('C'), 0, 'calm', center - 2)
+    mr = spec.get('max_run')
+    melody_a = section_melody(rng, scale, chords_of('A'), 0, spec['style'], center, bl=BL, max_run=mr)
+    melody_b = section_melody(rng, scale, chords_of('B'), 0, spec['style'], center + 3, bl=BL, max_run=mr)
+    melody_c = section_melody(rng, scale, chords_of('C'), 0, spec.get('style_c', 'calm'), center - 2, bl=BL, max_run=mr)
 
     # --- mélodies
     for p, d, m in melody_a:
         play('lead', spec['lead'], m, p, d, 0.8)
     for p, d, m in melody_b:
-        play('lead', spec['lead2'], m, 8 * 16 + p, d, 0.78)
+        play('lead', spec['lead2'], m, 8 * BL + p, d, 0.78)
     for p, d, m in melody_a:  # A' : le thème à l'octave, avec une seconde voix
-        play('lead', spec['lead'], m + 12 if m + 12 <= 93 else m, 16 * 16 + p, d, 0.72)
-        play('lead', spec['lead2'], m, 16 * 16 + p, d, 0.35)
+        play('lead', spec['lead'], m + 12 if m + 12 <= 93 else m, 16 * BL + p, d, 0.72)
+        play('lead', spec['lead2'], m, 16 * BL + p, d, 0.35)
     for p, d, m in harmonize(scale, melody_a):
-        play('counter', spec['counter'], m, 16 * 16 + p, d, 0.5)
-    for p, d, m in sparse(melody_c):
-        play('lead', spec['lead2'], m, 24 * 16 + p, d, 0.6)
+        play('counter', spec['counter'], m, 16 * BL + p, d, 0.5)
+    for p, d, m in sparse(melody_c, bl=BL):
+        play('lead', spec['lead2'], m, 24 * BL + p, d, 0.6)
 
     # --- accompagnement (avec conduite des voix)
     prev = None
+    voicings = []
     for bar, (root, tones) in enumerate(all_chords):
         section = plan[bar // 8][0]
         inst, pattern = spec['comp_c'] if section == 'C' else spec['comp']
         v = voicing(root, tones, prev)
         prev = v
+        voicings.append(v)
         light = section == 'A' and bar < 2
         for pos, dur, which in COMP[pattern]:
-            if light and pos % 8:
+            if light and pos % HALF:
                 continue
             notes = v if which == 'all' else [v[which % len(v)] + (12 if isinstance(which, int) and which >= len(v) else 0)]
             for k, m in enumerate(notes):
                 # léger décalage entre les cordes d'un accord gratté
-                play('comp', inst, m, bar * 16 + pos, dur, 0.55 - 0.05 * k + (0.1 if pos == 0 else 0))
+                play('comp', inst, m, bar * BL + pos, dur, 0.55 - 0.05 * k + (0.1 if pos == 0 else 0))
         if spec.get('pad') and section in ('B', "A'", 'C'):
             for m in v:
-                play('pad', spec['pad'], m, bar * 16, 16, 0.5)
+                play('pad', spec['pad'], m, bar * BL, BL, 0.5)
+
+    # --- couches en plus (stabs de cuivres, roulements, scintillements…), sur certaines parties
+    for layer in spec.get('layers', ()):
+        for bar, v in enumerate(voicings):
+            if plan[bar // 8][0] not in layer['sections']:
+                continue
+            for pos, dur, which in COMP[layer['pattern']]:
+                notes = v if which == 'all' else [v[which % len(v)] + (12 if isinstance(which, int) and which >= len(v) else 0)]
+                for m in notes:
+                    play('layer', layer['inst'], m + layer.get('shift', 0), bar * BL + pos, dur, layer.get('vel', 0.5))
+
+    # --- bourdon tenu sur la tonique (et la quinte), une note par partie
+    if spec.get('drone'):
+        base = 36 + (scale.key - 36) % 12
+        for bar in (0, 8, 16, 24):
+            for off in spec['drone']['notes']:
+                play('drone', spec['drone']['inst'], base + off, bar * BL, 8 * BL, spec['drone'].get('vel', 0.5))
 
     # --- basse
     inst, pattern = spec['bass']
@@ -947,41 +1356,66 @@ def render(wid):
         target = 36 + (nroot - 36) % 12
         approach = target - 1 if target - 1 != r else target + 2
         section = plan[bar // 8][0]
-        pat = BASS['long'] if section == 'C' and pattern not in ('long',) else BASS[pattern]
+        pat = BASS[spec.get('bass_c', 'long')] if section == 'C' and pattern != 'long' else BASS[pattern]
         for pos, dur, role in pat:
             m = {'R': r, 'F': fifth, 'O': r + 12, 'A': approach}[role]
-            play('bass', inst, m, bar * 16 + pos, dur, 0.55 if section == 'C' else 0.85)
+            play('bass', inst, m, bar * BL + pos, dur, 0.55 if section == 'C' else 0.85)
 
     # --- batterie
+    intro_keep = ('x', 'j', 'h', 'K', 'w', 'r', 'T') + tuple(spec.get('intro_keep', ()))
     for bar in range(bars):
         section = plan[bar // 8][0].replace("'", '')
         groove = spec['drums']['B' if section == 'A' and bar >= 16 else section]
         if section == 'A' and bar < 16 and bar < 2:
-            groove = {k: v for k, v in groove.items() if k in ('x', 'j', 'h', 'K', 'w', 'r', 'T')}
+            groove = {k: v for k, v in groove.items() if k in intro_keep}
         last = bar % 8 == 7
         for name, pat in groove.items():
             for s, ch in enumerate(pat):
                 if ch == '.':
                     continue
-                if last and s >= 8:
+                if last and s >= HALF:
                     continue  # place au break
-                vel = 0.95 if s % 4 == 0 else 0.6 + 0.15 * rng.uniform()
-                add('drums', DRUMS[name](vel, rng), at(bar * 16 + s))
+                vel = 0.95 if s % sub == 0 else 0.6 + 0.15 * rng.uniform()
+                add('drums', DRUMS[name](vel, rng), at(bar * BL + s))
         if last:
             fill = spec['fill']
-            for i in range(8):
-                add('drums', DRUMS[fill[i // 2]](0.55 + i * 0.05, rng), at(bar * 16 + 8 + i))
+            for i in range(HALF):
+                v = 0.55 + i * 0.05 if HALF == 8 else 0.55 + i * 0.4 / HALF
+                add('drums', DRUMS[fill[i * 4 // HALF]](v, rng), at(bar * BL + HALF + i))
         if bar % 8 == 0 and bar > 0:
-            add('drums', d_crash(0.9, rng), at(bar * 16))
+            add('drums', d_crash(0.9, rng), at(bar * BL))
             if spec.get('timpani'):
-                add('drums', d_timpani(0.9, rng, m=scale.key - 24), at(bar * 16))
+                add('drums', d_timpani(0.9, rng, m=scale.key - 24), at(bar * BL))
     if spec.get('bell'):
         for bar in (0, 8, 16, 24):
-            add('fx', d_shipbell(0.5, rng), at(bar * 16 + 2))
+            add('fx', d_shipbell(0.5, rng), at(bar * BL + 2))
     if spec.get('thunder'):
-        add('fx', d_thunder(0.6, rng), at(24 * 16))
+        add('fx', d_thunder(0.6, rng), at(24 * BL))
+    for bar in spec.get('toll', ()):
+        add('fx', d_toll(0.9, rng, m=48 + (scale.key - 36) % 12), at(bar * BL))
+    for bar in spec.get('cannon', ()):
+        add('fx', d_cannon(0.9, rng), at(bar * BL))
+    for bar, step, up in spec.get('slide', ()):
+        add('fx', d_slide(0.8, rng, up=up), at(bar * BL + step))
     # montée vers la reprise du début
-    add('fx', d_riser(0.5, rng, dur=at(32 * 16) - at(30 * 16)), at(30 * 16))
+    add('fx', d_riser(0.5, rng, dur=at(32 * BL) - at(30 * BL)), at(30 * BL))
+
+    # --- ambiance : gouttes qui tombent dans la grotte, vent des hauteurs
+    if spec.get('drops'):
+        for bar in range(bars):
+            for _ in range(int(rng.integers(0, 3))):
+                f0 = rng.uniform(900, 2200)
+                n = int(SR * 0.09)
+                t = taxis(n)
+                fr = f0 * (1 + 1.4 * t / 0.09)
+                drop = np.sin(TWO_PI * np.cumsum(fr) / SR) * np.exp(-t * 45) * np.clip(t / 0.002, 0, 1)
+                add('texture', drop * rng.uniform(0.4, 1.0), at(bar * BL) + rng.uniform(0, 4 * beat))
+    if spec.get('wind'):
+        n_loop = int(SR * loop)
+        t = taxis(n_loop)
+        gust = 0.55 + 0.45 * np.sin(TWO_PI * t / loop * 5 + 1.3) * np.sin(TWO_PI * t / loop * 3)
+        w = bandpass(rng.standard_normal(n_loop), 700, q=0.8) + 0.5 * bandpass(rng.standard_normal(n_loop), 2200, q=1.2)
+        buses['texture'][:n_loop] += w * gust
 
     # --- mixage
     mix = spec['mix']
@@ -993,16 +1427,16 @@ def render(wid):
         s = sig / peak * g
         if bus == 'bass':
             s = lowpass(s, 900)
-        if bus in ('comp', 'pad', 'counter'):
+        if bus in ('comp', 'pad', 'counter', 'layer'):
             s = highpass(s, 180)
-        if bus == 'lead' and spec.get('echo'):
+        if bus in spec.get('echo_buses', ('lead',)) and spec.get('echo'):
             d = int(SR * beat * 0.75)
             echo = np.zeros_like(s)
             echo[d:] = s[:-d] * 0.35
             echo[2 * d :] += s[: -2 * d] * 0.15
             s = s + echo
         out += s
-        send += s * (0.35 if bus in ('lead', 'pad', 'counter', 'fx') else 0.15)
+        send += s * (0.35 if bus in ('lead', 'pad', 'counter', 'fx', 'layer', 'drone', 'texture') else 0.15)
     # réverbération : bruit qui décroît (convolution par FFT)
     ir_n = int(SR * 1.8)
     t = taxis(ir_n)
@@ -1015,7 +1449,7 @@ def render(wid):
     if spec.get('duck'):
         duck = np.ones(n_total)
         for q in range(bars * 4):
-            i = int(at(q * 4) * SR)
+            i = int(at(q * sub) * SR)
             m = min(int(SR * beat * 0.6), n_total - i)
             duck[i : i + m] = np.minimum(duck[i : i + m], 0.55 + 0.45 * (np.arange(m) / m) ** 0.5)
         out = out * (0.6 + 0.4 * duck)

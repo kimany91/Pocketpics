@@ -1,6 +1,7 @@
 /**
  * Musiques de combat (composées par scripts/generate-music.py) : une par monde
- * de l'aventure, en boucle, qui démarre en fondu au début du combat et
+ * de l'aventure (indexées par l'id fixe du monde, pas par sa place sur la
+ * carte), en boucle, qui démarre en fondu au début du combat et
  * s'arrête en fondu à la fin. Les combats en ligne prennent celle de la
  * Tempête. Le volume se règle à part de celui des effets sonores.
  */
@@ -18,6 +19,16 @@ const TRACKS: Record<number, number> = {
   8: require('../../assets/music/world-8.m4a'),
   9: require('../../assets/music/world-9.m4a'),
   10: require('../../assets/music/world-10.m4a'),
+  11: require('../../assets/music/world-11.m4a'),
+  12: require('../../assets/music/world-12.m4a'),
+  13: require('../../assets/music/world-13.m4a'),
+  14: require('../../assets/music/world-14.m4a'),
+  15: require('../../assets/music/world-15.m4a'),
+  16: require('../../assets/music/world-16.m4a'),
+  17: require('../../assets/music/world-17.m4a'),
+  18: require('../../assets/music/world-18.m4a'),
+  19: require('../../assets/music/world-19.m4a'),
+  20: require('../../assets/music/world-20.m4a'),
 };
 /** Morceau des combats en ligne. */
 export const ONLINE_TRACK = 8;

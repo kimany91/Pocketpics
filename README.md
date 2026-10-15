@@ -89,26 +89,38 @@ Les effets en cours disparaissent quand la carte quitte le terrain (sauf l'étou
 
 **Mise en scène.** Le décor est l'illustration du monde, floutée sous un voile sombre (`src/components/battle/ArenaBackdrop.tsx`). Le combat s'ouvre sur un écran « VS » d'environ 1,6 s (un toucher le passe), puis les cartes tombent sur leur socle. Au repos, elles flottent doucement. Une carte qui attaque fonce en diagonale vers l'adversaire en laissant une traînée. La carte touchée prend un éclat, une onde et des étincelles, sa jauge clignote, et l'écran tremble selon la part de PV perdue. Un critique ou un coup de grâce ajoute un éclair blanc. Le cadre du message prend la couleur du camp dont il parle, et un onglet dit à qui est le tour.
 
-**Musique.** Chaque monde a sa propre musique de combat, composée par `python3 scripts/generate-music.py` (tout est synthétisé, rien sous licence) et encodée en AAC (`assets/music/world-<n>.m4a`, 3,9 Mo pour les 10). Les combats en ligne prennent celle de la Tempête. La musique démarre en fondu au début du combat et s'arrête en fondu à la fin. Son volume se règle à part (45 % par défaut, enregistré dans la sauvegarde) dans la fenêtre « Son », ouverte depuis l'icône 🔊 de l'accueil ou depuis l'icône ♪ en combat.
+**Musique.** Chaque monde a sa propre musique de combat, composée par `python3 scripts/generate-music.py` (tout est synthétisé, rien sous licence) et encodée en AAC (`assets/music/world-<id>.m4a`, numérotés par l'id fixe du monde, 8 Mo pour les 20). Les combats en ligne prennent celle de la Tempête. La musique démarre en fondu au début du combat et s'arrête en fondu à la fin. Son volume se règle à part (45 % par défaut, enregistré dans la sauvegarde) dans la fenêtre « Son », ouverte depuis l'icône 🔊 de l'accueil ou depuis l'icône ♪ en combat.
 
 Chaque morceau est une vraie petite composition en boucle (48 à 84 s), pas un accord qui se répète :
 
-- **4 parties de 8 mesures** : A (le thème), B (le développement, sur une autre grille d'accords), A' (le thème à l'octave avec une seconde voix à la tierce) et C (un pont plus calme, sur une troisième grille, qui remonte vers le début). Breaks de batterie en fin de partie, cymbale au début de la suivante.
-- **Des mélodies construites** : un motif de 2 mesures qui suit un contour (arche, montée, vague…), sa réponse transposée sur les accords suivants (fin ouverte), la reprise du motif, puis une conclusion qui descend sur la tonique. Les temps forts tombent sur des notes de l'accord.
-- **Basse et accompagnement écrits par style** (rebond, reggae, oum-pa, marche, pompe électronique, galop métal…), avec des accords qui s'enchaînent par le plus court chemin.
+- **4 parties de 8 mesures** (en 4/4, ou en 12/8 pour la gigue des Pirates) : A (le thème), B (le développement, sur une autre grille d'accords), A' (le thème à l'octave avec une seconde voix à la tierce) et C (un pont plus calme, sur une troisième grille, qui remonte vers le début). Breaks de batterie en fin de partie, cymbale au début de la suivante.
+- **Des mélodies construites** : un motif de 2 mesures qui suit un contour (arche, montée, vague…), sa réponse transposée sur les accords suivants (fin ouverte), la reprise du motif, puis une conclusion qui descend sur la tonique. Les temps forts tombent sur des notes de l'accord, et jamais plus de trois fois la même note d'affilée dans les nouveaux mondes.
+- **Basse et accompagnement écrits par style** (rebond, reggae, oum-pa, marche, pompe électronique, galop métal, polka, deux-temps country, maqsoum, wagonnet, basse acide…), avec des accords qui s'enchaînent par le plus court chemin.
 
-| Monde | Tonalité, tempo | Couleur | Instruments |
-| --- | --- | --- | --- |
-| Le Parc | Fa majeur, 124 | Promenade joyeuse | Glockenspiel, sifflet, ukulélé, claps |
-| La Plage | Do majeur, 112 | Calypso | Steel drum, marimba en contretemps, bongos |
-| Le Marché | Ré mineur harmonique, 144 | Tarentelle | Accordéon, violon, mandoline, tambourin |
-| La Forêt | Mi dorien, 100 | Aventure mystérieuse | Flûte, harpe, chœur, toms, wood-block |
-| Le Port | Sol majeur, 118 (balancé) | Chant de marins | Violon, accordéon, tuba, cloche de bateau |
-| La Montagne | Ré lydien, 92 | Souffle épique | Cor, célesta, chœur, timbales, grelots |
-| Le Volcan | Do# phrygien, 152 | Lourd et menaçant | Guitares saturées, cuivres, taïkos |
-| La Tempête | Si mineur, 160 | Électrique | Supersaw, arpèges, basse pompée, tonnerre |
-| Le Palais | Sib majeur, 112 | Fanfare royale | Cuivres, clavecin en basse d'Alberti, caisse claire de marche |
-| Le Cosmos | La mineur, 128 | Synthwave spatiale | Cloche, synthés, nappes, écho |
+Dans l'ordre de la carte (n° = id du monde et du fichier) :
+
+| # | Monde | Tonalité, tempo | Couleur | Instruments |
+| --- | --- | --- | --- | --- |
+| 1 | Le Parc | Fa majeur, 124 | Promenade joyeuse | Glockenspiel, sifflet, ukulélé, claps |
+| 11 | Le Lac | Mib mixolydien, 108 (léger balancé) | Balade sur l'eau | Vibraphone, flûte, guitare en arpèges, contrebasse pizzicato, cordes |
+| 2 | La Plage | Do majeur, 112 | Calypso | Steel drum, marimba en contretemps, bongos |
+| 12 | La Foire | Réb majeur, 140 | Galop de manège | Orgue de manège à vapeur, orgue de barbarie, glockenspiel, tuba, sifflet à coulisse |
+| 3 | Le Marché | Ré mineur harmonique, 144 | Tarentelle | Accordéon, violon, mandoline, tambourin |
+| 13 | La Ferme | La majeur, 156 | Hoedown | Banjo, violon, harmonica, mandoline, cloche de vache, claps |
+| 4 | La Forêt | Mi dorien, 100 | Aventure mystérieuse | Flûte, harpe, chœur, toms, wood-block |
+| 14 | Le Manoir | Do mineur harmonique, 132 (balancé) | Frissons pour rire | Thérémine, xylophone, clavecin, orgue, célesta, pizzicati, wood-block |
+| 5 | Le Port | Sol majeur, 118 (balancé) | Chant de marins | Violon, accordéon, tuba, cloche de bateau |
+| 15 | Les Pirates | Sol mineur, 116 en 12/8 | Gigue de corsaires | Violon, cuivres et stabs, sifflet, mandoline, grosses caisses et toms, canons |
+| 16 | Le Désert | Mi hijaz, 104 | Maqâm du désert | Oud, ney, harpe, bourdon, darbouka, cymbalettes |
+| 6 | La Montagne | Ré lydien, 92 | Souffle épique | Cor, célesta, chœur, timbales, grelots |
+| 17 | Les Mines | Fa# dorien, 136 | Wagonnets et cristaux | Cristaux en écho, cuivres, glockenspiel, basse synthé, pioches, gouttes |
+| 7 | Le Volcan | Do# phrygien, 152 | Lourd et menaçant | Guitares saturées, cuivres, taïkos |
+| 8 | La Tempête | Si mineur, 160 | Électrique | Supersaw, arpèges, basse pompée, tonnerre |
+| 18 | L'Archipel | Lab lydien, 96 | Îles dans le ciel | Violons, cor, harpe, célesta, chœur, vent |
+| 9 | Le Palais | Sib majeur, 112 | Fanfare royale | Cuivres, clavecin en basse d'Alberti, caisse claire de marche |
+| 19 | Néon | Fa mineur, 148 | Ville cyberpunk | Lead carré en écho, supersaw en contretemps, basse acide, lasers |
+| 10 | Le Cosmos | La mineur, 128 | Synthwave spatiale | Cloche, synthés, nappes, écho |
+| 20 | La Lune | Sib phrygien, 94 | Combat final | Chœur sombre, cuivres graves, cordes spiccato, taïkos, timbales, glas, célesta en écho |
 
 **Déroulé.** Avant le combat, on choisit 4 cartes (la première commence ; « Auto » prend les plus fortes). L'adversaire en a 4 aussi. On voit sa carte active et ses remplaçantes. Changer de carte est possible à tout moment, mais ça utilise le tour. Une carte K.O. est remplacée sans perdre de tour. Le camp qui n'a plus de carte debout perd.
 
