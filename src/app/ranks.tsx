@@ -6,13 +6,15 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { router, useIsFocused } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../components/AppText';
+import { Burst, Glow, Shockwave } from '../components/fx';
+import { PulseRings, useLoop } from '../components/online/Pulse';
 import { RankEmblem } from '../components/rank/RankEmblem';
 import { DIVISIONS, DIVISION_POINTS, LAST_INDEX, TIERS, rankOf, shownMmr } from '../game/rank';
 import { useGame } from '../state/game';
@@ -50,6 +52,28 @@ export default function RanksScreen() {
   }, [grow]);
   const fillStyle = useAnimatedStyle(() => ({ height: Math.max(0, fillH * grow.value) }));
   const markerStyle = useAnimatedStyle(() => ({ transform: [{ translateY: -fillH * grow.value }] }));
+  // traînée lumineuse sous le repère pendant la montée, qui s'éteint à l'arrivée
+  const trailStyle = useAnimatedStyle(() => ({ opacity: grow.value < 0.98 ? Math.min(1, grow.value * 6) : Math.max(0, (1 - grow.value) * 50), transform: [{ scaleY: 0.4 + Math.min(1, grow.value * 3) * 0.6 }] }));
+
+  // arrivée : onde sur le repère, étincelles et emblème qui rejoue son apparition
+  const focused = useIsFocused();
+  const [arrived, setArrived] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setArrived(1);
+      haptic.light();
+    }, 250 + 1250);
+    return () => clearTimeout(t);
+  }, []);
+  // reflet qui remonte la barre en boucle
+  const sweep = useLoop(focused && arrived > 0, 2600);
+  const sweepStyle = useAnimatedStyle(() => ({ transform: [{ translateY: fillH - sweep.value * (fillH + 160) }] }));
+  const halo = useSharedValue(0);
+  useEffect(() => {
+    if (!arrived || !focused) return;
+    halo.value = withSequence(withTiming(1, { duration: 200 }), withRepeat(withTiming(0.45, { duration: 1300, easing: Easing.inOut(Easing.sin) }), -1, true));
+  }, [arrived, focused, halo]);
+  const haloStyle = useAnimatedStyle(() => ({ opacity: halo.value }));
 
   const centerOnMe = (animated: boolean) => scroll.current?.scrollTo({ y: Math.max(0, myY - height * 0.55), animated });
 
@@ -90,6 +114,9 @@ export default function RanksScreen() {
             style={[styles.abs, { left: 0, bottom: 0, width: BAR, height: COUNT * STEP }]}
           />
           <View style={styles.fillShine} />
+          <Animated.View style={[styles.abs, { left: 0, top: 0, width: BAR, height: 160 }, sweepStyle]}>
+            <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.75)', 'rgba(255,255,255,0)']} style={StyleSheet.absoluteFill} />
+          </Animated.View>
         </Animated.View>
 
         {/* les 18 divisions */}
@@ -118,7 +145,17 @@ export default function RanksScreen() {
               {/* cran sur la barre */}
               <View style={[styles.abs, styles.notch, { left: cx - 9, top: emblemH / 2 - 9, borderColor: reached ? r.tier.color : 'rgba(255,255,255,0.25)', backgroundColor: reached ? r.tier.color2 : colors.bg }]} />
               <View style={[styles.abs, styles.node, { left: colX, width: side, top: 0, opacity: reached ? 1 : 0.5 }]}>
-                <RankEmblem rank={r} size={size} still={!current} />
+                {current ? (
+                  <View style={[styles.abs, { left: side / 2, top: emblemH / 2 }]}>
+                    <Animated.View style={[styles.abs, { left: -size * 1.1, top: -size * 1.1 }, haloStyle]}>
+                      <Glow color={r.tier.color} size={size * 2.2} />
+                    </Animated.View>
+                    <PulseRings color={r.tier.color} size={size * 1.9} count={2} duration={2600} active={focused && arrived > 0} />
+                    <Shockwave trigger={arrived} color={r.tier.color} size={size} />
+                    <Burst trigger={arrived} colors={[r.tier.color, r.tier.color2, '#FFFFFF']} count={18} radius={size * 1.5} />
+                  </View>
+                ) : null}
+                <RankEmblem rank={r} size={size} still={!current || !focused} play={current ? 1 + arrived : 1} />
                 <AppText numberOfLines={1} style={[styles.label, { color: reached ? r.tier.color : colors.text, fontSize: current ? 20 : 16 }]}>
                   {r.label}
                 </AppText>
@@ -134,6 +171,16 @@ export default function RanksScreen() {
 
         {/* mon repère : il monte avec le remplissage */}
         <Animated.View pointerEvents="none" style={[styles.abs, { left: 0, right: 0, top: yOf(0) - 20, height: 40 }, markerStyle]}>
+          <Animated.View style={[styles.abs, { left: cx - BAR / 2 - 4, top: 20, width: BAR + 8, height: 150 }, trailStyle]}>
+            <LinearGradient colors={['#FFFFFF', `${me.tier.color}AA`, `${me.tier.color}00`]} style={[StyleSheet.absoluteFill, { borderRadius: BAR }]} />
+          </Animated.View>
+          <View style={[styles.abs, { left: cx, top: 20 }]}>
+            <Animated.View style={[styles.abs, { left: -50, top: -50 }, haloStyle]}>
+              <Glow color={me.tier.color} size={100} />
+            </Animated.View>
+            <PulseRings color={me.tier.color} size={80} count={2} duration={1800} active={focused && arrived > 0} thickness={2} />
+            <Shockwave trigger={arrived} color="#FFFFFF" size={44} />
+          </View>
           <View style={[styles.marker, { left: cx - 20, borderColor: me.tier.color }]}>
             <AppText style={styles.markerText}>{name.slice(0, 1).toUpperCase()}</AppText>
           </View>

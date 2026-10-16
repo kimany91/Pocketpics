@@ -1,11 +1,15 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useIsFocused } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Linking, StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { Header } from '../../components/Header';
+import { ScanFrame } from '../../components/online/ScanFrame';
+import { StatusPill } from '../../components/online/StatusPill';
 import { useGoToRoomWhenConnected } from '../../state/useTradeNavigation';
 import { parseTradeQr } from '../../trade/code';
 import { useTrade } from '../../trade/session';
@@ -20,6 +24,7 @@ export default function ScanScreen() {
   const error = useTrade((s) => s.error);
   const [bad, setBad] = useState(false);
   const busy = useRef(false);
+  const focused = useIsFocused();
   useGoToRoomWhenConnected();
 
   const onScan = ({ data }: { data: string }) => {
@@ -60,17 +65,18 @@ export default function ScanScreen() {
             barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
             onBarcodeScanned={connecting ? undefined : onScan}
           />
-          <View style={styles.frame} pointerEvents="none" />
+          <ScanFrame bad={bad && !connecting} ok={connecting} active={focused} />
           <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
             {connecting ? (
-              <View style={styles.row}>
-                <ActivityIndicator color={colors.text} />
-                <AppText variant="label">Connexion à l'échange…</AppText>
-              </View>
+              <Animated.View entering={FadeInDown.duration(250)}>
+                <StatusPill tone="connecting" text="Connexion à l’échange" active={focused} />
+              </Animated.View>
             ) : (
-              <AppText variant="label" style={{ textAlign: 'center' }}>
-                {error && phase === 'idle' ? error : bad ? "Ce QR code n'est pas un échange PocketPics." : 'Vise le QR code affiché sur le téléphone de ton ami'}
-              </AppText>
+              <Animated.View key={error && phase === 'idle' ? 'err' : bad ? 'bad' : 'aim'} entering={FadeInDown.duration(250)}>
+                <AppText variant="label" style={{ textAlign: 'center', color: (error && phase === 'idle') || bad ? '#FF8A93' : colors.text }}>
+                  {error && phase === 'idle' ? error : bad ? "Ce QR code n'est pas un échange PocketPics." : 'Vise le QR code affiché sur le téléphone de ton ami'}
+                </AppText>
+              </Animated.View>
             )}
           </View>
         </View>
@@ -83,7 +89,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   cameraWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  frame: { width: 240, height: 240, borderRadius: 28, borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)' },
   footer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingTop: 20, backgroundColor: 'rgba(0,0,0,0.55)' },
   row: { flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center' },
 });

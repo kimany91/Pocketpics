@@ -1,12 +1,18 @@
+import { Ionicons } from '@expo/vector-icons';
+import { router, useIsFocused } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
-import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import { Share, StyleSheet, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { Header } from '../../components/Header';
 import { Screen } from '../../components/Screen';
+import { CodeTicket } from '../../components/online/CodeTicket';
+import { GlowQR } from '../../components/online/GlowQR';
+import { Message } from '../../components/online/Message';
+import { Radar } from '../../components/online/Radar';
+import { StatusPill } from '../../components/online/StatusPill';
 import { useGoToRoomWhenConnected } from '../../state/useTradeNavigation';
 import { tradeQrValue } from '../../trade/code';
 import { type TradeMode, useTrade } from '../../trade/session';
@@ -18,63 +24,58 @@ export default function HostScreen() {
   const phase = useTrade((s) => s.phase);
   const error = useTrade((s) => s.error);
   const [mode, setMode] = useState<TradeMode>('online');
+  const active = useIsFocused();
   useGoToRoomWhenConnected();
 
   useEffect(() => {
     void host(mode);
   }, [host, mode]);
   const other: TradeMode = mode === 'online' ? 'lan' : 'online';
-
-  const pulse = useSharedValue(0.4);
-  useEffect(() => {
-    pulse.value = withRepeat(withTiming(1, { duration: 900 }), -1, true);
-  }, [pulse]);
-  const dot = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  const connecting = phase === 'connecting';
 
   return (
     <Screen edges={['top', 'bottom']}>
       <Header title="Héberger un échange" />
       <View style={styles.body}>
         {error && phase === 'idle' ? (
-          <View style={{ alignItems: 'center', gap: 16 }}>
-            <AppText variant="heading" style={{ textAlign: 'center' }}>
-              Impossible d'héberger
-            </AppText>
-            <AppText variant="caption" style={{ textAlign: 'center' }}>
-              {error}
-            </AppText>
-            <Button label="Réessayer" kind="secondary" onPress={() => void host(mode)} />
-            <Button label={switchLabel(other)} kind="ghost" onPress={() => setMode(other)} />
-          </View>
+          <Message icon="cloud-offline-outline" title="Impossible d’héberger" text={error} onBack={() => router.back()} onRetry={() => void host(mode)}>
+            <Button label={switchLabel(other)} kind="secondary" onPress={() => setMode(other)} />
+          </Message>
         ) : !code ? (
-          <ActivityIndicator color={colors.text} />
-        ) : (
-          <Animated.View key={mode} entering={FadeIn.duration(400)} style={{ alignItems: 'center' }}>
-            <AppText variant="caption" style={{ marginBottom: 18 }}>
-              Fais scanner ce QR code à ton ami
-            </AppText>
-            <View style={styles.qr}>
-              <QRCode value={tradeQrValue(code)} size={210} color="#0B0B0D" backgroundColor="#F5F3EE" />
-            </View>
-            <AppText variant="caption" style={{ marginTop: 28 }}>
-              ou donne-lui ce code
-            </AppText>
-            <AppText variant="mono" selectable style={{ marginTop: 6 }}>
-              {code}
-            </AppText>
-            <View style={styles.status}>
-              <Animated.View style={[styles.dot, dot]} />
-              <AppText variant="label" style={{ color: colors.textDim }}>
-                {phase === 'connecting' ? 'Connexion du joueur…' : 'En attente d’un joueur'}
-              </AppText>
-            </View>
-            <AppText variant="caption" style={styles.hint}>
-              {mode === 'online'
-                ? 'Fonctionne où que vous soyez : il suffit d’une connexion Internet.'
-                : 'Les deux téléphones doivent être sur le même Wi-Fi. Rien ne passe par Internet.'}
-            </AppText>
-            <Button label={switchLabel(other)} kind="ghost" onPress={() => setMode(other)} />
+          <Animated.View entering={FadeIn} style={{ alignItems: 'center', gap: 18 }}>
+            <Radar size={200} color={colors.gold} active={active}>
+              <Ionicons name="swap-horizontal" size={34} color={colors.gold} />
+            </Radar>
+            <StatusPill tone="connecting" text="Ouverture de l’échange" active={active} />
           </Animated.View>
+        ) : (
+          <View key={mode} style={{ alignItems: 'center', alignSelf: 'stretch' }}>
+            <Animated.View entering={FadeInDown.duration(300)}>
+              <AppText variant="caption">Fais scanner ce QR code à ton ami</AppText>
+            </Animated.View>
+            <GlowQR value={tradeQrValue(code)} size={180} active={active && !connecting} color={connecting ? colors.success : colors.gold} />
+            <Animated.View entering={FadeInDown.delay(150).duration(350)} style={{ alignSelf: 'stretch' }}>
+              <CodeTicket
+                code={code}
+                label="ou donne-lui ce code"
+                icon="swap-horizontal"
+                active={active}
+                delay={350}
+                onPress={() => void Share.share({ message: `Échange des cartes avec moi sur PocketPics ! Code : ${code}` }).catch(() => {})}
+              />
+            </Animated.View>
+            <Animated.View entering={FadeInDown.delay(300).duration(350)} style={{ marginTop: 20 }}>
+              <StatusPill tone={connecting ? 'found' : 'waiting'} text={connecting ? 'Connexion du joueur' : 'En attente d’un joueur'} active={active} />
+            </Animated.View>
+            <Animated.View entering={FadeIn.delay(500)} style={{ alignItems: 'center' }}>
+              <AppText variant="caption" style={styles.hint}>
+                {mode === 'online'
+                  ? 'Fonctionne où que vous soyez : il suffit d’une connexion Internet.'
+                  : 'Les deux téléphones doivent être sur le même Wi-Fi. Rien ne passe par Internet.'}
+              </AppText>
+              <Button label={switchLabel(other)} kind="ghost" icon={other === 'lan' ? 'wifi' : 'globe-outline'} onPress={() => setMode(other)} />
+            </Animated.View>
+          </View>
         )}
       </View>
     </Screen>
@@ -85,8 +86,5 @@ const switchLabel = (m: TradeMode) => (m === 'lan' ? 'Échanger en Wi-Fi local (
 
 const styles = StyleSheet.create({
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  qr: { padding: 18, borderRadius: 24, backgroundColor: '#F5F3EE' },
-  status: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 36 },
-  hint: { textAlign: 'center', marginTop: 18, marginBottom: 6, maxWidth: 300 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success },
+  hint: { textAlign: 'center', marginTop: 14, marginBottom: 2, maxWidth: 300 },
 });

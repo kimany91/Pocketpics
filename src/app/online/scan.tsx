@@ -1,13 +1,15 @@
 /** Scanner un QR code : code ami (ajout) ou code de combat (rejoindre). */
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useRef, useState } from 'react';
+import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Linking, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { Header } from '../../components/Header';
+import { ScanFrame } from '../../components/online/ScanFrame';
 import { parseBattleCode } from '../../net/battleCode';
 import { useMatch } from '../../net/match';
 import { useSocial } from '../../net/social';
@@ -20,7 +22,17 @@ export default function OnlineScanScreen() {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [bad, setBad] = useState(false);
+  const [ok, setOk] = useState(false);
   const done = useRef(false);
+  const focused = useIsFocused();
+  // petit temps pour voir le viseur passer au vert, annulé si on quitte avant
+  const leaving = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (leaving.current) clearTimeout(leaving.current);
+  }, []);
+  const goBack = () => {
+    leaving.current = setTimeout(() => router.back(), 350);
+  };
 
   const onScan = ({ data }: { data: string }) => {
     if (done.current) return;
@@ -28,17 +40,19 @@ export default function OnlineScanScreen() {
       const code = parseFriendCode(data);
       if (!code) return setBad(true);
       done.current = true;
+      setOk(true);
       haptic.success();
       useSocial.getState().addFriend(code);
-      router.back();
+      goBack();
       return;
     }
     const code = parseBattleCode(data);
     if (!code) return setBad(true);
     done.current = true;
+    setOk(true);
     haptic.success();
     void useMatch.getState().join(code);
-    router.back();
+    goBack();
   };
 
   return (
@@ -58,11 +72,21 @@ export default function OnlineScanScreen() {
       ) : (
         <View style={styles.cameraWrap}>
           <CameraView style={StyleSheet.absoluteFill} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={onScan} />
-          <View style={styles.frame} pointerEvents="none" />
+          <ScanFrame bad={bad && !ok} ok={ok} active={focused} />
           <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
-            <AppText variant="label" style={{ textAlign: 'center' }}>
-              {bad ? (friend ? 'Ce QR code n’est pas un code ami PocketPics.' : 'Ce QR code n’est pas un combat PocketPics.') : 'Vise le QR code affiché sur le téléphone de ton ami'}
-            </AppText>
+            <Animated.View key={ok ? 'ok' : bad ? 'bad' : 'aim'} entering={FadeInDown.duration(250)}>
+              <AppText variant="label" style={{ textAlign: 'center', color: ok ? '#4FE0A8' : bad ? '#FF8A93' : '#F5F3EE' }}>
+                {ok
+                  ? friend
+                    ? 'Code ami lu !'
+                    : 'Code lu, connexion…'
+                  : bad
+                    ? friend
+                      ? 'Ce QR code n’est pas un code ami PocketPics.'
+                      : 'Ce QR code n’est pas un combat PocketPics.'
+                    : 'Vise le QR code affiché sur le téléphone de ton ami'}
+              </AppText>
+            </Animated.View>
           </View>
         </View>
       )}
@@ -74,6 +98,5 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   cameraWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  frame: { width: 240, height: 240, borderRadius: 28, borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)' },
   footer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingTop: 20, backgroundColor: 'rgba(0,0,0,0.55)' },
 });
