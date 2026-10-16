@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { type LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { FadeIn, FadeOut, SlideInDown, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
@@ -32,7 +32,7 @@ export function SoundSheet({ onClose }: { onClose(): void }) {
   return (
     <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={styles.overlay}>
       <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Fermer" />
-      <Animated.View entering={SlideInDown.springify().damping(16)} style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+      <Animated.View entering={SlideInDown.springify().damping(17).stiffness(190)} exiting={SlideOutDown.duration(200)} style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
         <View style={styles.grab} />
         <AppText variant="title">Son</AppText>
         <VolumeRow
@@ -80,6 +80,7 @@ function VolumeRow({
   const [trackW, setTrackW] = useState(1);
   const v = useSharedValue(value);
   const lastNotch = useSharedValue(Math.round(value * 10));
+  const held = useSharedValue(0);
 
   useEffect(() => {
     v.value = value;
@@ -93,6 +94,7 @@ function VolumeRow({
   const pan = Gesture.Pan()
     .minDistance(0)
     .onBegin((e) => {
+      held.value = withSpring(1, { damping: 14, stiffness: 400 });
       v.value = toValue(e.x);
       scheduleOnRN(onLive, v.value);
     })
@@ -106,11 +108,12 @@ function VolumeRow({
       scheduleOnRN(onLive, v.value);
     })
     .onFinalize(() => {
+      held.value = withSpring(0, { damping: 10, stiffness: 300 });
       scheduleOnRN(onCommit, v.value);
     });
 
   const fillStyle = useAnimatedStyle(() => ({ width: `${v.value * 100}%` }));
-  const knobStyle = useAnimatedStyle(() => ({ transform: [{ translateX: v.value * trackW - 13 }] }));
+  const knobStyle = useAnimatedStyle(() => ({ transform: [{ translateX: v.value * trackW - 13 }, { scale: 1 + held.value * 0.25 }] }));
   const muted = value <= 0;
 
   return (

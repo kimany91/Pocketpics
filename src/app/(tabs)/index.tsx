@@ -1,23 +1,28 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { type ComponentProps, useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
+  ZoomIn,
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
+  withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
 import { AppText } from '../../components/AppText';
-import { Button } from '../../components/Button';
+import { Button, Glint } from '../../components/Button';
 import { CoinChip, CoinIcon } from '../../components/Coin';
 import { GalleryImportSheet } from '../../components/GalleryImportSheet';
 import { SoundSheet, volumeIcon } from '../../components/SoundSheet';
 import { DEFAULT_SOUND_VOLUME } from '../../storage/model';
-import { Glow } from '../../components/fx';
+import { Glow, Twinkles } from '../../components/fx';
+import { Rise } from '../../components/Rise';
 import { PACK_RATIO, PackArt } from '../../components/PackArt';
 import { Screen } from '../../components/Screen';
 import { DRAW_INTERVAL_MS, MAX_STORED_DRAWS, formatCountdown } from '../../game/draws';
@@ -28,6 +33,7 @@ import { useGame } from '../../state/game';
 import { useDrawStatus } from '../../state/useDrawStatus';
 import { useGalleryAccess } from '../../state/useGalleryAccess';
 import { colors, fonts } from '../../theme';
+import { springs, useEntrance } from '../../theme/motion';
 import { haptic } from '../../utils/haptics';
 
 export default function DrawScreen() {
@@ -50,16 +56,43 @@ export default function DrawScreen() {
   const canOpen = available > 0 && (access === 'granted' || access === 'limited');
   const best = RARITIES[cards.reduce((m, c) => Math.max(m, getRarity(c.rarity).rank), -1)];
 
-  const float = useSharedValue(0);
-  const press = useSharedValue(1);
+  const { visit, focused } = useEntrance();
+  const float = useSharedValue(0.5);
+  const press = useSharedValue(0);
+  const nudge = useSharedValue(0);
+  // Le paquet flotte (et, s'il peut s'ouvrir, se trémousse de temps en temps
+  // pour inviter à l'ouvrir). Tout s'arrête quand l'onglet n'est pas affiché.
   useEffect(() => {
-    float.value = withRepeat(withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.sin) }), -1, true);
-  }, [float]);
+    if (!focused) {
+      cancelAnimation(float);
+      cancelAnimation(nudge);
+      return;
+    }
+    float.value = withRepeat(withTiming(float.value > 0.5 ? 0 : 1, { duration: 2600, easing: Easing.inOut(Easing.sin) }), -1, true);
+    if (canOpen) {
+      nudge.value = 0;
+      nudge.value = withRepeat(
+        withSequence(
+          withDelay(2600, withTiming(1, { duration: 90 })),
+          withTiming(-1, { duration: 120 }),
+          withTiming(0.7, { duration: 110 }),
+          withTiming(-0.4, { duration: 100 }),
+          withSpring(0, springs.pop),
+        ),
+        -1,
+        false,
+      );
+    } else nudge.value = withTiming(0);
+    return () => {
+      cancelAnimation(float);
+      cancelAnimation(nudge);
+    };
+  }, [focused, canOpen, float, nudge]);
   const packStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: (float.value - 0.5) * 14 },
-      { rotate: `${(float.value - 0.5) * 3}deg` },
-      { scale: press.value },
+      { translateY: (float.value - 0.5) * 14 + press.value * 6 },
+      { rotate: `${(float.value - 0.5) * 3 + nudge.value * 3.5}deg` },
+      { scale: (1 - press.value * 0.06) * (1 + Math.abs(nudge.value) * 0.025) },
     ],
   }));
   const glowOpacity = useSharedValue(0.5);
@@ -77,7 +110,7 @@ export default function DrawScreen() {
 
   return (
     <Screen>
-      <View style={styles.header}>
+      <Rise visit={visit} index={0} style={styles.header}>
         <View>
           <AppText variant="display">PocketPics</AppText>
           <AppText variant="caption" style={{ marginTop: 2 }}>
@@ -88,43 +121,41 @@ export default function DrawScreen() {
         </View>
         <View style={styles.headerBtns}>
           <CoinChip amount={coins} style={{ marginTop: 4 }} />
-          <Pressable
-            hitSlop={8}
-            onPress={() => setSoundOpen(true)}
-            style={styles.iconBtn}
-            accessibilityLabel="Régler le son"
-          >
-            <Ionicons name={volumeIcon(soundVolume)} size={18} color={colors.textDim} />
-          </Pressable>
-          <Pressable hitSlop={8} onPress={() => router.push('/rates')} style={styles.iconBtn} accessibilityLabel="Taux d'obtention">
-            <Ionicons name="stats-chart" size={18} color={colors.textDim} />
-          </Pressable>
+          <IconButton icon={volumeIcon(soundVolume)} label="Régler le son" onPress={() => setSoundOpen(true)} />
+          <IconButton icon="stats-chart" label="Taux d'obtention" onPress={() => router.push('/rates')} />
         </View>
-      </View>
+      </Rise>
 
-      <View style={styles.stage}>
+      <Rise visit={visit} index={1} dy={34} scale={0.9} style={styles.stage}>
         <Glow color={canOpen ? '#B99CFF' : '#FFFFFF'} size={packW * 3} opacity={glowOpacity} />
         <Pressable
           onPress={open}
-          onPressIn={() => (press.value = withSpring(0.95))}
-          onPressOut={() => (press.value = withSpring(1))}
+          onPressIn={() => (press.value = withSpring(1, springs.press))}
+          onPressOut={() => (press.value = withSpring(0, springs.release))}
           disabled={!canOpen}
         >
           <Animated.View style={[packStyle, !canOpen && { opacity: 0.45 }]}>
-            <PackArt width={packW} />
+            <PackArt width={packW} shimmer={focused} />
+            {canOpen && focused ? (
+              <View pointerEvents="none" style={[StyleSheet.absoluteFill, { margin: -packW * 0.18 }]}>
+                <Twinkles width={packW * 1.36} height={packW * PACK_RATIO * 1.36} count={5} size={0.09} colors={['#FFF6D8', '#D9C8FF']} />
+              </View>
+            ) : null}
           </Animated.View>
         </Pressable>
-      </View>
+      </Rise>
 
-      <View style={styles.bottom}>
+      <Rise visit={visit} index={2} style={styles.bottom}>
         <View style={styles.charges}>
           {Array.from({ length: MAX_STORED_DRAWS }).map((_, i) => (
             <ChargePip key={i} filled={i < charges} progress={i === charges ? cycle : i < charges ? 1 : 0} />
           ))}
         </View>
-        <AppText variant="heading" style={{ textAlign: 'center' }}>
-          {available === 0 ? 'Plus de tirage pour le moment' : available === 1 ? '1 tirage disponible' : `${available} tirages disponibles`}
-        </AppText>
+        <Animated.View key={available} entering={ZoomIn.springify().damping(12).stiffness(260)}>
+          <AppText variant="heading" style={{ textAlign: 'center' }}>
+            {available === 0 ? 'Plus de tirage pour le moment' : available === 1 ? '1 tirage disponible' : `${available} tirages disponibles`}
+          </AppText>
+        </Animated.View>
         <AppText variant="caption" style={styles.timer}>
           {nextAt ? `Prochain tirage dans ${formatCountdown(nextAt - now)}` : 'Réserve pleine — ouvre un paquet !'}
         </AppText>
@@ -189,7 +220,7 @@ export default function DrawScreen() {
             ) : null}
           </>
         )}
-      </View>
+      </Rise>
       {soundOpen ? <SoundSheet onClose={() => setSoundOpen(false)} /> : null}
       {isWeb ? (
         <GalleryImportSheet
@@ -207,21 +238,31 @@ export default function DrawScreen() {
 /** Plus de tirage : on peut en acheter un avec les pièces gagnées en solo. */
 function BuyDraw({ coins, onBuy }: { coins: number; onBuy(): void }) {
   const missing = DRAW_PRICE - coins;
+  const press = useSharedValue(0);
+  const wrap = useAnimatedStyle(() => ({ transform: [{ scale: 1 - press.value * 0.03 }] }));
+  const face = useAnimatedStyle(() => ({ transform: [{ translateY: press.value * 3 }] }));
   return (
     <View style={{ gap: 8 }}>
-      <Pressable
-        onPress={onBuy}
-        disabled={missing > 0}
-        accessibilityRole="button"
-        accessibilityLabel={`Acheter un tirage pour ${DRAW_PRICE} pièces`}
-        style={({ pressed }) => [styles.buy, missing > 0 && { opacity: 0.45 }, pressed && styles.buyPressed]}
-      >
-        <AppText style={styles.buyText}>Acheter un tirage</AppText>
-        <View style={styles.price}>
-          <CoinIcon size={18} />
-          <AppText style={styles.buyText}>{DRAW_PRICE}</AppText>
-        </View>
-      </Pressable>
+      <Animated.View style={wrap}>
+        <Pressable
+          onPress={onBuy}
+          onPressIn={() => (press.value = withSpring(1, springs.press))}
+          onPressOut={() => (press.value = withSpring(0, springs.release))}
+          disabled={missing > 0}
+          accessibilityRole="button"
+          accessibilityLabel={`Acheter un tirage pour ${DRAW_PRICE} pièces`}
+          style={[styles.buyBase, missing > 0 && { opacity: 0.45 }]}
+        >
+          <Animated.View style={[styles.buy, face]}>
+            {missing > 0 ? null : <Glint />}
+            <AppText style={styles.buyText}>Acheter un tirage</AppText>
+            <View style={styles.price}>
+              <CoinIcon size={18} />
+              <AppText style={styles.buyText}>{DRAW_PRICE}</AppText>
+            </View>
+          </Animated.View>
+        </Pressable>
+      </Animated.View>
       <AppText variant="caption" style={{ textAlign: 'center' }}>
         {missing > 0 ? `Il te manque ${missing} pièces : gagne-les en battant de nouveaux niveaux de l’aventure.` : 'Ou attends le prochain tirage gratuit.'}
       </AppText>
@@ -231,10 +272,44 @@ function BuyDraw({ coins, onBuy }: { coins: number; onBuy(): void }) {
 
 function ChargePip({ filled, progress }: { filled: boolean; progress: number }) {
   const style = useAnimatedStyle(() => ({ width: withTiming(`${Math.round(progress * 100)}%`, { duration: 600 }) }));
+  // une réserve qui se remplit fait un petit bond
+  const pop = useSharedValue(0);
+  const was = useRef(filled);
+  useEffect(() => {
+    if (filled !== was.current) pop.value = withSequence(withTiming(1, { duration: 100 }), withSpring(0, springs.pop));
+    was.current = filled;
+  }, [filled, pop]);
+  const popStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: 1 + pop.value * 0.18 }, { scaleY: 1 + pop.value * 0.7 }] }));
   return (
-    <View style={[styles.pip, filled && styles.pipFilled]}>
+    <Animated.View style={[styles.pip, filled && styles.pipFilled, popStyle]}>
       {!filled ? <Animated.View style={[styles.pipFill, style]} /> : null}
-    </View>
+    </Animated.View>
+  );
+}
+
+/** Petit bouton rond de l'en-tête : il s'enfonce et l'icône tourne un peu. */
+function IconButton({ icon, label, onPress }: { icon: ComponentProps<typeof Ionicons>['name']; label: string; onPress(): void }) {
+  const press = useSharedValue(0);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 - press.value * 0.1 }] }));
+  const iconStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${press.value * -14}deg` }] }));
+  return (
+    <Pressable
+      hitSlop={8}
+      onPressIn={() => (press.value = withSpring(1, springs.press))}
+      onPressOut={() => (press.value = withSpring(0, springs.release))}
+      onPress={() => {
+        haptic.tick();
+        onPress();
+      }}
+      accessibilityLabel={label}
+      accessibilityRole="button"
+    >
+      <Animated.View style={[styles.iconBtn, style]}>
+        <Animated.View style={iconStyle}>
+          <Ionicons name={icon} size={18} color={colors.textDim} />
+        </Animated.View>
+      </Animated.View>
+    </Pressable>
   );
 }
 
@@ -267,22 +342,21 @@ const styles = StyleSheet.create({
   bottom: { paddingHorizontal: 20, paddingBottom: 18, gap: 6 },
   charges: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 12 },
   pip: { width: 44, height: 6, borderRadius: 3, backgroundColor: colors.surface2, overflow: 'hidden' },
-  pipFilled: { backgroundColor: colors.gold },
+  pipFilled: { backgroundColor: colors.gold, boxShadow: '0px 0px 8px rgba(247,201,72,0.45)' },
   pipFill: { height: '100%', backgroundColor: 'rgba(247,201,72,0.35)' },
   timer: { textAlign: 'center', marginBottom: 14, fontFamily: fonts.medium, fontVariant: ['tabular-nums'] },
   limited: { flexDirection: 'row', justifyContent: 'center', marginTop: 10 },
+  buyBase: { height: 58, borderRadius: 18, backgroundColor: '#B8861E', paddingBottom: 4 },
   buy: {
-    height: 58,
+    flex: 1,
     borderRadius: 18,
     backgroundColor: colors.gold,
-    borderBottomWidth: 4,
-    borderBottomColor: '#B8861E',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
+    overflow: 'hidden',
   },
-  buyPressed: { borderBottomWidth: 1, transform: [{ translateY: 3 }] },
   buyText: { fontFamily: fonts.bold, fontSize: 17, color: '#141414' },
   price: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.12)' },
 });

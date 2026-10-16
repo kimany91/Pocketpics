@@ -9,7 +9,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
-import Animated, { Easing, FadeInDown, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 
 import { LEVELS_PER_WORLD, TOTAL_LEVELS, getLevel } from '../../battle/levels';
@@ -19,11 +29,14 @@ import { DecorSprite, Earth, Road, Texture } from '../../components/map/decor';
 import { railPaths, smoothPath } from '../../components/map/mapLayout';
 import { OUTLINE, WORLD_LOOKS } from '../../components/map/worlds';
 import { RankEmblem } from '../../components/rank/RankEmblem';
+import { Rise } from '../../components/Rise';
+import { RollingNumber } from '../../components/RollingNumber';
 import { Screen } from '../../components/Screen';
 import { rankOf, shownMmr } from '../../game/rank';
 import { useSocial } from '../../net/social';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
+import { easeOut, springs, useEntrance } from '../../theme/motion';
 import { haptic } from '../../utils/haptics';
 
 export default function BattleTab() {
@@ -41,23 +54,28 @@ export default function BattleTab() {
   const level = getLevel(current);
   const panelW = width - 32;
   const myRank = rankOf(rank ? shownMmr(rank) : 0);
+  const { visit, focused } = useEntrance();
 
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.titleRow}>
+        <Rise visit={visit} index={0} style={styles.titleRow}>
           <AppText variant="title">Combat</AppText>
           <CoinChip amount={coins} />
-        </View>
+        </Rise>
 
         {/* Solo */}
-        <Animated.View entering={FadeInDown.duration(350)}>
+        <Rise visit={visit} index={1} dy={36} scale={0.94}>
           <Panel
             label="Aventure solo"
             onPress={() => router.push('/solo')}
             border={level ? WORLD_LOOKS[level.world.n - 1].node : colors.gold}
+            width={panelW}
+            focused={focused}
+            visit={visit}
+            shineDelay={420}
+            art={<SoloScene width={panelW} world={level?.world.n ?? 1} level={current} />}
           >
-            <SoloScene width={panelW} world={level?.world.n ?? 1} level={current} />
             <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(8,8,12,0.88)']} style={[StyleSheet.absoluteFill, { top: '45%' }]} />
             <View style={styles.panelText}>
               <AppText style={styles.kicker}>Solo</AppText>
@@ -67,22 +85,34 @@ export default function BattleTab() {
               </AppText>
               <View style={styles.metaRow}>
                 <Ionicons name="star" size={14} color={colors.gold} />
-                <AppText style={styles.meta}>{`${totalStars}/${TOTAL_LEVELS * 3}`}</AppText>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <RollingNumber value={totalStars} style={styles.meta} />
+                  <AppText style={styles.meta}>{`/${TOTAL_LEVELS * 3}`}</AppText>
+                </View>
                 <View style={styles.dot} />
                 <AppText style={styles.meta}>Gagne des pièces</AppText>
               </View>
             </View>
-            <PlayChip />
+            <PlayChip focused={focused} />
           </Panel>
-        </Animated.View>
+        </Rise>
 
         {/* Multijoueur */}
-        <Animated.View entering={FadeInDown.delay(120).duration(350)}>
-          <Panel label="Multijoueur" onPress={() => router.push('/multi')} border={myRank.tier.color} height={210}>
-            <LinearGradient colors={['#1B2350', '#2A1B4F', '#120F24']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-            <View style={styles.multiArt}>
+        <Rise visit={visit} index={2} dy={36} scale={0.94}>
+          <Panel
+            label="Multijoueur"
+            onPress={() => router.push('/multi')}
+            border={myRank.tier.color}
+            height={210}
+            width={panelW}
+            focused={focused}
+            visit={visit}
+            shineDelay={620}
+            art={<LinearGradient colors={['#1B2350', '#2A1B4F', '#120F24']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
+          >
+            <Floating focused={focused} style={styles.multiArt}>
               <RankEmblem rank={myRank} size={92} />
-            </View>
+            </Floating>
             <View style={[styles.panelText, { left: 140, right: 16, bottom: 70 }]}>
               <AppText style={styles.kicker}>Multijoueur</AppText>
               <AppText style={styles.big}>Classé</AppText>
@@ -97,47 +127,162 @@ export default function BattleTab() {
                 <AppText style={styles.badgeText}>{requests}</AppText>
               </View>
             ) : null}
-            <PlayChip />
+            <PlayChip focused={focused} delay={450} />
           </Panel>
-        </Animated.View>
+        </Rise>
 
-        <AppText variant="caption" style={{ marginTop: 4 }}>
-          L’aventure rapporte des pièces pour acheter des tirages. Les combats en ligne font monter ton rang.
-        </AppText>
+        <Rise visit={visit} index={3}>
+          <AppText variant="caption" style={{ marginTop: 4 }}>
+            L’aventure rapporte des pièces pour acheter des tirages. Les combats en ligne font monter ton rang.
+          </AppText>
+        </Rise>
       </ScrollView>
     </Screen>
   );
 }
 
-function Panel({ label, onPress, border, height = 290, children }: { label: string; onPress(): void; border: string; height?: number; children: React.ReactNode }) {
+const LIP = 4;
+
+/**
+ * Grand panneau illustré façon bouton 3D : il s'enfonce sur sa tranche au
+ * toucher pendant que l'illustration avance (profondeur), et un reflet le
+ * traverse de temps en temps. Le décor dérive lentement (parallaxe).
+ */
+function Panel({
+  label,
+  onPress,
+  border,
+  height = 290,
+  width,
+  focused,
+  visit,
+  shineDelay,
+  art,
+  children,
+}: {
+  label: string;
+  onPress(): void;
+  border: string;
+  height?: number;
+  width: number;
+  focused: boolean;
+  visit: number;
+  shineDelay: number;
+  art: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const press = useSharedValue(0);
+  const drift = useSharedValue(0);
+  useEffect(() => {
+    if (!focused) {
+      cancelAnimation(drift);
+      return;
+    }
+    drift.value = withRepeat(withTiming(drift.value > 0.5 ? 0 : 1, { duration: 7000, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(drift);
+  }, [focused, drift]);
+  const face = useAnimatedStyle(() => ({ transform: [{ translateY: press.value * LIP }, { scale: 1 - press.value * 0.012 }] }));
+  const artStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: (drift.value - 0.5) * 14 },
+      { translateY: (0.5 - drift.value) * 6 },
+      { scale: 1.06 + press.value * 0.04 },
+    ],
+  }));
   return (
     <Pressable
+      onPressIn={() => (press.value = withSpring(1, springs.press))}
+      onPressOut={() => (press.value = withSpring(0, springs.release))}
       onPress={() => {
         haptic.medium();
         onPress();
       }}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [styles.panel, { height, borderColor: OUTLINE }, pressed && styles.panelPressed]}
+      style={{ height }}
     >
-      <View style={[StyleSheet.absoluteFill, { borderRadius: 21, overflow: 'hidden' }]}>{children}</View>
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.panelRim, { borderColor: border }]} />
+      <View style={[styles.lip, { top: LIP + 6 }]} />
+      <Animated.View style={[styles.panel, { height: height - LIP, borderColor: OUTLINE }, face]}>
+        <View style={[StyleSheet.absoluteFill, { borderRadius: 21, overflow: 'hidden' }]}>
+          <Animated.View style={[StyleSheet.absoluteFill, artStyle]}>{art}</Animated.View>
+          {children}
+          <Shine width={width} height={height} focused={focused} visit={visit} delay={shineDelay} />
+        </View>
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.panelRim, { borderColor: border }]} />
+      </Animated.View>
     </Pressable>
   );
 }
 
-function PlayChip() {
+/** Reflet en biais qui balaie le panneau à l'arrivée, puis toutes les ~6 s. */
+function Shine({ width, height, focused, visit, delay }: { width: number; height: number; focused: boolean; visit: number; delay: number }) {
+  const t = useSharedValue(0);
+  useEffect(() => {
+    cancelAnimation(t);
+    t.value = 0;
+    if (!focused) return;
+    t.value = withDelay(
+      delay,
+      withRepeat(withSequence(withTiming(1, { duration: 1150, easing: easeOut }), withDelay(5200, withTiming(0, { duration: 0 }))), -1, false),
+    );
+    return () => cancelAnimation(t);
+  }, [focused, visit, delay, t]);
+  const band = width * 0.42;
+  const style = useAnimatedStyle(() => ({
+    opacity: t.value > 0 && t.value < 1 ? 1 : 0,
+    transform: [{ translateX: -band * 1.6 + t.value * (width + band * 3.2) }, { rotate: '18deg' }],
+  }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: -height * 0.3, height: height * 1.6, width: band }, style]}>
+      <LinearGradient
+        colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.22)', 'rgba(255,255,255,0)']}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={StyleSheet.absoluteFill}
+      />
+    </Animated.View>
+  );
+}
+
+/** Flotte doucement de haut en bas (seulement à l'écran). */
+function Floating({ focused, style, children }: { focused: boolean; style: object; children: React.ReactNode }) {
+  const f = useSharedValue(0.5);
+  useEffect(() => {
+    if (!focused) {
+      cancelAnimation(f);
+      return;
+    }
+    f.value = withRepeat(withTiming(f.value > 0.5 ? 0 : 1, { duration: 2400, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(f);
+  }, [focused, f]);
+  const a = useAnimatedStyle(() => ({ transform: [{ translateY: (f.value - 0.5) * 8 }, { rotate: `${(f.value - 0.5) * 4}deg` }] }));
+  return <Animated.View style={[style, a]}>{children}</Animated.View>;
+}
+
+function PlayChip({ focused, delay = 0 }: { focused: boolean; delay?: number }) {
   const pulse = useSharedValue(0);
   useEffect(() => {
-    pulse.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }), -1, true);
+    if (!focused) {
+      cancelAnimation(pulse);
+      pulse.value = 0;
+      return;
+    }
+    pulse.value = withDelay(
+      delay,
+      withRepeat(withSequence(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }), withTiming(0, { duration: 900, easing: Easing.inOut(Easing.sin) })), -1, false),
+    );
     return () => cancelAnimation(pulse);
-  }, [pulse]);
+  }, [focused, delay, pulse]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pulse.value * 0.06 }] }));
+  const glow = useAnimatedStyle(() => ({ opacity: 0.25 + pulse.value * 0.5, transform: [{ scale: 1 + pulse.value * 0.12 }] }));
   return (
-    <Animated.View style={[styles.playChip, style]} pointerEvents="none">
-      <Ionicons name="play" size={16} color="#141414" />
-      <AppText style={styles.playText}>Jouer</AppText>
-    </Animated.View>
+    <View style={styles.playWrap} pointerEvents="none">
+      <Animated.View style={[styles.playGlow, glow]} />
+      <Animated.View style={[styles.playChip, style]}>
+        <Ionicons name="play" size={16} color="#141414" />
+        <AppText style={styles.playText}>Jouer</AppText>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -208,8 +353,8 @@ function SoloScene({ width, world, level }: { width: number; world: number; leve
 const styles = StyleSheet.create({
   content: { padding: 16, paddingTop: 12, paddingBottom: 40, gap: 14 },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
-  panel: { borderRadius: 24, borderWidth: 3, backgroundColor: colors.surface, borderBottomWidth: 7 },
-  panelPressed: { borderBottomWidth: 3, transform: [{ translateY: 4 }] },
+  panel: { borderRadius: 24, borderWidth: 3, backgroundColor: colors.surface },
+  lip: { position: 'absolute', left: 0, right: 0, bottom: 0, borderRadius: 24, backgroundColor: OUTLINE },
   panelRim: { borderRadius: 21, borderWidth: 2, opacity: 0.6 },
   panelText: { position: 'absolute', left: 18, right: 110, bottom: 16, gap: 2 },
   kicker: { fontFamily: fonts.black, fontSize: 11, letterSpacing: 1.4, color: colors.gold, textTransform: 'uppercase' },
@@ -219,7 +364,9 @@ const styles = StyleSheet.create({
   meta: { fontFamily: fonts.semibold, fontSize: 12, color: 'rgba(255,255,255,0.75)' },
   dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.5)', marginHorizontal: 3 },
   onlineDot: { width: 8, height: 8, borderRadius: 4 },
-  playChip: { position: 'absolute', right: 16, bottom: 18, flexDirection: 'row', alignItems: 'center', gap: 6, height: 42, paddingHorizontal: 16, borderRadius: 21, backgroundColor: colors.gold, borderWidth: 3, borderColor: OUTLINE },
+  playWrap: { position: 'absolute', right: 16, bottom: 18 },
+  playGlow: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 21, boxShadow: '0px 0px 16px rgba(255,214,102,0.95)' },
+  playChip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 42, paddingHorizontal: 16, borderRadius: 21, backgroundColor: colors.gold, borderWidth: 3, borderColor: OUTLINE },
   playText: { fontFamily: fonts.black, fontSize: 15, color: '#141414' },
   multiArt: { position: 'absolute', left: 26, top: 40, width: 100, alignItems: 'center' },
   badge: { position: 'absolute', top: 12, right: 12, minWidth: 26, height: 26, borderRadius: 13, backgroundColor: colors.danger, borderWidth: 2.5, borderColor: OUTLINE, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },

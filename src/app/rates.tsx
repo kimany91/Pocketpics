@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { AppText } from '../components/AppText';
 import { CardFace } from '../components/card/CardFace';
+import { Rise } from '../components/Rise';
 import { CARDS_PER_PACK, MAX_STORED_DRAWS } from '../game/draws';
 import { RARITIES, formatChance } from '../game/rarity';
 import { useGame } from '../state/game';
@@ -28,10 +29,10 @@ export default function RatesScreen() {
         <AppText variant="label" style={{ marginTop: 4, marginBottom: 4, color: colors.textDim }}>
           CHANCES DE BASE PAR CARTE
         </AppText>
-        {[...RARITIES].reverse().map((r) => {
+        {[...RARITIES].reverse().map((r, i) => {
           const owned = cards.filter((c) => c.rarity === r.id).length;
           return (
-            <View key={r.id} style={styles.row}>
+            <Rise key={r.id} visit={1} index={i} delay={140} dy={14} style={styles.row}>
               <CardFace card={{ id: `preview-${r.id}`, rarity: r.id, name: null }} width={44} quality="thumb" imageUri="" animated={r.rank >= 6} />
               <View style={{ flex: 1 }}>
                 <AppText variant="heading" style={{ color: r.color }}>
@@ -42,7 +43,7 @@ export default function RatesScreen() {
               <AppText variant="heading" style={styles.pct}>
                 {formatChance(r.id)}
               </AppText>
-            </View>
+            </Rise>
           );
         })}
         {Platform.OS === 'web' ? <WebReset /> : null}

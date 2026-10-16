@@ -10,7 +10,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { AppState, StyleSheet, View } from 'react-native';
+import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { initSfx } from '../audio/sfx';
@@ -19,6 +19,7 @@ import { ChallengeOverlay } from '../components/ChallengeOverlay';
 import { useSocial } from '../net/social';
 import { useGame } from '../state/game';
 import { colors } from '../theme';
+import { PUSH, UP, webSceneLayout } from '../components/SceneTransition';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -64,24 +65,24 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, animation: 'fade' }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="open" options={{ presentation: 'fullScreenModal', animation: 'fade', gestureEnabled: false }} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, ...PUSH }} screenLayout={Platform.OS === 'web' ? webSceneLayout : undefined}>
+        <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+        <Stack.Screen name="open" options={{ presentation: 'fullScreenModal', animation: 'fade', animationDuration: 260, gestureEnabled: false }} />
         <Stack.Screen name="card/[id]" options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
         <Stack.Screen name="rates" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="battle/deck" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="battle/fight" options={{ animation: 'fade', gestureEnabled: false }} />
-        <Stack.Screen name="trade/host" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="trade/join" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="trade/scan" options={{ animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="trade/room" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
-        <Stack.Screen name="friends" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="solo" options={{ animation: 'fade' }} />
-        <Stack.Screen name="multi" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="ranks" options={{ animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="online/host" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
-        <Stack.Screen name="online/join" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
-        <Stack.Screen name="online/scan" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="battle/deck" />
+        <Stack.Screen name="battle/fight" options={{ animation: 'fade', animationDuration: 260, gestureEnabled: false }} />
+        <Stack.Screen name="trade/host" />
+        <Stack.Screen name="trade/join" />
+        <Stack.Screen name="trade/scan" options={UP} />
+        <Stack.Screen name="trade/room" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="friends" />
+        <Stack.Screen name="solo" options={{ animation: 'fade_from_bottom', animationDuration: 300 }} />
+        <Stack.Screen name="multi" />
+        <Stack.Screen name="ranks" options={UP} />
+        <Stack.Screen name="online/host" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="online/join" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="online/scan" options={UP} />
       </Stack>
       <ChallengeOverlay />
     </GestureHandlerRootView>

@@ -4,10 +4,23 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  Easing,
+  ZoomIn,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { portraitRef } from '../battle/arenas';
 import { botArt } from '../battle/botArt';
@@ -15,16 +28,19 @@ import { type FighterInput, makeFighter } from '../battle/engine';
 import { type Level, TOTAL_LEVELS, getLevel, levelFighters, levelMmr } from '../battle/levels';
 import { AppText } from '../components/AppText';
 import { InspectFighter } from '../components/battle/InspectFighter';
-import { Button } from '../components/Button';
+import { Button, Glint } from '../components/Button';
 import { CardFace } from '../components/card/CardFace';
 import { CoinChip, CoinIcon } from '../components/Coin';
 import { SagaMap } from '../components/map/SagaMap';
 import { OUTLINE, WORLD_LOOKS } from '../components/map/worlds';
 import { RankEmblem } from '../components/rank/RankEmblem';
+import { Rise } from '../components/Rise';
+import { RollingNumber } from '../components/RollingNumber';
 import { LEVEL_REWARD } from '../game/economy';
 import { rankOf } from '../game/rank';
 import { useGame } from '../state/game';
 import { colors, fonts } from '../theme';
+import { springs, useScreenFocus } from '../theme/motion';
 import { haptic } from '../utils/haptics';
 
 export default function SoloScreen() {
@@ -49,23 +65,27 @@ export default function SoloScreen() {
 
       {/* en-tête fixe */}
       <View style={[styles.header, { paddingTop: insets.top + 6 }]} pointerEvents="box-none">
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.round} accessibilityLabel="Retour">
-          <Ionicons name="chevron-back" size={22} color="#141414" />
-        </Pressable>
-        <View style={styles.pill}>
-          <Ionicons name="star" size={16} color={colors.gold} />
-          <AppText style={styles.pillText}>{`${totalStars}/${TOTAL_LEVELS * 3}`}</AppText>
-        </View>
-        <CoinChip amount={coins} style={styles.coins} />
+        <Rise visit={1} index={0} dy={-16} delay={120}>
+          <RoundBack />
+        </Rise>
+        <Rise visit={1} index={1} dy={-16} delay={120} style={{ marginLeft: 'auto' }}>
+          <View style={styles.pill}>
+            <Ionicons name="star" size={16} color={colors.gold} />
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <RollingNumber value={totalStars} style={styles.pillText} />
+              <AppText style={styles.pillText}>{`/${TOTAL_LEVELS * 3}`}</AppText>
+            </View>
+          </View>
+        </Rise>
+        <Rise visit={1} index={2} dy={-16} delay={120}>
+          <CoinChip amount={coins} style={styles.coins} />
+        </Rise>
       </View>
 
       {cleared < TOTAL_LEVELS && !open ? (
-        <View style={[styles.playWrap, { bottom: Math.max(insets.bottom, 14) + 6 }]}>
-          <Pressable onPress={() => pick(current)} style={({ pressed }) => [styles.play, pressed && styles.playPressed]} accessibilityRole="button" accessibilityLabel={`Jouer le niveau ${current}`}>
-            <Ionicons name="play" size={18} color="#141414" />
-            <AppText style={styles.playText}>{`Niveau ${current}`}</AppText>
-          </Pressable>
-        </View>
+        <Animated.View entering={ZoomIn.springify().damping(13).stiffness(220)} style={[styles.playWrap, { bottom: Math.max(insets.bottom, 14) + 6 }]} pointerEvents="box-none">
+          <PlayButton label={`Niveau ${current}`} onPress={() => pick(current)} />
+        </Animated.View>
       ) : null}
 
       {open ? <LevelSheet level={open} best={stars[open.n - 1] ?? 0} done={(stars[open.n - 1] ?? 0) > 0} locked={open.n > cleared + 1} onClose={() => setOpen(null)} bottom={insets.bottom} /> : null}
@@ -73,39 +93,153 @@ export default function SoloScreen() {
   );
 }
 
+/** Bouton retour rond et blanc du haut de la carte. */
+function RoundBack() {
+  const press = useSharedValue(0);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 - press.value * 0.12 }, { rotate: `${press.value * -10}deg` }] }));
+  return (
+    <Pressable
+      onPressIn={() => (press.value = withSpring(1, springs.press))}
+      onPressOut={() => (press.value = withSpring(0, springs.release))}
+      onPress={() => {
+        haptic.tick();
+        router.back();
+      }}
+      hitSlop={10}
+      accessibilityLabel="Retour"
+      accessibilityRole="button"
+    >
+      <Animated.View style={[styles.round, style]}>
+        <Ionicons name="chevron-back" size={22} color="#141414" />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+/**
+ * Gros bouton doré « Niveau N » : il rebondit doucement pour attirer l'œil,
+ * un reflet le traverse, et il s'enfonce sur sa tranche au toucher.
+ */
+function PlayButton({ label, onPress }: { label: string; onPress(): void }) {
+  const focused = useScreenFocus();
+  const press = useSharedValue(0);
+  const bob = useSharedValue(0);
+  useEffect(() => {
+    if (!focused) {
+      cancelAnimation(bob);
+      bob.value = 0;
+      return;
+    }
+    bob.value = withRepeat(
+      withSequence(withDelay(1800, withTiming(1, { duration: 160, easing: Easing.out(Easing.quad) })), withSpring(0, { damping: 6, stiffness: 260, mass: 0.6 })),
+      -1,
+      false,
+    );
+    return () => cancelAnimation(bob);
+  }, [focused, bob]);
+  const wrap = useAnimatedStyle(() => ({ transform: [{ translateY: -bob.value * 7 }, { scale: 1 + bob.value * 0.04 - press.value * 0.04 }] }));
+  const face = useAnimatedStyle(() => ({ transform: [{ translateY: press.value * 4 }] }));
+  return (
+    <Animated.View style={wrap}>
+      <Pressable
+        onPressIn={() => (press.value = withSpring(1, springs.press))}
+        onPressOut={() => (press.value = withSpring(0, springs.release))}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Jouer le ${label.toLowerCase()}`}
+        style={styles.playBase}
+      >
+        <Animated.View style={[styles.play, face]}>
+          <Glint />
+          <Ionicons name="play" size={18} color="#141414" />
+          <AppText style={styles.playText}>{label}</AppText>
+        </Animated.View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+/**
+ * Fiche d'un niveau : elle monte avec un ressort, son contenu arrive en
+ * cascade (titre, étoiles une à une, adversaire, cartes, boutons). On la
+ * ferme en la faisant glisser vers le bas, par le fond ou par « Fermer ».
+ */
 function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Level; best: number; done: boolean; locked: boolean; onClose(): void; bottom: number }) {
   const foes = useMemo(() => levelFighters(level), [level]);
   // Carte de l'adversaire ouverte en grand, en 3D comme dans la collection.
   const [inspect, setInspect] = useState<FighterInput | null>(null);
   const look = WORLD_LOOKS[level.world.n - 1];
   const rank = rankOf(levelMmr(level.n));
+  const { height } = useWindowDimensions();
+  const y = useSharedValue(height);
+  const drag = useSharedValue(0);
+  const shown = useSharedValue(0);
+
+  useEffect(() => {
+    y.value = withSpring(0, springs.sheet);
+    shown.value = withTiming(1, { duration: 200 });
+  }, [y, shown]);
+
+  const close = () => {
+    'worklet';
+    shown.value = withTiming(0, { duration: 200 });
+    y.value = withTiming(height * 0.7, { duration: 230, easing: Easing.in(Easing.cubic) }, (finished) => {
+      if (finished) scheduleOnRN(onClose);
+    });
+  };
+  const dismiss = () => {
+    haptic.tick();
+    close();
+  };
+
+  const pan = Gesture.Pan()
+    .activeOffsetY(8)
+    .onUpdate((e) => {
+      drag.value = e.translationY > 0 ? e.translationY : e.translationY * 0.15;
+    })
+    .onEnd((e) => {
+      if (e.translationY > 110 || e.velocityY > 900) {
+        y.value = drag.value;
+        drag.value = 0;
+        close();
+      } else drag.value = withSpring(0, springs.release);
+    });
+
+  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.value + drag.value }] }));
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: shown.value * Math.max(0.3, 1 - drag.value / 400) }));
+
   return (
     <View style={StyleSheet.absoluteFill}>
-      <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)} style={[StyleSheet.absoluteFill, styles.backdrop]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Fermer" />
+      <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, backdropStyle]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} accessibilityLabel="Fermer" />
       </Animated.View>
-      <Animated.View entering={SlideInDown.springify().damping(18)} exiting={SlideOutDown.duration(200)} style={[styles.sheet, { paddingBottom: Math.max(bottom, 16) + 8 }]}>
-        <View style={[styles.sheetHead, { backgroundColor: look.node }]}>
-          <View style={{ flex: 1 }}>
-            <AppText style={styles.sheetKicker}>{`Monde ${level.world.n} · ${level.world.place}`}</AppText>
-            <AppText style={styles.sheetTitle}>{level.boss ? `Boss · Niveau ${level.n}` : `Niveau ${level.n}`}</AppText>
+      <Animated.View style={[styles.sheet, { paddingBottom: Math.max(bottom, 16) + 8 }, sheetStyle]}>
+        <GestureDetector gesture={pan}>
+          <View style={[styles.sheetHead, { backgroundColor: look.node }]}>
+            <View style={styles.grab} />
+            <Rise visit={1} index={0} delay={90} style={{ flex: 1 }}>
+              <AppText style={styles.sheetKicker}>{`Monde ${level.world.n} · ${level.world.place}`}</AppText>
+              <AppText style={styles.sheetTitle}>{level.boss ? `Boss · Niveau ${level.n}` : `Niveau ${level.n}`}</AppText>
+            </Rise>
+            {locked ? (
+              <Rise visit={1} index={2} delay={90}>
+                <View style={styles.lockBadge}>
+                  <Ionicons name="lock-closed" size={14} color="#FFFFFF" />
+                  <AppText style={styles.lockText}>Verrouillé</AppText>
+                </View>
+              </Rise>
+            ) : (
+              <View style={styles.bestStars}>
+                {[0, 1, 2].map((i) => (
+                  <PopStar key={i} on={i < best} delay={260 + i * 120} />
+                ))}
+              </View>
+            )}
           </View>
-          {locked ? (
-            <View style={styles.lockBadge}>
-              <Ionicons name="lock-closed" size={14} color="#FFFFFF" />
-              <AppText style={styles.lockText}>Verrouillé</AppText>
-            </View>
-          ) : (
-            <View style={styles.bestStars}>
-              {[0, 1, 2].map((i) => (
-                <Ionicons key={i} name="star" size={22} color={i < best ? '#FFD54F' : 'rgba(0,0,0,0.3)'} />
-              ))}
-            </View>
-          )}
-        </View>
+        </GestureDetector>
 
         <View style={styles.sheetBody}>
-          <View style={styles.oppRow}>
+          <Rise visit={1} index={1} delay={140} style={styles.oppRow}>
             <Image source={botArt(portraitRef(level.world))} style={[styles.oppImg, { borderColor: look.node }]} />
             <View style={{ flex: 1, gap: 2 }}>
               <AppText variant="heading">{level.world.bot}</AppText>
@@ -122,42 +256,43 @@ function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Lev
               <RankEmblem rank={rank} size={34} still />
               <AppText style={styles.rankText}>{rank.label}</AppText>
             </View>
-          </View>
+          </Rise>
 
           <View style={styles.cards}>
-            {foes.map((f) => (
-              <Pressable
-                key={f.ref}
-                onPress={() => {
-                  haptic.light();
-                  setInspect(f);
-                }}
-                style={({ pressed }) => [{ alignItems: 'center', gap: 4 }, pressed && { transform: [{ scale: 0.94 }] }]}
-                accessibilityRole="button"
-                accessibilityLabel={`Voir ${f.name}`}
-              >
-                <CardFace card={{ id: f.ref, rarity: f.rarity, name: f.name }} imageSource={botArt(f.ref)} width={64} quality="thumb" animated={false} />
-                <AppText style={styles.cardStat}>{`❤ ${f.battle.hp}`}</AppText>
-              </Pressable>
+            {foes.map((f, i) => (
+              <Rise key={f.ref} visit={1} index={i} delay={230} dy={26} scale={0.8}>
+                <FoeCard
+                  onPress={() => {
+                    haptic.light();
+                    setInspect(f);
+                  }}
+                  label={`Voir ${f.name}`}
+                >
+                  <CardFace card={{ id: f.ref, rarity: f.rarity, name: f.name }} imageSource={botArt(f.ref)} width={64} quality="thumb" animated={false} />
+                  <AppText style={styles.cardStat}>{`❤ ${f.battle.hp}`}</AppText>
+                </FoeCard>
+              </Rise>
             ))}
           </View>
 
-          <View style={styles.rewards}>
-            {done ? (
-              <AppText variant="caption">Pièces déjà gagnées : rejoue pour améliorer tes étoiles.</AppText>
-            ) : (
-              <>
-                <AppText variant="caption">Première victoire :</AppText>
-                <CoinIcon size={16} />
-                <AppText style={styles.rewardText}>{`+${LEVEL_REWARD}`}</AppText>
-                <AppText variant="caption">(une seule fois)</AppText>
-              </>
-            )}
-          </View>
-          <AppText variant="caption">3 étoiles si tu gagnes sans perdre de carte, 2 en en perdant une.</AppText>
+          <Rise visit={1} index={4} delay={230} style={{ gap: 12 }}>
+            <View style={styles.rewards}>
+              {done ? (
+                <AppText variant="caption">Pièces déjà gagnées : rejoue pour améliorer tes étoiles.</AppText>
+              ) : (
+                <>
+                  <AppText variant="caption">Première victoire :</AppText>
+                  <CoinIcon size={16} />
+                  <AppText style={styles.rewardText}>{`+${LEVEL_REWARD}`}</AppText>
+                  <AppText variant="caption">(une seule fois)</AppText>
+                </>
+              )}
+            </View>
+            <AppText variant="caption">3 étoiles si tu gagnes sans perdre de carte, 2 en en perdant une.</AppText>
+          </Rise>
 
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
-            <Button label="Fermer" kind="secondary" style={{ flex: 1 }} onPress={onClose} />
+          <Rise visit={1} index={5} delay={230} style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
+            <Button label="Fermer" kind="secondary" style={{ flex: 1 }} onPress={() => close()} />
             <Button
               label={locked ? `Après le niv. ${level.n - 1}` : done ? 'Rejouer' : 'Jouer'}
               icon={locked ? 'lock-closed' : 'flash'}
@@ -170,7 +305,7 @@ function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Lev
                 router.push({ pathname: '/battle/deck', params: { level: String(level.n) } });
               }}
             />
-          </View>
+          </Rise>
         </View>
       </Animated.View>
       {inspect ? (
@@ -187,22 +322,59 @@ function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Lev
   );
 }
 
+/** Étoile de record : les étoiles gagnées tombent une à une en tournant. */
+function PopStar({ on, delay }: { on: boolean; delay: number }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    p.value = withDelay(delay, on ? withSpring(1, { damping: 8, stiffness: 220, mass: 0.7 }) : withTiming(1, { duration: 200 }));
+    if (on) setTimeout(() => haptic.tick(), delay + 60);
+  }, [on, delay, p]);
+  const style = useAnimatedStyle(() =>
+    on
+      ? { opacity: Math.min(1, p.value * 2), transform: [{ scale: 0.2 + p.value * 0.8 }, { rotate: `${(1 - p.value) * -140}deg` }] }
+      : { opacity: p.value, transform: [{ scale: 0.7 + p.value * 0.3 }] },
+  );
+  return (
+    <Animated.View style={style}>
+      <Ionicons name="star" size={22} color={on ? '#FFD54F' : 'rgba(0,0,0,0.3)'} />
+    </Animated.View>
+  );
+}
+
+/** Carte de l'adversaire dans la fiche : elle se soulève un peu au toucher. */
+function FoeCard({ onPress, label, children }: { onPress(): void; label: string; children: ReactNode }) {
+  const press = useSharedValue(0);
+  const style = useAnimatedStyle(() => ({ transform: [{ translateY: -press.value * 6 }, { scale: 1 + press.value * 0.06 }, { rotate: `${press.value * -3}deg` }] }));
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => (press.value = withSpring(1, springs.press))}
+      onPressOut={() => (press.value = withSpring(0, springs.release))}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Animated.View style={[{ alignItems: 'center', gap: 4 }, style]}>{children}</Animated.View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: { position: 'absolute', left: 0, right: 0, top: 0, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14 },
   round: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 3, borderColor: OUTLINE, alignItems: 'center', justifyContent: 'center' },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 38, paddingHorizontal: 12, borderRadius: 19, backgroundColor: 'rgba(14,12,20,0.82)', borderWidth: 2, borderColor: OUTLINE, marginLeft: 'auto' },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 38, paddingHorizontal: 12, borderRadius: 19, backgroundColor: 'rgba(14,12,20,0.82)', borderWidth: 2, borderColor: OUTLINE },
   pillText: { fontFamily: fonts.black, fontSize: 14, color: colors.text },
   coins: { backgroundColor: 'rgba(14,12,20,0.82)', borderWidth: 2, borderColor: OUTLINE },
   lockBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.35)', borderWidth: 2, borderColor: OUTLINE },
   lockText: { fontFamily: fonts.black, fontSize: 12, color: '#FFFFFF' },
   playWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
-  play: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 54, paddingHorizontal: 28, borderRadius: 27, backgroundColor: colors.gold, borderWidth: 3, borderColor: OUTLINE, borderBottomWidth: 7 },
-  playPressed: { borderBottomWidth: 3, transform: [{ translateY: 4 }] },
+  playBase: { height: 54, borderRadius: 27, backgroundColor: OUTLINE, paddingBottom: 4 },
+  play: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 28, borderRadius: 27, backgroundColor: colors.gold, borderWidth: 3, borderColor: OUTLINE, overflow: 'hidden' },
   playText: { fontFamily: fonts.black, fontSize: 18, color: '#141414' },
   backdrop: { backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#15151A', borderTopLeftRadius: 26, borderTopRightRadius: 26, borderWidth: 3, borderBottomWidth: 0, borderColor: OUTLINE, overflow: 'hidden' },
-  sheetHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 3, borderColor: OUTLINE },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 18, paddingBottom: 14, borderBottomWidth: 3, borderColor: OUTLINE },
+  grab: { position: 'absolute', top: 6, left: '50%', marginLeft: -20, width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(0,0,0,0.3)' },
   sheetKicker: { fontFamily: fonts.bold, fontSize: 12, letterSpacing: 0.8, color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase' },
   sheetTitle: { fontFamily: fonts.black, fontSize: 26, color: '#FFFFFF', textShadowColor: OUTLINE, textShadowOffset: { width: 1.5, height: 2 }, textShadowRadius: 0 },
   bestStars: { flexDirection: 'row', gap: 2 },
