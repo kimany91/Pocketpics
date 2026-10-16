@@ -184,17 +184,33 @@ class RelayLink<M = TradeMessage> implements TradeLink<M> {
 
 /* ------------------------------ Hôte / invité ------------------------------ */
 
+/**
+ * Se connecte au premier relais qui répond. Tous sont essayés en même temps :
+ * si l'un ne répond pas, on n'attend pas son délai avant d'essayer les autres.
+ */
 async function connectAny(deps: RelayDeps, clientId: string, topic: string): Promise<MqttConnection> {
-  let last: unknown;
-  for (const url of deps.urls) {
-    try {
-      return await deps.connect(url, clientId, topic);
-    } catch (e) {
-      last = e;
+  return new Promise<MqttConnection>((resolve, reject) => {
+    let won = false;
+    let failed = 0;
+    const total = deps.urls.length;
+    if (total === 0) return reject(new Error(OFFLINE));
+    for (const url of deps.urls) {
+      deps.connect(url, clientId, topic).then(
+        (conn) => {
+          if (won) return conn.close();
+          won = true;
+          resolve(conn);
+        },
+        () => {
+          if (++failed === total && !won) reject(new Error(OFFLINE));
+        },
+      );
     }
-  }
-  throw last instanceof Error ? last : new Error('Aucun relais en ligne joignable');
+  });
 }
+
+/** Message affiché quand aucun relais ne répond (WebSocket bloqué, pas de réseau, relais en panne). */
+export const OFFLINE = 'Impossible de joindre les serveurs de jeu. Vérifie ta connexion (Wi-Fi ou 4G/5G), puis réessaie. Dans un navigateur, un blocage des connexions WebSocket peut aussi empêcher le jeu : essaie l’app installée.';
 
 const newId = (deps: RelayDeps) => hex(deps.randomBytes(8));
 

@@ -57,7 +57,16 @@ export default function JoinBattleScreen() {
       <Header title={friend ? `Défi de ${friend.name}` : 'Rejoindre un combat'} onBack={exit} />
       <KeyboardAvoidingView style={styles.body} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {phase === 'over' ? (
-          <Message icon="cloud-offline-outline" title="Impossible de rejoindre" text={error ?? 'Vérifie ta connexion Internet.'} onBack={exit} />
+          <Message
+            icon="cloud-offline-outline"
+            title="Impossible de rejoindre"
+            text={error ?? 'Vérifie ta connexion Internet.'}
+            onBack={exit}
+            onRetry={() => {
+              const m = useMatch.getState();
+              void m.join(m.code ?? '', { friend: m.friend ?? undefined });
+            }}
+          />
         ) : phase === 'joining' || phase === 'lobby' ? (
           <Animated.View entering={FadeIn} style={{ alignItems: 'center', gap: 14 }}>
             <ActivityIndicator color={colors.gold} size="large" />

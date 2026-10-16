@@ -6,7 +6,7 @@ import { colors } from '../../theme';
 import { AppText } from '../AppText';
 import { Button } from '../Button';
 
-export function Message({ icon, title, text, onBack }: { icon: keyof typeof Ionicons.glyphMap; title: string; text: string; onBack(): void }) {
+export function Message({ icon, title, text, onBack, onRetry }: { icon: keyof typeof Ionicons.glyphMap; title: string; text: string; onBack(): void; onRetry?(): void }) {
   return (
     <Animated.View entering={FadeIn} style={{ alignItems: 'center', gap: 10 }}>
       <Ionicons name={icon} size={44} color={colors.textDim} />
@@ -16,7 +16,8 @@ export function Message({ icon, title, text, onBack }: { icon: keyof typeof Ioni
       <AppText variant="caption" style={{ textAlign: 'center', maxWidth: 300 }}>
         {text}
       </AppText>
-      <Button label="Retour" kind="secondary" onPress={onBack} style={{ marginTop: 14 }} />
+      {onRetry ? <Button label="Réessayer" icon="refresh" onPress={onRetry} style={{ marginTop: 14 }} /> : null}
+      <Button label="Retour" kind="secondary" onPress={onBack} style={{ marginTop: onRetry ? 4 : 14 }} />
     </Animated.View>
   );
 }

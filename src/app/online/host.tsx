@@ -73,7 +73,16 @@ export default function HostBattleScreen() {
       <Header title={friend ? 'Défi' : 'Créer un combat'} onBack={exit} />
       <View style={styles.body}>
         {phase === 'over' ? (
-          <Message icon="cloud-offline-outline" title="Impossible de créer le combat" text={error ?? 'Vérifie ta connexion Internet.'} onBack={exit} />
+          <Message
+            icon="cloud-offline-outline"
+            title="Impossible de créer le combat"
+            text={error ?? 'Vérifie ta connexion Internet.'}
+            onBack={exit}
+            onRetry={() => {
+              const m = useMatch.getState();
+              void m.host({ friend: m.friend ?? undefined });
+            }}
+          />
         ) : friend ? (
           declined || expired ? (
             <Message
