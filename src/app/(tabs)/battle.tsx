@@ -15,8 +15,8 @@ import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 import { LEVELS_PER_WORLD, TOTAL_LEVELS, getLevel } from '../../battle/levels';
 import { AppText } from '../../components/AppText';
 import { CoinChip } from '../../components/Coin';
-import { DecorSprite, Texture } from '../../components/map/decor';
-import { smoothPath } from '../../components/map/mapLayout';
+import { DecorSprite, Earth, Road, Texture } from '../../components/map/decor';
+import { railPaths, smoothPath } from '../../components/map/mapLayout';
 import { OUTLINE, WORLD_LOOKS } from '../../components/map/worlds';
 import { RankEmblem } from '../../components/rank/RankEmblem';
 import { Screen } from '../../components/Screen';
@@ -153,6 +153,7 @@ function SoloScene({ width, world, level }: { width: number; world: number; leve
     { x: width * 0.7, y: -40 },
   ];
   const road = smoothPath(pts);
+  const rails = look.roadStyle === 'rails' ? railPaths(pts, 0, h) : null;
   const kinds = look.decor.map(([k]) => k);
   // décors en haut et sur les côtés : le bas à gauche reste libre pour le texte
   const spots = [
@@ -170,11 +171,20 @@ function SoloScene({ width, world, level }: { width: number; world: number; leve
       {Array.from({ length: 40 }, (_, i) => (
         <Texture key={i} kind={look.texture} x={((i * 97) % 100) / 100 * width} y={((i * 53) % 100) / 100 * h} color={look.speck} />
       ))}
-      <Path d={road} stroke="rgba(0,0,0,0.22)" strokeWidth={50} fill="none" transform="translate(0 5)" />
-      <Path d={road} stroke={OUTLINE} strokeWidth={48} fill="none" />
-      <Path d={road} stroke={look.roadEdge} strokeWidth={43} fill="none" />
-      <Path d={road} stroke={look.road} strokeWidth={35} fill="none" />
-      <Path d={road} stroke={look.roadLine} strokeWidth={3} fill="none" strokeDasharray="3 15" opacity={0.75} />
+      <Road d={road} look={look} w={38} rails={rails} />
+      {look.sky ? (
+        // tout en haut de l'aventure : le ciel noir et la Terre
+        <G>
+          <Path d={`M0 0 H${width} V58 Q${width / 2} 6 0 58 Z`} fill={look.sky} />
+          {Array.from({ length: 14 }, (_, i) => (
+            <Circle key={i} cx={(((i * 37 + 11) % 100) / 100) * width} cy={4 + ((i * 53) % 40)} r={i % 3 ? 0.9 : 1.4} fill="#FFFFFF" opacity={0.8} />
+          ))}
+          <Path d={`M0 58 Q${width / 2} 6 ${width} 58`} stroke={OUTLINE} strokeWidth={2.6} fill="none" />
+          <G transform={`translate(${width * 0.84} 24)`}>
+            <Earth r={16} />
+          </G>
+        </G>
+      ) : null}
       {spots.map(([x, y, s], i) => (
         <DecorSprite key={i} kind={kinds[i % kinds.length]} x={x * width} y={y * h} scale={s} flip={i % 2 === 1} seed={i * 4} />
       ))}

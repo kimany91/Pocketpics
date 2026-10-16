@@ -1,7 +1,8 @@
 /**
  * La carte de l'aventure solo : une longue route qui serpente vers le haut à
- * travers les 10 mondes. Chaque monde a son sol, ses décors, son grand décor,
- * son panneau, et son adversaire qui attend à côté de son boss.
+ * travers les 20 mondes, du Parc jusqu'à la Lune. Chaque monde a son sol, ses
+ * décors, son grand décor, son panneau, et son adversaire qui attend à côté
+ * de son boss.
  *
  * Chaque monde est un SVG à part (une seule image géante serait trop lourde
  * sur téléphone) ; la route est tracée en entier dans chacun, et chaque SVG
@@ -14,19 +15,19 @@ import { Image, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } f
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import Svg, { G, Path, Rect } from 'react-native-svg';
 
-import { botCardRef } from '../../battle/arenas';
+import { ARENAS, portraitRef } from '../../battle/arenas';
 import { botArt } from '../../battle/botArt';
-import { LEVELS_PER_WORLD, TOTAL_LEVELS, getLevel } from '../../battle/levels';
+import { LEVELS_PER_WORLD, TOTAL_LEVELS, WORLDS, getLevel } from '../../battle/levels';
 import { colors, fonts } from '../../theme';
 import { AppText } from '../AppText';
 import { Embers, Glow, Twinkles } from '../fx';
-import { DecorSprite, HeroDecor, Texture } from './decor';
+import { DecorSprite, HeroDecor, MoonSky, Road, Texture } from './decor';
 import { WorldLive, isLive } from './live';
 import { type MapLayout, ROAD_W, type WorldArea, mapLayout } from './mapLayout';
-import { OUTLINE, WORLD_LOOKS } from './worlds';
+import { OUTLINE, SKY_H, WORLD_LOOKS } from './worlds';
 
-/** Carte de la meilleure carte d'un monde : son illustration sert de portrait à l'adversaire. */
-const portraitOf = (w: number) => botArt(botCardRef(w, 3));
+/** Portrait de l'adversaire du monde à la place w (illustration de sa meilleure carte, d'après l'id fixe du monde). */
+const portraitOf = (w: number) => botArt(portraitRef(ARENAS[w - 1]));
 
 /* --------------------------------- Mondes --------------------------------- */
 
@@ -58,12 +59,10 @@ const WorldSection = memo(function WorldSection({ area, layout, alive }: { area:
           </G>
         ) : null}
         <HeroDecor kind={area.hero.kind} x={area.hero.x} y={area.hero.y} side={area.hero.side} width={W} live={alive} />
-        {/* route : ombre, bordure, chaussée, pointillés */}
-        <Path d={layout.road} stroke="rgba(0,0,0,0.22)" strokeWidth={ROAD_W + 14} fill="none" strokeLinecap="round" transform="translate(0 5)" />
-        <Path d={layout.road} stroke={OUTLINE} strokeWidth={ROAD_W + 10} fill="none" strokeLinecap="round" />
-        <Path d={layout.road} stroke={look.roadEdge} strokeWidth={ROAD_W + 5} fill="none" strokeLinecap="round" />
-        <Path d={layout.road} stroke={look.road} strokeWidth={ROAD_W - 3} fill="none" strokeLinecap="round" />
-        <Path d={layout.road} stroke={look.roadLine} strokeWidth={3} fill="none" strokeDasharray="3 15" strokeLinecap="round" opacity={0.75} />
+        {/* route : ombre, bordure, chaussée, pointillés (ou planches, rails, néons) */}
+        <Road d={layout.road} look={look} w={ROAD_W} rails={area.rails} />
+        {/* tout en haut : le ciel noir, la route passe derrière l'horizon */}
+        {look.sky && area.sky ? <MoonSky width={W} h={SKY_H} sky={look.sky} earth={area.sky.earth} live={alive} /> : null}
         {area.decor.map((d, i) => (alive && isLive(d.kind) ? null : <DecorSprite key={i} {...d} seed={i + area.w * 13} />))}
       </Svg>
       <WorldLife area={area} width={W} />
@@ -125,7 +124,12 @@ function WorldLife({ area, width }: { area: WorldArea; width: number }) {
 
 /* --------------------------------- Niveaux -------------------------------- */
 
-type NodeState = 'done' | 'current' | 'locked';
+/**
+ * done : gagné (au moins 1 étoile) ; open : derrière le joueur mais jamais
+ * gagné (monde ajouté après coup dans une ancienne sauvegarde), jouable ;
+ * current : le prochain niveau ; locked : pas encore accessible.
+ */
+type NodeState = 'done' | 'open' | 'current' | 'locked';
 
 function LevelNode({ n, state, stars, onPress }: { n: number; state: NodeState; stars: number; onPress(): void }) {
   const level = getLevel(n);
@@ -154,7 +158,7 @@ function LevelNode({ n, state, stars, onPress }: { n: number; state: NodeState; 
           start={{ x: 0.2, y: 0 }}
           end={{ x: 0.8, y: 1 }}
         />
-        <View style={[styles.nodeInner, { width: size - 14, height: size - 14, borderRadius: size, backgroundColor: locked ? '#6E747D' : look.node }]}>
+        <View style={[styles.nodeInner, { width: size - 14, height: size - 14, borderRadius: size, backgroundColor: locked ? '#6E747D' : look.node }, state === 'open' && styles.nodeOpen]}>
           {boss && !locked ? (
             <Image source={portraitOf(w)} style={{ width: size - 16, height: size - 16, borderRadius: size }} />
           ) : locked ? (
@@ -169,6 +173,11 @@ function LevelNode({ n, state, stars, onPress }: { n: number; state: NodeState; 
           <Svg width={36} height={24} viewBox="0 0 36 24">
             <Path d="M3 21 L5 6 L12 13 L18 2 L24 13 L31 6 L33 21 Z" fill={locked ? '#9AA0A8' : '#FFD54F'} stroke={OUTLINE} strokeWidth={2.4} strokeLinejoin="round" />
           </Svg>
+        </View>
+      ) : null}
+      {state === 'open' && !boss ? (
+        <View style={styles.newTag}>
+          <AppText style={styles.newText}>!</AppText>
         </View>
       ) : null}
       {boss ? (
@@ -234,18 +243,26 @@ function Mascot({ area, defeated }: { area: WorldArea; defeated: boolean }) {
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: -bob.value * 5 }, { rotate: `${(bob.value - 0.5) * 6}deg` }] }));
   if (!level) return null;
   return (
-    <Animated.View style={[styles.abs, { left: area.mascot.x - 34, top: area.mascot.y - 44, width: 68, alignItems: 'center' }, style]} pointerEvents="none">
+    <Animated.View style={[styles.abs, { left: area.mascot.x - 60, top: area.mascot.y - 44, width: 120, alignItems: 'center' }, style]} pointerEvents="none">
       <View style={[styles.mascotRing, { borderColor: WORLD_LOOKS[area.w - 1].node }]}>
         <Image source={portraitOf(area.w)} style={[styles.mascotImg, defeated && { opacity: 0.55 }]} />
       </View>
       <View style={styles.mascotName}>
-        <AppText style={styles.mascotText}>{defeated ? `${level.world.bot} ✓` : level.world.bot}</AppText>
+        <AppText style={styles.mascotText} numberOfLines={1}>
+          {defeated ? `${level.world.bot} ✓` : level.world.bot}
+        </AppText>
       </View>
     </Animated.View>
   );
 }
 
 /* ---------------------------------- Carte --------------------------------- */
+
+/** « La Lune » → « la Lune », pour la phrase du haut de la carte. */
+const lastPlace = (() => {
+  const p = ARENAS[WORLDS - 1]?.place ?? '';
+  return /^(Le|La|Les|L') ?/.test(p) ? p.charAt(0).toLowerCase() + p.slice(1) : p;
+})();
 
 export function SagaMap({
   cleared,
@@ -302,13 +319,14 @@ export function SagaMap({
         <WorldSign key={`s${a.w}`} area={a} />
       ))}
       {layout.worlds.map((a) => (
-        <Mascot key={`m${a.w}`} area={a} defeated={cleared >= a.w * LEVELS_PER_WORLD} />
+        <Mascot key={`m${a.w}`} area={a} defeated={(stars[a.w * LEVELS_PER_WORLD - 1] ?? 0) > 0} />
       ))}
       {layout.nodes.map((p, i) => {
         const n = i + 1;
         const boss = n % LEVELS_PER_WORLD === 0;
         const size = boss ? 68 : 54;
-        const state: NodeState = n <= cleared ? 'done' : n === current && cleared < TOTAL_LEVELS ? 'current' : 'locked';
+        const won = (stars[i] ?? 0) > 0;
+        const state: NodeState = n <= cleared ? (won ? 'done' : 'open') : n === current && cleared < TOTAL_LEVELS ? 'current' : 'locked';
         return (
           <View key={n} style={[styles.abs, { left: p.x - size / 2, top: p.y - size / 2 }]}>
             <LevelNode n={n} state={state} stars={stars[i] ?? 0} onPress={() => onPick(n)} />
@@ -323,7 +341,7 @@ export function SagaMap({
       {/* haut de la carte : un voile pour la fin de l'aventure */}
       <LinearGradient colors={['rgba(9,9,11,0.85)', 'rgba(9,9,11,0)']} style={[styles.abs, { left: 0, right: 0, top: 0, height: 140 + topInset }]} pointerEvents="none" />
       <View style={[styles.abs, { top: 50 + topInset, left: 0, right: 0, alignItems: 'center' }]} pointerEvents="none">
-        <AppText style={styles.end}>{cleared >= TOTAL_LEVELS ? 'Aventure terminée !' : 'Tout en haut : le Cosmos'}</AppText>
+        <AppText style={styles.end}>{cleared >= TOTAL_LEVELS ? 'Aventure terminée !' : `Tout en haut : ${lastPlace}`}</AppText>
       </View>
     </ScrollView>
   );
@@ -338,6 +356,9 @@ const styles = StyleSheet.create({
   bossTag: { position: 'absolute', bottom: -12, width: 74, alignItems: 'center', height: 19, borderRadius: 6, backgroundColor: '#C8283C', borderWidth: 2, borderColor: OUTLINE, justifyContent: 'center' },
   bossText: { fontFamily: fonts.black, fontSize: 10, color: '#FFFFFF', letterSpacing: 0.5 },
   stars: { position: 'absolute', flexDirection: 'row', gap: 1 },
+  nodeOpen: { borderColor: '#FFFFFF' },
+  newTag: { position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: '#FF4F6E', borderWidth: 2.5, borderColor: OUTLINE, alignItems: 'center', justifyContent: 'center' },
+  newText: { fontFamily: fonts.black, fontSize: 13, lineHeight: 16, color: '#FFFFFF' },
   starIcon: { textShadowColor: OUTLINE, textShadowOffset: { width: 0, height: 1.5 }, textShadowRadius: 1 },
   pin: { alignItems: 'center', width: 40 },
   pinHead: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#FFFFFF', borderWidth: 3, borderColor: OUTLINE, alignItems: 'center', justifyContent: 'center' },

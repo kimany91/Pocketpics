@@ -1,18 +1,20 @@
 /**
- * Géométrie de la carte d'aventure (pure, testable) : position des 50
- * niveaux le long d'une route qui serpente vers le haut, tracé de la route,
- * limites de chaque monde, et placement des décors à l'écart de la route.
+ * Géométrie de la carte d'aventure (pure, testable) : position des niveaux
+ * (5 par monde) le long d'une route qui serpente vers le haut, tracé de la
+ * route, limites de chaque monde, et placement des décors à l'écart de la
+ * route.
  *
  * Repère : x de 0 à `width`, y de 0 (haut de la carte) à `height` (bas). Le
  * niveau 1 est en bas, on remonte la carte en avançant.
  */
 import { LEVELS_PER_WORLD, TOTAL_LEVELS, WORLDS } from '../../battle/levels';
-import { type DecorKind, type HeroKind, WORLD_LOOKS } from './worlds';
+import { type DecorKind, type HeroKind, SKY_H, WORLD_LOOKS } from './worlds';
 
 export const STEP = 124;
 const GAP = 170;
 const BOTTOM = 290;
-const TOP = 280;
+/** Haut de la carte : de la place pour le ciel noir de la Lune, au-dessus du dernier niveau. */
+const TOP = 380;
 export const ROAD_W = 40;
 
 export interface Pt {
@@ -29,7 +31,7 @@ export interface Placed {
 }
 
 export interface WorldArea {
-  /** 1 → 10 */
+  /** Place du monde sur la carte : 1 → WORLDS. */
   w: number;
   top: number;
   bottom: number;
@@ -40,6 +42,10 @@ export interface WorldArea {
   hero: { kind: HeroKind; x: number; y: number; side: -1 | 1 };
   decor: Placed[];
   texture: Pt[];
+  /** Rails de la route (mines) : deux tracés décalés de part et d'autre du milieu. */
+  rails: string[] | null;
+  /** Ciel noir (dernier monde) : position de la Terre. */
+  sky: { earth: Pt } | null;
 }
 
 export interface MapLayout {
@@ -119,8 +125,46 @@ function roadXAt(samples: Pt[], y: number) {
 const dist2 = (a: Pt, b: Pt) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 
 /** Rayon approximatif de chaque décor (pour ne pas les poser sur la route). */
-const RADIUS: Partial<Record<DecorKind, number>> = { tree: 30, palm: 30, pine: 26, snowPine: 26, stall: 34, chalet: 32, boat: 30, fountain: 30, topiary: 18, planet: 24, column: 16, deadTree: 24 };
+const RADIUS: Partial<Record<DecorKind, number>> = {
+  tree: 30, palm: 30, pine: 26, snowPine: 26, stall: 34, chalet: 32, boat: 30, fountain: 30, topiary: 18, planet: 24, column: 16, deadTree: 24,
+  willow: 30, lily: 26, tent: 30, popcorn: 20, garland: 24, hay: 20, fence: 26, cow: 24, scarecrow: 20, sunflower: 14, ironFence: 26,
+  chest: 18, cannon: 22, cactus: 18, dune: 28, sandRock: 20, minecart: 22, timber: 20, islet: 24, cloud: 22, hotAir: 22, rainbow: 28,
+  tower: 18, crater: 22, lander: 22, dish: 16,
+};
 const radiusOf = (k: DecorKind) => RADIUS[k] ?? 16;
+
+/** Place gardée autour de chaque grand décor. */
+const HERO_R: Partial<Record<HeroKind, number>> = { lake: 100, fair: 100, farm: 98, manor: 100, pyramids: 104, mine: 100, skyIslands: 100, skyline: 106, moonBase: 98 };
+/** Grands décors collés au bord (mer, port, crique) : on ne sème rien dans l'eau. */
+const EDGE_WATER: Partial<Record<HeroKind, number>> = { sea: 70, lighthouse: 20, cove: 64 };
+
+/** Horizon courbe du ciel de la Lune, à l'abscisse x. */
+export const horizonY = (x: number, width: number) => {
+  const t = Math.max(0, Math.min(1, x / width));
+  return SKY_H - 280 * t * (1 - t);
+};
+
+/**
+ * Deux rails parallèles à la route, décalés de ±gap, entre yMin et yMax
+ * (tracés de points, pour les mines).
+ */
+export function railPaths(pts: Pt[], yMin: number, yMax: number, gap = 10.5): string[] {
+  const s = sampleRoad(pts);
+  const r = (n: number) => Math.round(n * 10) / 10;
+  return [gap, -gap].map((g) => {
+    let d = '';
+    for (let i = 0; i < s.length; i++) {
+      if (s[i].y < yMin - 30 || s[i].y > yMax + 30) continue;
+      const a = s[Math.max(0, i - 1)];
+      const b = s[Math.min(s.length - 1, i + 1)];
+      const tx = b.x - a.x;
+      const ty = b.y - a.y;
+      const len = Math.hypot(tx, ty) || 1;
+      d += `${d ? 'L' : 'M'}${r(s[i].x - (ty / len) * g)} ${r(s[i].y + (tx / len) * g)}`;
+    }
+    return d;
+  });
+}
 
 const cache = new Map<number, MapLayout>();
 
@@ -157,10 +201,17 @@ export function mapLayout(width: number): MapLayout {
     const reserved: (Pt & { r: number })[] = [
       { ...sign, r: 70 },
       { ...mascot, r: 52 },
-      { x: hero.x, y: hero.y, r: 92 },
+      { x: hero.x, y: hero.y, r: HERO_R[look.hero] ?? 92 },
       ...nodes.slice((w - 1) * LEVELS_PER_WORLD, w * LEVELS_PER_WORLD).map((n) => ({ ...n, r: 44 })),
+      // la ville néon monte haut au-dessus de son centre
+      ...(look.hero === 'skyline' ? [{ x: hero.x - heroSide * 20, y: hero.y - 120, r: 60 }] : []),
     ];
-    const free = (p: Pt, r: number) => !nearRoad(p, r) && reserved.every((q) => dist2(q, p) > (q.r + r) ** 2);
+    const water = EDGE_WATER[look.hero];
+    const inWater = (p: Pt, r: number) =>
+      water !== undefined && Math.abs(p.y - hero.y) < 180 + r && (heroSide < 0 ? p.x < hero.x + water + r : p.x > hero.x - water - r);
+    // dernier monde : rien dans le ciel, au-dessus de l'horizon
+    const skyTop = look.sky ? SKY_H + 10 : 0;
+    const free = (p: Pt, r: number) => p.y > skyTop && !inWater(p, r) && !nearRoad(p, r) && reserved.every((q) => dist2(q, p) > (q.r + r) ** 2);
 
     // décors : une grille irrégulière, un tirage pondéré par case
     const total = look.decor.reduce((s, [, n]) => s + n, 0);
@@ -189,10 +240,12 @@ export function mapLayout(width: number): MapLayout {
     for (let y = top + 8; y < bottom; y += 30) {
       for (let x = 6; x < width; x += 34) {
         const p = { x: x + rand() * 24, y: y + rand() * 20 };
-        if (rand() < 0.45 && !nearRoad(p, 2)) texture.push(p);
+        if (rand() < 0.45 && !nearRoad(p, 2) && (!look.sky || p.y > horizonY(p.x, width) + 6)) texture.push(p);
       }
     }
-    worlds.push({ w, top, bottom, sign, mascot, hero, decor, texture });
+    const rails = look.roadStyle === 'rails' ? railPaths(full, top, bottom) : null;
+    const sky = look.sky ? { earth: { x: last.x < width / 2 ? width * 0.76 : width * 0.24, y: 158 } } : null;
+    worlds.push({ w, top, bottom, sign, mascot, hero, decor, texture, rails, sky });
   }
 
   const layout = { width, height, nodes, road: smoothPath(full), worlds };
