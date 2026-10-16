@@ -11,8 +11,8 @@ import { create } from 'zustand';
 
 import { shownMmr } from '../game/rank';
 import { useGame } from '../state/game';
-import { type MqttConnection, connectMqtt } from '../trade/mqtt';
-import { deps } from '../trade/online';
+import { type MqttConnection } from '../trade/mqtt';
+import { connectRelay, deps } from '../trade/online';
 import { newOnlineCode } from '../trade/relayCore';
 import { useMatch } from './match';
 import { CHALLENGE_TTL_MS, type SocialMsg, inboxTopic, isOnline, newFriendCode, openFor, presenceTopic, sealFor } from './socialCore';
@@ -151,7 +151,7 @@ export const useSocial = create<SocialStore>((set, get) => {
     set({ status: 'connecting' });
     const clientBase = Array.from(getRandomBytes(6), (b) => b.toString(16).padStart(2, '0')).join('');
     // Tous les relais à la fois : deux amis se retrouvent même si l'un d'eux n'en joint qu'un.
-    const results = await Promise.allSettled(deps().urls.map((url, i) => connectMqtt(url, `pps-${clientBase}${i}`, topics, { will })));
+    const results = await Promise.allSettled(deps().urls.map((url, i) => connectRelay(url, `pps-${clientBase}${i}`, topics, { will })));
     const ok = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
     if (gen !== generation) {
       ok.forEach((c) => c.close());

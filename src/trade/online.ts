@@ -3,8 +3,9 @@ import { getRandomBytes } from 'expo-crypto';
 import nacl from 'tweetnacl';
 
 import type { HostHandle, TradeLink } from './link';
-import { connectMqtt } from './mqtt';
+import { type MqttConnection, type MqttWill, connectMqtt } from './mqtt';
 import { type RelayDeps, type RoomOptions, hostOnline as hostCore, joinOnline as joinCore } from './relayCore';
+import { ROOM_RELAY, connectRoom, inClaudeViewer } from './roomRelay';
 
 // Hasard cryptographique fourni par Expo (fonctionne sur iOS, Android et web).
 nacl.setPRNG((x, n) => {
@@ -18,11 +19,29 @@ nacl.setPRNG((x, n) => {
  */
 export const RELAYS = ['wss://broker.hivemq.com:8884/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
 
-export function deps(): RelayDeps {
+/**
+ * Se connecte à un relais : le canal « room » de claude.ai pour `ROOM_RELAY`
+ * (démo publiée sur claude.ai, où les WebSocket vers l'extérieur sont bloqués),
+ * un relais MQTT public sinon.
+ */
+export function connectRelay(url: string, clientId: string, topic: string | string[], opts: { will?: MqttWill } = {}): Promise<MqttConnection> {
+  return url === ROOM_RELAY ? connectRoom(clientId, topic, opts) : connectMqtt(url, clientId, topic, opts);
+}
+
+/**
+ * Relais à utiliser, par ordre de préférence. Dans le visualiseur claude.ai, le
+ * canal « room » passe en premier : c'est le seul joignable depuis la page, et
+ * les deux joueurs qui ont la démo ouverte s'y retrouvent.
+ */
+export function relayUrls(): string[] {
   // Permet de pointer vers un relais de test (ex. relais local) sans recompiler.
   const override = (globalThis as { __pocketpicsRelays?: unknown }).__pocketpicsRelays;
-  const urls = Array.isArray(override) && override.every((u) => typeof u === 'string') ? (override as string[]) : RELAYS;
-  return { connect: connectMqtt, urls, randomBytes: getRandomBytes };
+  if (Array.isArray(override) && override.every((u) => typeof u === 'string')) return override as string[];
+  return inClaudeViewer() ? [ROOM_RELAY, ...RELAYS] : RELAYS;
+}
+
+export function deps(): RelayDeps {
+  return { connect: connectRelay, urls: relayUrls(), randomBytes: getRandomBytes };
 }
 
 export const hostOnline = (onGuest: (link: TradeLink) => void): Promise<HostHandle> => hostCore(deps(), onGuest);

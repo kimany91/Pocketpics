@@ -185,27 +185,46 @@ class RelayLink<M = TradeMessage> implements TradeLink<M> {
 /* ------------------------------ Hôte / invité ------------------------------ */
 
 /**
- * Se connecte au premier relais qui répond. Tous sont essayés en même temps :
- * si l'un ne répond pas, on n'attend pas son délai avant d'essayer les autres.
+ * Se connecte au relais préféré qui répond. Tous sont essayés en même temps (un
+ * relais muet ne fait pas attendre les suivants), mais on garde toujours le
+ * premier de la liste qui répond : l'hôte et l'invité, qui ont la même liste,
+ * se retrouvent ainsi sur le même relais.
  */
 async function connectAny(deps: RelayDeps, clientId: string, topic: string): Promise<MqttConnection> {
+  const total = deps.urls.length;
+  if (total === 0) throw new Error(OFFLINE);
   return new Promise<MqttConnection>((resolve, reject) => {
-    let won = false;
-    let failed = 0;
-    const total = deps.urls.length;
-    if (total === 0) return reject(new Error(OFFLINE));
-    for (const url of deps.urls) {
+    const results: ({ ok: MqttConnection } | { err: true } | undefined)[] = new Array(total);
+    let done = false;
+    const settle = () => {
+      if (done) return;
+      for (let i = 0; i < total; i++) {
+        const r = results[i];
+        if (r === undefined) return; // un relais préféré n'a pas encore répondu : on l'attend
+        if ('ok' in r) {
+          done = true;
+          resolve(r.ok);
+          // les relais moins prioritaires déjà connectés sont fermés
+          results.forEach((x, j) => j !== i && x && 'ok' in x && x.ok.close());
+          return;
+        }
+      }
+      done = true;
+      reject(new Error(OFFLINE));
+    };
+    deps.urls.forEach((url, i) => {
       deps.connect(url, clientId, topic).then(
         (conn) => {
-          if (won) return conn.close();
-          won = true;
-          resolve(conn);
+          if (done) return conn.close();
+          results[i] = { ok: conn };
+          settle();
         },
         () => {
-          if (++failed === total && !won) reject(new Error(OFFLINE));
+          results[i] = { err: true };
+          settle();
         },
       );
-    }
+    });
   });
 }
 
