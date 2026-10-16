@@ -2,11 +2,29 @@
  * Avant un combat : on choisit ses 4 cartes (la première choisie commence).
  * En ligne (`online=1`), c'est aussi le salon : on voit l'adversaire et son
  * rang, chacun valide ses cartes, et le combat part quand les deux sont prêts.
+ *
+ * Une carte choisie bondit (avec quelques étincelles) et vient se poser dans
+ * les emplacements de l'équipe, en bas ; quand l'équipe est complète, le bouton
+ * « Combattre » s'illumine.
  */
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, FlatList, Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeOut,
+  ZoomIn,
+  ZoomOut,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { portraitRef } from '../../battle/arenas';
@@ -18,6 +36,7 @@ import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { Header } from '../../components/Header';
 import { CardFace } from '../../components/card/CardFace';
+import { Burst, Glow } from '../../components/fx';
 import { Message } from '../../components/online/Message';
 import { RankEmblem } from '../../components/rank/RankEmblem';
 import { rankOf } from '../../game/rank';
@@ -176,51 +195,121 @@ export default function DeckScreen() {
           data={sorted}
           numColumns={cols}
           keyExtractor={(c) => c.id}
-          contentContainerStyle={{ paddingHorizontal: 16, gap, paddingBottom: 120 }}
+          contentContainerStyle={{ paddingHorizontal: 16, gap, paddingBottom: 200 }}
           columnWrapperStyle={{ gap }}
-          renderItem={({ item }) => {
-            const order = picked.indexOf(item.id);
-            const b = item.battle;
-            return (
-              <Pressable onPress={() => toggle(item.id)} style={{ width: cardW }} accessibilityLabel={`Choisir ${item.name ?? getRarity(item.rarity).label}`}>
-                <View>
-                  <CardFace card={item} width={cardW} quality="thumb" animated={false} />
-                  {order >= 0 ? (
-                    <View style={[styles.picked, { borderRadius: cardW * 0.07 }]}>
-                      <View style={styles.badge}>
-                        <AppText style={styles.badgeText}>{order + 1}</AppText>
-                      </View>
-                    </View>
-                  ) : null}
-                </View>
-                <View style={styles.stats}>
-                  <Stat icon="heart" value={String(b.hp)} color={colors.danger} />
-                  <Stat icon="flash" value={powerLabel(b.attacks[0])} color={colors.gold} />
-                  <Ionicons name={KIND_LOOK[kindOf(b.attacks[1])].icon} size={12} color={KIND_LOOK[kindOf(b.attacks[1])].color} accessibilityLabel={ATTACK_KIND_LABEL[kindOf(b.attacks[1])]} />
-                </View>
-              </Pressable>
-            );
-          }}
+          renderItem={({ item }) => <DeckCard card={item} order={picked.indexOf(item.id)} width={cardW} onPress={() => toggle(item.id)} />}
         />
       )}
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        {need > 0 ? <TeamSlots cards={picked.map((id) => cards.find((c) => c.id === id)).filter((c): c is Card => !!c)} slots={need} onRemove={toggle} /> : null}
         {online && match.myReady ? (
           <View style={styles.waiting}>
             <ActivityIndicator color={colors.gold} />
             <AppText variant="heading" numberOfLines={1}>{`En attente de ${opp?.name ?? 'l’adversaire'}…`}</AppText>
           </View>
         ) : (
-          <Button
+          <FightButton
             label={picked.length >= need && need > 0 ? (online ? 'Prêt !' : 'Combattre') : `${picked.length}/${need} cartes`}
-            size="lg"
-            icon="flash"
             disabled={need === 0 || picked.length < need || (online && match.phase !== 'lobby')}
             onPress={fight}
           />
         )}
       </View>
     </View>
+  );
+}
+
+/** Une carte de la collection : elle bondit quand on la choisit, se tasse quand on la retire. */
+function DeckCard({ card, order, width, onPress }: { card: Card; order: number; width: number; onPress(): void }) {
+  const b = card.battle;
+  const pop = useSharedValue(0);
+  const prev = useRef(order);
+  const [sparks, setSparks] = useState(0);
+  useEffect(() => {
+    if (order >= 0 && prev.current < 0) {
+      pop.value = withSequence(withTiming(1, { duration: 90, easing: Easing.out(Easing.quad) }), withSpring(0, { damping: 7, stiffness: 320 }));
+      setSparks((n) => n + 1);
+    } else if (order < 0 && prev.current >= 0) {
+      pop.value = withSequence(withTiming(-1, { duration: 80 }), withSpring(0, { damping: 11, stiffness: 300 }));
+    }
+    prev.current = order;
+  }, [order, pop]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pop.value * 0.07 }, { rotate: `${pop.value * -2.5}deg` }] }));
+  const kind = kindOf(b.attacks[1]);
+  return (
+    <Pressable onPress={onPress} style={{ width }} accessibilityLabel={`Choisir ${card.name ?? getRarity(card.rarity).label}`}>
+      <Animated.View style={style}>
+        <CardFace card={card} width={width} quality="thumb" animated={false} />
+        {order >= 0 ? (
+          <Animated.View entering={FadeIn.duration(140)} exiting={FadeOut.duration(140)} style={[styles.picked, { borderRadius: width * 0.07 }]}>
+            <Animated.View key={order} entering={ZoomIn.springify().damping(9).stiffness(260)} style={styles.badge}>
+              <AppText style={styles.badgeText}>{order + 1}</AppText>
+            </Animated.View>
+          </Animated.View>
+        ) : null}
+        <View pointerEvents="none" style={styles.sparkPoint}>
+          <Burst trigger={sparks} colors={[colors.gold, '#FFF3C2', '#FFFFFF']} count={7} radius={width * 0.75} />
+        </View>
+      </Animated.View>
+      <View style={styles.stats}>
+        <Stat icon="heart" value={String(b.hp)} color={colors.danger} />
+        <Stat icon="flash" value={powerLabel(b.attacks[0])} color={colors.gold} />
+        <Ionicons name={KIND_LOOK[kind].icon} size={12} color={KIND_LOOK[kind].color} accessibilityLabel={ATTACK_KIND_LABEL[kind]} />
+      </View>
+    </Pressable>
+  );
+}
+
+/** Emplacements de l'équipe : les cartes choisies viennent s'y poser, dans l'ordre d'entrée en jeu. */
+function TeamSlots({ cards, slots, onRemove }: { cards: Card[]; slots: number; onRemove(id: string): void }) {
+  const w = 34;
+  return (
+    <View style={styles.slots}>
+      <AppText variant="caption" style={{ flex: 1 }} numberOfLines={2}>
+        {cards.length >= slots ? 'Équipe prête !' : 'Ton équipe'}
+      </AppText>
+      {Array.from({ length: slots }, (_, i) => {
+        const c = cards[i];
+        return (
+          <Pressable key={i} disabled={!c} onPress={() => c && onRemove(c.id)} accessibilityLabel={c ? `Retirer ${c.name ?? getRarity(c.rarity).label}` : `Emplacement ${i + 1}`} style={[styles.slot, { width: w + 6, height: w * 1.4 + 6 }, c && styles.slotFull]}>
+            {c ? (
+              <Animated.View key={c.id} entering={ZoomIn.springify().damping(10).stiffness(220)} exiting={ZoomOut.duration(120)}>
+                <CardFace card={c} width={w} quality="thumb" animated={false} />
+              </Animated.View>
+            ) : (
+              <AppText style={styles.slotNum}>{i + 1}</AppText>
+            )}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Le bouton du combat : quand l'équipe est prête, il bondit et un halo doré respire derrière lui. */
+function FightButton({ label, disabled, onPress }: { label: string; disabled: boolean; onPress(): void }) {
+  const glow = useSharedValue(0);
+  const bump = useSharedValue(0);
+  useEffect(() => {
+    if (disabled) {
+      cancelAnimation(glow);
+      glow.value = withTiming(0, { duration: 200 });
+      return;
+    }
+    bump.value = withSequence(withTiming(1, { duration: 110 }), withSpring(0, { damping: 6, stiffness: 260 }));
+    glow.value = withRepeat(withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(glow);
+  }, [disabled, glow, bump]);
+  const glowStyle = useAnimatedStyle(() => ({ opacity: disabled ? 0 : 0.35 + glow.value * 0.5, transform: [{ scaleX: 1 + glow.value * 0.06 }] }));
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 + bump.value * 0.05 }] }));
+  return (
+    <Animated.View style={style}>
+      <Animated.View pointerEvents="none" style={[styles.fightGlow, glowStyle]}>
+        <Glow color={colors.gold} size={90} stretchX={4.2} />
+      </Animated.View>
+      <Button label={label} size="lg" icon="flash" disabled={disabled} onPress={onPress} />
+    </Animated.View>
   );
 }
 
@@ -261,5 +350,11 @@ const styles = StyleSheet.create({
   stat: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   statText: { fontFamily: fonts.bold, fontSize: 12, color: colors.text, fontVariant: ['tabular-nums'] },
   waiting: { height: 58, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16 },
-  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, backgroundColor: 'rgba(9,9,11,0.94)' },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 10, gap: 10, backgroundColor: 'rgba(9,9,11,0.94)', borderTopWidth: 1, borderTopColor: colors.border },
+  sparkPoint: { position: 'absolute', left: '50%', top: '50%', width: 0, height: 0 },
+  slots: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  slot: { borderRadius: 7, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
+  slotFull: { borderStyle: 'solid', borderColor: colors.gold, backgroundColor: 'rgba(247,201,72,0.1)' },
+  slotNum: { fontFamily: fonts.bold, fontSize: 13, color: colors.textFaint },
+  fightGlow: { position: 'absolute', left: 0, right: 0, top: -16, bottom: -16, alignItems: 'center', justifyContent: 'center' },
 });

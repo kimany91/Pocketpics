@@ -1,6 +1,7 @@
 /**
  * Effets visuels réutilisables : halo, rayons, gerbes d'étincelles, onde, flash,
- * scintillement, particules flottantes, colonne de lumière.
+ * scintillement, particules flottantes, colonne de lumière, traits d'impact,
+ * éclat de rayons et confettis.
  *
  * Tous les effets sont décoratifs : ils ne captent jamais le toucher
  * (`pointerEvents="none"`), sinon ils bloqueraient les boutons situés dessous.
@@ -110,12 +111,15 @@ export function Burst({
   colors,
   count,
   radius,
+  delay = 0,
 }: {
   /** Incrémenter pour déclencher une nouvelle gerbe. */
   trigger: number;
   colors: string[];
   count: number;
   radius: number;
+  /** Attente avant le départ des étincelles (ex. arrêt sur image d'un coup). */
+  delay?: number;
 }) {
   const specs = useMemo<ParticleSpec[]>(
     () =>
@@ -123,7 +127,7 @@ export function Burst({
         angle: (Math.PI * 2 * i) / count + Math.random() * 0.6,
         dist: radius * (0.45 + Math.random() * 0.75),
         size: 16 + Math.random() * 30,
-        delay: Math.random() * 140,
+        delay: delay + Math.random() * 140,
         duration: 750 + Math.random() * 650,
         spin: (Math.random() - 0.5) * 360,
         color: colors[i % colors.length],
@@ -328,13 +332,25 @@ export function LightPillar({ trigger, color, width, height }: { trigger: number
 
 /* ---------------------------------- Onde ---------------------------------- */
 
-export function Shockwave({ trigger, color, size, delay = 0 }: { trigger: number; color: string; size: number; delay?: number }) {
+export function Shockwave({
+  trigger,
+  color,
+  size,
+  delay = 0,
+  duration = 900,
+}: {
+  trigger: number;
+  color: string;
+  size: number;
+  delay?: number;
+  duration?: number;
+}) {
   const p = useSharedValue(0);
   useEffect(() => {
     if (trigger <= 0) return;
     p.value = 0;
-    p.value = withDelay(delay, withTiming(1, { duration: 900, easing: Easing.out(Easing.quad) }));
-  }, [trigger, p, delay]);
+    p.value = withDelay(delay, withTiming(1, { duration, easing: Easing.out(Easing.quad) }));
+  }, [trigger, p, delay, duration]);
   const style = useAnimatedStyle(() => ({
     opacity: p.value === 0 ? 0 : (1 - p.value) * 0.9,
     transform: [{ scale: 0.4 + p.value * 1.9 }],
@@ -358,6 +374,191 @@ export function Flash({ trigger, color = '#FFFFFF', peak = 0.85 }: { trigger: nu
   }, [trigger, o, peak]);
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
   return <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: color }, style]} />;
+}
+
+/* ----------------------------- Traits d'impact ----------------------------- */
+
+interface LineSpec {
+  angle: number;
+  len: number;
+  thick: number;
+}
+
+/**
+ * Étoile d'impact façon bande dessinée : des traits fins jaillissent du point
+ * d'impact et s'effacent en un éclair. Une seule valeur animée pour tous les traits.
+ */
+export function ImpactLines({
+  trigger,
+  color,
+  size,
+  count = 10,
+  delay = 0,
+  thickness = 4,
+  duration = 340,
+}: {
+  trigger: number;
+  color: string;
+  size: number;
+  count?: number;
+  delay?: number;
+  thickness?: number;
+  duration?: number;
+}) {
+  const p = useSharedValue(0);
+  const specs = useMemo<LineSpec[]>(
+    () =>
+      Array.from({ length: trigger > 0 ? count : 0 }, (_, i) => ({
+        angle: (360 * i) / count + (Math.random() - 0.5) * (260 / count),
+        len: size * (0.22 + Math.random() * 0.22),
+        thick: thickness * (0.55 + Math.random() * 0.8),
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [trigger],
+  );
+  useEffect(() => {
+    if (trigger <= 0) return;
+    p.value = 0;
+    p.value = withDelay(delay, withTiming(1, { duration, easing: Easing.out(Easing.cubic) }));
+    return () => cancelAnimation(p);
+  }, [trigger, p, delay, duration]);
+  return (
+    <View pointerEvents="none" style={styles.center}>
+      {specs.map((s, i) => (
+        <ImpactLine key={`${trigger}-${i}`} spec={s} p={p} size={size} color={color} />
+      ))}
+    </View>
+  );
+}
+
+function ImpactLine({ spec, p, size, color }: { spec: LineSpec; p: SharedValue<number>; size: number; color: string }) {
+  const style = useAnimatedStyle(() => {
+    const t = p.value;
+    const r = size * 0.16 + t * size * 0.3;
+    return {
+      opacity: t === 0 || t === 1 ? 0 : t < 0.25 ? 1 : 1 - (t - 0.25) / 0.75,
+      transform: [{ rotate: `${spec.angle}deg` }, { translateX: r + spec.len / 2 }, { scaleX: t < 0.3 ? 0.35 + (t / 0.3) * 0.65 : 1 - (t - 0.3) * 0.8 }, { scaleY: 1 - t * 0.6 }],
+    };
+  });
+  return (
+    <Animated.View
+      style={[
+        { position: 'absolute', width: spec.len, height: spec.thick, marginLeft: -spec.len / 2, marginTop: -spec.thick / 2, borderRadius: spec.thick / 2, backgroundColor: color },
+        style,
+      ]}
+    />
+  );
+}
+
+/* ----------------------------- Éclat de rayons ----------------------------- */
+
+/** Rayons qui s'ouvrent et tournent un instant derrière quelque chose (attaque spéciale). */
+export function RayBurst({ trigger, color, size, duration = 700 }: { trigger: number; color: string; size: number; duration?: number }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    if (trigger <= 0) return;
+    p.value = 0;
+    p.value = withTiming(1, { duration, easing: Easing.out(Easing.quad) });
+    return () => cancelAnimation(p);
+  }, [trigger, p, duration]);
+  const style = useAnimatedStyle(() => {
+    const t = p.value;
+    return {
+      opacity: t === 0 || t === 1 ? 0 : t < 0.2 ? (t / 0.2) * 0.85 : 0.85 * (1 - (t - 0.2) / 0.8),
+      transform: [{ rotate: `${t * 70}deg` }, { scale: 0.45 + t * 0.75 }],
+    };
+  });
+  return (
+    <Animated.Image
+      source={raysTex}
+      style={[{ position: 'absolute', width: size, height: size, marginLeft: -size / 2, marginTop: -size / 2, tintColor: color }, style]}
+    />
+  );
+}
+
+/* --------------------------------- Confettis -------------------------------- */
+
+interface ConfettiSpec {
+  x: number;
+  drift: number;
+  sway: number;
+  w: number;
+  h: number;
+  delay: number;
+  duration: number;
+  spin: number;
+  flips: number;
+  color: string;
+  round: boolean;
+}
+
+/** Pluie de confettis (victoire) : une seule averse, chaque morceau tombe en virevoltant. */
+export function Confetti({
+  width,
+  height,
+  colors,
+  count = 28,
+  trigger = 1,
+}: {
+  width: number;
+  height: number;
+  colors: string[];
+  count?: number;
+  trigger?: number;
+}) {
+  const specs = useMemo<ConfettiSpec[]>(
+    () =>
+      Array.from({ length: trigger > 0 ? count : 0 }, (_, i) => ({
+        x: halton(i + 1, 2) * width,
+        drift: (Math.random() - 0.5) * 70,
+        sway: 10 + Math.random() * 22,
+        w: 6 + Math.random() * 5,
+        h: 10 + Math.random() * 8,
+        delay: Math.round(halton(i + 1, 3) * 900),
+        duration: 2300 + Math.random() * 1500,
+        spin: (Math.random() - 0.5) * 720,
+        flips: 2 + Math.random() * 4,
+        color: colors[i % colors.length],
+        round: i % 5 === 0,
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [trigger, count, width],
+  );
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {specs.map((s, i) => (
+        <ConfettiPiece key={`${trigger}-${i}`} spec={s} height={height} />
+      ))}
+    </View>
+  );
+}
+
+function ConfettiPiece({ spec, height }: { spec: ConfettiSpec; height: number }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    p.value = withDelay(spec.delay, withTiming(1, { duration: spec.duration, easing: Easing.linear }));
+    return () => cancelAnimation(p);
+  }, [p, spec]);
+  const style = useAnimatedStyle(() => {
+    const t = p.value;
+    return {
+      opacity: t === 0 ? 0 : t > 0.85 ? (1 - t) / 0.15 : 1,
+      transform: [
+        { translateX: spec.x + spec.drift * t + Math.sin(t * Math.PI * 4) * spec.sway },
+        { translateY: -30 + t * (height + 60) },
+        { rotate: `${spec.spin * t}deg` },
+        { scaleY: Math.cos(t * Math.PI * spec.flips) },
+      ],
+    };
+  });
+  return (
+    <Animated.View
+      style={[
+        { position: 'absolute', left: -spec.w / 2, top: 0, width: spec.w, height: spec.round ? spec.w : spec.h, borderRadius: spec.round ? spec.w / 2 : 1.5, backgroundColor: spec.color },
+        style,
+      ]}
+    />
+  );
 }
 
 const styles = StyleSheet.create({

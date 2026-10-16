@@ -4,9 +4,14 @@
  * jouer le bot, et on propose au joueur ses actions : attaque classique,
  * attaque spéciale (mini-jeu de précision), ou changer de carte.
  *
- * Mise en scène : décor flou de l'arène, ouverture « VS », l'écran tremble à
- * chaque coup (plus fort sur un critique), et le cadre du message prend la
- * couleur du camp dont on parle.
+ * Mise en scène : décor flou de l'arène, ouverture « VS », bandeau à chaque
+ * changement de tour, et le cadre du message prend la couleur du camp dont on
+ * parle. Un coup se joue en trois temps : l'élan (`use`), la ruée de la carte
+ * qui attaque (`hit`, `STRIKE_MS`), puis l'impact au contact : image figée un
+ * instant, chiffre, tremblement de l'écran à la mesure des PV perdus (zoom et
+ * éclair en plus sur un critique). Au K.O., la carte éclate ; le dernier K.O.
+ * affiche un grand « K.O. ! » avant l'écran de fin (confettis, étoiles une à une,
+ * pièces qui défilent).
  */
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -26,6 +31,7 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -64,16 +70,17 @@ import type { SoloReward } from '../../game/economy';
 import { DIVISION_POINTS, rankOf, shownMmr } from '../../game/rank';
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
-import { type ActKind, type FighterStatus, FighterView, HpBar, type Popup, type ReactKind } from '../../components/battle/FighterView';
+import { type ActKind, type FighterStatus, FighterView, HpBar, type Popup, type ReactKind, STRIKE_MS, type StrikeKind } from '../../components/battle/FighterView';
 import { KIND_LOOK, STATUS_LOOK, activeStatuses, attackHint } from '../../components/battle/kinds';
 import { FitLines, FitText, type TextPart, fitFontSize } from '../../components/battle/FitText';
 import { ArenaBackdrop } from '../../components/battle/ArenaBackdrop';
 import { InspectFighter } from '../../components/battle/InspectFighter';
 import { QUALITY_LABEL, TimingBar } from '../../components/battle/TimingBar';
+import { TurnBanner } from '../../components/battle/TurnBanner';
 import { VsIntro } from '../../components/battle/VsIntro';
 import { SoundSheet } from '../../components/SoundSheet';
 import { CardFace } from '../../components/card/CardFace';
-import { Burst, Flash } from '../../components/fx';
+import { Burst, Confetti, Flash, Glow, ImpactLines, Rays, Shockwave } from '../../components/fx';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import type { Card } from '../../storage/model';
@@ -194,25 +201,44 @@ export default function FightScreen() {
   };
   /** Ouverture « VS » : le combat attend qu'elle soit finie. */
   const [intro, setIntro] = useState(true);
-  /** Éclair blanc plein écran (critique, coup de grâce, K.O.). */
-  const [flashN, setFlashN] = useState(0);
+  /** Éclair plein écran (critique, coup de grâce, K.O.), de la couleur du coup. */
+  const [flash, setFlash] = useState<{ n: number; color: string; peak: number }>({ n: 0, color: '#FFFFFF', peak: 0.22 });
+  const flashScreen = (color = '#FFFFFF', peak = 0.22) => setFlash((f) => ({ n: f.n + 1, color, peak }));
   const shakeX = useSharedValue(0);
   const shakeY = useSharedValue(0);
-  /** L'écran tremble, d'autant plus que le coup est fort. */
-  const shake = (power: number) => {
+  const punchV = useSharedValue(0);
+  /** L'écran tremble, d'autant plus que le coup est fort (après l'arrêt sur image `delay`). */
+  const shake = (power: number, delay = 0) => {
     const a = Math.min(14, power);
     const seq = (k: number) =>
-      withSequence(
-        withTiming(a * k, { duration: 35 }),
-        withTiming(-a * 0.8 * k, { duration: 45 }),
-        withTiming(a * 0.5 * k, { duration: 45 }),
-        withTiming(-a * 0.25 * k, { duration: 45 }),
-        withTiming(0, { duration: 60, easing: Easing.out(Easing.quad) }),
+      withDelay(
+        delay,
+        withSequence(
+          withTiming(a * k, { duration: 35 }),
+          withTiming(-a * 0.8 * k, { duration: 45 }),
+          withTiming(a * 0.5 * k, { duration: 45 }),
+          withTiming(-a * 0.25 * k, { duration: 45 }),
+          withTiming(0, { duration: 60, easing: Easing.out(Easing.quad) }),
+        ),
       );
     shakeX.value = seq(1);
     shakeY.value = seq(-0.6);
   };
-  const stageStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }, { translateY: shakeY.value }] }));
+  /** Petit coup de zoom de la « caméra » sur les gros coups. */
+  const punch = (amount: number) => {
+    punchV.value = withSequence(withTiming(amount, { duration: 60, easing: Easing.out(Easing.quad) }), withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) }));
+  };
+  const stageStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }, { translateY: shakeY.value }, { scale: 1 + punchV.value }] }));
+  /** Bandeau de changement de tour (rejoué à chaque changement). */
+  const [banner, setBanner] = useState<{ key: number; mine: boolean } | null>(null);
+  const lastBanner = useRef<boolean | null>(null);
+  const showBanner = (mine: boolean) => {
+    if (lastBanner.current === mine) return;
+    lastBanner.current = mine;
+    setBanner((b) => ({ key: (b?.key ?? 0) + 1, mine }));
+  };
+  /** Grand « K.O. ! » quand la dernière carte d'un camp tombe. */
+  const [koStamp, setKoStamp] = useState<{ n: number; won: boolean }>({ n: 0, won: true });
   const [pending, setPending] = useState<{ slot: 0 | 1; attack: Attack; hits: number } | null>(null);
   const [switchTo, setSwitchTo] = useState<number | null>(null);
   const [result, setResult] = useState<SideId | null>(null);
@@ -229,14 +255,21 @@ export default function FightScreen() {
     return () => stopBattleMusic(token, 500);
   }, []);
   // Animations : une « action » (la carte qui agit) et une « réaction » (la carte qui subit) par camp.
-  const [acts, setActs] = useState<[{ key: number; kind: ActKind }, { key: number; kind: ActKind }]>([
+  type ActFx = { key: number; kind: ActKind; color?: string };
+  type ReactFx = { key: number; kind: ReactKind; strong?: boolean; color?: string; hitstop?: number };
+  type StrikeFx = { key: number; kind: StrikeKind; color: string };
+  type CastFx = { key: number; color: string; icon: (typeof KIND_LOOK)[AttackKind]['icon'] };
+  const [acts, setActs] = useState<[ActFx, ActFx]>([
     { key: 0, kind: 'basic' },
     { key: 0, kind: 'basic' },
   ]);
-  const [reacts, setReacts] = useState<[{ key: number; kind: ReactKind; strong?: boolean }, { key: number; kind: ReactKind; strong?: boolean }]>([
+  const [reacts, setReacts] = useState<[ReactFx, ReactFx]>([
     { key: 0, kind: 'hurt' },
     { key: 0, kind: 'hurt' },
   ]);
+  const [strikes, setStrikes] = useState<[StrikeFx | undefined, StrikeFx | undefined]>([undefined, undefined]);
+  const [casts, setCasts] = useState<[CastFx | undefined, CastFx | undefined]>([undefined, undefined]);
+  const [shatters, setShatters] = useState<[number, number]>([0, 0]);
   // 0 : les cartes arrivent sur le terrain à la fin de l'ouverture
   const [enters, setEnters] = useState<[number, number]>([0, 0]);
   const [popups, setPopups] = useState<[Popup[], Popup[]]>([[], []]);
@@ -249,18 +282,31 @@ export default function FightScreen() {
     [],
   );
 
-  const doAct = (side: SideId, kind: ActKind) =>
+  const doAct = (side: SideId, kind: ActKind, color?: string) =>
     setActs((a) => {
       const next: typeof a = [a[0], a[1]];
-      next[side] = { key: ++fxKey.current, kind };
+      next[side] = { key: ++fxKey.current, kind, color };
       return next;
     });
-  const doReact = (side: SideId, kind: ReactKind, strong = false) =>
+  const doReact = (side: SideId, kind: ReactKind, strong = false, color?: string, hitstop = 0) =>
     setReacts((a) => {
       const next: typeof a = [a[0], a[1]];
-      next[side] = { key: ++fxKey.current, kind, strong };
+      next[side] = { key: ++fxKey.current, kind, strong, color, hitstop };
       return next;
     });
+  const doStrike = (side: SideId, kind: StrikeKind, color: string) =>
+    setStrikes((a) => {
+      const next: typeof a = [a[0], a[1]];
+      next[side] = { key: ++fxKey.current, kind, color };
+      return next;
+    });
+  const doCast = (side: SideId, kind: AttackKind) =>
+    setCasts((a) => {
+      const next: typeof a = [a[0], a[1]];
+      next[side] = { key: ++fxKey.current, color: KIND_LOOK[kind].color, icon: KIND_LOOK[kind].icon };
+      return next;
+    });
+  const doShatter = (side: SideId) => setShatters((k) => (side === 0 ? [k[0] + 1, k[1]] : [k[0], k[1] + 1]));
   const doEnter = (side: SideId) => setEnters((e) => (side === 0 ? [e[0] + 1, e[1]] : [e[0], e[1] + 1]));
   const popup = (side: SideId, p: Omit<Popup, 'key'>) =>
     setPopups((all) => {
@@ -293,35 +339,58 @@ export default function FightScreen() {
               doAct(e.side, 'mirror');
               await sleep(380);
             }
-            doAct(e.side, actFor(kind, e.special, before, e.side));
+            // attaque spéciale : rayons, anneau et icône de son type
+            if (e.special || e.copied) doCast(e.side, kind);
+            // l'élan : la carte se charge, puis chaque coup la fait foncer (« hit »)
+            doAct(e.side, actFor(kind, e.special, before, e.side), KIND_LOOK[kind].color);
             playSfx(soundFor(kind), { volume: 0.6 });
-            await sleep(STATUS_KINDS.includes(kind) ? 500 : e.side === 0 ? 650 : 900);
+            const flourish = e.special || e.copied ? 140 : 0;
+            await sleep(STATUS_KINDS.includes(kind) ? 500 : (e.side === 0 ? 340 : 620) + flourish);
             break;
           }
           case 'hit': {
-            setShown(view);
             const strong = e.quality === 'crit' || !!e.execute;
+            const kind = e.kind as AttackKind;
+            const color = e.execute ? '#FF2E3F' : (KIND_LOOK[kind]?.color ?? '#FFFFFF');
+            // la carte qui attaque fonce ; tout part au moment du contact
+            doStrike(other(e.side), kind === 'slap' ? 'slap' : kind === 'recoil' ? 'heavy' : 'dash', color);
+            await sleep(STRIKE_MS);
+            if (!alive.current) return;
+            setShown(view);
+            /** Arrêt sur image au contact : plus long sur un gros coup. */
+            const hitstop = e.damage <= 0 ? 0 : strong ? 110 : e.guarded ? 40 : 70;
             if (e.damage > 0) {
-              doReact(e.side, e.execute ? 'execute' : e.guarded ? 'guarded' : e.kind === 'slap' ? 'slapped' : 'hurt', strong);
-              // l'écran tremble selon la part de PV perdue ; un critique fait aussi un éclair
-              shake(e.guarded ? 2 : 3 + Math.min(1, e.damage / Math.max(1, before.sides[e.side].fighters[before.sides[e.side].active].maxHp)) * 16 + (strong ? 5 : 0));
-              if (strong) setFlashN((n) => n + 1);
-            }
-            const q = QUALITY_LABEL[e.quality];
-            const tag = hitTag(e);
-            popup(e.side, {
-              main: e.damage > 0 ? `-${e.damage}` : '0',
-              color: e.damage <= 0 ? colors.textDim : e.quality === 'crit' || e.execute ? colors.gold : '#FFFFFF',
-              sub: tag ?? q.text,
-              subColor: tag ? colors.gold : q.color,
-              big: e.quality === 'crit' || !!e.execute,
-            });
+              doReact(e.side, e.execute ? 'execute' : e.guarded ? 'guarded' : e.kind === 'slap' ? 'slapped' : 'hurt', strong, color, hitstop);
+              // l'écran tremble selon la part de PV perdue ; un critique fait aussi un éclair et un coup de zoom
+              const part = Math.min(1, e.damage / Math.max(1, before.sides[e.side].fighters[before.sides[e.side].active].maxHp));
+              shake(e.guarded ? 2 : 3 + part * 16 + (strong ? 5 : 0), hitstop);
+              if (strong) {
+                flashScreen(e.execute ? '#FF2E3F' : '#FFF3C2', 0.26);
+                punch(0.035);
+              } else if (part > 0.25) punch(0.015);
+            } else doReact(e.side, 'whiff');
             if (e.quality === 'miss') playSfx('miss');
             else if (e.quality === 'crit' || e.execute) playSfx('crit');
             else playSfx(e.kind === 'slap' ? 'slap' : 'hit', { volume: e.quality === 'weak' || e.guarded ? 0.6 : 1 });
             if (e.guarded) playSfx('shield', { volume: 0.6 });
             if (e.damage > 0) (strong ? haptic.heavy : haptic.medium)();
-            await sleep(e.execute ? 950 : strong ? 820 : 700);
+            if (hitstop) await sleep(hitstop);
+            const q = QUALITY_LABEL[e.quality];
+            const tag = hitTag(e);
+            popup(
+              e.side,
+              e.damage > 0
+                ? {
+                    main: `-${e.damage}`,
+                    color: strong ? colors.gold : '#FFFFFF',
+                    sub: tag ?? q.text,
+                    subColor: tag ? colors.gold : q.color,
+                    big: strong,
+                  }
+                : { main: 'Raté !', color: '#C9C8D2', soft: true },
+            );
+            // le coup fatal : on enchaîne vite sur le K.O.
+            await sleep(e.hp <= 0 ? 520 : e.execute ? 820 : strong ? 700 : 600);
             break;
           }
           case 'status': {
@@ -343,6 +412,10 @@ export default function FightScreen() {
             await sleep(1150);
             break;
           case 'dodged':
+            // elle fonce… dans le vide
+            doStrike(other(e.side), 'whiff', '#5EE6D6');
+            await sleep(70);
+            if (!alive.current) return;
             setShown(view);
             doReact(e.side, 'dodged');
             popup(e.side, { main: 'Esquivé !', color: '#5EE6D6' });
@@ -386,17 +459,25 @@ export default function FightScreen() {
             playSfx('stun', { volume: 0.5 });
             await sleep(1300);
             break;
-          case 'ko':
+          case 'ko': {
             setShown(view);
             say([nameParts(e.fighter, e.side), { text: ' est K.O. !' }], e.side);
+            // la carte fissurée éclate en morceaux
+            doShatter(e.side);
             playSfx('ko');
             haptic.heavy();
-            shake(10);
-            setFlashN((n) => n + 1);
-            await sleep(1300);
+            shake(12);
+            punch(0.03);
+            flashScreen('#FFFFFF', 0.3);
+            const last = view.sides[e.side].fighters.every((f) => f.hp <= 0);
+            if (last) setKoStamp((k) => ({ n: k.n + 1, won: e.side === 1 }));
+            await sleep(last ? 1500 : 1200);
             break;
+          }
           case 'switch':
             setShown(view);
+            // la nouvelle carte arrive sans les chiffres de la précédente
+            setPopups((all) => (e.side === 0 ? [[], all[1]] : [all[0], []]));
             doEnter(e.side);
             playSfx('swipe', { volume: 0.7 });
             if (e.side === 0) say(e.forced ? [{ text: 'À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }] : [{ text: 'Reviens ! À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }], e.side);
@@ -467,6 +548,7 @@ export default function FightScreen() {
       setMode('idle');
       if (asked.current !== battle) {
         asked.current = battle;
+        if (battle.mustReplace === null) showBanner(false);
         if (online) say([{ text: `${foeInfo?.name ?? 'L’adversaire'} choisit son coup…` }], 1);
         controller
           .next(battle)
@@ -483,6 +565,7 @@ export default function FightScreen() {
       return;
     }
     const me = activeOf(battle, 0);
+    showBanner(true);
     setMode('menu');
     say(me.stun > 0 ? [nameParts(me.name, 0), { text: ' est étourdie…' }] : [{ text: 'Que doit faire ' }, nameParts(me.name, 0), { text: ' ?' }], 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -690,7 +773,11 @@ export default function FightScreen() {
             width={layout.foeW}
             facing={-1}
             act={acts[1]}
+            strike={strikes[1]}
             react={reacts[1]}
+            cast={casts[1]}
+            shatter={shatters[1]}
+            active={!intro && result === null && !busy && shown.turn === 1 && shown.mustReplace === null}
             enter={enters[1]}
             ko={foe.hp <= 0}
             status={statusOf(foe)}
@@ -701,7 +788,7 @@ export default function FightScreen() {
 
         <View style={[styles.message, { height: layout.msgH }]}>
           <View style={[styles.messageBar, { backgroundColor: speaker === 1 ? foeInfo.tint : speaker === 0 ? getRarity(me.rarity).color : colors.textFaint }]} />
-          <Animated.View key={msgKey} entering={(speaker === 1 ? FadeInRight : FadeInLeft).duration(200)} style={styles.messageInner}>
+          <Animated.View key={`msg-${msgKey}`} entering={(speaker === 1 ? FadeInRight : FadeInLeft).duration(200)} style={styles.messageInner}>
             {Array.isArray(msg) ? (
               <FitText parts={capParts(msg)} lines={layout.compact ? 2 : 3} maxSize={layout.compact ? 24 : 30} minSize={14} initialWidth={width - 80} />
             ) : (
@@ -715,6 +802,7 @@ export default function FightScreen() {
             )}
           </Animated.View>
           {!intro && result === null ? <TurnTab mine={shown.turn === 0 || shown.mustReplace === 0} bot={foeInfo.name} tint={foeInfo.tint} left={turnLeft} /> : null}
+          {banner && !intro && result === null ? <TurnBanner key={`banner-${banner.key}`} mine={banner.mine} name={foeInfo.name} tint={foeInfo.tint} width={width} /> : null}
         </View>
 
         {/* Joueur : carte à gauche, infos à droite */}
@@ -727,7 +815,11 @@ export default function FightScreen() {
               width={layout.cardW}
               facing={1}
               act={acts[0]}
+              strike={strikes[0]}
               react={reacts[0]}
+              cast={casts[0]}
+              shatter={shatters[0]}
+              active={canPlay}
               enter={enters[0]}
               ko={me.hp <= 0}
               status={statusOf(me)}
@@ -810,6 +902,7 @@ export default function FightScreen() {
           ) : (
             <View style={styles.twoButtons}>
               <AttackButton
+                index={0}
                 attack={me.attacks[0]}
                 tag="Classique"
                 hint={attackHint(shown, me, foe, me.attacks[0], false)}
@@ -819,6 +912,7 @@ export default function FightScreen() {
                 onPress={() => attack(0)}
               />
               <AttackButton
+                index={1}
                 attack={me.attacks[1]}
                 tag="Spéciale"
                 kind={specialKind}
@@ -844,7 +938,8 @@ export default function FightScreen() {
         </View>
       </View>
 
-      <Flash trigger={flashN} peak={0.22} />
+      <Flash trigger={flash.n} color={flash.color} peak={flash.peak} />
+      {koStamp.n > 0 && result === null ? <KoStamp key={koStamp.n} won={koStamp.won} /> : null}
       {intro ? <VsIntro arenaLabel={foeInfo.label} bot={foeInfo.name} tint={foeInfo.tint} width={width} myMmr={myMmr} foeMmr={foeInfo.mmr} onDone={endIntro} /> : null}
 
       {inspect ? (
@@ -1071,6 +1166,7 @@ function applyEvent(b: Battle, e: BattleEvent): Battle {
 }
 
 function AttackButton({
+  index,
   attack,
   tag,
   kind,
@@ -1081,6 +1177,8 @@ function AttackButton({
   disabled,
   onPress,
 }: {
+  /** Place du bouton : les deux boutons entrent l'un après l'autre. */
+  index: number;
   attack: Attack;
   tag: string;
   /** Type de l'attaque spéciale : son icône dit ce qu'elle fait, quel que soit son nom. */
@@ -1095,7 +1193,8 @@ function AttackButton({
 }) {
   const { width } = useWindowDimensions();
   // Deux boutons côte à côte : le nom de l'attaque doit toujours tenir en entier.
-  const inner = (width - 42) / 2 - 30;
+  const btnW = (width - 42) / 2;
+  const inner = btnW - 30;
   const nameSize = Math.floor(fitFontSize([{ text: attack.name }], inner, 2, compact ? 16 : 17, 11));
   const hot = hint.hot && !disabled;
   // Bon moment pour cette attaque : le liseré doré respire.
@@ -1109,104 +1208,243 @@ function AttackButton({
     glow.value = withRepeat(withTiming(1, { duration: 750, easing: Easing.inOut(Easing.sin) }), -1, true);
     return () => cancelAnimation(glow);
   }, [hot, glow]);
+  // À ton tour : le bouton se réveille (petit bond et reflet qui le traverse)
+  const press = useSharedValue(0);
+  const ready = useSharedValue(disabled ? 0 : 2);
+  useEffect(() => {
+    if (disabled) {
+      ready.value = 0;
+      return;
+    }
+    ready.value = withDelay(index * 90, withTiming(2, { duration: 760, easing: Easing.out(Easing.quad) }));
+  }, [disabled, ready, index]);
   const glowStyle = useAnimatedStyle(() => ({ opacity: 0.35 + glow.value * 0.65 }));
+  const wrapStyle = useAnimatedStyle(() => {
+    const r = ready.value;
+    const bump = r > 0 && r < 0.6 ? Math.sin((r / 0.6) * Math.PI) * 0.045 : 0;
+    return { transform: [{ scale: 1 + bump - press.value * 0.05 }] };
+  });
+  const sheenStyle = useAnimatedStyle(() => {
+    const r = Math.min(1, ready.value / 1.4);
+    return { opacity: r > 0 && r < 1 ? 1 : 0, transform: [{ translateX: -btnW * 0.6 + r * btnW * 1.8 }, { skewX: '-20deg' }] };
+  });
   const edge = hot ? colors.gold : accent;
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={attack.name}
-      style={({ pressed }) => [
-        styles.attack,
-        compact && { minHeight: 70, paddingVertical: 8 },
-        // bouton « physique » : une lèvre en bas qui s'enfonce quand on appuie
-        { borderColor: `${edge}55`, borderBottomColor: `${edge}AA` },
-        hot && styles.attackHot,
-        disabled && { opacity: 0.4 },
-        pressed && styles.attackPressed,
-      ]}
-    >
-      {hot ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.attackGlow, glowStyle]} /> : null}
-      <View style={styles.attackTagRow}>
-        {kind ? <Ionicons name={KIND_LOOK[kind].icon} size={12} color={KIND_LOOK[kind].color} /> : null}
-        <AppText style={[styles.attackTag, { color: accent, flex: 1 }]} numberOfLines={1}>
-          {kind ? (kind === 'basic' ? 'Coup puissant' : ATTACK_KIND_LABEL[kind]) : tag}
-        </AppText>
-        {uses ? <AppText style={[styles.attackTag, { color: colors.textDim }]}>{uses}</AppText> : null}
-      </View>
-      <AppText
-        style={[styles.attackName, { fontSize: nameSize, lineHeight: Math.round(nameSize * 1.2) }]}
-        numberOfLines={2}
-        adjustsFontSizeToFit
-        minimumFontScale={0.7}
+    <Animated.View entering={FadeInDown.delay(index * 70).springify().damping(15)} style={[{ flex: 1 }, wrapStyle]}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={() => {
+          press.value = withTiming(1, { duration: 70 });
+        }}
+        onPressOut={() => {
+          press.value = withSpring(0, { damping: 10, stiffness: 320 });
+        }}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel={attack.name}
+        style={({ pressed }) => [
+          styles.attack,
+          compact && { minHeight: 70, paddingVertical: 8 },
+          // bouton « physique » : une lèvre en bas qui s'enfonce quand on appuie
+          { borderColor: `${edge}55`, borderBottomColor: `${edge}AA` },
+          hot && styles.attackHot,
+          disabled && { opacity: 0.4 },
+          pressed && styles.attackPressed,
+        ]}
       >
-        {attack.name}
-      </AppText>
-      <AppText variant="caption" numberOfLines={1} style={hint.hot && !disabled ? { color: colors.gold } : undefined}>
-        {hint.text}
-      </AppText>
-    </Pressable>
+        {hot ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.attackGlow, glowStyle]} /> : null}
+        <Animated.View pointerEvents="none" style={[styles.sheen, { width: btnW * 0.35 }, sheenStyle]} />
+        <View style={styles.attackTagRow}>
+          {kind ? <Ionicons name={KIND_LOOK[kind].icon} size={12} color={KIND_LOOK[kind].color} /> : null}
+          <AppText style={[styles.attackTag, { color: accent, flex: 1 }]} numberOfLines={1}>
+            {kind ? (kind === 'basic' ? 'Coup puissant' : ATTACK_KIND_LABEL[kind]) : tag}
+          </AppText>
+          {uses ? <AppText style={[styles.attackTag, { color: colors.textDim }]}>{uses}</AppText> : null}
+        </View>
+        <AppText
+          style={[styles.attackName, { fontSize: nameSize, lineHeight: Math.round(nameSize * 1.2) }]}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+        >
+          {attack.name}
+        </AppText>
+        <AppText variant="caption" numberOfLines={1} style={hint.hot && !disabled ? { color: colors.gold } : undefined}>
+          {hint.text}
+        </AppText>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+/** Le dernier K.O. : un grand « K.O. ! » s'écrase au milieu de l'écran. */
+function KoStamp({ won }: { won: boolean }) {
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.value = withDelay(120, withSequence(withTiming(1, { duration: 170, easing: Easing.in(Easing.quad) }), withTiming(1, { duration: 820 }), withTiming(2, { duration: 320 })));
+    return () => cancelAnimation(t);
+  }, [t]);
+  const style = useAnimatedStyle(() => {
+    const v = t.value;
+    const sc = v < 1 ? 2.8 - 1.8 * v : 1 + (v - 1) * 0.12;
+    return { opacity: v < 1 ? v : 2 - v, transform: [{ scale: sc }, { rotate: '-8deg' }] };
+  });
+  const color = won ? colors.gold : colors.danger;
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center, { zIndex: 15 }]}>
+      <ImpactLines trigger={1} color={color} size={420} count={16} thickness={6} delay={290} duration={520} />
+      <Shockwave trigger={1} color={color} size={170} delay={290} duration={700} />
+      <Animated.View style={style}>
+        <AppText style={[styles.koStamp, { color }]}>K.O. !</AppText>
+      </Animated.View>
+    </View>
+  );
+}
+
+const CONFETTI = [colors.gold, '#FFF3C2', colors.success, '#7CC8FF', '#FF8A3D', '#FF5A67', '#C9A6FF'];
+
+/** Pièces gagnées : le compteur défile jusqu'au total, puis la pastille rebondit. */
+function CoinCount({ coins, delay }: { coins: number; delay: number }) {
+  const [n, setN] = useState(0);
+  const bump = useSharedValue(0);
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const steps = Math.min(18, Math.max(1, coins));
+    const start = setTimeout(() => {
+      let i = 0;
+      timer = setInterval(() => {
+        i++;
+        setN(Math.round((coins * i) / steps));
+        if (i % 2 === 0) playSfx('tick', { volume: 0.35 });
+        if (i >= steps) {
+          clearInterval(timer);
+          bump.value = withSequence(withTiming(1, { duration: 90 }), withSpring(0, { damping: 6, stiffness: 260 }));
+          playSfx('up3', { volume: 0.6 });
+          haptic.light();
+        }
+      }, 45);
+    }, delay);
+    return () => {
+      clearTimeout(start);
+      if (timer) clearInterval(timer);
+    };
+  }, [coins, delay, bump]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 + bump.value * 0.18 }] }));
+  return (
+    <Animated.View entering={ZoomIn.delay(delay - 150).springify().damping(9)} style={[styles.coinsWon, style]}>
+      <CoinIcon size={26} />
+      <AppText style={styles.coinsText}>{`+${n}`}</AppText>
+    </Animated.View>
+  );
+}
+
+/** Une étoile de fin de niveau : elle tombe à sa place, gagnée (dorée, étincelles) ou non (grise). */
+function ResultStar({ index, earned, show }: { index: number; earned: boolean; show: boolean }) {
+  const size = index === 1 ? 50 : 40;
+  if (!show) return <View style={{ width: size, height: size }} />;
+  return (
+    <View style={{ alignItems: 'center', justifyContent: 'center', transform: [{ translateY: index === 1 ? -12 : 0 }] }}>
+      {earned ? (
+        <View style={{ position: 'absolute', width: 0, height: 0, alignItems: 'center', justifyContent: 'center' }}>
+          <Glow color={colors.gold} size={size * 2.4} style={{ left: -size * 1.2, top: -size * 1.2 }} />
+          <Burst trigger={1} colors={[colors.gold, '#FFF3C2', '#FFFFFF']} count={10} radius={size * 1.5} />
+        </View>
+      ) : null}
+      <Animated.View entering={ZoomIn.springify().damping(earned ? 7 : 12).stiffness(earned ? 260 : 160)} style={{ transform: [{ rotate: `${(index - 1) * 12}deg` }] }}>
+        <Ionicons name="star" size={size} color={earned ? colors.gold : 'rgba(255,255,255,0.14)'} />
+      </Animated.View>
+    </View>
   );
 }
 
 function ResultOverlay({ won, levelN, deck, reward, stars }: { won: boolean; levelN: number; deck: string; reward: SoloReward | null; stars: number }) {
+  const { width, height } = useWindowDimensions();
   const next = levelN < TOTAL_LEVELS ? getLevel(levelN + 1) : null;
+  // les étoiles tombent une à une, chacune avec son petit son
+  const [starsShown, setStarsShown] = useState(0);
+  useEffect(() => {
+    if (!won) return;
+    const timers = [0, 1, 2].map((i) =>
+      setTimeout(() => {
+        setStarsShown(i + 1);
+        if (i < stars) {
+          playSfx(`up${i + 2}` as Sfx, { volume: 0.7 });
+          haptic.light();
+        }
+      }, 620 + i * 320),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [won, stars]);
+  const coinsAt = 620 + 3 * 320 + 150;
+  const raysSize = Math.min(width * 1.1, 420);
   return (
-    <Animated.View entering={FadeIn.duration(250)} style={[StyleSheet.absoluteFill, styles.overlay]}>
+    <Animated.View entering={FadeIn.duration(won ? 300 : 500)} style={[StyleSheet.absoluteFill, styles.overlay, !won && styles.overlayLost]}>
+      {won ? <Confetti width={width} height={height} colors={CONFETTI} count={34} /> : null}
       <View style={{ alignItems: 'center', justifyContent: 'center' }}>
         {won ? (
-          <View style={{ position: 'absolute' }}>
-            <Burst trigger={1} colors={[colors.gold, '#FFF3C2', colors.success]} count={36} radius={170} />
+          <View pointerEvents="none" style={{ position: 'absolute', width: raysSize, height: raysSize }}>
+            <Rays colors={[colors.gold, '#FFF3C2']} size={raysSize} visible />
           </View>
         ) : null}
-        <Animated.View entering={ZoomIn.springify().damping(12)} style={[styles.medal, { backgroundColor: won ? colors.gold : colors.surface2 }]}>
-          <Ionicons name={won ? 'trophy' : 'refresh'} size={40} color={won ? '#141414' : colors.text} />
+        <View pointerEvents="none" style={{ position: 'absolute', width: 260, height: 260, opacity: won ? 0.55 : 0.35 }}>
+          <Glow color={won ? colors.gold : '#5A6A8A'} size={260} />
+        </View>
+        {won ? (
+          <View style={{ position: 'absolute' }}>
+            <Burst trigger={1} colors={[colors.gold, '#FFF3C2', colors.success]} count={30} radius={170} />
+          </View>
+        ) : null}
+        <Animated.View
+          entering={won ? ZoomIn.springify().damping(10) : FadeInDown.duration(700)}
+          style={[styles.medal, { backgroundColor: won ? colors.gold : colors.surface2 }, won ? styles.medalWon : styles.medalLost]}
+        >
+          <Ionicons name={won ? 'trophy' : 'refresh'} size={40} color={won ? '#141414' : colors.textDim} />
         </Animated.View>
       </View>
       {won ? (
         <View style={styles.resultStars}>
           {[0, 1, 2].map((i) => (
-            <Animated.View key={i} entering={ZoomIn.delay(350 + i * 220).springify().damping(8)} style={{ transform: [{ translateY: i === 1 ? -10 : 0 }, { rotate: `${(i - 1) * 12}deg` }] }}>
-              <Ionicons name="star" size={i === 1 ? 46 : 38} color={i < stars ? colors.gold : 'rgba(255,255,255,0.14)'} />
-            </Animated.View>
+            <ResultStar key={i} index={i} earned={i < stars} show={starsShown > i} />
           ))}
         </View>
       ) : null}
-      <Animated.View entering={FadeInDown.delay(200)} style={{ alignItems: 'center', marginTop: 22, paddingHorizontal: 32 }}>
-        <AppText variant="display">{won ? 'Victoire !' : 'Défaite'}</AppText>
-        <AppText variant="body" style={{ textAlign: 'center', color: colors.textDim, marginTop: 6 }}>
-          {won
-            ? next
-              ? next.world.n !== getLevel(levelN)?.world.n
-                ? `Monde terminé ! Direction ${next.world.place}.`
-                : `Niveau ${levelN} gagné. Le niveau ${next.n} t’attend.`
-              : 'Tu as terminé toute l’aventure. Bravo !'
-            : 'Change de cartes ou vise mieux la cible, et retente ta chance.'}
-        </AppText>
-      </Animated.View>
+      <View style={{ alignItems: 'center', marginTop: 22, paddingHorizontal: 32 }}>
+        <Animated.View entering={won ? ZoomIn.delay(160).springify().damping(9) : FadeIn.delay(250).duration(600)}>
+          <AppText variant="display" style={won ? styles.winTitle : styles.loseTitle}>
+            {won ? 'Victoire !' : 'Défaite'}
+          </AppText>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(won ? 320 : 450)}>
+          <AppText variant="body" style={{ textAlign: 'center', color: colors.textDim, marginTop: 6 }}>
+            {won
+              ? next
+                ? next.world.n !== getLevel(levelN)?.world.n
+                  ? `Monde terminé ! Direction ${next.world.place}.`
+                  : `Niveau ${levelN} gagné. Le niveau ${next.n} t’attend.`
+                : 'Tu as terminé toute l’aventure. Bravo !'
+              : 'Change de cartes ou vise mieux la cible, et retente ta chance.'}
+          </AppText>
+        </Animated.View>
+      </View>
       {won && reward ? (
         reward.coins > 0 ? (
           <View style={{ alignItems: 'center', marginTop: 18, gap: 6 }}>
-            <Animated.View entering={ZoomIn.delay(450).springify().damping(9)} style={styles.coinsWon}>
-              <CoinIcon size={26} />
-              <AppText style={styles.coinsText}>{`+${reward.coins}`}</AppText>
-            </Animated.View>
-            <Animated.View entering={FadeIn.delay(700)}>
+            <CoinCount coins={reward.coins} delay={coinsAt} />
+            <Animated.View entering={FadeIn.delay(coinsAt + 300)}>
               <AppText variant="caption" style={{ textAlign: 'center', paddingHorizontal: 32 }}>
                 pièces gagnées pour ta première victoire ici
               </AppText>
             </Animated.View>
           </View>
         ) : (
-          <Animated.View entering={FadeIn.delay(600)} style={{ marginTop: 16 }}>
+          <Animated.View entering={FadeIn.delay(coinsAt)} style={{ marginTop: 16 }}>
             <AppText variant="caption" style={{ textAlign: 'center', paddingHorizontal: 32 }}>
               Pièces déjà gagnées sur ce niveau : rejouer sert à améliorer tes étoiles.
             </AppText>
           </Animated.View>
         )
       ) : null}
-      <Animated.View entering={FadeInDown.delay(350)} style={{ alignSelf: 'stretch', gap: 10, marginTop: 30, paddingHorizontal: 32 }}>
+      <Animated.View entering={FadeInDown.delay(won ? 900 : 650).springify().damping(16)} style={{ alignSelf: 'stretch', gap: 10, marginTop: 30, paddingHorizontal: 32 }}>
         {won && next ? (
           <Button label={`Niveau ${next.n}`} size="lg" icon="arrow-forward" onPress={() => router.replace({ pathname: '/battle/deck', params: { level: String(next.n) } })} />
         ) : null}
@@ -1250,9 +1488,16 @@ function OnlineResult({ won, change, opp, reason }: { won: boolean; change: { be
   const fillStyle = useAnimatedStyle(() => ({ width: `${Math.max(0, Math.min(1, fill.value)) * 100}%` }));
   const shownRank = second ? ra : rb;
 
+  const { width, height } = useWindowDimensions();
   return (
-    <Animated.View entering={FadeIn.duration(250)} style={[StyleSheet.absoluteFill, styles.overlay]}>
+    <Animated.View entering={FadeIn.duration(won ? 300 : 500)} style={[StyleSheet.absoluteFill, styles.overlay, !won && styles.overlayLost]}>
+      {won ? <Confetti width={width} height={height} colors={[...CONFETTI, shownRank.tier.color]} count={30} /> : null}
       <View style={{ alignItems: 'center', justifyContent: 'center', height: 150 }}>
+        {won ? (
+          <View pointerEvents="none" style={{ position: 'absolute', width: Math.min(width * 1.05, 400), height: Math.min(width * 1.05, 400) }}>
+            <Rays colors={[shownRank.tier.color, '#FFF3C2']} size={Math.min(width * 1.05, 400)} visible />
+          </View>
+        ) : null}
         {won ? (
           <View style={{ position: 'absolute' }}>
             <Burst trigger={1} colors={[colors.gold, '#FFF3C2', shownRank.tier.color]} count={30} radius={160} />
@@ -1261,7 +1506,9 @@ function OnlineResult({ won, change, opp, reason }: { won: boolean; change: { be
         <RankEmblem key={shownRank.index} rank={shownRank} size={110} />
       </View>
       <Animated.View entering={FadeInDown.delay(200)} style={{ alignItems: 'center', marginTop: 18, paddingHorizontal: 32, gap: 6 }}>
-        <AppText variant="display">{won ? 'Victoire !' : 'Défaite'}</AppText>
+        <AppText variant="display" style={won ? styles.winTitle : styles.loseTitle}>
+          {won ? 'Victoire !' : 'Défaite'}
+        </AppText>
         {reason ? (
           <AppText variant="caption" style={{ textAlign: 'center' }}>
             {reason === 'gone' ? `${opp} a quitté le combat.` : 'Connexion perdue : le combat compte comme une défaite.'}
@@ -1298,7 +1545,7 @@ function OnlineResult({ won, change, opp, reason }: { won: boolean; change: { be
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
-  resultStars: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 18 },
+  resultStars: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginTop: 18, height: 62 },
   coinsWon: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 18, height: 52, borderRadius: 26, backgroundColor: 'rgba(247,201,72,0.14)', borderWidth: 1.5, borderColor: 'rgba(247,201,72,0.5)' },
   coinsText: { fontFamily: fonts.black, fontSize: 28, color: colors.gold },
   promo: { paddingHorizontal: 14, height: 34, borderRadius: 8, justifyContent: 'center', transform: [{ skewX: '-10deg' }] },
@@ -1351,8 +1598,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 5,
     justifyContent: 'center',
     gap: 3,
+    overflow: 'hidden',
   },
   attackPressed: { borderBottomWidth: 2, transform: [{ translateY: 3 }], backgroundColor: '#1F1F26' },
+  sheen: { position: 'absolute', top: -10, bottom: -10, left: 0, backgroundColor: 'rgba(255,255,255,0.16)' },
+  koStamp: {
+    fontFamily: fonts.black,
+    fontSize: 86,
+    lineHeight: 96,
+    letterSpacing: -3,
+    textShadowColor: '#000',
+    textShadowOffset: { width: 4, height: 6 },
+    textShadowRadius: 0,
+  },
   attackGlow: { borderRadius: 16, borderWidth: 2, borderColor: colors.gold, margin: -1.5 },
   attackTag: { fontFamily: fonts.semibold, fontSize: 11, letterSpacing: 0.4, textTransform: 'uppercase' },
   attackTagRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -1364,4 +1622,9 @@ const styles = StyleSheet.create({
   overlay: { backgroundColor: 'rgba(5,5,7,0.88)', alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   dialog: { width: '86%', maxWidth: 380, padding: 22, borderRadius: 24, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   medal: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center' },
+  medalWon: { borderWidth: 4, borderColor: '#FFF3C2', shadowColor: colors.gold, shadowOpacity: 0.8, shadowRadius: 22 },
+  medalLost: { borderWidth: 2, borderColor: colors.borderStrong },
+  overlayLost: { backgroundColor: 'rgba(6,7,12,0.92)' },
+  winTitle: { color: colors.gold, textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 4 }, textShadowRadius: 0 },
+  loseTitle: { color: colors.textDim },
 });
