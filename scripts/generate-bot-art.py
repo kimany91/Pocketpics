@@ -1,7 +1,8 @@
 """Illustrations des cartes des adversaires du mode solo (python3 scripts/generate-bot-art.py).
 
-Paysages en aplats superposés, un thème par arène, 4 variantes chacun.
-Sortie : assets/bots/a<arène>-<carte>.jpg (320 × 448).
+Paysages en aplats superposés, un décor par monde et, sur chaque carte, son
+sujet au premier plan. Sortie : assets/bots/a<monde>-<carte>.jpg (320 × 448).
+Arguments optionnels : les ids des mondes à rendre (par défaut tous).
 """
 import math
 import random
@@ -9,7 +10,6 @@ import random
 from PIL import Image, ImageDraw, ImageFilter
 
 W, H = 320, 448
-S = 2  # suréchantillonnage pour des bords propres
 OUT = "assets/bots"
 
 
@@ -22,7 +22,7 @@ def mix(a, b, t):
     return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
 
-def gradient(top, bottom, w=W * S, h=H * S):
+def gradient(top, bottom, w=W, h=H):
     img = Image.new("RGB", (w, h))
     d = ImageDraw.Draw(img)
     for y in range(h):
@@ -30,7 +30,7 @@ def gradient(top, bottom, w=W * S, h=H * S):
     return img
 
 
-def ridge(rnd, base, amp, rough, w=W * S, h=H * S):
+def ridge(rnd, base, amp, rough, w=W, h=H):
     """Ligne de crête : somme de sinus + bruit, fermée vers le bas."""
     pts = []
     ph = [rnd.uniform(0, 6.3) for _ in range(3)]
@@ -44,181 +44,10 @@ def ridge(rnd, base, amp, rough, w=W * S, h=H * S):
     return pts + [(w, h), (0, h)]
 
 
-def peaks(rnd, base, height, count, w=W * S, h=H * S):
-    pts = [(0, base)]
-    for i in range(count):
-        x0 = w * (i + rnd.uniform(0.2, 0.8)) / count
-        pts.append((x0, base - height * rnd.uniform(0.55, 1.0)))
-        pts.append((w * (i + 1) / count, base - height * rnd.uniform(0.0, 0.25)))
-    return pts + [(w, h), (0, h)]
-
-
-def grain(img, amount=10, seed=0):
-    rnd = random.Random(seed)
-    noise = Image.effect_noise(img.size, amount).convert("L")
-    noise = noise.point(lambda v: v)
-    tint = Image.merge("RGB", (noise, noise, noise))
-    return Image.blend(img, tint, 0.06 + rnd.random() * 0.02)
-
-
-def circle(d, cx, cy, r, fill):
-    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=fill)
-
-
-THEMES = {
-    1: dict(sky=("#9ED8FF", "#E8F7FF"), layers=("#7BC67E", "#5AAE62", "#3F8F4C"), sun="#FFF3B0", motif="park"),
-    2: dict(sky=("#FF9E7A", "#FFE1A8"), layers=("#3B8FC2", "#F2D59B", "#E6C181"), sun="#FFF1C9", motif="beach"),
-    3: dict(sky=("#FFB36B", "#FFE2B8"), layers=("#C9573A", "#9E3F2C", "#5A2A22"), sun="#FFF0D0", motif="market"),
-    4: dict(sky=("#B8E3C6", "#F1FAEC"), layers=("#3E8E5E", "#2C6B47", "#1C4A31"), sun="#FBF6D9", motif="forest"),
-    5: dict(sky=("#6EB6F0", "#D8EEFF"), layers=("#2F6FA8", "#245A8A", "#173E61"), sun="#FFFFFF", motif="port"),
-    6: dict(sky=("#7FA7DE", "#E6EEFA"), layers=("#E9F0FA", "#8EA6C8", "#4C6488"), sun="#FFFDF0", motif="mountain"),
-    7: dict(sky=("#3A1220", "#FF7A3D"), layers=("#4A1C1C", "#2B1012", "#160809"), sun="#FFD08A", motif="volcano"),
-    8: dict(sky=("#2B2550", "#7E6FC9"), layers=("#3C3470", "#2A2452", "#181433"), sun="#E9E4FF", motif="storm"),
-    9: dict(sky=("#F7E3A8", "#FFF8E6"), layers=("#E8C873", "#C9A24A", "#8E6E2A"), sun="#FFFFFF", motif="palace"),
-    10: dict(sky=("#07061A", "#2A1550"), layers=("#3B1F6E", "#251248", "#120A26"), sun="#FFE6F4", motif="cosmos"),
-}
-
-
-def draw_card(arena, idx):
-    th = THEMES[arena]
-    rnd = random.Random(arena * 100 + idx)
-    shift = (idx - 1.5) * 0.08
-    top, bottom = hex_rgb(th["sky"][0]), hex_rgb(th["sky"][1])
-    top = mix(top, (0, 0, 0) if shift < 0 else (255, 255, 255), abs(shift))
-    img = gradient(top, bottom)
-    d = ImageDraw.Draw(img)
-    w, h = W * S, H * S
-    motif = th["motif"]
-
-    # Astre (soleil, lune, planète)
-    if motif == "cosmos":
-        for _ in range(140):
-            x, y, r = rnd.uniform(0, w), rnd.uniform(0, h * 0.8), rnd.choice((1, 1, 2, 3))
-            circle(d, x, y, r * S * 0.6, mix((255, 255, 255), hex_rgb("#C9B8FF"), rnd.random()))
-        glow = Image.new("RGB", (w, h))
-        gd = ImageDraw.Draw(glow)
-        for _ in range(3):
-            circle(gd, rnd.uniform(0, w), rnd.uniform(h * 0.1, h * 0.6), rnd.uniform(120, 220) * S * 0.6, hex_rgb(rnd.choice(("#C94BFF", "#4B8BFF", "#FF4FA8"))))
-        img = Image.blend(img, glow.filter(ImageFilter.GaussianBlur(60 * S)), 0.45)
-        d = ImageDraw.Draw(img)
-        px, py, pr = rnd.uniform(w * 0.25, w * 0.75), rnd.uniform(h * 0.2, h * 0.4), rnd.uniform(50, 80) * S
-        circle(d, px, py, pr, hex_rgb(th["sun"]))
-        circle(d, px + pr * 0.35, py - pr * 0.2, pr * 0.85, mix(hex_rgb(th["sun"]), hex_rgb("#B07DFF"), 0.35))
-        if idx % 2 == 0:
-            d.ellipse([px - pr * 1.8, py - pr * 0.35, px + pr * 1.8, py + pr * 0.35], outline=hex_rgb("#FFE6F4"), width=4 * S)
-    else:
-        sx, sy = rnd.uniform(w * 0.2, w * 0.8), rnd.uniform(h * 0.14, h * 0.32)
-        sr = rnd.uniform(34, 52) * S
-        halo = Image.new("RGB", (w, h))
-        circle(ImageDraw.Draw(halo), sx, sy, sr * 2.2, hex_rgb(th["sun"]))
-        img = Image.blend(img, halo.filter(ImageFilter.GaussianBlur(40 * S)), 0.25)
-        d = ImageDraw.Draw(img)
-        circle(d, sx, sy, sr, hex_rgb(th["sun"]))
-
-    if motif == "storm":
-        for _ in range(4):
-            x = rnd.uniform(0, w)
-            circle(d, x, rnd.uniform(h * 0.05, h * 0.2), rnd.uniform(60, 110) * S, mix(hex_rgb("#4B4383"), top, 0.3))
-        x, y = rnd.uniform(w * 0.3, w * 0.7), h * 0.18
-        bolt = [(x, y)]
-        for _ in range(5):
-            x += rnd.uniform(-40, 40) * S
-            y += rnd.uniform(40, 60) * S
-            bolt.append((x, y))
-        d.line(bolt, fill=hex_rgb("#FFF6B0"), width=7 * S, joint="curve")
-
-    # Plans successifs, du plus loin au plus proche
-    layers = [hex_rgb(c) for c in th["layers"]]
-    bases = [h * 0.56, h * 0.68, h * 0.82]
-    for li, (col, base) in enumerate(zip(layers, bases)):
-        far = mix(col, bottom, 0.25 * (2 - li) / 2)
-        if motif == "volcano" and li == 0:
-            cx = w * rnd.uniform(0.4, 0.6)
-            top_y = base - h * rnd.uniform(0.24, 0.3)
-            pts = [(0, base + 20 * S), (cx - w * 0.42, base), (cx - w * 0.09, top_y), (cx + w * 0.09, top_y), (cx + w * 0.42, base), (w, base + 20 * S), (w, h), (0, h)]
-        elif motif == "mountain" and li == 0:
-            pts = peaks(rnd, base, h * 0.32, 2)
-        elif motif == "beach" and li == 0:
-            pts = [(0, base), (w, base), (w, h), (0, h)]
-        else:
-            pts = ridge(rnd, base, h * (0.05 + 0.03 * li), 2 * S)
-        d.polygon(pts, fill=far)
-        if motif == "mountain" and li == 0:
-            for i in range(1, len(pts) - 2):
-                x, y = pts[i]
-                if y < base - h * 0.15:
-                    d.polygon([(x, y), (x - 38 * S, y + 50 * S), (x + 38 * S, y + 50 * S)], fill=hex_rgb("#FFFFFF"))
-        if motif == "volcano" and li == 0:
-            cx, top_y = (pts[2][0] + pts[3][0]) / 2, pts[2][1]
-            d.ellipse([cx - w * 0.09, top_y - 8 * S, cx + w * 0.09, top_y + 8 * S], fill=hex_rgb("#FF8A3D"))
-            for k in range(3):
-                x0 = cx + (k - 1) * w * 0.05
-                pts_l = [(x0 - 7 * S, top_y)]
-                x, y = x0, top_y
-                while y < base - 4 * S:
-                    y += 18 * S
-                    x += (k - 1) * 9 * S + rnd.uniform(-6, 6) * S
-                    pts_l.append((x, y))
-                d.line(pts_l, fill=hex_rgb("#FF6B2D"), width=int((9 - k) * S), joint="curve")
-            for _ in range(12):
-                circle(d, cx + rnd.uniform(-70, 70) * S, top_y - rnd.uniform(10, 130) * S, rnd.uniform(3, 8) * S, hex_rgb("#FFB35C"))
-        if motif == "forest" and li >= 1:
-            for _ in range(7 + li * 3):
-                x = rnd.uniform(0, w)
-                th_h = rnd.uniform(70, 130) * S * (0.7 + li * 0.3)
-                yb = base + rnd.uniform(0, 30) * S
-                d.polygon([(x, yb - th_h), (x - th_h * 0.28, yb), (x + th_h * 0.28, yb)], fill=mix(col, (0, 0, 0), 0.15))
-        if motif == "park" and li == 1:
-            for _ in range(5):
-                x = rnd.uniform(0, w)
-                yb = base + rnd.uniform(0, 20) * S
-                d.rectangle([x - 4 * S, yb - 40 * S, x + 4 * S, yb], fill=hex_rgb("#6B4A2E"))
-                circle(d, x, yb - 55 * S, rnd.uniform(24, 34) * S, mix(col, (0, 0, 0), 0.2))
-        if motif == "beach" and li == 0:
-            for k in range(6):
-                y = base + 12 * S + k * 16 * S
-                d.line([(rnd.uniform(0, w * 0.4), y), (rnd.uniform(w * 0.6, w), y)], fill=mix(col, (255, 255, 255), 0.35), width=3 * S)
-        if motif == "port" and li == 0:
-            lx = w * (0.25 + 0.5 * rnd.random())
-            d.rectangle([lx - 12 * S, base - 150 * S, lx + 12 * S, base + 40 * S], fill=hex_rgb("#F5F3EE"))
-            for k in range(3):
-                d.rectangle([lx - 12 * S, base - 130 * S + k * 45 * S, lx + 12 * S, base - 115 * S + k * 45 * S], fill=hex_rgb("#E5484D"))
-            d.polygon([(lx - 16 * S, base - 150 * S), (lx + 16 * S, base - 150 * S), (lx, base - 176 * S)], fill=hex_rgb("#2B2B33"))
-            d.polygon([(lx, base - 165 * S), (lx - 120 * S, base - 200 * S), (lx - 120 * S, base - 130 * S)], fill=mix(hex_rgb("#FFF6C2"), top, 0.5))
-        if motif == "market" and li == 0:
-            stripe = 26 * S
-            for k in range(0, w // stripe + 1):
-                c = hex_rgb("#F5F3EE") if k % 2 == 0 else hex_rgb("#E5484D")
-                d.rectangle([k * stripe, h * 0.42, (k + 1) * stripe, h * 0.5], fill=c)
-            for k in range(0, w // stripe + 1):
-                c = hex_rgb("#F5F3EE") if k % 2 == 0 else hex_rgb("#E5484D")
-                d.pieslice([k * stripe, h * 0.5 - stripe / 2, (k + 1) * stripe, h * 0.5 + stripe / 2], 0, 180, fill=c)
-        if motif == "market" and li == 2:
-            for _ in range(14):
-                circle(d, rnd.uniform(0, w), base + rnd.uniform(10, 120) * S, rnd.uniform(16, 30) * S, hex_rgb(rnd.choice(("#E5484D", "#F7C948", "#7BC67E", "#FF9A3D"))))
-        if motif == "palace" and li == 0:
-            cols = 5
-            for k in range(cols):
-                x = w * (k + 0.5) / cols
-                d.rectangle([x - 14 * S, base - 170 * S, x + 14 * S, base + 10 * S], fill=hex_rgb("#FFF8E6"))
-                d.rectangle([x - 20 * S, base - 180 * S, x + 20 * S, base - 168 * S], fill=hex_rgb("#F2DFA6"))
-            d.polygon([(0, base - 180 * S), (w, base - 180 * S), (w / 2, base - 250 * S)], fill=hex_rgb("#F2DFA6"))
-        if motif == "storm" and li == 2:
-            for _ in range(60):
-                x, y = rnd.uniform(0, w), rnd.uniform(0, h)
-                d.line([(x, y), (x - 8 * S, y + 26 * S)], fill=mix(hex_rgb("#B9B0FF"), top, 0.4), width=2 * S)
-        if motif == "cosmos" and li == 2:
-            for _ in range(30):
-                circle(d, rnd.uniform(0, w), base + rnd.uniform(0, 140) * S, rnd.uniform(2, 5) * S, hex_rgb("#C9A6FF"))
-
-    img = img.resize((W, H), Image.LANCZOS)
-    return grain(img, 40, arena * 10 + idx)
-
-
 # ---------------------------------------------------------------------------
-# Mondes 11 à 20 : même décor en aplats, mais chaque carte montre son sujet
-# (le nom de la carte) au premier plan. La carte 3 sert aussi de portrait rond
-# de l'adversaire : son sujet est centré et lisible en petit.
+# Chaque monde a son décor en aplats et chaque carte montre son sujet (le nom
+# de la carte) au premier plan. La carte 3 sert aussi de portrait rond de
+# l'adversaire : son sujet est centré et lisible en petit.
 # Les coordonnées sont exprimées en pixels finaux (320 × 448).
 # ---------------------------------------------------------------------------
 
@@ -2041,7 +1870,1266 @@ def lune_card(c, rnd, idx):
                 crater(c, rnd.uniform(10, 310), base + rnd.uniform(14, 40) * (1 + i * 0.5), rnd.uniform(8, 16) * (1 + i * 0.6), col)
 
 
+def spine(cx, cy, ang, length, bend, t=1.0, n=18):
+    """Point et direction à la fraction t le long d'un leaf()."""
+    x, y = cx, cy
+    step = length / n
+    a = ang
+    for i in range(1, int(round(n * t)) + 1):
+        a = ang + bend * i / n
+        x += math.cos(math.radians(a)) * step
+        y += math.sin(math.radians(a)) * step
+    return x, y, a
+
+
+# --- 1 · Le Parc -----------------------------------------------------------
+
+def round_tree(c, x, base, s, col="#5FB45E", dark="#3F8A4A"):
+    c.rect(x - 3.5 * s, base - 36 * s, x + 3.5 * s, base, "#7A5232")
+    for dx, dy, r in ((0, -52, 22), (-17, -40, 16), (17, -40, 17), (-6, -66, 15), (10, -62, 14)):
+        c.circ(x + dx * s, base + dy * s, r * s, dark)
+    for dx, dy, r in ((-5, -56, 15), (-16, -44, 9), (8, -66, 9)):
+        c.circ(x + dx * s, base + dy * s, r * s, col)
+
+
+def lamp_post(c, x, base, h):
+    c.rect(x - 2.5, base - h, x + 2.5, base, "#2E4A3A")
+    c.rect(x - 6, base - 8, x + 6, base, "#2E4A3A")
+    c.poly([(x - 9, base - h), (x + 9, base - h), (x + 6, base - h - 20), (x - 6, base - h - 20)], "#FFF2B8")
+    c.poly([(x - 11, base - h - 20), (x + 11, base - h - 20), (x, base - h - 30)], "#2E4A3A")
+    c.rect(x - 10, base - h, x + 10, base - h + 3, "#2E4A3A")
+
+
+def park_bg(c, rnd, sun, path=True):
+    for _ in range(3):
+        puff(c, rnd.uniform(20, 300), rnd.uniform(40, 150), rnd.uniform(0.5, 0.9), "#FFFFFF", "#DCEFF7")
+    sun_disk(c, sun[0], sun[1], 26, "#FFF3B0", 0.4)
+    c.poly(hills(rnd, 232, 14, 0.3), "#B4E0A8")
+    for _ in range(8):
+        round_tree(c, rnd.uniform(0, W), 240, rnd.uniform(0.35, 0.5), "#9CD08F", "#86C27C")
+    c.poly(hills(rnd, 262, 10, 0.3), "#8DCF7E")
+    for x in (rnd.uniform(10, 70), rnd.uniform(250, 310)):
+        round_tree(c, x, 278, rnd.uniform(0.75, 0.95))
+    c.poly(hills(rnd, 300, 6, 0), "#74C266")
+    if path:
+        left = bez((142, 300), (124, 340), (50, 390), (40, 450), 14)
+        right = bez((178, 300), (204, 345), (290, 390), (300, 450), 14)
+        c.poly(left + right[::-1], "#E9D7A8")
+        c.line(left, "#D6BE88", 2)
+        c.line(right, "#D6BE88", 2)
+    for _ in range(36):
+        x, y = rnd.uniform(0, W), rnd.uniform(310, 445)
+        if path and abs(x - 160) < 40 + (y - 300) * 0.8:
+            continue
+        if rnd.random() < 0.35:
+            c.circ(x, y, 2.2, rnd.choice(("#FFFFFF", "#FFE36B", "#FF9AC0")))
+        else:
+            c.poly([(x - 3, y), (x, y - 7), (x + 3, y)], "#5EAE54")
+
+
+def parc_card(c, rnd, idx):
+    if idx == 0:  # Banc public
+        park_bg(c, rnd, (252, 88))
+        lamp_post(c, 262, 352, 150)
+        c.alpha(lambda o: o.ell(50, 368, 272, 392, (30, 60, 20, 90)))
+        iron, wood, light = "#2B2F33", "#3E8E5E", "#5FB07A"
+        for x in (82, 238):
+            c.rect(x - 4, 258, x + 4, 334, iron)
+        for k in range(3):
+            y = 262 + k * 20
+            c.rrect(64, y, 256, y + 14, 4, wood)
+            c.rect(68, y + 1, 252, y + 4, light)
+        for k in range(3):
+            y = 330 + k * 9
+            c.poly([(64 - k * 4, y), (256 + k * 4, y), (258 + k * 4, y + 8), (62 - k * 4, y + 8)], wood if k % 2 == 0 else light)
+        for x, s in ((74, -1), (246, 1)):
+            c.line(bez((x, 300), (x + 18 * s, 300), (x + 20 * s, 318), (x + 6 * s, 330)), iron, 5, True)
+            c.line([(x + 4 * s, 356), (x, 382)], iron, 6, True)
+            c.line([(x - 6 * s, 356), (x - 20 * s, 380)], iron, 5, True)
+        c.rect(70, 352, 250, 358, iron)
+        c.poly(leaf(120, 388, -15, 18, 9), "#E8A23B")
+        c.poly(leaf(206, 394, 200, 16, 8), "#D9732A")
+    elif idx == 1:  # Pigeon fier
+        park_bg(c, rnd, (70, 90))
+        lamp_post(c, 280, 330, 140)
+        for _ in range(9):
+            c.circ(rnd.uniform(50, 130), rnd.uniform(384, 410), rnd.uniform(1.6, 2.8), "#C9A061")
+        c.alpha(lambda o: o.ell(96, 368, 236, 390, (60, 50, 20, 80)))
+        c.poly([(206, 296), (270, 326), (262, 344), (200, 322)], "#5A6070")
+        c.poly([(262, 326), (270, 326), (262, 344), (254, 340)], "#2E323C")
+        for x0, x1 in ((142, 138), (176, 180)):
+            c.line([(x0, 330), (x1, 372)], "#E5747A", 4)
+            for d in (-9, 0, 9):
+                c.line([(x1, 372), (x1 + d, 378)], "#E5747A", 2.5)
+        c.ell(104, 246, 232, 344, "#9AA3B5")
+        c.ell(134, 262, 236, 322, "#B4BCCB")
+        for k in range(2):
+            c.line([(160 + k * 22, 276), (176 + k * 22, 316)], "#3A3F4A", 4)
+        c.poly([(206, 300), (240, 312), (232, 324), (200, 318)], "#7D8597")
+        c.ell(86, 212, 168, 322, "#8A93A8")
+        c.clip(lambda m: m.ell(86, 212, 168, 322, 255), lambda t: (t.ell(90, 214, 150, 268, "#5FAF8A"), t.ell(110, 240, 176, 292, "#9B6FB5")), opacity=0.75, blur=6)
+        c.alpha(lambda o: o.ell(100, 236, 128, 276, (255, 255, 255, 60)))
+        c.circ(114, 196, 25, "#8A93A8")
+        c.poly([(92, 192), (64, 202), (92, 208)], "#4A4F5A")
+        c.ell(88, 188, 100, 196, "#F2F2F2")
+        c.circ(110, 190, 6, "#FF8A3D")
+        c.circ(109, 190, 3, "#1E1E1E")
+        c.circ(108, 188.5, 1.2, "#FFFFFF")
+    elif idx == 2:  # Toboggan
+        park_bg(c, rnd, (250, 84), path=False)
+        c.ell(20, 336, 300, 440, "#F2D59B")
+        c.ell(36, 346, 284, 432, "#F7E1B0")
+        c.alpha(lambda o: o.ell(80, 370, 300, 400, (90, 70, 20, 70)))
+        for x in (84, 152):
+            c.rect(x - 3, 150, x + 3, 380, "#4FA3FF")
+        c.poly([(70, 156), (118, 120), (166, 156)], "#E5484D")
+        c.poly([(118, 120), (166, 156), (152, 156)], "#B9343A")
+        for k in range(7):
+            y = 240 + k * 20
+            c.rect(84, y, 152, y + 4, "#F7C948")
+        c.rect(80, 214, 156, 226, "#FF9A3D")
+        c.rect(80, 190, 84, 214, "#4FA3FF")
+        c.rect(80, 190, 156, 194, "#4FA3FF")
+        path = bez((150, 224), (214, 226), (226, 360), (298, 370), 30)
+        c.line(path, "#E5484D", 34, True)
+        c.line(path, "#F7C948", 24, True)
+        c.line([(x, y - 6) for x, y in path], "#FFE58A", 4)
+        c.rect(290, 372, 296, 386, "#4FA3FF")
+        for x, y in ((60, 410), (250, 420)):
+            c.poly([(x - 10, y), (x + 10, y), (x + 7, y - 12), (x - 7, y - 12)], "#E5484D")
+            c.rect(x + 12, y - 22, x + 15, y, "#4FA3FF")
+            c.ell(x + 8, y - 26, x + 20, y - 18, "#4FA3FF")
+    else:  # Cerf-volant
+        park_bg(c, rnd, (62, 70))
+        cx, cy = 166, 186
+        top, right, bot, left = (cx, 92), (cx + 70, cy - 10), (cx, 292), (cx - 70, cy - 10)
+        c.line(bez(bot, (150, 340), (60, 360), (10, 450), 20), "#FFFFFF", 1.4)
+        tail = bez(bot, (196, 320), (130, 350), (170, 420), 24)
+        c.line(tail, "#3A3F4A", 1.6)
+        for k, (x, y) in enumerate(tail[4::5]):
+            col = ("#E5484D", "#F7C948", "#4FA3FF", "#5FC46A")[k % 4]
+            c.poly([(x - 10, y - 6), (x, y), (x - 10, y + 6)], col)
+            c.poly([(x + 10, y - 6), (x, y), (x + 10, y + 6)], col)
+        c.alpha(lambda o: o.poly([(top[0] + 6, top[1] + 8), (right[0] + 6, right[1] + 8), (bot[0] + 6, bot[1] + 8), (left[0] + 6, left[1] + 8)], (40, 60, 90, 60)))
+        mid = (cx, cy - 10)
+        for a, b, col in ((top, right, "#F7C948"), (right, bot, "#4FA3FF"), (bot, left, "#5FC46A"), (left, top, "#E5484D")):
+            c.poly([mid, a, b], col)
+        c.poly([mid, top, (cx + 20, 120)], "#FFE58A")
+        c.line([top, bot], "#5A3A20", 2.5)
+        c.line([left, right], "#5A3A20", 2.5)
+        for x, y in ((54, 120), (276, 90), (260, 260)):
+            c.alpha(lambda o, x=x, y=y: o.line([(x, y), (x + 34, y - 4)], (255, 255, 255, 170), 2))
+
+
+# --- 2 · La Plage ----------------------------------------------------------
+
+def beach_bg(c, rnd, sun, sand=320, sun_r=26):
+    for _ in range(3):
+        puff(c, rnd.uniform(20, 300), rnd.uniform(40, 150), rnd.uniform(0.5, 0.9), "#FFFFFF", "#E2F2F7")
+    sun_disk(c, sun[0], sun[1], sun_r, "#FFF4C8", 0.4)
+    c.vgrad(0, 240, W, sand + 20, "#7AD3E8", "#3B9FC9")
+    c.rect(0, 239, W, 241.5, "#EAFBFF")
+    for _ in range(14):
+        x, y = rnd.uniform(0, W), rnd.uniform(250, sand)
+        c.line([(x, y), (x + rnd.uniform(8, 22), y)], "#B9ECF7", 1.4)
+    shore = hills(rnd, sand, 7, 0)
+    c.poly([(x, y - 6) for x, y in shore[:-2]] + shore[-2:], "#F4FCFF")
+    c.poly([(x, y - 2) for x, y in shore[:-2]] + shore[-2:], "#E6CB8E")
+    c.poly(shore, "#F4D9A0")
+    for _ in range(26):
+        c.circ(rnd.uniform(0, W), rnd.uniform(sand + 15, H), rnd.uniform(0.8, 1.6), "#E2C07E")
+
+
+def shell(c, x, y, s, col="#FFB8A8"):
+    c.pie(x - 9 * s, y - 9 * s, x + 9 * s, y + 9 * s, 180, 360, col)
+    for a in (200, 235, 270, 305, 340):
+        t = math.radians(a)
+        c.line([(x, y), (x + 8 * s * math.cos(t), y + 8 * s * math.sin(t))], hx(col, 0.2), 1)
+
+
+def plage_card(c, rnd, idx):
+    if idx == 0:  # Château de sable
+        beach_bg(c, rnd, (66, 90), sand=300)
+        sand, dk, lt = "#E9C483", "#CFA764", "#F5D9A0"
+        c.alpha(lambda o: o.ell(60, 370, 270, 396, (120, 80, 20, 70)))
+
+        def tower(x0, x1, top, bottom):
+            c.rect(x0, top, x1, bottom, sand)
+            c.rect(x1 - (x1 - x0) * 0.3, top, x1, bottom, dk)
+            n = 4
+            w = (x1 - x0) / (2 * n - 1)
+            for k in range(n):
+                c.rect(x0 + 2 * k * w, top - 10, x0 + (2 * k + 1) * w, top, sand if k < n - 1 else dk)
+        tower(92, 228, 296, 380)
+        tower(70, 114, 246, 382)
+        tower(206, 250, 246, 382)
+        tower(136, 184, 206, 300)
+        c.line([(160, 196), (160, 160)], "#6B4A2E", 2)
+        c.poly([(160, 160), (186, 168), (160, 177)], "#E5484D")
+        c.pie(146, 340, 174, 368, 180, 360, "#8A6A3E")
+        c.rect(146, 354, 174, 382, "#8A6A3E")
+        for x, y in ((92, 280), (228, 280), (160, 240)):
+            c.pie(x - 5, y - 6, x + 5, y + 6, 180, 360, "#8A6A3E")
+            c.rect(x - 5, y, x + 5, y + 8, "#8A6A3E")
+        for _ in range(40):
+            c.circ(rnd.uniform(74, 246), rnd.uniform(210, 378), 1, lt)
+        for x, y in ((128, 380), (196, 384)):
+            shell(c, x, y, 0.8)
+        c.poly([(256, 352), (292, 352), (286, 392), (262, 392)], "#E5484D")
+        c.rect(256, 350, 292, 356, "#B9343A")
+        c.arc(256, 330, 292, 370, 180, 360, "#B9343A", 2)
+        c.line([(36, 400), (60, 330)], "#4FA3FF", 4)
+        c.poly([(54, 320), (70, 326), (64, 344), (50, 340)], "#F7C948")
+    elif idx == 1:  # Crabe pressé
+        beach_bg(c, rnd, (250, 90), sand=290)
+        for k in range(6):
+            x = 30 + k * 14
+            c.ell(x - 3, 392 - k * 2, x + 3, 396 - k * 2, "#D9B676")
+            c.ell(x + 2, 402 - k * 2, x + 8, 406 - k * 2, "#D9B676")
+        for k in range(4):
+            c.alpha(lambda o, k=k: o.line([(50 - k * 4, 330 + k * 16), (90, 330 + k * 16)], (255, 255, 255, 180), 3))
+        for x, y, r in ((96, 386, 8), (84, 374, 6), (104, 372, 5)):
+            c.circ(x, y, r, "#F7E3B4")
+        c.alpha(lambda o: o.ell(100, 372, 230, 392, (120, 70, 20, 80)))
+        red, dk = "#E8553E", "#B8392A"
+        for side in (-1, 1):
+            for k in range(3):
+                x0 = 160 + side * (30 + k * 8)
+                c.line([(x0, 350), (x0 + side * 26, 340 + k * 4), (x0 + side * 34, 380)], dk, 5, True)
+        for side in (-1, 1):
+            x = 160 + side * 76
+            c.line([(160 + side * 40, 334), (160 + side * 64, 300), (x, 272)], red, 10, True)
+            c.pie(x - 22, 236, x + 22, 280, -62, 242, red)
+            c.pie(x - 14, 246, x + 14, 270, -62, 242, "#F27A5E")
+        c.ell(108, 312, 212, 378, red)
+        c.ell(122, 316, 198, 350, "#F27A5E")
+        for x in (144, 176):
+            c.line([(x, 320), (x, 292)], dk, 4)
+            c.circ(x, 288, 10, "#FFFFFF")
+            c.circ(x + 3, 289, 5, "#1E1E1E")
+        c.arc(144, 340, 176, 362, 20, 160, "#7A1E14", 2.5)
+        c.poly(leaf(205, 282, -90, 18, 12, fat=0.6)[::-1], "#7FD3F5")
+        c.circ(205, 274, 6, "#7FD3F5")
+    elif idx == 2:  # Parasol
+        beach_bg(c, rnd, (62, 80), sand=290)
+        c.alpha(lambda o: o.ell(60, 352, 290, 400, (120, 80, 20, 70)))
+        c.poly([(70, 372), (230, 352), (262, 400), (96, 426)], "#4FA3FF")
+        for k in range(1, 5, 2):
+            t0, t1 = k / 5, (k + 1) / 5
+            c.poly([lerp((70, 372), (96, 426), t0), lerp((230, 352), (262, 400), t0), lerp((230, 352), (262, 400), t1), lerp((70, 372), (96, 426), t1)], "#FFFFFF")
+        c.line([(176, 392), (150, 168)], "#F5F0E6", 5)
+
+        def canopy(t):
+            for k in range(8):
+                t.pie(0, 0, 240, 150, 180 + k * 22.5, 180 + (k + 1) * 22.5, "#E5484D" if k % 2 == 0 else "#FFFFFF")
+            for k in range(8):
+                x = 15 + k * 30
+                t.pie(x - 15, 63, x + 15, 87, 0, 180, "#E5484D" if k % 2 == 0 else "#FFFFFF")
+            t.circ(120, 4, 6, "#F7C948")
+        c.rotated((240, 92), canopy, 150, 196, 8)
+        c.circ(242, 404, 22, "#FFFFFF")
+        c.pie(220, 382, 264, 426, 200, 260, "#E5484D")
+        c.pie(220, 382, 264, 426, 320, 20, "#4FA3FF")
+        c.pie(220, 382, 264, 426, 80, 140, "#F7C948")
+        shell(c, 50, 420, 1.0)
+        c.poly(star_pts(290, 430, 10, 4), "#FF9A3D")
+    else:  # Coucher doré
+        c.vgrad(0, 0, W, 240, "#C2507A", "#FFC860")
+        c.glow(lambda g: g.circ(160, 236, 140, "#FF9A3D"), 60, 0.5)
+        c.glow(lambda g: g.circ(160, 236, 90, "#FFD27A"), 30, 0.7)
+        c.circ(160, 236, 74, "#FFE7A0")
+        c.circ(160, 236, 64, "#FFF2C4")
+        c.alpha(lambda o: [o.rrect(x, y, x + w, y + 8, 4, (150, 60, 110, 150)) for x, y, w in ((20, 150, 120), (180, 120, 120), (90, 196, 150), (220, 182, 90))])
+        c.vgrad(0, 238, W, 380, "#F2A15A", "#7A4A6E")
+        for k in range(10):
+            y = 244 + k * 12
+            hw = 70 - k * 5 + rnd.uniform(-6, 6)
+            c.line([(160 - hw, y), (160 + hw, y)], "#FFE7A0", 3 - k * 0.15)
+        c.rect(0, 237, W, 240, "#FFE7A0")
+        shore = hills(rnd, 380, 8, 0)
+        c.poly(shore, "#9E5E48")
+        c.poly(hills(rnd, 420, 6, 0), "#7A4438")
+        for x, y, s in ((92, 120, 1.0), (116, 104, 0.7), (228, 96, 0.8)):
+            c.line([(x - 10 * s, y - 4 * s), (x, y), (x + 10 * s, y - 4 * s)], "#5A2A44", 2)
+        palm(c, 296, 440, 170, -40, rnd, "#5A2A34", "#4A2236")
+
+
+# --- 3 · Le Marché ---------------------------------------------------------
+
+def market_bg(c, rnd, shelves=True):
+    c.vgrad(0, 0, W, 320, "#F6C79A", "#E8A878")
+    for x in range(-10, W, 40):
+        c.rect(x, 60, x + 2, 320, "#E39D6E")
+    if shelves:
+        for y in (190, 268):
+            c.rect(0, y, W, y + 8, "#8B5A2B")
+            c.rect(0, y + 8, W, y + 12, "#6B4220")
+            x = 6
+            while x < W:
+                col = rnd.choice(("#FF9A3D", "#E5484D", "#F7C948", "#7BC67E", "#9B5FC0"))
+                for k in range(4):
+                    c.circ(x + k * 9 + 5, y - 6 - (k % 2) * 6, 6, hx(col, 0.1))
+                c.rect(x, y - 8, x + 40, y, "#B07A4A")
+                x += 46
+    stripe = 32
+    for k in range(W // stripe + 1):
+        col = "#F5F3EE" if k % 2 == 0 else "#E5484D"
+        c.rect(k * stripe, 0, (k + 1) * stripe, 56, col)
+        c.pie(k * stripe, 56 - stripe / 2, (k + 1) * stripe, 56 + stripe / 2, 0, 180, col)
+    c.rect(0, 0, W, 6, "#B9343A")
+    for x in (6, 314):
+        c.rect(x - 4, 60, x + 4, H, "#6B4220")
+    c.rect(0, 320, W, 336, "#C08850")
+    c.rect(0, 320, W, 324, "#D9A066")
+    c.rect(0, 336, W, H, "#8B5A2B")
+    for k in range(4):
+        c.line([(0, 360 + k * 24), (W, 360 + k * 24)], "#74481F", 2)
+
+
+def chalkboard(c, x, y, angle=6):
+    c.rotated((54, 34), lambda t: (t.rrect(0, 0, 54, 34, 3, "#6B4220"), t.rect(4, 4, 50, 30, "#2E3A33"),
+                                   t.line([(10, 12), (40, 12)], "#F2F2F2", 2), t.line([(10, 21), (30, 21)], "#F2F2F2", 2), t.circ(40, 22, 3, "#F7C948")), x, y, angle)
+
+
+def marche_card(c, rnd, idx):
+    if idx == 0:  # Tomate géante
+        market_bg(c, rnd)
+        c.alpha(lambda o: o.ell(70, 316, 250, 336, (60, 20, 0, 90)))
+        cx, cy, r = 160, 242, 86
+        c.circ(cx, cy, r, "#E5302B")
+        c.clip(lambda m: m.circ(cx, cy, r, 255), lambda t: t.circ(cx - 24, cy - 22, r * 1.02, "#F2483A"))
+        for dx in (-34, 34):
+            c.arc(cx + dx - 40, cy - r, cx + dx + 40, cy + r, 250 if dx < 0 else 200, 340 if dx < 0 else 290, "#C42420", 2.5)
+        c.alpha(lambda o: o.ell(cx - 56, cy - 62, cx - 20, cy - 34, (255, 255, 255, 140)))
+        c.poly(star_pts(cx, cy - r + 10, 34, 10, 6, -90), "#3E9A3E")
+        c.poly(star_pts(cx, cy - r + 10, 22, 7, 6, -60), "#57B04F")
+        c.rrect(cx - 4, cy - r - 20, cx + 4, cy - r + 6, 3, "#3E7A2E")
+        for x, y, rr in ((50, 306, 18), (80, 312, 13), (270, 304, 20)):
+            c.circ(x, y, rr, "#E5302B")
+            c.poly(star_pts(x, y - rr + 3, rr * 0.5, rr * 0.18, 5), "#3E9A3E")
+            c.circ(x - rr * 0.35, y - rr * 0.35, rr * 0.2, "#F58A7E")
+        chalkboard(c, 266, 360)
+    elif idx == 1:  # Baguette
+        market_bg(c, rnd)
+
+        def baguette(p0, p1, r):
+            c.poly(tube(p0, p1, r, r), "#D9963A")
+            c.circ(*p0, r, "#D9963A")
+            c.circ(*p1, r, "#D9963A")
+            c.poly(tube(lerp(p0, p1, 0.02), lerp(p0, p1, 0.98), r * 0.45, r * 0.45), "#E9B05A")
+            for k in range(1, 6):
+                q = lerp(p0, p1, k / 6)
+                dx, dy = p1[0] - p0[0], p1[1] - p0[1]
+                L = math.hypot(dx, dy)
+                ux, uy = dx / L, dy / L
+                c.line([(q[0] - ux * 8 - uy * 3, q[1] - uy * 8 + ux * 3), (q[0] + ux * 8 - uy * 5, q[1] + uy * 8 + ux * 5)], "#F7D9A0", 3)
+        for p0, p1 in (((96, 300), (146, 120)), ((130, 300), (170, 106)), ((168, 300), (196, 116)), ((200, 300), (236, 136))):
+            baguette(p0, p1, 14)
+        c.poly([(80, 270), (240, 270), (226, 336), (94, 336)], "#B07A3A")
+        for k in range(5):
+            c.line([(82 + k * 2, 280 + k * 12), (238 - k * 2, 280 + k * 12)], "#8A5A26", 2)
+        for x in range(92, 236, 14):
+            c.line([(x, 272), (x + 4, 334)], "#C99050", 1.5)
+        c.rect(76, 266, 244, 276, "#8A5A26")
+        for k in range(5):
+            a = math.radians(200 + k * 35)
+            x, y = 272 + 22 * math.cos(a), 312 + 14 * math.sin(a)
+            c.ell(x - 13, y - 9, x + 13, y + 9, "#E0A24A" if k % 2 else "#C9862E")
+        chalkboard(c, 46, 360, -6)
+    elif idx == 2:  # Fromager
+        market_bg(c, rnd)
+        c.alpha(lambda o: o.ell(40, 314, 290, 336, (60, 20, 0, 90)))
+        c.rect(40, 236, 190, 318, "#E3B23C")
+        c.ell(40, 300, 190, 336, "#E3B23C")
+        c.ell(40, 218, 190, 254, "#F7D86A")
+        c.line([(40, 236), (40, 318)], "#C99428", 2)
+        c.line([(190, 236), (190, 318)], "#C99428", 2)
+        c.ell(80, 228, 150, 244, None, "#E3B23C", 1.5)
+        wedge_top = [(150, 250), (290, 226), (290, 270)]
+        front = [(150, 250), (290, 270), (290, 330), (150, 312)]
+        c.poly(front, "#F7D86A")
+        c.poly([(150, 250), (290, 226), (290, 270)], "#FFE58A")
+        c.poly([(290, 226), (300, 236), (300, 326), (290, 330)], "#E3B23C")
+        for x, y, rr in ((182, 278, 9), (222, 296, 12), (262, 280, 8), (250, 312, 6), (196, 304, 5), (270, 304, 5)):
+            c.ell(x - rr, y - rr * 0.8, x + rr, y + rr * 0.8, "#E3B23C")
+        for x, y, rr in ((84, 276, 6), (130, 290, 8)):
+            c.ell(x - rr, y - rr * 0.8, x + rr, y + rr * 0.8, "#C99428")
+        c.line([(40, 300), (130, 250)], "#C9CDD6", 5)
+        c.line([(40, 300), (16, 314)], "#6B4220", 7)
+        c.line([(24, 309), (16, 314)], "#6B4220", 7)
+        chalkboard(c, 260, 370)
+    else:  # Pastèque
+        market_bg(c, rnd)
+        c.alpha(lambda o: o.ell(60, 318, 260, 338, (60, 20, 0, 90)))
+        cx, cy = 160, 226
+        c.circ(cx, cy, 102, "#2E7A3A")
+        for k in range(10):
+            a = math.radians(k * 36)
+            c.line([(cx + 92 * math.cos(a), cy + 92 * math.sin(a)), (cx + 102 * math.cos(a + 0.12), cy + 102 * math.sin(a + 0.12))], "#1F5A2A", 5)
+        c.circ(cx, cy, 92, "#8FD47A")
+        c.circ(cx, cy, 86, "#F4F6E8")
+        c.circ(cx, cy, 80, "#F0444E")
+        c.alpha(lambda o: o.ell(cx - 64, cy - 66, cx + 10, cy - 10, (255, 140, 150, 120)))
+        for ring, n, rr in ((0, 8, 54), (1, 6, 30)):
+            for k in range(n):
+                a = 2 * math.pi * (k + ring * 0.5) / n
+                x, y = cx + rr * math.cos(a), cy + rr * math.sin(a)
+                c.poly(leaf(x, y, math.degrees(a) + 180, 12, 7), "#1E1E1E")
+        c.poly([(54, 340), (110, 340), (82, 300)], "#F0444E")
+        c.poly([(50, 340), (114, 340), (114, 346), (50, 346)], "#2E7A3A")
+        c.poly([(244, 340), (296, 340), (270, 304)], "#F0444E")
+        c.poly([(240, 340), (300, 340), (300, 346), (240, 346)], "#2E7A3A")
+        for x, y in ((80, 326), (88, 316), (266, 326), (276, 318)):
+            c.ell(x - 2, y - 3, x + 2, y + 3, "#1E1E1E")
+
+
+# --- 4 · La Forêt ----------------------------------------------------------
+
+def pine(c, x, base, h, col):
+    for k in range(3):
+        w = h * (0.34 - k * 0.07)
+        y0 = base - h * (0.2 + k * 0.26)
+        c.poly([(x - w, y0 + h * 0.1), (x, y0 - h * 0.34), (x + w, y0 + h * 0.1)], col)
+    c.rect(x - h * 0.03, base - h * 0.2, x + h * 0.03, base, hx(col, 0.3))
+
+
+def fern(c, x, y, s, col="#3E8E4E"):
+    for a in (-150, -120, -95, -70, -40):
+        c.poly(leaf(x, y, a, 40 * s, 10 * s, bend=30 if a > -90 else -30, fat=0.5), col)
+
+
+def forest_bg(c, rnd, sun, near=True):
+    sun_disk(c, sun[0], sun[1], 24, "#FBF6D9", 0.45)
+    c.poly(hills(rnd, 226, 10, 0.3), "#A8D6B0")
+    for _ in range(18):
+        pine(c, rnd.uniform(-10, 330), 248, rnd.uniform(50, 80), "#86C29A")
+    c.poly(hills(rnd, 250, 8, 0.3), "#86C29A")
+    for _ in range(12):
+        pine(c, rnd.uniform(-10, 330), 290, rnd.uniform(80, 120), "#4E9A66")
+    c.poly(hills(rnd, 290, 8, 0.3), "#4E9A66")
+    c.poly(hills(rnd, 340, 8, 0), "#3E8456")
+    if near:
+        for x in (rnd.uniform(-10, 30), rnd.uniform(290, 330)):
+            pine(c, x, 420, rnd.uniform(200, 240), "#2C6B47")
+    for _ in range(26):
+        x, y = rnd.uniform(0, W), rnd.uniform(350, 445)
+        c.poly([(x - 3, y), (x, y - 7), (x + 3, y)], "#5EA55C")
+
+
+def foret_card(c, rnd, idx):
+    if idx == 0:  # Vieux chêne
+        forest_bg(c, rnd, (60, 80), near=False)
+        c.alpha(lambda o: o.ell(60, 384, 260, 410, (10, 40, 20, 90)))
+        trunk = [(116, 400), (136, 380), (142, 300), (138, 220), (182, 220), (178, 300), (184, 380), (206, 400), (176, 394), (160, 400), (144, 394)]
+        c.line([(150, 236), (96, 176)], "#6B4A2E", 14, True)
+        c.line([(172, 236), (226, 170)], "#6B4A2E", 14, True)
+        c.line([(160, 230), (160, 150)], "#6B4A2E", 12, True)
+        c.poly(trunk, "#7A5232")
+        c.poly([(166, 230), (182, 220), (178, 300), (184, 380), (206, 400), (176, 394), (172, 300)], "#5E3E24")
+        for x, y0, y1 in ((150, 240, 290), (162, 300, 360), (146, 320, 380)):
+            c.line([(x, y0), (x + 3, y1)], "#5E3E24", 2)
+        c.ell(144, 268, 166, 300, "#3A2414")
+        c.circ(150, 282, 3.5, "#FFD34D")
+        c.circ(160, 282, 3.5, "#FFD34D")
+        for dx, dy, r in ((0, 130, 60), (-62, 150, 46), (62, 146, 48), (-96, 186, 36), (96, 182, 38), (-34, 96, 40), (36, 92, 42), (0, 196, 44), (-50, 200, 34), (52, 202, 34)):
+            c.circ(160 + dx, dy, r, "#3F8A4A")
+        for dx, dy, r in ((-14, 112, 30), (-70, 140, 24), (48, 108, 22), (-100, 178, 16), (80, 160, 18), (-30, 176, 16)):
+            c.circ(160 + dx, dy, r, "#5FAE5A")
+        for _ in range(8):
+            x, y = rnd.uniform(70, 250), rnd.uniform(80, 220)
+            c.ell(x - 3, y - 4, x + 3, y + 4, "#A8743A")
+        fern(c, 70, 410, 1.0)
+        fern(c, 250, 414, 0.9)
+    elif idx == 1:  # Champignon
+        forest_bg(c, rnd, (250, 86))
+        c.alpha(lambda o: o.ell(90, 382, 240, 404, (10, 40, 20, 90)))
+        c.rrect(138, 270, 182, 392, 16, "#F4EBD9")
+        c.rrect(138, 270, 150, 392, 6, "#FFFFFF")
+        c.ell(130, 300, 190, 322, "#E8DCC4")
+        c.ell(132, 296, 188, 314, "#FBF5E8")
+        c.ell(76, 262, 244, 292, "#EAD9C0")
+        for k in range(12):
+            x = 88 + k * 13
+            c.line([(x, 280), (160, 286)], "#D6C2A2", 1)
+        c.chord(70, 166, 250, 310, 180, 360, "#E5302B")
+        c.clip(lambda m: m.chord(70, 166, 250, 310, 180, 360, 255), lambda t: t.ell(70, 150, 220, 260, "#F2483A"))
+        for x, y, rr in ((120, 210, 12), (170, 192, 14), (212, 224, 10), (100, 244, 8), (150, 230, 8), (190, 248, 7), (228, 254, 6)):
+            c.ell(x - rr, y - rr * 0.8, x + rr, y + rr * 0.8, "#FFFFFF")
+        for x, s in ((76, 0.5), (252, 0.6)):
+            c.rrect(x - 6 * s, 400 - 40 * s, x + 6 * s, 400, 4, "#F4EBD9")
+            c.chord(x - 28 * s, 400 - 64 * s, x + 28 * s, 400 - 18 * s, 180, 360, "#B9733A")
+        fern(c, 40, 420, 1.0)
+        fern(c, 290, 424, 0.9)
+        for x in range(110, 220, 9):
+            c.poly([(x - 3, 396), (x, 386 - (x % 4) * 2), (x + 3, 396)], "#5EA55C")
+    elif idx == 2:  # Renard roux
+        forest_bg(c, rnd, (70, 80))
+        org, dk, wht = "#E8742A", "#B8541A", "#FFF6EC"
+        c.alpha(lambda o: o.ell(90, 378, 290, 400, (10, 40, 20, 90)))
+        t0 = (196, 374)
+        c.poly(leaf(*t0, -8, 110, 50, bend=-70, fat=0.7), org)
+        x, y, a = spine(*t0, -8, 110, -70, t=0.72)
+        c.poly(leaf(x, y, a, 32, 30, bend=-20, fat=0.5), wht)
+        c.ell(128, 256, 216, 384, org)
+        c.ell(176, 300, 220, 384, dk)
+        c.ell(112, 244, 162, 344, wht)
+        for x0 in (126, 148):
+            c.rrect(x0, 320, x0 + 15, 388, 7, org)
+            c.rrect(x0, 352, x0 + 15, 390, 7, "#3A2418")
+        c.poly([(110, 206), (122, 162), (140, 198)], org)
+        c.poly([(116, 200), (122, 172), (134, 198)], "#3A2418")
+        c.poly([(136, 200), (156, 166), (160, 210)], org)
+        c.poly([(142, 202), (155, 176), (157, 206)], "#3A2418")
+        head = [(76, 236), (100, 208), (140, 196), (164, 214), (160, 246), (132, 262), (100, 254)]
+        c.poly(head, org)
+        c.poly([(76, 236), (100, 246), (132, 262), (150, 252), (120, 238)], wht)
+        c.circ(78, 236, 6, "#1E1E1E")
+        c.poly(leaf(110, 222, -12, 16, 7), "#1E1E1E")
+        c.circ(117, 220, 1.4, "#FFFFFF")
+    else:  # Clairière
+        forest_bg(c, rnd, (160, 40), near=False)
+        c.alpha(lambda o: [o.poly([(160 + dx, -20), (160 + dx * 3.2 - 30, 400), (160 + dx * 3.2 + 30, 400)], (255, 250, 200, 100)) for dx in (-36, -12, 12, 36)])
+        c.glow(lambda g: g.ell(70, 300, 250, 400, "#FFF4B0"), 30, 1.0)
+        c.glow(lambda g: g.poly([(130, 0), (190, 0), (220, 360), (100, 360)], "#FFF4B0"), 30, 0.22)
+        c.ell(40, 320, 280, 410, "#9FD67A")
+        c.ell(80, 336, 240, 396, "#C2E88A")
+        for side in (-1, 1):
+            for k, (x, h) in enumerate(((-5, 340), (40, 300), (75, 260))):
+                xx = 160 + side * (165 - x)
+                c.rect(xx - 9 + k * 2, 0, xx + 9 - k * 2, 380 + k * 10, hx("#2C5A3A", 0.2 * (2 - k)))
+            for k in range(5):
+                c.circ(160 + side * (150 - k * 12), 20 + k * 22, 50 - k * 4, "#2C6B47")
+        c.rect(144, 344, 176, 368, "#8B5A2B")
+        c.ell(144, 338, 176, 350, "#C99A6A")
+        c.ell(150, 341, 170, 347, "#B07A4A")
+        for _ in range(26):
+            x, y = rnd.uniform(60, 260), rnd.uniform(334, 404)
+            c.circ(x, y, 2.4, rnd.choice(("#FFFFFF", "#FFE36B", "#FF9AC0", "#B79BFF")))
+        for x, y, col in ((116, 270, "#FFB13D"), (204, 248, "#7FD3F5")):
+            c.poly(leaf(x, y, -140, 14, 12), col)
+            c.poly(leaf(x, y, -40, 14, 12), col)
+            c.poly(leaf(x, y, 150, 10, 8), col)
+            c.poly(leaf(x, y, 30, 10, 8), col)
+        for _ in range(14):
+            x, y = rnd.uniform(90, 230), rnd.uniform(120, 320)
+            c.glow(lambda g, x=x, y=y: g.circ(x, y, 3, "#FFF4B0"), 3, 1.0)
+
+
+# --- 5 · Le Port -----------------------------------------------------------
+
+def port_bg(c, rnd, sun, quay=380, town=True):
+    for _ in range(3):
+        puff(c, rnd.uniform(20, 300), rnd.uniform(40, 150), rnd.uniform(0.5, 0.9), "#FFFFFF", "#DDEBF7")
+    sun_disk(c, sun[0], sun[1], 24, "#FFFFFF", 0.45)
+    c.poly(hills(rnd, 236, 12, 0.3), "#8EB4D8")
+    if town:
+        x = rnd.uniform(-10, 10)
+        while x < W:
+            w, h = rnd.uniform(16, 26), rnd.uniform(14, 30)
+            col = rnd.choice(("#F2D3A8", "#F4B6A0", "#F7E3B4", "#C9E0F2", "#F2C0C8"))
+            c.rect(x, 250 - h, x + w, 250, col)
+            c.poly([(x - 2, 250 - h), (x + w / 2, 250 - h - 8), (x + w + 2, 250 - h)], "#C9573A")
+            c.rect(x + w * 0.3, 250 - h * 0.6, x + w * 0.5, 250 - h * 0.35, "#4A6A8A")
+            x += w + 1
+    c.vgrad(0, 250, W, H, "#6DB6EA", "#245A8A")
+    c.rect(0, 249, W, 251.5, "#E6F2FB")
+    for _ in range(16):
+        x, y = rnd.uniform(0, W), rnd.uniform(258, quay)
+        c.line([(x, y), (x + rnd.uniform(8, 22), y)], "#A8D4F2", 1.4)
+    if quay < H:
+        c.rect(0, quay, W, H, "#A9A296")
+        c.rect(0, quay, W, quay + 6, "#C9C2B4")
+        for k in range(3):
+            y = quay + 6 + k * 22
+            for x in range(-20 + (k % 2) * 24, W, 48):
+                c.rrect(x + 2, y + 2, x + 46, y + 20, 3, "#B6AFA2")
+
+
+def bollard(c, x, y):
+    c.rrect(x - 12, y - 30, x + 12, y, 4, "#2B2F38")
+    c.ell(x - 18, y - 38, x + 18, y - 26, "#3A3F4A")
+
+
+def gull(c, x, y, s, flip=1):
+    c.poly(leaf(x - 10 * s * flip, y, -150 if flip > 0 else -30, 46 * s, 16 * s, bend=40 * flip, fat=0.6), "#B9C2CF")
+    c.ell(x - 22 * s, y - 6 * s, x + 22 * s, y + 8 * s, "#FFFFFF")
+    c.poly(leaf(x - 2 * s * flip, y - 2 * s, -120 if flip > 0 else -60, 50 * s, 18 * s, bend=50 * flip, fat=0.6), "#D9DFE8")
+    c.circ(x + 20 * s * flip, y - 6 * s, 8 * s, "#FFFFFF")
+    c.poly([(x + 26 * s * flip, y - 8 * s), (x + 38 * s * flip, y - 5 * s), (x + 26 * s * flip, y - 3 * s)], "#F7C948")
+
+
+def port_card(c, rnd, idx):
+    if idx == 0:  # Mouette
+        port_bg(c, rnd, (60, 90))
+        bollard(c, 60, 410)
+        for x, y in ((90, 300), (250, 320)):
+            c.poly([(x - 30, y), (x + 30, y), (x + 22, y + 12), (x - 22, y + 12)], "#E5484D")
+            c.line([(x, y), (x, y - 40)], "#6B4A2E", 2)
+            c.poly([(x + 2, y - 38), (x + 2, y - 6), (x + 24, y - 6)], "#F6F1E1")
+        cx, cy = 150, 210
+        c.poly(leaf(cx + 14, cy - 6, -70, 120, 40, bend=34, fat=0.6), "#D9DFE8")
+        x, y, a = spine(cx + 14, cy - 6, -70, 120, 34, t=0.72)
+        c.poly(leaf(x, y, a, 36, 20, bend=12, fat=0.5), "#2E323C")
+        c.poly([(cx - 56, cy), (cx - 92, cy - 14), (cx - 86, cy + 14)], "#FFFFFF")
+        c.ell(cx - 66, cy - 18, cx + 58, cy + 18, "#FFFFFF")
+        c.ell(cx - 46, cy + 4, cx + 46, cy + 18, "#E6EBF2")
+        c.circ(cx + 60, cy - 10, 20, "#FFFFFF")
+        c.poly([(cx + 74, cy - 12), (cx + 106, cy - 6), (cx + 74, cy - 2)], "#F7C948")
+        c.circ(cx + 92, cy - 5, 2.2, "#E5484D")
+        c.circ(cx + 66, cy - 14, 3.2, "#1E1E1E")
+        c.poly(leaf(cx - 4, cy - 6, -118, 140, 46, bend=-36, fat=0.6), "#B9C2CF")
+        x, y, a = spine(cx - 4, cy - 6, -118, 140, -36, t=0.72)
+        c.poly(leaf(x, y, a, 42, 24, bend=-12, fat=0.5), "#2E323C")
+        gull(c, 262, 110, 0.4)
+    elif idx == 1:  # Phare
+        port_bg(c, rnd, (250, 70), quay=470, town=False)
+        c.alpha(lambda o: [o.poly([(160, 128), (-40, 70 + d), (-40, 170 + d)], (255, 248, 200, 80)) for d in (0,)] + [o.poly([(160, 128), (360, 60), (360, 160)], (255, 248, 200, 80))])
+        for x, y, rx, ry, col in ((160, 380, 120, 40, "#6E7480"), (100, 370, 60, 30, "#8A909C"), (220, 376, 70, 32, "#7E8490"), (160, 360, 70, 26, "#8A909C")):
+            c.poly(blob(rnd, x, y, rx, ry, 0.15, 12), col)
+        tower = [(134, 356), (186, 356), (176, 150), (144, 150)]
+        c.poly(tower, "#F5F3EE")
+        c.clip(lambda m: m.poly(tower, 255), lambda t: [t.rect(100, 170 + k * 52, 220, 196 + k * 52, "#E5484D") for k in range(4)])
+        c.clip(lambda m: m.poly(tower, 255), lambda t: t.rect(166, 140, 220, 360, "#000000"), opacity=0.12)
+        c.rect(150, 300, 170, 332, "#3A3F4A")
+        c.pie(150, 292, 170, 308, 180, 360, "#3A3F4A")
+        c.rect(136, 138, 184, 150, "#2B2F38")
+        c.glow(lambda g: g.circ(160, 124, 22, "#FFE36B"), 14, 1.2)
+        c.rect(146, 108, 174, 138, "#FFE7A0")
+        for x in (146, 160, 174):
+            c.line([(x, 108), (x, 138)], "#2B2F38", 2.5)
+        c.poly([(140, 110), (180, 110), (160, 86)], "#2B2F38")
+        c.circ(160, 84, 4, "#2B2F38")
+        for x, y, r in ((60, 380, 14), (84, 366, 10), (262, 378, 16), (240, 362, 9), (290, 390, 10)):
+            c.circ(x, y, r, "#FFFFFF")
+        gull(c, 70, 150, 0.45)
+        gull(c, 250, 200, 0.35, -1)
+    elif idx == 2:  # Chalutier
+        port_bg(c, rnd, (60, 90), quay=470)
+        c.alpha(lambda o: o.ell(40, 336, 290, 372, (10, 40, 70, 90)))
+        c.line([(190, 300), (190, 150)], "#4A4F5A", 4)
+        c.line([(190, 170), (100, 214)], "#4A4F5A", 3)
+        c.line([(190, 170), (282, 200)], "#4A4F5A", 3)
+        c.line([(100, 214), (86, 300)], "#4A4F5A", 1.2)
+        c.line([(282, 200), (290, 290)], "#4A4F5A", 1.2)
+        net = [(230, 300), (282, 202), (286, 300)]
+        c.poly(net, "#7FA38A")
+        for k in range(1, 6):
+            c.line([lerp(net[0], net[1], k / 6), lerp(net[2], net[1], k / 6)], "#4E7A5E", 1.2)
+            c.line([lerp(net[0], net[2], k / 6), lerp(net[0], net[2], k / 6)[:1] + (300 - k * 16,)], "#4E7A5E", 1.2)
+        c.poly([(190, 150), (212, 156), (190, 162)], "#E5484D")
+        c.rect(94, 236, 164, 300, "#F5F3EE")
+        c.rect(88, 228, 170, 238, "#E5484D")
+        for x in (102, 124, 146):
+            c.rect(x, 248, x + 14, 266, "#2E4A6A")
+        c.rect(138, 206, 150, 228, "#E5484D")
+        c.rect(138, 202, 150, 208, "#2B2F38")
+        hull = [(50, 296), (264, 296), (296, 276), (282, 312), (256, 346), (80, 346), (48, 316)]
+        c.poly(hull, "#2F6FA8")
+        c.clip(lambda m: m.poly(hull, 255), lambda t: t.rect(0, 330, W, 360, "#C9473D"))
+        c.line([(50, 306), (288, 298)], "#F5F3EE", 4)
+        for x in (90, 120, 150):
+            c.circ(x, 318, 4, "#F5F3EE")
+        for x, y, s in ((60, 150, 0.45), (250, 120, 0.35), (100, 110, 0.3)):
+            gull(c, x, y, s, 1 if x < 160 else -1)
+    else:  # Ancre
+        port_bg(c, rnd, (258, 84), quay=380)
+        c.alpha(lambda o: o.ell(70, 372, 250, 392, (20, 20, 30, 90)))
+        navy, lt = "#2B3A55", "#4E6488"
+        c.circ(160, 110, 20, None, navy, 9)
+        c.rrect(150, 126, 170, 340, 6, navy)
+        c.rrect(152, 128, 157, 336, 3, lt)
+        c.rrect(102, 150, 218, 168, 8, navy)
+        c.circ(102, 159, 10, navy)
+        c.circ(218, 159, 10, navy)
+        c.arc(88, 236, 232, 352, 20, 160, navy, 16)
+        for side in (-1, 1):
+            x, y = 160 + side * 72 * math.cos(math.radians(20)), 294 + 58 * math.sin(math.radians(20))
+            c.poly([(x - side * 4, y + 14), (x + side * 22, y - 20), (x + side * 8, y + 18)], navy)
+            c.poly([(x - side * 10, y + 10), (x + side * 2, y - 26), (x + side * 14, y + 4)], navy)
+        c.circ(160, 346, 12, navy)
+        rope = bez((160, 92), (240, 140), (80, 200), (170, 240), 30) + bez((170, 240), (240, 270), (120, 300), (230, 330), 30)[1:]
+        c.line(rope, "#D9B77A", 6)
+        c.line(rope, "#B8935A", 1.5)
+        c.line(rope[::1], "#F2D9A8", 1)
+        c.circ(270, 352, 26, "#E5484D")
+        c.circ(270, 352, 15, "#A9A296")
+        for a in (45, 135, 225, 315):
+            c.arc(244, 326, 296, 378, a - 15, a + 15, "#FFFFFF", 11)
+
+
+# --- 6 · La Montagne -------------------------------------------------------
+
+def peak(c, x, top, base, hw, col, shade, snow=0.32, rnd=None):
+    c.poly([(x - hw, base), (x, top), (x + hw, base)], col)
+    c.poly([(x, top), (x + hw, base), (x + hw * 0.25, base)], shade)
+    h = (base - top) * snow
+    k = hw * (h / (base - top))
+    cap = [(x, top), (x + k, top + h), (x + k * 0.55, top + h * 0.78), (x + k * 0.2, top + h * 1.0), (x - k * 0.25, top + h * 0.8),
+           (x - k * 0.6, top + h * 1.02), (x - k, top + h)]
+    c.poly(cap, "#FFFFFF")
+    c.poly([(x, top), (x + k, top + h), (x + k * 0.55, top + h * 0.78), (x + k * 0.2, top + h * 1.0)], "#DCE6F4")
+
+
+def mountain_bg(c, rnd, sun, main=None, snow_ground=False):
+    for _ in range(2):
+        puff(c, rnd.uniform(20, 300), rnd.uniform(40, 130), rnd.uniform(0.5, 0.8), "#FFFFFF", "#DDE6F4")
+    sun_disk(c, sun[0], sun[1], 24, "#FFFDF0", 0.45)
+    for x, top, hw in ((30, 150, 110), (290, 140, 120), (170, 170, 120)):
+        peak(c, x, top, 270, hw, "#B6C8E6", "#9FB4D8")
+    if main:
+        peak(c, *main, "#8EA6C8", "#6F88B0", 0.3)
+    for x, top, hw in ((60, 210, 100), (260, 200, 110)):
+        peak(c, x, top, 300, hw, "#7F98BF", "#6680A8", 0.22)
+    c.poly(hills(rnd, 300, 8, 0.3), "#EEF3FA" if snow_ground else "#8DB87A")
+    for _ in range(16):
+        pine(c, rnd.uniform(-10, 330), 318, rnd.uniform(40, 70), "#3F6E5A")
+    c.poly(hills(rnd, 340, 8, 0), "#F4F7FC" if snow_ground else "#7FB06A")
+
+
+def montagne_card(c, rnd, idx):
+    if idx == 0:  # Chamois
+        mountain_bg(c, rnd, (250, 80))
+        c.poly([(30, H), (60, 352), (130, 338), (230, 340), (300, 360), (330, H)], "#8E8C94")
+        c.poly([(130, 338), (230, 340), (300, 360), (330, H), (200, H)], "#76747C")
+        c.poly([(60, 352), (130, 338), (230, 340), (226, 346), (130, 346), (64, 358)], "#A8A6AE")
+        brown, dk, legc = "#9A6238", "#6E4224", "#4A2E1A"
+        for x0, x1 in ((136, 132), (150, 152), (194, 192), (208, 212)):
+            c.line([(x0, 292), (x0 - 2, 318), (x1, 342)], legc, 7, True)
+        c.ell(116, 246, 224, 306, brown)
+        c.ell(136, 284, 216, 306, dk)
+        c.line([(128, 252), (216, 258)], legc, 4)
+        c.poly([(220, 262), (232, 258), (228, 274)], legc)
+        c.poly([(122, 270), (148, 254), (130, 222), (104, 230)], brown)
+        c.poly([(110, 238), (124, 236), (136, 266), (124, 270)], "#F2E6D0")
+        c.poly(leaf(110, 216, -92, 22, 6, bend=110), "#1E1E1E")
+        c.poly(leaf(120, 216, -86, 20, 6, bend=110), "#2E2620")
+        c.poly(leaf(124, 220, -30, 16, 8), brown)
+        c.ell(86, 212, 128, 246, "#F2E6D0")
+        c.line([(116, 214), (104, 228), (92, 242)], "#2A2018", 6)
+        c.circ(103, 227, 2.8, "#FFFFFF")
+        c.circ(103, 227, 1.7, "#1E1E1E")
+        c.circ(89, 240, 2.5, "#3A2A20")
+    elif idx == 1:  # Sommet
+        mountain_bg(c, rnd, (60, 80), main=(170, 76, 300, 150))
+        c.line([(170, 76), (170, 40)], "#4A3A2A", 2.5)
+        c.poly([(170, 40), (196, 47), (170, 54)], "#E5484D")
+        for x, y, s in ((60, 270, 1.1), (160, 284, 1.2), (270, 276, 1.0), (110, 300, 0.9), (220, 302, 1.0)):
+            puff(c, x, y, s, "#FFFFFF", "#DCE6F4")
+    elif idx == 2:  # Avalanche
+        mountain_bg(c, rnd, (270, 70), snow_ground=True)
+        slope = [(-10, 120), (40, 100), (W + 10, 330), (W + 10, H), (-10, H)]
+        c.poly(slope, "#EEF3FA")
+        c.poly([(-10, 120), (40, 100), (W + 10, 330), (W + 10, 350)], "#C9D6EA")
+        for x, y in ((250, 330), (276, 356), (300, 340), (230, 370)):
+            pine(c, x, y, 60, "#3F6E5A")
+        rnd2 = random.Random(7)
+        for k in range(40):
+            t = k / 39
+            x = 30 + t * 210 + rnd2.uniform(-20, 20)
+            y = 110 + t * 230 + rnd2.uniform(-20, 20)
+            r = 18 + t * 30 + rnd2.uniform(-6, 6)
+            c.circ(x + 4, y + 6, r, "#B9C8E0")
+        rnd2 = random.Random(7)
+        for k in range(40):
+            t = k / 39
+            x = 30 + t * 210 + rnd2.uniform(-20, 20)
+            y = 110 + t * 230 + rnd2.uniform(-20, 20)
+            r = 18 + t * 30 + rnd2.uniform(-6, 6)
+            c.circ(x, y, r, "#FFFFFF")
+        c.alpha(lambda o: [o.circ(rnd.uniform(40, 300), rnd.uniform(120, 420), rnd.uniform(2, 5), (255, 255, 255, 220)) for _ in range(40)])
+        for x, y in ((210, 350), (262, 300)):
+            c.line([(x, y), (x + 18, y - 34)], "#5E3A20", 4)
+            c.poly([(x + 18, y - 34), (x - 8, y - 18), (x + 28, y - 6)], "#3F6E5A")
+    else:  # Refuge
+        mountain_bg(c, rnd, (60, 70), main=(240, 100, 290, 130), snow_ground=True)
+        for x, y, h in ((36, 400, 120), (290, 410, 130), (70, 350, 70), (250, 352, 70)):
+            pine(c, x, y, h, "#2F5E4A")
+            c.poly([(x - h * 0.12, y - h * 0.66), (x, y - h * 0.86), (x + h * 0.12, y - h * 0.66)], "#FFFFFF")
+        c.alpha(lambda o: o.ell(70, 360, 260, 392, (60, 80, 120, 70)))
+        c.rect(96, 262, 224, 374, "#8B5A35")
+        for k in range(8):
+            c.line([(96, 270 + k * 13), (224, 270 + k * 13)], "#6B4220", 2)
+        c.rect(244 - 56, 196, 244 - 40, 246, "#6E6A70")
+        for k, r in enumerate((10, 14, 18)):
+            c.circ(196 + k * 10, 180 - k * 20, r, "#F2F4F8")
+        c.poly([(76, 276), (160, 196), (244, 276), (232, 286), (160, 216), (88, 286)], "#6B4220")
+        c.poly([(70, 272), (160, 186), (250, 272), (240, 278), (160, 200), (80, 278)], "#FFFFFF")
+        c.poly([(160, 216), (232, 286), (88, 286)], "#A06A40")
+        lights = [(112, 296, 144, 330), (176, 296, 208, 330)]
+        c.glow(lambda g: [g.rect(*b, "#FFB040") for b in lights], 10, 0.9)
+        for x0, y0, x1, y1 in lights:
+            c.rect(x0, y0, x1, y1, "#FFD36B")
+            c.line([((x0 + x1) / 2, y0), ((x0 + x1) / 2, y1)], "#6B4220", 2.5)
+            c.line([(x0, (y0 + y1) / 2), (x1, (y0 + y1) / 2)], "#6B4220", 2.5)
+            c.rect(x0 - 8, y0, x0 - 2, y1, "#C9473D")
+            c.rect(x1 + 2, y0, x1 + 8, y1, "#C9473D")
+        c.rect(148, 330, 172, 374, "#5E3A20")
+        c.circ(167, 352, 2, "#F7C948")
+        c.rect(150, 236, 170, 256, "#FFD36B")
+        c.rect(96, 368, 224, 380, "#FFFFFF")
+
+
+# --- 7 · Le Volcan ---------------------------------------------------------
+
+def volcano_cone(c, rnd, cx, top, hw, base, lava=True):
+    c.poly([(cx - hw, base), (cx - hw * 0.18, top), (cx + hw * 0.18, top), (cx + hw, base)], "#4A1C1C")
+    c.poly([(cx + hw * 0.05, top), (cx + hw * 0.18, top), (cx + hw, base), (cx + hw * 0.3, base)], "#3A1416")
+    c.glow(lambda g: g.ell(cx - hw * 0.2, top - 8, cx + hw * 0.2, top + 8, "#FF8A3D"), 10, 1.0)
+    c.ell(cx - hw * 0.17, top - 5, cx + hw * 0.17, top + 5, "#FFB050")
+    if lava:
+        for k in (-1, 0, 1):
+            pts = [(cx + k * hw * 0.08, top)]
+            x, y = pts[0]
+            while y < base - 6:
+                y += 14
+                x += k * 7 + rnd.uniform(-4, 4)
+                pts.append((x, y))
+            c.glow(lambda g, pts=pts: g.line(pts, "#FF6B2D", 6), 4, 0.8)
+            c.line(pts, "#FF7A2D", 3.5 - abs(k))
+
+
+def volcano_ground(c, rnd, base=330):
+    c.poly(hills(rnd, base, 10, 1), "#2B1012")
+    c.poly(hills(rnd, base + 60, 12, 1), "#1A0A0C")
+    cracks = []
+    for _ in range(6):
+        x, y = rnd.uniform(0, W), rnd.uniform(base + 20, H)
+        cracks.append([(x, y), (x + rnd.uniform(10, 30), y + rnd.uniform(-6, 6)), (x + rnd.uniform(30, 60), y + rnd.uniform(-8, 8))])
+    c.glow(lambda g: [g.line(p, "#FF5A1D", 3) for p in cracks], 3, 1.0)
+    for p in cracks:
+        c.line(p, "#FF9A3D", 1.4)
+
+
+def embers(c, rnd, n, y0=0, y1=H):
+    pts = [(rnd.uniform(0, W), rnd.uniform(y0, y1), rnd.uniform(1, 2.6)) for _ in range(n)]
+    c.glow(lambda g: [g.circ(x, y, r * 2, "#FF8A3D") for x, y, r in pts], 3, 1.0)
+    for x, y, r in pts:
+        c.circ(x, y, r, "#FFC07A")
+
+
+def obsidian(c, x, y, ang, L, w):
+    a = math.radians(ang)
+    dx, dy = math.cos(a), math.sin(a)
+    nx, ny = -dy, dx
+    p = [(x + nx * w, y + ny * w), (x + nx * w * 0.8 + dx * L * 0.7, y + ny * w * 0.8 + dy * L * 0.7), (x + dx * L, y + dy * L),
+         (x - nx * w + dx * L * 0.75, y - ny * w + dy * L * 0.75), (x - nx * w, y - ny * w)]
+    c.poly(p, "#16111E")
+    c.poly([p[0], p[1], p[2], (x + dx * L * 0.72, y + dy * L * 0.72), (x + nx * w * 0.1, y + ny * w * 0.1)], "#2C2440")
+    c.poly([p[1], p[2], (x + nx * w * 0.5 + dx * L * 0.72, y + ny * w * 0.5 + dy * L * 0.72)], "#4E4470")
+    c.line([p[0], p[1], p[2]], "#B9A8FF", 1.4)
+    c.line([(x - nx * w * 0.6 + dx * L * 0.1, y - ny * w * 0.6 + dy * L * 0.1), (x - nx * w * 0.6 + dx * L * 0.6, y - ny * w * 0.6 + dy * L * 0.6)], "#FF8A3D", 1.4)
+
+
+def volcan_card(c, rnd, idx):
+    if idx == 0:  # Coulée de lave
+        volcano_cone(c, rnd, 170, 150, 160, 290, lava=False)
+        volcano_ground(c, rnd, 300)
+        river = bez((172, 152), (210, 260), (60, 330), (150, 460), 40)
+        for wdt, col in ((36, "#B8321E"), (24, "#FF6B2D"), (12, "#FFC24A")):
+            pts = [(x, y) for x, y in river]
+            widths = [(wdt * (0.25 + 0.75 * i / len(pts))) for i in range(len(pts))]
+            if col == "#B8321E":
+                c.glow(lambda g: [g.line([pts[i], pts[i + 1]], "#FF5A1D", widths[i] * 1.4) for i in range(len(pts) - 1)], 10, 0.8)
+            for i in range(len(pts) - 1):
+                c.line([pts[i], pts[i + 1]], col, widths[i] * (1 if col != "#FFC24A" else 1.6), True)
+        for t in (0.55, 0.7, 0.82, 0.93):
+            i = int(t * (len(river) - 1))
+            x, y = river[i]
+            c.poly(blob(rnd, x + rnd.uniform(-6, 6), y, 8 + t * 10, 4 + t * 4, 0.3, 7), "#3A1416")
+        for x, y in ((60, 380), (260, 400), (240, 340), (30, 430)):
+            c.poly(blob(rnd, x, y, 26, 16, 0.25, 8), "#120607")
+        embers(c, rnd, 20, 100, 440)
+    elif idx == 1:  # Cendres
+        c.alpha(lambda o: o.rect(0, 0, W, H, (40, 20, 25, 90)))
+        rnd2 = random.Random(3)
+        blobs = [(160 + rnd2.uniform(-30, 30) * (1 + (300 - y) / 120), y, 30 + (300 - y) * 0.28 + rnd2.uniform(-6, 6)) for y in range(290, 40, -12)]
+        blobs += [(rnd2.uniform(40, 280), rnd2.uniform(40, 150), rnd2.uniform(30, 50)) for _ in range(10)]
+        c.glow(lambda g: g.ell(110, 220, 210, 320, "#FF6B2D"), 30, 0.9)
+        for x, y, r in blobs:
+            c.circ(x + 6, y + 8, r, "#2E2428")
+        for x, y, r in blobs:
+            c.circ(x, y, r, "#5A4A4E")
+        for x, y, r in blobs[::2]:
+            c.circ(x - r * 0.3, y - r * 0.3, r * 0.5, "#76666A")
+        c.glow(lambda g: g.ell(100, 250, 220, 310, "#FF5A1D"), 18, 0.8)
+        bolt = [(110, 90), (126, 120), (114, 126), (134, 160)]
+        c.glow(lambda g: g.line(bolt, "#E0D0FF", 4), 5, 1.2)
+        c.line(bolt, "#FFFFFF", 2)
+        volcano_cone(c, rnd, 160, 300, 170, 400)
+        volcano_ground(c, rnd, 390)
+        c.alpha(lambda o: [o.circ(rnd.uniform(0, W), rnd.uniform(0, H), rnd.uniform(1, 2.4), (90, 80, 84, 200)) for _ in range(80)])
+        embers(c, rnd, 18, 200, 330)
+    elif idx == 2:  # Cratère
+        c.poly(hills(rnd, 200, 8, 1), "#3A1416")
+        c.poly([(-10, 220), (60, 200), (160, 196), (260, 200), (330, 220), (330, 300), (-10, 300)], "#4A1C1C")
+        c.glow(lambda g: g.ell(20, 230, 300, 350, "#FF6B2D"), 30, 0.9)
+        c.ell(30, 236, 290, 340, "#FF7A2D")
+        c.clip(lambda m: m.ell(30, 236, 290, 340, 255), lambda t: (t.ell(70, 256, 250, 324, "#FFB040"), t.ell(110, 274, 210, 306, "#FFE07A")))
+        crust = []
+        for _ in range(9):
+            a = rnd.uniform(0, 6.3)
+            d = rnd.uniform(0.3, 0.9)
+            crust.append((160 + 120 * d * math.cos(a), 288 + 46 * d * math.sin(a)))
+        for x, y in crust:
+            c.poly(blob(rnd, x, y, rnd.uniform(10, 22), rnd.uniform(4, 8), 0.3, 8), "#7A2A18")
+        for x, y, r in ((120, 280, 6), (200, 300, 8), (176, 270, 4)):
+            c.circ(x, y, r, None, "#FFF2B0", 2)
+        for x, y in ((150, 230), (186, 214), (120, 220)):
+            c.circ(x, y, 4, "#FFB040")
+        c.poly([(-10, 300), (30, 330), (90, 344), (160, 350), (240, 344), (300, 330), (330, 300), (330, H), (-10, H)], "#2B1012")
+        c.line([(30, 330), (90, 344), (160, 350), (240, 344), (300, 330)], "#FF8A3D", 2)
+        c.alpha(lambda o: [o.ell(x, y, x + 120, y + 30, (120, 90, 90, 70)) for x, y in ((40, 160), (160, 130), (100, 100))], blur=6)
+        volcano_ground(c, rnd, 390)
+        embers(c, rnd, 22, 100, 300)
+    else:  # Obsidienne
+        volcano_cone(c, rnd, 230, 210, 120, 300)
+        c.glow(lambda g: g.circ(160, 280, 110, "#FF5A1D"), 40, 0.8)
+        volcano_ground(c, rnd, 330)
+        c.poly(blob(rnd, 160, 380, 130, 40, 0.15, 14), "#2B1012")
+        for ang, L, w, x in ((-120, 130, 22, 130), (-62, 120, 20, 196), (-140, 80, 14, 104), (-40, 76, 13, 222)):
+            obsidian(c, x, 362, ang, L, w)
+        obsidian(c, 162, 372, -92, 220, 34)
+        for x, y, r in ((150, 170, 12), (200, 250, 8), (112, 270, 7)):
+            sparkle(c, x, y, r, "#FFFFFF")
+        embers(c, rnd, 16, 60, 300)
+
+
+# --- 8 · La Tempête --------------------------------------------------------
+
+def storm_clouds(c, rnd, y1=150, n=14):
+    pts = [(rnd.uniform(-20, 340), rnd.uniform(-20, y1), rnd.uniform(40, 80)) for _ in range(n)]
+    for x, y, r in pts:
+        c.circ(x, y + 10, r, "#2A2452")
+    for x, y, r in pts:
+        c.circ(x, y, r, "#4B4383")
+    for x, y, r in pts[::2]:
+        c.circ(x - r * 0.25, y - r * 0.3, r * 0.6, "#5E56A0")
+
+
+def rain(c, rnd, n=60, alpha=110):
+    c.alpha(lambda o: [o.line([(x, y), (x - 8, y + 24)], (190, 180, 255, alpha), 1.5) for x, y in ((rnd.uniform(0, W + 20), rnd.uniform(0, H)) for _ in range(n))])
+
+
+def tempete_card(c, rnd, idx):
+    if idx == 0:  # Éclair
+        storm_clouds(c, rnd)
+        c.poly(hills(rnd, 330, 12, 1), "#2A2452")
+        c.poly(hills(rnd, 390, 10, 1), "#181433")
+        rain(c, rnd)
+        bolt = [(150, 70), (176, 70), (158, 160), (196, 160), (140, 290), (158, 200), (124, 200)]
+        c.glow(lambda g: g.poly(bolt, "#FFF6B0"), 22, 1.0)
+        c.glow(lambda g: g.circ(146, 300, 40, "#FFF6B0"), 20, 0.7)
+        c.poly(bolt, "#FFF3A0")
+        c.poly([(156, 76), (168, 76), (152, 166), (178, 166), (150, 240), (162, 194), (138, 194)], "#FFFFFF")
+        branch = [(186, 160), (226, 200), (216, 206), (250, 250)]
+        c.glow(lambda g: g.line(branch, "#FFF6B0", 4), 6, 1.0)
+        c.line(branch, "#FFFDE0", 2)
+        sparkle(c, 140, 296, 22, "#FFFDE0")
+    elif idx == 1:  # Ouragan
+        storm_clouds(c, rnd, 120)
+        c.vgrad(0, 280, W, H, "#3C3470", "#181433")
+        for k in range(5):
+            y = 300 + k * 30
+            pts = [(x, y + 12 * math.sin(x / 26 + k)) for x in range(-10, W + 20, 10)]
+            c.line(pts, "#B9B0FF", 2)
+            for x in range(10 + k * 17, W, 70):
+                c.poly(leaf(x, y + 12 * math.sin(x / 26 + k) - 2, -20, 28, 12, bend=60), "#E0DCFF")
+        trunk = bez((60, 420), (70, 330), (130, 250), (196, 200), 16)
+        for i in range(len(trunk) - 1):
+            c.line([trunk[i], trunk[i + 1]], "#5A3A30" if i % 2 else "#6B4A3E", 18 - i * 0.6, True)
+        tx, ty = trunk[-1]
+        for a, L in ((-30, 110), (-8, 130), (12, 120), (30, 104), (-52, 86), (50, 90), (0, 80)):
+            c.poly(leaf(tx, ty, a, L, 26, bend=34, fat=0.6), "#3F8A4A" if a % 4 else "#2E6B3A")
+        c.circ(tx, ty, 8, "#5A3A30")
+        c.alpha(lambda o: [o.line(bez((x, y), (x + 60, y - 20), (x + 120, y + 20), (x + 180, y), 16), (230, 225, 255, 150), 2.5) for x, y in ((-40, 170), (20, 240), (-60, 290), (80, 140))])
+        for x, y, a in ((250, 150, 30), (290, 260, -20), (200, 300, 60)):
+            c.poly(leaf(x, y, a, 16, 8), "#5FAE5A")
+        rain(c, rnd, 80, 120)
+    elif idx == 2:  # Grêle
+        storm_clouds(c, rnd, 110)
+        c.poly(hills(rnd, 360, 8, 0.5), "#2E2A5A")
+        c.poly(hills(rnd, 400, 6, 0.5), "#232048")
+        for _ in range(40):
+            c.circ(rnd.uniform(0, W), rnd.uniform(370, 445), rnd.uniform(2, 5), "#E6EEFF")
+        stones = [(rnd.uniform(10, 310), rnd.uniform(130, 360), rnd.uniform(5, 16)) for _ in range(22)]
+        stones.sort(key=lambda s: s[2])
+        c.alpha(lambda o: [o.line([(x + r * 0.6, y - r * 0.8), (x + r * 1.6, y - r * 4)], (220, 230, 255, 110), r * 1.2) for x, y, r in stones])
+        for x, y, r in stones:
+            c.circ(x, y, r, "#EAF2FF")
+            c.chord(x - r, y - r, x + r, y + r, 20, 160, "#B9C8F0")
+            c.circ(x - r * 0.35, y - r * 0.35, r * 0.3, "#FFFFFF")
+        for x, y in ((90, 400), (200, 410), (250, 390)):
+            c.circ(x, y, 8, "#EAF2FF")
+            c.arc(x - 18, y - 22, x + 18, y + 2, 200, 340, "#B9C8F0", 1.5)
+    else:  # Œil du cyclone
+        c.alpha(lambda o: o.rect(0, 0, W, H, (10, 6, 30, 80)))
+        stars(c, rnd, 40, H, ("#D9D0FF",), 1.0)
+        cx, cy = 160, 224
+        lay = c.layer("RGBA")
+        cols = ((120, 108, 200, 255), (170, 160, 235, 255), (225, 220, 255, 255), (255, 255, 255, 255))
+        for layer_i, col in enumerate(cols):
+            for k in range(6):
+                a = k * 60 + layer_i * 14
+                r0 = 30 + layer_i * 4
+                x0, y0 = cx + r0 * math.cos(math.radians(a)), cy + r0 * math.sin(math.radians(a))
+                lay.poly(leaf(x0, y0, a + 70, 150 - layer_i * 22, 54 - layer_i * 10, bend=110, fat=0.7), col)
+        im = lay.img.filter(ImageFilter.GaussianBlur(1.2 * SS))
+        c.glow(lambda g: g.circ(cx, cy, 120, "#9B8CFF"), 30, 0.5)
+        c._reset(Image.alpha_composite(c.img.convert("RGBA"), im).convert("RGB"))
+        c.circ(cx, cy, 30, "#F4F2FF")
+        c.circ(cx, cy, 24, "#2B3A8A")
+        c.circ(cx, cy, 20, "#3E5ABF")
+        c.glow(lambda g: g.circ(cx, cy, 14, "#8FB4FF"), 8, 0.9)
+        rain(c, rnd, 30, 80)
+
+
+# --- 9 · Le Palais ---------------------------------------------------------
+
+GOLD, DGOLD, LGOLD, VELVET = "#E0B040", "#B08428", "#FFE58A", "#B8263A"
+
+
+def column(c, x, top, base, w=26):
+    c.rect(x - w / 2, top, x + w / 2, base, "#FFF8E6")
+    for k in range(-1, 2):
+        c.line([(x + k * w * 0.25, top + 16), (x + k * w * 0.25, base - 10)], "#EADFC0", 2)
+    c.rect(x - w * 0.75, top, x + w * 0.75, top + 14, GOLD)
+    c.rect(x - w * 0.7, base - 12, x + w * 0.7, base, GOLD)
+
+
+def palace_bg(c, rnd, carpet=True, windows=True):
+    c.vgrad(0, 0, W, 340, "#F7E3A8", "#FFF4D6")
+    c.rect(0, 0, W, 34, "#E8C873")
+    for x in range(0, W, 40):
+        c.chord(x, 18, x + 40, 50, 0, 180, "#D9B456")
+    if windows:
+        for x in (80, 240):
+            c.rect(x - 34, 120, x + 34, 300, DGOLD)
+            c.pie(x - 34, 86, x + 34, 154, 180, 360, DGOLD)
+            c.vgrad(x - 28, 120, x + 28, 296, "#BFE3F7", "#E8F6FD")
+            c.clip(lambda m, x=x: m.pie(x - 28, 92, x + 28, 148, 180, 360, 255), lambda t, x=x: t.vgrad(x - 28, 92, x + 28, 121, "#A8D8F2", "#BFE3F7"))
+            c.line([(x, 92), (x, 296)], DGOLD, 3)
+            c.line([(x - 28, 200), (x + 28, 200)], DGOLD, 3)
+            c.poly([(x - 44, 80), (x - 28, 80), (x - 30, 310), (x - 50, 310)], VELVET)
+            c.poly([(x + 44, 80), (x + 28, 80), (x + 30, 310), (x + 50, 310)], VELVET)
+    for x in (10, 160, 310):
+        column(c, x, 40, 340)
+    c.vgrad(0, 340, W, H, "#E8C873", "#C9A24A")
+    for k in range(-6, 8):
+        c.line([(160 + k * 30, 340), (160 + k * 70, H)], "#D9B456", 1.4)
+    for y in (360, 390, 425):
+        c.line([(0, y), (W, y)], "#D9B456", 1.4)
+    if carpet:
+        c.poly([(130, 340), (190, 340), (240, H), (80, H)], VELVET)
+        c.line([(132, 340), (84, H)], GOLD, 3)
+        c.line([(188, 340), (236, H)], GOLD, 3)
+
+
+def palais_card(c, rnd, idx):
+    if idx == 0:  # Couronne
+        palace_bg(c, rnd, carpet=False)
+        c.alpha(lambda o: [o.poly([(160, 220), (160 + 260 * math.cos(math.radians(a - 6)), 220 + 260 * math.sin(math.radians(a - 6))),
+                                   (160 + 260 * math.cos(math.radians(a + 6)), 220 + 260 * math.sin(math.radians(a + 6)))], (255, 240, 180, 80)) for a in range(0, 360, 30)])
+        c.rect(118, 330, 202, 448, "#FFF8E6")
+        c.rect(108, 322, 212, 338, GOLD)
+        c.rect(112, 430, 208, 448, GOLD)
+        c.alpha(lambda o: o.ell(76, 312, 244, 336, (90, 40, 10, 80)))
+        cush = [(70, 300), (100, 280), (220, 280), (250, 300), (236, 324), (84, 324)]
+        c.poly(cush, VELVET)
+        c.poly([(84, 290), (236, 290), (230, 300), (90, 300)], "#D0384C")
+        for x, y in ((70, 300), (250, 300), (84, 324), (236, 324)):
+            c.circ(x, y, 5, GOLD)
+            c.poly([(x - 4, y + 3), (x + 4, y + 3), (x + 2, y + 18), (x - 2, y + 18)], GOLD)
+        c.glow(lambda g: g.ell(90, 160, 230, 290, "#FFD050"), 20, 0.7)
+        c.chord(108, 196, 212, 260, 180, 360, "#8E1E2E")
+        pts = [(100, 286), (100, 216), (124, 248), (140, 186), (160, 232), (180, 186), (196, 248), (220, 216), (220, 286)]
+        c.poly(pts, GOLD)
+        c.poly([(100, 216), (124, 248), (140, 186), (148, 230), (124, 262), (104, 240)], LGOLD)
+        c.rrect(94, 256, 226, 290, 6, DGOLD)
+        c.rrect(96, 258, 224, 270, 4, GOLD)
+        for x, y in ((100, 212), (140, 180), (180, 180), (220, 212), (160, 226)):
+            c.circ(x, y, 7, "#FFF8F0")
+        for x, col in ((118, "#3FCF8E"), (160, "#E5484D"), (202, "#4FA3FF")):
+            c.poly([(x, 264), (x + 9, 273), (x, 282), (x - 9, 273)], col)
+            c.poly([(x, 264), (x + 4, 270), (x - 4, 270)], "#FFFFFF")
+        for x, y, r in ((84, 190, 12), (238, 210, 10), (160, 150, 9)):
+            sparkle(c, x, y, r, "#FFFFFF")
+    elif idx == 1:  # Trône
+        palace_bg(c, rnd)
+        c.rect(60, 336, 260, 356, "#F2DFA6")
+        c.rect(60, 336, 260, 340, GOLD)
+        c.rect(80, 316, 240, 336, "#F7E8BC")
+        c.rect(80, 316, 240, 320, GOLD)
+        c.alpha(lambda o: o.ell(90, 304, 230, 324, (90, 40, 10, 80)))
+        c.rrect(104, 110, 216, 300, 20, GOLD)
+        c.pie(124, 74, 196, 146, 180, 360, GOLD)
+        c.poly(star_pts(160, 84, 14, 6), LGOLD)
+        c.rrect(118, 124, 202, 290, 14, VELVET)
+        for x in (138, 160, 182):
+            for y in (150, 190, 230, 266):
+                c.circ(x + (10 if y in (190, 266) and x < 182 else 0), y, 2.5, "#7A1626")
+        c.rrect(94, 280, 226, 306, 10, VELVET)
+        c.rrect(94, 280, 226, 288, 6, "#D0384C")
+        for x in (98, 222):
+            c.rrect(x - 12, 228, x + 12, 304, 8, GOLD)
+            c.circ(x, 228, 13, LGOLD)
+        for x in (104, 216):
+            c.rect(x - 6, 304, x + 6, 318, DGOLD)
+        c.line([(112, 120), (112, 290)], LGOLD, 3)
+    elif idx == 2:  # Lustre
+        palace_bg(c, rnd, carpet=False, windows=False)
+        c.poly([(40, 34), (280, 34), (300, 340), (20, 340)], "#8E1E2E")
+        for x in range(50, 290, 30):
+            c.line([(x, 40), (x + (x - 160) * 0.08, 336)], "#7A1626", 3)
+        c.poly([(40, 34), (280, 34), (270, 70), (50, 70)], VELVET)
+        c.circ(160, 34, 18, GOLD)
+        c.line([(160, 34), (160, 120)], DGOLD, 3)
+        cx = 160
+        c.glow(lambda g: g.circ(cx, 210, 100, "#FFE07A"), 40, 0.6)
+        for tier, (cy, rx, ry, n) in enumerate(((150, 50, 12, 6), (230, 100, 22, 8))):
+            pts = [(cx + rx * math.cos(2 * math.pi * k / n), cy + ry * math.sin(2 * math.pi * k / n)) for k in range(n)]
+            for x, y in pts:
+                c.line(bez((cx, cy - 40 + tier * 10), (cx + (x - cx) * 0.3, y + 20), (x, y + 22), (x, y)), GOLD, 3)
+            c.ell(cx - rx, cy - ry, cx + rx, cy + ry, None, GOLD, 5)
+            for k in range(n * 3):
+                a = 2 * math.pi * k / (n * 3)
+                x, y = cx + rx * math.cos(a), cy + ry * math.sin(a)
+                c.poly(leaf(x, y + 3, 90, 16 + tier * 4, 6), "#F2F6FF")
+                c.circ(x, y + 18 + tier * 4, 2, "#FFFFFF")
+            lights = [(x, y - 10) for x, y in pts]
+            c.glow(lambda g, lights=lights: [g.circ(x, y, 9, "#FFE07A") for x, y in lights], 6, 1.2)
+            for x, y in pts:
+                c.rect(x - 3, y - 14, x + 3, y, "#FFF8E6")
+                c.poly(leaf(x, y - 14, -90, 12, 7), "#FFD36B")
+        c.poly([(150, 120), (170, 120), (178, 160), (166, 190), (176, 250), (144, 250), (154, 190), (142, 160)], GOLD)
+        c.poly([(152, 124), (158, 124), (150, 160), (156, 240), (148, 240), (146, 160)], LGOLD)
+        c.poly(leaf(cx, 250, 90, 30, 14), "#F2F6FF")
+        for x, y, r in ((70, 180, 10), (250, 160, 12), (220, 290, 8)):
+            sparkle(c, x, y, r, "#FFFFFF")
+    else:  # Salle des glaces
+        vx, vy = 160, 214
+        c.vgrad(0, 0, W, H, "#D9B456", "#B08A38")
+        c.poly([(0, 0), (W, 0), (vx + 36, vy - 50), (vx - 36, vy - 50)], "#C9A24A")
+        c.poly([(0, H), (W, H), (vx + 36, vy + 40), (vx - 36, vy + 40)], "#A8823A")
+        for k in range(-5, 6):
+            c.line([(vx + k * 7, vy + 40), (160 + k * 60, H)], "#B08A38", 1.2)
+        for d in (0.15, 0.3, 0.5, 0.75):
+            y = vy + 40 + (H - vy - 40) * d
+            c.line([(vx - 36 - (160 - 36) * d * 1.0, y), (vx + 36 + (124) * d, y)], "#B08A38", 1.2)
+        c.alpha(lambda o: o.poly([(vx - 20, vy + 40), (vx + 20, vy + 40), (vx + 50, H), (vx - 50, H)], (255, 250, 220, 90)))
+        for side in (-1, 1):
+            xs = [0, 0.38, 0.6, 0.74, 0.83, 0.89]
+            for i in range(len(xs) - 1):
+                t0, t1 = xs[i], xs[i + 1]
+                xa, xb = vx - side * 160 * (1 - t0 * 0.775), vx - side * 160 * (1 - t1 * 0.775)
+                k0, k1 = 1 - t0 * 0.775, 1 - t1 * 0.775
+                top0, top1 = vy - 214 * k0 * 0.62, vy - 214 * k1 * 0.62
+                bot0, bot1 = vy + 234 * k0 * 0.62, vy + 234 * k1 * 0.62
+                ins = 0.12
+                xa2, xb2 = xa + (xb - xa) * ins, xb - (xb - xa) * ins
+                ta, tb = top0 + (top1 - top0) * ins, top1 - (top1 - top0) * ins
+                ba, bb = bot0 + (bot1 - bot0) * ins, bot1 - (bot1 - bot0) * ins
+                arch = [(xa2, ba), (xa2, ta + 10 * k0), ((xa2 + xb2) / 2, ta - 8 * k0), (xb2, tb + 10 * k1), (xb2, bb)]
+                frame = [(x - side * 0, y) for x, y in arch]
+                c.poly([(xa2 - side * 4 * k0, ba + 4 * k0), (xa2 - side * 4 * k0, ta + 4 * k0), ((xa2 + xb2) / 2, ta - 14 * k0), (xb2 + side * 4 * k1, tb + 4 * k1), (xb2 + side * 4 * k1, bb + 4 * k1)], GOLD)
+                c.poly(frame, "#DCE8F5")
+                c.clip(lambda m, frame=frame: m.poly(frame, 255), lambda t, xa2=xa2, xb2=xb2, ta=ta, bb=bb: (t.vgrad(min(xa2, xb2), ta - 20, max(xa2, xb2), bb, "#EEF5FC", "#BFD3EA"),
+                                                                                                        t.poly([(xa2, ta + (bb - ta) * 0.7), (xa2, ta + (bb - ta) * 0.5), (xb2, ta), (xb2, ta + (bb - ta) * 0.2)], "#FFFFFF")))
+        c.glow(lambda g: g.rect(vx - 34, vy - 50, vx + 34, vy + 40, "#FFF2C0"), 24, 1.2)
+        c.rect(vx - 22, vy - 30, vx + 22, vy + 40, "#FFFBEA")
+        c.pie(vx - 22, vy - 52, vx + 22, vy - 8, 180, 360, "#FFFBEA")
+        c.line([(vx, vy - 52), (vx, vy + 40)], "#E8C873", 2)
+        c.line([(vx - 22, vy), (vx + 22, vy)], "#E8C873", 2)
+        for d, s in ((0.15, 1.0), (0.4, 0.62), (0.62, 0.4)):
+            y = 70 + (vy - 60 - 70) * d * 1.4
+            x = vx
+            c.line([(x, 0), (x, y - 10 * s)], DGOLD, 1.5 * s)
+            c.glow(lambda g, x=x, y=y, s=s: g.ell(x - 26 * s, y - 8 * s, x + 26 * s, y + 10 * s, "#FFE07A"), 8 * s, 1.0)
+            c.ell(x - 22 * s, y - 6 * s, x + 22 * s, y + 6 * s, None, GOLD, 3 * s)
+            for k in range(-2, 3):
+                c.poly(leaf(x + k * 9 * s, y + 4 * s, 90, 12 * s, 5 * s), "#FFFFFF")
+        sparkle(c, 60, 140, 10, "#FFFFFF")
+        sparkle(c, 264, 300, 8, "#FFFFFF")
+
+
+# --- 10 · Le Cosmos --------------------------------------------------------
+
+def cosmos_bg(c, rnd, n=150, ground=False):
+    for _ in range(n):
+        c.circ(rnd.uniform(0, W), rnd.uniform(0, H), rnd.choice((0.5, 0.6, 0.8, 1.1, 1.4)), mix((255, 255, 255), hex_rgb("#C9B8FF"), rnd.random()))
+    for _ in range(4):
+        sparkle(c, rnd.uniform(10, 310), rnd.uniform(10, 430), rnd.uniform(3, 6), "#FFFFFF")
+    if ground:
+        c.poly(hills(rnd, 372, 12, 0.5), "#3B1F6E")
+        c.poly(hills(rnd, 410, 10, 0.5), "#251248")
+        for _ in range(16):
+            c.circ(rnd.uniform(0, W), rnd.uniform(380, 445), rnd.uniform(1, 2.2), "#C9A6FF")
+
+
+def cosmos_card(c, rnd, idx):
+    if idx == 0:  # Nébuleuse
+        cosmos_bg(c, rnd)
+        lay = c.layer()
+        for x, y, rx, ry, col in ((130, 200, 110, 70, "#FF4FA8"), (200, 250, 100, 80, "#7B4BFF"), (120, 280, 90, 60, "#4B8BFF"),
+                                  (190, 170, 70, 50, "#FF8AD8"), (150, 230, 60, 40, "#FFD0F0"), (240, 320, 60, 40, "#4BD8FF")):
+            lay.poly(blob(rnd, x, y, rx, ry, 0.3, 14), col)
+        c._reset(ImageChops.add(c.img, lay.img.filter(ImageFilter.GaussianBlur(26 * SS)).point(lambda v: int(v * 0.9))))
+        c._reset(ImageChops.add(c.img, lay.img.filter(ImageFilter.GaussianBlur(8 * SS)).point(lambda v: int(v * 0.35))))
+        c.alpha(lambda o: o.poly(blob(rnd, 170, 236, 90, 14, 0.4, 14), (20, 8, 40, 120)), blur=6)
+        for x, y, r in ((150, 220, 14), (204, 262, 9), (110, 280, 7), (190, 170, 8)):
+            c.glow(lambda g, x=x, y=y, r=r: g.circ(x, y, r * 0.6, "#FFFFFF"), r * 0.6, 1.2)
+            sparkle(c, x, y, r, "#FFFFFF")
+    elif idx == 1:  # Comète
+        cosmos_bg(c, rnd, ground=True)
+        hx_, hy = 236, 128
+        c.alpha(lambda o: o.poly([(hx_ - 10, hy - 10), (hx_ + 10, hy + 10), (-20, 420), (-60, 330)], (140, 200, 255, 60)), blur=10)
+        c.alpha(lambda o: o.poly([(hx_ - 6, hy - 6), (hx_ + 6, hy + 6), (10, 400), (-20, 350)], (200, 230, 255, 110)), blur=4)
+        c.alpha(lambda o: o.poly(bez((hx_, hy), (180, 200), (100, 290), (30, 380), 20) + bez((40, 420), (120, 310), (190, 220), (hx_ + 4, hy + 6), 20), (255, 220, 160, 70)), blur=6)
+        c.glow(lambda g: g.circ(hx_, hy, 26, "#9FE0FF"), 18, 1.2)
+        c.circ(hx_, hy, 11, "#FFFFFF")
+        c.circ(40, 80, 18, "#7A5ABF")
+        c.circ(46, 74, 15, "#9B7BDF")
+    elif idx == 2:  # Supernova
+        cosmos_bg(c, rnd)
+        cx, cy = 160, 200
+        c.glow(lambda g: g.circ(cx, cy, 120, "#FF6FB0"), 50, 0.7)
+        c.glow(lambda g: g.ell(cx - 130, cy - 40, cx + 130, cy + 40, None, "#FFB060", 6), 6, 1.2)
+        c.ell(cx - 126, cy - 38, cx + 126, cy + 38, None, "#FFD9A0", 2)
+        rays = []
+        for k in range(16):
+            a = math.radians(k * 22.5 + rnd.uniform(-5, 5))
+            L = rnd.uniform(70, 140) if k % 2 else rnd.uniform(130, 180)
+            rays.append([(cx + 6 * math.cos(a + 1.57), cy + 6 * math.sin(a + 1.57)), (cx + L * math.cos(a), cy + L * math.sin(a)), (cx - 6 * math.cos(a + 1.57), cy - 6 * math.sin(a + 1.57))])
+        c.glow(lambda g: [g.poly(r, "#FFE6A0") for r in rays], 6, 1.0)
+        c.alpha(lambda o: [o.poly(r, (255, 250, 230, 200)) for r in rays])
+        c.glow(lambda g: g.circ(cx, cy, 30, "#FFFFFF"), 18, 1.4)
+        c.circ(cx, cy, 20, "#FFFFFF")
+        for _ in range(30):
+            a, d = rnd.uniform(0, 6.3), rnd.uniform(60, 150)
+            c.circ(cx + d * math.cos(a), cy + d * math.sin(a), rnd.uniform(1, 2.5), rnd.choice(("#FFD0A0", "#FF9AD0", "#FFFFFF")))
+    else:  # Lune rousse
+        cosmos_bg(c, rnd, ground=True)
+        cx, cy, r = 160, 212, 88
+        c.glow(lambda g: g.circ(cx, cy, r * 1.4, "#FF6A3D"), 40, 0.7)
+        c.circ(cx, cy, r, "#E0784A")
+        c.clip(lambda m: m.circ(cx, cy, r, 255), lambda t: (t.poly(blob(rnd, cx - 30, cy - 20, 40, 30, 0.3), "#C85E38"), t.poly(blob(rnd, cx + 30, cy + 26, 34, 22, 0.3), "#C85E38")))
+        c.clip(lambda m: (m.circ(cx, cy, r, 255), m.circ(cx - 34, cy - 14, r, 0)), lambda t: t.circ(cx, cy, r, "#8A3420"), opacity=0.55, blur=8)
+        c.clip(lambda m: m.circ(cx, cy, r, 255), lambda t: t.circ(cx - 20, cy - 16, r * 0.95, "#F09060"), opacity=0.5, blur=10)
+        for dx, dy, rr in ((-40, 30, 10), (20, -50, 8), (44, 20, 12), (-10, -8, 6), (-56, -30, 7)):
+            c.circ(cx + dx, cy + dy, rr, "#B85A36")
+            c.circ(cx + dx - rr * 0.2, cy + dy - rr * 0.2, rr * 0.75, "#D06A42")
+
+
 WORLDS = {
+    1: (("#9ED8FF", "#EAF8FF"), parc_card),
+    2: (("#8FD3F5", "#FFF1D0"), plage_card),
+    3: (("#FFB36B", "#FFE2B8"), marche_card),
+    4: (("#B8E3C6", "#F1FAEC"), foret_card),
+    5: (("#6EB6F0", "#D8EEFF"), port_card),
+    6: (("#7FA7DE", "#E6EEFA"), montagne_card),
+    7: (("#3A1220", "#FF7A3D"), volcan_card),
+    8: (("#2B2550", "#7E6FC9"), tempete_card),
+    9: (("#F7E3A8", "#FFF8E6"), palais_card),
+    10: (("#07061A", "#2A1550"), cosmos_card),
     11: (("#7CCBE6", "#E9F9FB"), lake_card),
     12: (("#2E1F5E", "#FF8FB0"), foire_card),
     13: (("#8FD0F2", "#FFF0C8"), ferme_card),
@@ -2067,7 +3155,7 @@ def draw_scene(arena, idx):
 
 
 def seeded_grain(img, amount, seed):
-    """Comme grain(), mais avec un bruit reproductible (effect_noise dépend de
+    """Léger grain de papier, reproductible (Image.effect_noise dépend de
     l'ordre des appels, ce qui changerait l'image selon les mondes rendus)."""
     rnd = random.Random(seed)
     data = bytes(max(0, min(255, int(rnd.gauss(128, amount)))) for _ in range(img.width * img.height))
@@ -2076,7 +3164,7 @@ def seeded_grain(img, amount, seed):
 
 
 def render(arena, idx):
-    return draw_scene(arena, idx) if arena in WORLDS else draw_card(arena, idx)
+    return draw_scene(arena, idx)
 
 
 if __name__ == "__main__":
@@ -2086,7 +3174,7 @@ if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     # Sans argument : tous les mondes. Sinon seulement les ids donnés
     # (ex. `python3 scripts/generate-bot-art.py 11 12`).
-    wanted = [int(a) for a in sys.argv[1:]] or [*THEMES, *WORLDS]
+    wanted = [int(a) for a in sys.argv[1:]] or list(WORLDS)
     for arena in wanted:
         for idx in range(4):
             render(arena, idx).save(f"{OUT}/a{arena}-{idx}.jpg", quality=80, optimize=True, progressive=True)
