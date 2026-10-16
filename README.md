@@ -12,7 +12,7 @@ PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie ph
 | --- | --- |
 | **Tirage** | Paquet animé, réserve de tirages (3 max), compte à rebours jusqu'au prochain, taux d'obtention, solde de pièces. Sans tirage, on peut en acheter un avec des pièces |
 | **Collection** | Grille de cartes, filtres par rareté, tri récentes/rareté. On touche une carte pour l'agrandir |
-| **Combat** | Un menu à deux grands panneaux : **Aventure solo** (carte de 20 mondes, 100 niveaux, qui rapportent des pièces) et **Multijoueur** (rang, amis, combats classés par défi ou par code / QR code) |
+| **Combat** | Un menu à deux grands panneaux : **Aventure solo** (carte de 21 mondes, 130 niveaux, qui rapportent des pièces) et **Multijoueur** (rang, amis, combats classés par défi ou par code / QR code) |
 | **Échange** | Héberger (QR code + code) ou rejoindre (scan QR ou saisie du code), puis échange classique |
 
 **Ouverture d'un paquet**
@@ -124,7 +124,7 @@ Dans l'ordre de la carte (n° = id du monde et du fichier) :
 
 **Déroulé.** Avant le combat, on choisit 4 cartes (la première commence ; « Auto » prend les plus fortes). L'adversaire en a 4 aussi. On voit sa carte active et ses remplaçantes. Changer de carte est possible à tout moment, mais ça utilise le tour. Une carte K.O. est remplacée sans perdre de tour. Le camp qui n'a plus de carte debout perd.
 
-**Aventure solo** (`src/battle/levels.ts`, mondes dans `src/battle/arenas.ts`). 20 mondes de 5 niveaux, soit 100 niveaux, du bas vers le haut de la carte : le Parc, le Lac, la Plage, la Foire, le Marché, la Ferme, la Forêt, le Manoir, le Port, les Pirates, le Désert, la Montagne, les Mines, le Volcan, la Tempête, l'Archipel, le Palais, Néon, le Cosmos et la Lune. Aux 10 premiers mondes se sont ajoutés 10 nouveaux, glissés entre eux là où ils tombent logiquement. Chaque monde a son adversaire et ses 4 cartes, de plus en plus rares. Le bot vise de mieux en mieux, garde ses spéciales pour le bon moment et met à l'abri ses cartes en danger (`src/battle/bot.ts`). Gagner un niveau débloque le suivant. Les illustrations des adversaires sont générées par `scripts/generate-bot-art.py`, et les sons de combat par `python3 scripts/generate-sounds.py combat`.
+**Aventure solo** (`src/battle/levels.ts`, mondes dans `src/battle/arenas.ts`). 20 mondes de 5 niveaux, puis la Galerie, monde final de 30 niveaux : 130 niveaux du bas vers le haut de la carte : le Parc, le Lac, la Plage, la Foire, le Marché, la Ferme, la Forêt, le Manoir, le Port, les Pirates, le Désert, la Montagne, les Mines, le Volcan, la Tempête, l'Archipel, le Palais, Néon, le Cosmos et la Lune, et enfin la Galerie. Aux 10 premiers mondes se sont ajoutés 10 nouveaux, glissés entre eux là où ils tombent logiquement. Chaque monde a son adversaire et ses 4 cartes, de plus en plus rares. Le bot vise de mieux en mieux, garde ses spéciales pour le bon moment et met à l'abri ses cartes en danger (`src/battle/bot.ts`). Gagner un niveau débloque le suivant. Les illustrations des adversaires sont générées par `scripts/generate-bot-art.py`, et les sons de combat par `python3 scripts/generate-sounds.py combat`.
 
 | # | Monde | Adversaire | Cartes |
 | --- | --- | --- | --- |
@@ -148,6 +148,7 @@ Dans l'ordre de la carte (n° = id du monde et du fichier) :
 | 18 | Néon | Kai | Hologramme (Mythique), Voiture volante (Légendaire), Gratte-ciel (Ultra Légendaire), Androïde (Ultra Légendaire) |
 | 19 | Le Cosmos | Astra | Nébuleuse (Ultra Légendaire), Comète (Légendaire), Supernova (Divine), Lune rousse (Mythique) |
 | 20 | La Lune | Séléna | Rover (Légendaire), Astronaute (Ultra Légendaire), Base lunaire (Divine), Clair de Terre (Divine) |
+| 21 | La Galerie | Le Grand Portrait | Portrait doré, Statue d'ivoire, Vitrail céleste, Fresque éternelle, Sculpture de lumière, Tapisserie royale, Miroir sans fin, La Muse (Divines), Le Grand Portrait (Galaxy) |
 
 - **Difficulté** : abordable au début, de plus en plus dure, **ultra dure sur la Lune**. Chaque monde est plus fort que celui d'avant : ses cartes sont un peu plus rares (la somme de leurs rangs de rareté monte d'au moins 1 à chaque monde), et les stats des cartes du bot sont ramenées à la moyenne de leur rareté, pour que le hasard ne rende jamais un monde plus facile que le précédent. Les premiers mondes, aux cartes très communes, sont renforcés (+12 % au niveau 1, qui fond jusqu'au milieu de l'aventure). L'adversaire aligne 3 cartes au niveau 1, puis 4. Dans un monde, chaque niveau est un peu plus fort que le précédent ; le 1er niveau rétrograde sa meilleure carte d'un cran, le 5e est un **boss** dont la meilleure carte monte d'un cran. La Lune surclasse toutes ses cartes d'un rang de plus (au-delà de la Divine, chaque rang en trop devient un bonus de stats) et renforce encore leurs stats. Le bot vise correctement dès le départ (4/10) et parfaitement à la fin. Tous ces réglages sont dans l'objet `TUNE`.
 - **Réglé par simulation** (`tests/levels.test.ts`), avec un joueur qui vise bien. Avec les cartes des 3 paquets de départ, on passe les premiers mondes et on bloque vers le Manoir ou le Port : il faut ouvrir des paquets pour aller plus loin. Même avec le meilleur deck possible, le boss de la Lune ne tombe qu'environ 1 fois sur 30.
@@ -159,7 +160,11 @@ Dans l'ordre de la carte (n° = id du monde et du fichier) :
 | Fort (Ultra Légendaire, Légendaire, 2 Mythiques) | 100 % | 99 % | 99 % | 100 % | 96 % | 95 % | 81 % | 17 % | 7 % | 1 % | 1 % | 0 % |
 | Au maximum (Divine, Ultra Légendaire, 2 Légendaires) | 100 % | 99 % | 100 % | 100 % | 100 % | 99 % | 97 % | 73 % | 55 % | 21 % | 31 % | 3 % |
 
-- **Étoiles** : 3 si on gagne sans perdre de carte, 2 en en perdant une, 1 sinon. La meilleure note de chaque niveau est gardée (300 étoiles au total).
+- **Le sanctuaire de la Divine** : entre le Volcan et la Tempête, la route devient un pont au-dessus du vide, avec une grande carte Divine au milieu. Tant qu'on ne l'a pas débloquée, **aucune Divine ne sort des paquets** (une Divine tirée devient une Ultra Légendaire) et la suite de l'aventure reste fermée. Une fois le Volcan battu, toucher la carte la débloque avec une mise en scène, pour toujours (`divineUnlocked` dans la sauvegarde).
+- **La Galerie, monde final** (niveaux 101 à 130) : après la Lune, une route toute droite de 30 niveaux, tous très durs (bot parfait). Au 1er niveau, l'adversaire aligne 4 Divines ; au 2e, une 5e carte (Mythique) qui monte d'un rang à chaque niveau jusqu'à la Divine, puis une 6e arrive, et ainsi de suite jusqu'à 8 cartes, avec des stats qui montent (et allégées un peu par carte quand l'équipe grandit, sinon c'est injouable). Au 30e niveau, **le Grand Portrait**, boss final du jeu, garde pour la fin sa **carte Galaxy**. Réglée par simulation avec 4 Divines : environ 66 % de victoires au 1er niveau, 50 % au 15e, 29 % au 20e, 13 % au 29e, 3 % contre le Grand Portrait (tous ces réglages dans `GALLERY`).
+- **La carte Galaxy** : la rareté au-dessus de la Divine (rang 8), qui ne sort jamais d'un paquet. Battre le Grand Portrait la première fois débloque **une seule carte Galaxy par joueur**, créée à partir d'une nouvelle photo (`claimGalaxy`), avec une révélation à part. Elle ne s'échange pas.
+- **Difficulté cachée** (`hiddenAdjust`, jamais affichée dans le jeu) : au début d'un combat solo, on compare la rareté des cartes choisies à celles qu'un joueur a normalement à ce point de l'aventure (départ, puis moyen, fort, maximum, et 4 Divines dans la Galerie). Avec des cartes normales ou faibles, rien ne change. Avec des cartes plus fortes, l'adversaire s'adapte : il rate moins, vise mieux et fait plus de critiques (une Mythique dès le 2e niveau : un peu ; deux Mythiques : plus ; une Légendaire : encore plus), et avec des cartes de fin de jeu au début, ses stats montent aussi (jusqu'à ×1,8). Exemple simulé : un deck au maximum gagne le boss du Parc 86 % du temps au lieu de 100 %, celui de la Ferme 51 %.
+- **Étoiles** : 3 si on gagne sans perdre de carte, 2 en en perdant une, 1 sinon. La meilleure note de chaque niveau est gardée (390 étoiles au total).
 - **Anciennes sauvegardes** (`src/storage/model.ts`) : une partie commencée sur l'ancienne carte de 10 mondes garde ses étoiles, chaque niveau à sa nouvelle place, et reprend là où elle en était. Les nouveaux mondes glissés derrière le joueur sont ouverts : on peut y revenir quand on veut pour gagner leurs étoiles et leurs pièces.
 
 **La carte** (`src/components/map/`). Une longue route qui serpente vers le haut, comme dans les jeux « saga » : niveau 1 en bas, on remonte la carte pour voir les mondes suivants. Chaque monde a son sol, sa route (sable, pavés, planches, tapis rouge, route d'étoiles…), ses décors dessinés façon dessin animé (contour sombre, reflets, arbres avec des yeux), un grand décor (mare et son canard, mer, halle du marché, arbre géant, phare, montagnes, volcan, nuage d'orage, château, planète à anneaux) et son panneau. Le passage d'un monde à l'autre se fait par un bord ondulé. Le portrait de l'adversaire de chaque monde attend à côté de son boss.
@@ -172,11 +177,11 @@ Les niveaux sont des pastilles dorées avec leur numéro, et leurs étoiles au-d
 
 Les pièces se gagnent seulement en battant les niveaux de l'aventure solo, et servent à acheter un tirage quand la réserve est vide (200 pièces). Les tirages gratuits restent la base.
 
-- **Chaque niveau rapporte 20 pièces, une seule fois** : à sa première victoire. Le montant est le même du niveau 1 au niveau 100.
+- **Chaque niveau rapporte 20 pièces, une seule fois** : à sa première victoire. Le montant est le même du niveau 1 au niveau 130.
 - **Rejouer un niveau déjà gagné ne rapporte rien** : ça sert seulement à améliorer ses étoiles. Impossible donc de « farmer » des pièces.
 - Une défaite, un abandon ou un combat en ligne ne rapportent rien.
 
-Toute l'aventure rapporte donc 2 000 pièces, soit 10 tirages, étalés sur toute la progression. Un tirage acheté s'ajoute à la réserve et se consomme après les tirages gratuits. L'écran de victoire affiche le gain (ou « pièces déjà gagnées »), et la fiche de chaque niveau ce qu'il rapporte.
+Toute l'aventure rapporte donc 2 600 pièces, soit 13 tirages, étalés sur toute la progression. Un tirage acheté s'ajoute à la réserve et se consomme après les tirages gratuits. L'écran de victoire affiche le gain (ou « pièces déjà gagnées »), et la fiche de chaque niveau ce qu'il rapporte.
 
 ## Rang en ligne (`src/game/rank.ts`)
 
@@ -208,6 +213,7 @@ Six rangs, chacun en trois divisions : **Papier**, **Bronze**, **Argent**, **Tit
 
 La table des raretés ci-dessous donne les chances **de base** de chaque carte. Trois mécaniques s'y ajoutent, avec un état rangé dans la sauvegarde (`luck`).
 
+- **Divine à débloquer** : tant que la Divine n'a pas été débloquée au sanctuaire de l'aventure (après le Volcan), aucune Divine ne sort des paquets : une Divine tirée devient une Ultra Légendaire. La Galaxy ne sort jamais d'un paquet.
 - **Paquets de départ** : dans une nouvelle partie, le 1er et le 2e paquet se terminent par une **Super Rare**, le 3e par une **Épique** (exactement). Les autres cartes de ces paquets restent en dessous (Rare au plus dans les deux premiers, Super Rare au plus dans le 3e), pour que la belle carte soit révélée en dernier. Ça ne se produit qu'une fois, et « Effacer ma partie de test » (navigateur) relance une partie neuve, donc ces paquets aussi.
 - **Malchance** : après 20 cartes sans Épique ou mieux, la chance d'en avoir une monte de 2,5 points par carte. Elle est garantie à la 40e carte. Même principe pour Légendaire ou mieux : la chance monte après 180 cartes, et la Légendaire est garantie à la 350e. Le compteur repart à zéro dès que la carte sort.
 - **Paquets brillants** : 1 paquet sur 20 environ (garanti au plus tard au 30e) est doré et contient une carte Super Rare ou mieux. Le sachet doré et l'annonce apparaissent avant de déchirer.
