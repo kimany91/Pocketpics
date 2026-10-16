@@ -2,7 +2,8 @@
 
 Paysages en aplats superposés, un décor par monde et, sur chaque carte, son
 sujet au premier plan. Sortie : assets/bots/a<monde>-<carte>.jpg (320 × 448).
-Arguments optionnels : les ids des mondes à rendre (par défaut tous).
+Aussi assets/bots/sanctuary.jpg (la Divine du sanctuaire). Arguments optionnels :
+les ids des mondes à rendre et/ou `sanctuary` (par défaut tout).
 """
 import math
 import random
@@ -3119,6 +3120,354 @@ def cosmos_card(c, rnd, idx):
             c.circ(cx + dx - rr * 0.2, cy + dy - rr * 0.2, rr * 0.75, "#D06A42")
 
 
+# --- 21 · La Galerie (monde final) -----------------------------------------
+
+def ornate_frame(c, x0, y0, x1, y1, t=14, inner="#1A1030"):
+    """Cadre doré mouluré ; renvoie la zone intérieure (toile)."""
+    c.rrect(x0, y0, x1, y1, 6, DGOLD)
+    c.rrect(x0 + 2, y0 + 2, x1 - 2, y1 - 2, 5, GOLD)
+    c.rect(x0 + t * 0.45, y0 + t * 0.45, x1 - t * 0.45, y1 - t * 0.45, LGOLD)
+    c.rect(x0 + t * 0.6, y0 + t * 0.6, x1 - t * 0.6, y1 - t * 0.6, DGOLD)
+    for k in range(int((x1 - x0) / 16)):
+        x = x0 + t + k * 16
+        if x < x1 - t:
+            c.circ(x, y0 + t * 0.25, 1.6, LGOLD)
+            c.circ(x, y1 - t * 0.25, 1.6, LGOLD)
+    for k in range(int((y1 - y0) / 16)):
+        y = y0 + t + k * 16
+        if y < y1 - t:
+            c.circ(x0 + t * 0.25, y, 1.6, LGOLD)
+            c.circ(x1 - t * 0.25, y, 1.6, LGOLD)
+    c.rect(x0 + t, y0 + t, x1 - t, y1 - t, inner)
+    for x, y in ((x0, y0), (x1, y0), (x0, y1), (x1, y1)):
+        c.circ(x, y, t * 0.7, GOLD)
+        c.circ(x, y, t * 0.42, LGOLD)
+        c.circ(x, y, t * 0.18, DGOLD)
+    return x0 + t, y0 + t, x1 - t, y1 - t
+
+
+def marble_column(c, x, top, base, w=24):
+    c.rect(x - w / 2, top, x + w / 2, base, "#E6E0EE")
+    c.rect(x + w * 0.15, top, x + w / 2, base, "#CFC7DD")
+    c.rect(x - w * 0.8, top, x + w * 0.8, top + 14, GOLD)
+    c.rect(x - w * 0.8, top + 10, x + w * 0.8, top + 14, DGOLD)
+    c.rect(x - w * 0.75, base - 12, x + w * 0.75, base, GOLD)
+
+
+def spotlight(c, x, x_bot, w_bot, y_bot=448, a=36):
+    c.alpha(lambda o: o.poly([(x - 8, -10), (x + 8, -10), (x_bot + w_bot, y_bot), (x_bot - w_bot, y_bot)], (255, 240, 200, a)), blur=6)
+
+
+def gallery_bg(c, rnd, carpet=True, columns=True, spots=(160,), floor=True):
+    c.vgrad(0, 0, W, H, "#0D0726", "#2B1559")
+    lay = c.layer()
+    for x, y, r, col in ((60, 120, 90, "#6A2FB0"), (270, 200, 80, "#2F3FB0"), (180, 60, 70, "#8A2F90")):
+        lay.circ(x, y, r, col)
+    c._reset(ImageChops.add(c.img, lay.img.filter(ImageFilter.GaussianBlur(40 * SS)).point(lambda v: int(v * 0.45))))
+    for _ in range(45):
+        c.circ(rnd.uniform(0, W), rnd.uniform(0, 330), rnd.choice((0.6, 0.9, 1.3)), mix((255, 255, 255), hex_rgb("#E6C8FF"), rnd.random()))
+    for _ in range(3):
+        sparkle(c, rnd.uniform(10, 310), rnd.uniform(10, 300), rnd.uniform(3, 5), "#FFFFFF")
+    for x, y, s, a in ((40, 70, 0.9, -12), (282, 96, 0.8, 10), (250, 250, 0.6, -6), (64, 262, 0.55, 8)):
+        c.rotated((40 * s, 52 * s), lambda t, s=s: (t.rect(0, 0, 40 * s, 52 * s, hx(GOLD, 0.45)), t.rect(5 * s, 5 * s, 35 * s, 47 * s, "#160C30")), x, y, a)
+    if floor:
+        c.poly([(-30, H), (W + 30, H), (262, 332), (58, 332)], "#D9D2E6")
+        for k in range(-3, 4):
+            c.line([(160 + k * 29, 332), (160 + k * 92, H)], "#CCC3DC", 1.2)
+        for y in (352, 386):
+            c.line([(0, y), (W, y)], "#CCC3DC", 1.2)
+        c.line([(58, 332), (262, 332)], GOLD, 3)
+        if carpet:
+            c.poly([(138, 332), (182, 332), (236, H), (84, H)], VELVET)
+            c.line([(140, 332), (88, H)], GOLD, 2.5)
+            c.line([(180, 332), (232, H)], GOLD, 2.5)
+    if columns:
+        for x in (24, 296):
+            marble_column(c, x, 36, 352)
+    for x in spots:
+        spotlight(c, x, x, 120)
+
+
+def lady(t, cx, cy):
+    t.ell(cx - 64, cy + 50, cx + 64, cy + 150, "#2A3A6A")
+    t.poly([(cx - 30, cy + 56), (cx, cy + 96), (cx + 30, cy + 56)], "#F0D2B4")
+    t.rect(cx - 10, cy + 20, cx + 10, cy + 60, "#E8C6A6")
+    t.pie(cx - 34, cy - 50, cx + 34, cy + 20, 180, 360, "#5A3420")
+    t.circ(cx, cy - 46, 15, "#5A3420")
+    t.ell(cx - 24, cy - 32, cx + 24, cy + 30, "#F0D2B4")
+    t.pie(cx - 26, cy - 36, cx + 26, cy + 4, 180, 360, "#5A3420")
+    for dx in (-9, 9):
+        t.circ(cx + dx, cy - 2, 2.2, "#3A2418")
+    t.arc(cx - 8, cy + 6, cx + 8, cy + 18, 30, 150, "#B8584A", 1.6)
+    t.ell(cx - 18, cy + 4, cx - 10, cy + 10, "#F2B0A0")
+    t.ell(cx + 10, cy + 4, cx + 18, cy + 10, "#F2B0A0")
+    for k in range(9):
+        a = math.radians(20 + k * 17.5)
+        t.circ(cx + 26 * math.cos(a), cy + 60 + 16 * math.sin(a), 2.6, "#FFF8F0")
+
+
+def galerie_card(c, rnd, idx):
+    if idx == 0:  # Portrait doré
+        gallery_bg(c, rnd)
+        c.glow(lambda g: g.rect(74, 92, 246, 324, "#FFD060"), 18, 0.6)
+        x0, y0, x1, y1 = ornate_frame(c, 74, 92, 246, 324, 16)
+        c.clip(lambda m: m.rect(x0, y0, x1, y1, 255), lambda t: (t.vgrad(x0, y0, x1, y1, "#2F4A3A", "#16261E"), lady(t, 160, 196)))
+        c.rrect(132, 334, 188, 346, 3, GOLD)
+        c.rect(140, 339, 180, 341, DGOLD)
+    elif idx == 1:  # Statue d'ivoire
+        gallery_bg(c, rnd, carpet=False)
+        c.alpha(lambda o: o.ell(84, 404, 236, 428, (20, 10, 40, 90)))
+        c.rect(104, 326, 216, 420, "#EEE8F4")
+        c.rect(176, 326, 216, 420, "#D2CAE0")
+        c.rect(96, 318, 224, 330, GOLD)
+        c.rect(96, 410, 224, 422, GOLD)
+        iv, sh, dk = "#F4ECD8", "#E0D3B8", "#C9B898"
+        c.rect(122, 304, 198, 318, sh)
+        robe = [(134, 188), (186, 188), (198, 304), (122, 304)]
+        c.poly(robe, iv)
+        c.poly([(166, 188), (186, 188), (198, 304), (170, 304)], sh)
+        for x0, x1 in ((140, 132), (152, 148), (164, 166), (178, 186)):
+            c.line([(x0, 214), (x1, 302)], dk, 1.5)
+        c.poly(leaf(134, 192, 70, 70, 20, bend=-60), iv)
+        c.poly(leaf(186, 194, -60, 64, 18, bend=-30), sh)
+        x, y, _ = spine(186, 194, -60, 64, -30)
+        c.circ(x, y, 9, iv)
+        c.rect(152, 170, 168, 192, sh)
+        c.circ(160, 158, 21, iv)
+        c.chord(139, 137, 181, 179, 300, 90, sh)
+        for k in range(7):
+            a = math.radians(-180 + k * 30)
+            c.circ(160 + 19 * math.cos(a), 152 + 16 * math.sin(a), 6, "#EADFC6")
+        c.poly(leaf(118, 160, -60, 22, 8), "#C9B898")
+        sparkle(c, 200, 150, 9, "#FFFFFF")
+    elif idx == 2:  # Vitrail céleste
+        gallery_bg(c, rnd, columns=True)
+        left = bez((90, 190), (90, 130), (120, 92), (160, 78), 16)
+        right = bez((160, 78), (200, 92), (230, 130), (230, 190), 16)
+        arch = [(90, 330)] + left + right[1:] + [(230, 330)]
+        outer = [(80, 340)] + bez((80, 190), (80, 120), (116, 80), (160, 64), 16) + bez((160, 64), (204, 80), (240, 120), (240, 190), 16)[1:] + [(240, 340)]
+        c.glow(lambda g: g.poly(outer, "#8A6BFF"), 22, 0.8)
+        c.alpha(lambda o: o.poly([(100, 330), (220, 330), (290, H), (30, H)], (190, 160, 255, 60)), blur=4)
+        c.poly(outer, "#4A3F6A")
+        cols = ("#3E5ABF", "#9B4BFF", "#F7C948", "#E5484D", "#4BD8FF", "#5FC46A")
+        cx, cy = 160, 196
+
+        def glass(t):
+            for k in range(8):
+                t.pie(cx - 260, cy - 260, cx + 260, cy + 260, k * 45 + 22.5, (k + 1) * 45 + 22.5, cols[k % 6])
+            t.circ(cx, cy, 56, "#2A2A8A")
+            for k in range(8):
+                t.pie(cx - 56, cy - 56, cx + 56, cy + 56, k * 45 + 10, k * 45 + 35, cols[(k + 2) % 6])
+            t.circ(cx, cy, 24, "#FFF2B0")
+            t.poly(star_pts(cx, cy, 20, 8, 8), "#F7C948")
+            for k in range(8):
+                a = math.radians(k * 45 + 22.5)
+                t.line([(cx + 24 * math.cos(a), cy + 24 * math.sin(a)), (cx + 260 * math.cos(a), cy + 260 * math.sin(a))], "#1A1030", 3)
+            for r in (24, 56, 96):
+                t.circ(cx, cy, r, None, "#1A1030", 3)
+            t.line([(90, 290), (230, 290)], "#1A1030", 3)
+            t.rect(90, 292, 230, 330, "#2A2A8A")
+            t.line([(160, 292), (160, 330)], "#1A1030", 3)
+        c.clip(lambda m: m.poly(arch, 255), glass)
+        c.clip(lambda m: m.poly(arch, 255), lambda t: t.poly([(90, 330), (90, 100), (140, 80), (110, 330)], "#FFFFFF"), opacity=0.18)
+        c.line(arch, "#1A1030", 3)
+    elif idx == 3:  # Fresque éternelle
+        gallery_bg(c, rnd)
+        c.glow(lambda g: g.rect(48, 92, 272, 330, "#FFD060"), 16, 0.5)
+        top = bez((48, 150), (48, 90), (272, 90), (272, 150), 20)
+        shape = [(48, 330)] + top + [(272, 330)]
+        c.poly([(40, 338)] + bez((40, 150), (40, 78), (280, 78), (280, 150), 20) + [(280, 338)], GOLD)
+        c.poly([(44, 334)] + bez((44, 150), (44, 84), (276, 84), (276, 150), 20) + [(276, 334)], DGOLD)
+
+        def paint(t):
+            t.vgrad(48, 90, 272, 330, "#6FA6DA", "#F7DDB0")
+            t.glow(lambda g: g.circ(160, 170, 46, "#FFE07A"), 20, 1.0)
+            t.circ(160, 170, 30, "#FFE9A0")
+            for k in range(12):
+                a = math.radians(k * 30)
+                t.line([(160 + 36 * math.cos(a), 170 + 36 * math.sin(a)), (160 + 52 * math.cos(a), 170 + 52 * math.sin(a))], "#FFE07A", 3)
+            for x, y, s in ((80, 270, 1.0), (240, 280, 1.1), (160, 300, 1.3), (70, 150, 0.6), (250, 140, 0.6)):
+                puff(t, x, y, s, "#FFF8EE", "#E8D2B8")
+            for x, flip in ((104, 1), (216, -1)):
+                for a, L in ((-150, 44), (-130, 40), (-170, 34)):
+                    aa = a if flip > 0 else -180 - a
+                    t.poly(leaf(x, 222, aa, L, 14, bend=20 * flip), "#FFFFFF")
+                t.poly(leaf(x, 210, 90, 46, 24, fat=0.5), "#E9C7D8" if flip > 0 else "#C9D8F0")
+                t.circ(x, 206, 9, "#F0D2B4")
+                t.circ(x, 202, 9, None, "#F7C948", 1.5)
+            t.alpha(lambda o: [o.line([(x, y), (x + rnd.uniform(-20, 20), y + rnd.uniform(10, 40))], (90, 60, 40, 90), 1) for x, y in ((60, 200), (250, 230), (120, 120), (200, 300), (180, 110))])
+            t.alpha(lambda o: [o.poly(blob(rnd, x, y, r, r * 0.7, 0.4, 9), (240, 225, 200, 170)) for x, y, r in ((56, 320, 22), (264, 108, 16), (268, 320, 14))])
+        c.clip(lambda m: m.poly(shape, 255), paint)
+    elif idx == 4:  # Sculpture de lumière
+        gallery_bg(c, rnd, carpet=False)
+        c.alpha(lambda o: o.ell(84, 404, 236, 428, (20, 10, 40, 90)))
+        c.rect(112, 300, 208, 420, "#EEE8F4")
+        c.rect(176, 300, 208, 420, "#D2CAE0")
+        c.rect(104, 292, 216, 304, GOLD)
+        c.rect(104, 410, 216, 422, GOLD)
+        cx, cy = 160, 186
+        rings = ((0, "#5FF6FF"), (60, "#FFD36B"), (120, "#FF7EE0"))
+
+        def ring(t, col, wdt):
+            t.ell(4, 4, 196, 76, None, col, wdt)
+        for ang, col in rings:
+            lay_fn = (lambda col: (lambda t: ring(t, col, 10)))(col)
+            c.glow(lambda g, ang=ang, lay_fn=lay_fn: g.rotated((200, 80), lay_fn, cx, cy, ang), 8, 1.0)
+        for ang, col in rings:
+            c.rotated((200, 80), (lambda col: (lambda t: ring(t, hx(col, 0.5, "#FFFFFF"), 3.5)))(col), cx, cy, ang)
+        c.glow(lambda g: g.circ(cx, cy, 30, "#FFFFFF"), 16, 1.2)
+        c.circ(cx, cy, 16, "#FFFFFF")
+        c.line([(cx, cy + 20), (cx, 292)], "#E6D8FF", 2)
+        for _ in range(16):
+            a, d = rnd.uniform(0, 6.3), rnd.uniform(40, 110)
+            c.circ(cx + d * math.cos(a), cy + d * math.sin(a) * 0.8, rnd.uniform(1, 2.2), rnd.choice(("#5FF6FF", "#FFD36B", "#FF9AE8")))
+    elif idx == 5:  # Tapisserie royale
+        gallery_bg(c, rnd, carpet=False, spots=(110, 210))
+        c.alpha(lambda o: o.rect(78, 82, 252, 366, (0, 0, 0, 80)), blur=6)
+        c.rect(70, 76, 250, 352, "#9E1F33")
+        c.rect(80, 86, 240, 342, GOLD)
+        c.rect(86, 92, 234, 336, "#7A1626")
+        for y in range(110, 330, 34):
+            for x in range(104, 230, 34):
+                if abs(x - 160) > 40 or abs(y - 214) > 60:
+                    c.poly([(x, y - 5), (x + 5, y), (x, y + 5), (x - 5, y)], hx(GOLD, 0.3))
+        c.ell(110, 150, 210, 280, "#9E1F33")
+        c.ell(110, 150, 210, 280, None, GOLD, 3)
+        c.poly([(130, 236), (130, 190), (144, 210), (152, 176), (160, 204), (168, 176), (176, 210), (190, 190), (190, 236)], GOLD)
+        c.rect(128, 230, 192, 244, DGOLD)
+        for x in (130, 152, 168, 190):
+            c.circ(x, 186 if x in (130, 190) else 174, 4, "#FFF8F0")
+        c.poly([(160, 236), (166, 242), (160, 248), (154, 242)], "#4FA3FF")
+        for x, y in ((128, 262), (192, 262)):
+            c.poly(star_pts(x, y, 8, 3.5), LGOLD)
+        for k in range(36):
+            x = 72 + k * 5
+            c.line([(x, 352), (x, 364)], GOLD, 1.5)
+        for x in (70, 250):
+            c.line([(x, 352), (x, 372)], GOLD, 2)
+            c.poly(leaf(x, 370, 90, 22, 10), GOLD)
+        c.alpha(lambda o: [o.rect(x, 76, x + 10, 352, (0, 0, 0, 40)) for x in (104, 150, 196, 232)])
+        c.rect(52, 66, 268, 76, GOLD)
+        for x in (52, 268):
+            c.circ(x, 71, 9, LGOLD)
+    elif idx == 6:  # Miroir sans fin
+        gallery_bg(c, rnd, carpet=False, columns=True, spots=())
+        cx, cy = 160, 210
+        c.glow(lambda g: g.circ(cx, cy, 120, "#8A6BFF"), 30, 0.6)
+
+        def rot_rect(w, h, ang):
+            a = math.radians(ang)
+            ca, sa = math.cos(a), math.sin(a)
+            return [(cx + x * ca - y * sa, cy + x * sa + y * ca) for x, y in ((-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2))]
+        for k in range(12):
+            s = 0.8 ** k
+            ang = k * 7
+            w, h = 230 * s, 300 * s
+            c.poly(rot_rect(w, h, ang), mix(hex_rgb(GOLD), hex_rgb("#2A1458"), min(1, k * 0.08)))
+            c.poly(rot_rect(w - 18 * s, h - 18 * s, ang), mix(hex_rgb("#BFD3EA"), hex_rgb("#3A2470"), min(1, 0.25 + k * 0.08)))
+        c.glow(lambda g: g.circ(cx, cy, 16, "#FFFFFF"), 12, 1.3)
+        c.circ(cx, cy, 6, "#FFFFFF")
+        c.alpha(lambda o: o.poly(rot_rect(190, 260, 0)[:2] + [(cx + 20, cy + 40), (cx - 60, cy + 40)], (255, 255, 255, 30)))
+    elif idx == 7:  # La Muse
+        gallery_bg(c, rnd, spots=(160,))
+        cx = 160
+        c.glow(lambda g: g.circ(cx, 150, 46, "#FFE07A"), 20, 0.8)
+        c.circ(cx, 150, 40, None, "#FFE9A0", 2)
+        for a, L, w in ((80, 200, 70), (95, 196, 74), (110, 180, 60), (70, 170, 50)):
+            c.alpha(lambda o, a=a, L=L, w=w: o.poly(leaf(cx, 196, a, L, w, bend=10, fat=0.5), (242, 236, 255, 225)))
+        c.alpha(lambda o: o.poly(leaf(cx + 4, 200, 92, 160, 40, bend=12, fat=0.5), (210, 196, 250, 160)))
+        c.poly([(146, 180), (174, 180), (170, 236), (150, 236)], "#F2EEFF")
+        for a, L in ((20, 120), (35, 110), (8, 100)):
+            c.poly(leaf(cx + 6, 140, a, L, 22, bend=60, fat=0.6), "#3A2470")
+        c.alpha(lambda o: [o.circ(cx + 30 + k * 9, 150 + k * 10 + (k % 2) * 8, 1.4, (255, 240, 200, 255)) for k in range(10)])
+        c.rect(154, 160, 166, 182, "#F4E2D0")
+        c.ell(141, 128, 179, 170, "#F4E2D0")
+        c.pie(139, 124, 181, 158, 180, 360, "#3A2470")
+        for k in range(9):
+            a = math.radians(-200 + k * 25)
+            c.poly(leaf(cx + 21 * math.cos(a), 146 + 18 * math.sin(a), math.degrees(a) + 60, 12, 6), GOLD)
+        for dx in (-8, 8):
+            c.arc(cx + dx - 4, 146, cx + dx + 4, 152, 20, 160, "#5A3A50", 1.5)
+        c.line([(150, 196), (190, 232)], "#F4E2D0", 7, True)
+        c.arc(184, 200, 236, 270, 120, 420, GOLD, 6)
+        c.line([(188, 214), (232, 214)], GOLD, 4)
+        for k in range(5):
+            c.line([(194 + k * 8, 214), (196 + k * 7, 262)], "#FFF2C0", 1)
+        c.circ(210, 268, 6, GOLD)
+        for x, y, r in ((100, 120, 9), (220, 120, 8), (118, 290, 7), (212, 300, 8)):
+            sparkle(c, x, y, r, "#FFF6D0")
+    else:  # Le Grand Portrait (boss final)
+        gallery_bg(c, rnd, carpet=True, columns=False, spots=(110, 210))
+        c.glow(lambda g: g.rect(40, 56, 280, 392, "#B04BFF"), 26, 0.9)
+        crest = [(110, 64), (122, 34), (140, 52), (160, 22), (180, 52), (198, 34), (210, 64)]
+        c.poly(crest, GOLD)
+        c.poly([(140, 52), (160, 22), (160, 64), (130, 64)], LGOLD)
+        for x, y in ((122, 34), (160, 22), (198, 34)):
+            c.circ(x, y, 5, "#E5484D")
+        x0, y0, x1, y1 = ornate_frame(c, 40, 60, 280, 392, 20, "#0A0618")
+        cx, cy = 160, 200
+
+        def cosmos(t):
+            t.vgrad(x0, y0, x1, y1, "#140A30", "#05030E")
+            for _ in range(35):
+                t.circ(rnd.uniform(x0, x1), rnd.uniform(y0, y1), rnd.choice((0.6, 0.9, 1.2)), "#E6D8FF")
+            lay = t.layer("RGBA")
+            for li, col in enumerate(((90, 40, 170, 255), (160, 70, 220, 255), (230, 140, 255, 255), (255, 230, 255, 255))):
+                for k in range(4):
+                    a = k * 90 + li * 16
+                    r0 = 14 + li * 3
+                    lay.poly(leaf(cx + r0 * math.cos(math.radians(a)), cy + r0 * math.sin(math.radians(a)), a + 75, 150 - li * 26, 50 - li * 9, bend=140, fat=0.7), col)
+            im = lay.img.filter(ImageFilter.GaussianBlur(2.5 * SS))
+            t._reset(Image.alpha_composite(t.img.convert("RGBA"), im).convert("RGB"))
+            t.glow(lambda g: g.circ(cx, cy, 34, "#FFE6FF"), 18, 1.2)
+            t.ell(cx - 96, cy + 70, cx + 96, cy + 220, "#07040F")
+            t.rect(cx - 16, cy + 30, cx + 16, cy + 90, "#07040F")
+            t.ell(cx - 34, cy - 40, cx + 34, cy + 46, "#07040F")
+            t.poly([(cx - 36, cy - 30), (cx - 40, cy - 70), (cx - 20, cy - 50), (cx, cy - 80), (cx + 20, cy - 50), (cx + 40, cy - 70), (cx + 36, cy - 30)], "#07040F")
+            t.glow(lambda g: [g.ell(cx + dx - 10, cy - 6, cx + dx + 10, cy + 6, "#FFD36B") for dx in (-14, 14)], 6, 1.6)
+            for dx in (-14, 14):
+                t.poly(leaf(cx + dx - 8, cy, 0, 16, 7), "#FFF4C0")
+            t.glow(lambda g: [g.circ(x, y, 4, col) for x, y, col in ((cx - 40, cy - 70, "#FF4FA8"), (cx, cy - 80, "#5FF6FF"), (cx + 40, cy - 70, "#FF4FA8"))], 4, 1.4)
+        c.clip(lambda m: m.rect(x0, y0, x1, y1, 255), cosmos)
+        c.rrect(120, 398, 200, 414, 4, GOLD)
+        c.rect(130, 404, 190, 407, DGOLD)
+
+
+def sanctuary_card(c, rnd, idx):
+    """Le sanctuaire de la Divine : lumière céleste, ailes de lumière, couronne."""
+    c.vgrad(0, 0, W, H, "#C9782E", "#FFE2A8")
+    cx, cy = 160, 200
+    c.alpha(lambda o: [o.poly([(cx, cy), (cx + 320 * math.cos(math.radians(a - 5)), cy + 320 * math.sin(math.radians(a - 5))),
+                               (cx + 320 * math.cos(math.radians(a + 5)), cy + 320 * math.sin(math.radians(a + 5)))], (255, 236, 180, 70)) for a in range(0, 360, 20)])
+    c.glow(lambda g: g.circ(cx, cy, 110, "#FFD27A"), 50, 0.35)
+    for side in (-1, 1):
+        for row, (L, w, col, edge) in enumerate(((150, 30, "#F7C948", "#C98A1E"), (120, 28, "#FFE08A", "#E0A93A"), (86, 24, "#FFF8E0", "#F2C55A"))):
+            for k in range(6):
+                a = 160 + k * 17 + row * 5
+                aa = a if side < 0 else 180 - a
+                f = leaf(cx + side * (20 + row * 4), cy + 4, aa, L - (5 - k) * 10, w, bend=22 * -side, fat=0.6)
+                c.poly([(x + 1.5, y + 2) for x, y in f], edge)
+                c.poly(f, col)
+    for x, y, s in ((50, 380, 1.4), (150, 400, 1.7), (270, 384, 1.5), (100, 420, 1.3), (230, 424, 1.4), (10, 420, 1.2), (310, 420, 1.2)):
+        puff(c, x, y, s, "#FFFFFF", "#F7D9A0")
+    c.rect(0, 420, W, H, "#FFFFFF")
+    c.glow(lambda g: g.circ(cx, cy, 40, "#FFFFFF"), 16, 0.6)
+    c.circ(cx, cy - 4, 52, None, "#F7C948", 4)
+    c.circ(cx, cy, 30, "#FFFBEA")
+    c.poly(star_pts(cx, cy, 26, 9, 8, -90), "#FFE07A")
+    c.poly(star_pts(cx, cy, 14, 5, 8, -68), "#FFFFFF")
+    crown = [(cx - 30, cy - 70), (cx - 30, cy - 96), (cx - 16, cy - 82), (cx, cy - 106), (cx + 16, cy - 82), (cx + 30, cy - 96), (cx + 30, cy - 70)]
+    c.glow(lambda g: g.poly(crown, "#FFD060"), 8, 0.9)
+    c.poly(crown, GOLD)
+    c.poly([(cx - 30, cy - 70), (cx - 30, cy - 96), (cx - 16, cy - 82), (cx, cy - 106), (cx, cy - 70)], LGOLD)
+    c.rrect(cx - 32, cy - 74, cx + 32, cy - 64, 3, DGOLD)
+    for x, y in ((cx - 30, cy - 98), (cx, cy - 108), (cx + 30, cy - 98)):
+        c.circ(x, y, 4, "#FFFFFF")
+    for _ in range(20):
+        x, y = rnd.uniform(10, 310), rnd.uniform(20, 360)
+        sparkle(c, x, y, rnd.uniform(3, 7), rnd.choice(("#FFFFFF", "#F7C948")))
+
+
 WORLDS = {
     1: (("#9ED8FF", "#EAF8FF"), parc_card),
     2: (("#8FD3F5", "#FFF1D0"), plage_card),
@@ -3140,7 +3489,9 @@ WORLDS = {
     18: (("#4FA8EE", "#DDF3FF"), archipel_card),
     19: (("#0B0322", "#3D0F5E"), neon_card),
     20: (("#03040A", "#161A28"), lune_card),
+    21: (("#0D0726", "#2B1559"), galerie_card),
 }
+CARDS = {21: 9}  # nombre de cartes par monde (4 par défaut)
 
 
 def draw_scene(arena, idx):
@@ -3167,15 +3518,27 @@ def render(arena, idx):
     return draw_scene(arena, idx)
 
 
+def render_sanctuary():
+    """Grande carte de la Divine, posée sur le pont du sanctuaire (assets/bots/sanctuary.jpg)."""
+    c = Canvas(gradient(hex_rgb("#FFDFA0"), hex_rgb("#FFF8EA"), w=W * SS, h=H * SS))
+    sanctuary_card(c, random.Random(2100), 0)
+    return seeded_grain(c.img.resize((W, H), Image.LANCZOS), 20, 2100)
+
+
 if __name__ == "__main__":
     import os
     import sys
 
     os.makedirs(OUT, exist_ok=True)
-    # Sans argument : tous les mondes. Sinon seulement les ids donnés
-    # (ex. `python3 scripts/generate-bot-art.py 11 12`).
-    wanted = [int(a) for a in sys.argv[1:]] or list(WORLDS)
-    for arena in wanted:
-        for idx in range(4):
-            render(arena, idx).save(f"{OUT}/a{arena}-{idx}.jpg", quality=80, optimize=True, progressive=True)
+    # Sans argument : tous les mondes et le sanctuaire. Sinon seulement ce qui
+    # est donné (ex. `python3 scripts/generate-bot-art.py 11 21 sanctuary`).
+    wanted = sys.argv[1:] or [*map(str, WORLDS), "sanctuary"]
+    save = dict(quality=80, optimize=True, progressive=True)
+    for arg in wanted:
+        if arg == "sanctuary":
+            render_sanctuary().save(f"{OUT}/sanctuary.jpg", **save)
+            continue
+        arena = int(arg)
+        for idx in range(CARDS.get(arena, 4)):
+            render(arena, idx).save(f"{OUT}/a{arena}-{idx}.jpg", **save)
     print("ok")

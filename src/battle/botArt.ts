@@ -1,7 +1,8 @@
 /**
- * Illustrations des cartes des adversaires, mondes 1 à 20 (générées par
+ * Illustrations des cartes des adversaires, mondes 1 à 21 (générées par
  * scripts/generate-bot-art.py). La carte 3 de chaque monde sert aussi de
- * portrait rond de l'adversaire (carte du mode solo, fiche du niveau).
+ * portrait rond de l'adversaire (carte du mode solo, fiche du niveau) ; pour
+ * la Galerie (monde 21, 9 cartes), c'est la carte 8, le Grand Portrait.
  */
 
 const ART: Record<string, number> = {
@@ -85,7 +86,19 @@ const ART: Record<string, number> = {
   'bot:20:1': require('../../assets/bots/a20-1.jpg'),
   'bot:20:2': require('../../assets/bots/a20-2.jpg'),
   'bot:20:3': require('../../assets/bots/a20-3.jpg'),
+  'bot:21:0': require('../../assets/bots/a21-0.jpg'),
+  'bot:21:1': require('../../assets/bots/a21-1.jpg'),
+  'bot:21:2': require('../../assets/bots/a21-2.jpg'),
+  'bot:21:3': require('../../assets/bots/a21-3.jpg'),
+  'bot:21:4': require('../../assets/bots/a21-4.jpg'),
+  'bot:21:5': require('../../assets/bots/a21-5.jpg'),
+  'bot:21:6': require('../../assets/bots/a21-6.jpg'),
+  'bot:21:7': require('../../assets/bots/a21-7.jpg'),
+  'bot:21:8': require('../../assets/bots/a21-8.jpg'),
 };
 
 /** Image d'une carte de bot à partir de sa référence `bot:<arène>:<carte>`. */
 export const botArt = (ref: string): number | undefined => ART[ref];
+
+/** Illustration de la grande carte Divine du sanctuaire, sur le pont au-dessus du vide. */
+export const SANCTUARY_ART: number = require('../../assets/bots/sanctuary.jpg');
