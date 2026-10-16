@@ -13,7 +13,6 @@ import Animated, {
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
-  withDecay,
   withDelay,
   withRepeat,
   withSequence,
@@ -59,6 +58,13 @@ interface Props {
   onSpin(speed: number): void;
   /** Prévient l'écran quand la carte est zoomée (pour suspendre le défilement). */
   onZoomChange?(zoomed: boolean): void;
+  /**
+   * Arrivée de la carte : `spin` (petit tournoiement, par défaut) ou `none`
+   * quand l'écran anime lui-même l'arrivée (envol depuis la grille).
+   */
+  entrance?: 'spin' | 'none';
+  /** `false` : carte voisine affichée en retrait, immobile et sans geste. */
+  active?: boolean;
 }
 
 const MAX_ZOOM = 4;
@@ -66,11 +72,33 @@ const noop = () => {};
 /** Petit choc quand on retourne la carte d'un double-tap. */
 const flipFeel = () => haptic.medium();
 
-export function CardStage({ card, imageSource, imageUri, backNote, width, rotY, rotX, tilt, burning = false, onBurnt = noop, onSpin, onZoomChange }: Props) {
+/** Ressort de la carte qui se pose à plat après un retournement. */
+const FLIP_SPRING = { damping: 15, stiffness: 120, mass: 1 };
+
+export function CardStage({
+  card,
+  imageSource,
+  imageUri,
+  backNote,
+  width,
+  rotY,
+  rotX,
+  tilt,
+  burning = false,
+  onBurnt = noop,
+  onSpin,
+  onZoomChange,
+  entrance = 'spin',
+  active = true,
+}: Props) {
   const r = getRarity(card.rarity);
   const height = width * CARD_RATIO;
   const m = width * 0.14; // marge de découpe (ornements de la Divine compris)
-  const scale = useSharedValue(0.85);
+  const scale = useSharedValue(entrance === 'spin' ? 0.85 : 1);
+  /** Carte soulevée pendant qu'on la fait tourner au doigt. */
+  const lift = useSharedValue(0);
+  /** Petit bond pendant un retournement. */
+  const hop = useSharedValue(0);
   const burn = useSharedValue(0);
   const lighter = useSharedValue(0);
   /** Début du geste, pour calculer une vitesse moyenne fiable. */
@@ -87,11 +115,13 @@ export function CardStage({ card, imageSource, imageUri, backNote, width, rotY, 
   const [onFire, setOnFire] = useState(false);
 
   useEffect(() => {
-    // Petite entrée en tournoyant
-    scale.value = withSpring(1, { damping: 13 });
-    rotY.value = withSequence(withTiming(-25, { duration: 0 }), withSpring(0, { damping: 9, stiffness: 70 }));
+    if (entrance !== 'spin') return;
+    // Petite entrée en tournoyant, qui se pose sans trop osciller.
+    scale.value = withSpring(1, { damping: 14, stiffness: 150 });
+    rotY.value = withSequence(withTiming(-28, { duration: 0 }), withSpring(0, { damping: 12, stiffness: 85 }));
     rotX.value = 0;
-  }, [scale, rotY, rotX]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!burning) return;
@@ -135,7 +165,7 @@ export function CardStage({ card, imageSource, imageUri, backNote, width, rotY, 
 
   // Zoom tant qu'on pince ; on relâche, ça dézoome.
   const pinch = Gesture.Pinch()
-    .enabled(!burning)
+    .enabled(!burning && active)
     .onStart(() => {
       zoomStart.value = zoom.value;
       offStartX.value = offX.value;
@@ -158,10 +188,17 @@ export function CardStage({ card, imageSource, imageUri, backNote, width, rotY, 
     });
 
   const pan = Gesture.Pan()
-    .enabled(!burning)
+    .enabled(!burning && active)
     .maxPointers(1)
     .onBegin(() => {
       t0.value = Date.now();
+    })
+    .onStart(() => {
+      cancelAnimation(rotY);
+      lift.value = withSpring(1, { damping: 14, stiffness: 220 });
+    })
+    .onFinalize(() => {
+      lift.value = withSpring(0, { damping: 12, stiffness: 160 });
     })
     .onChange((e) => {
       if (zoom.value > 1.01) return; // pendant un pincement, on ne tourne pas
@@ -175,20 +212,28 @@ export function CardStage({ card, imageSource, imageUri, backNote, width, rotY, 
       const dt = Math.max(16, Date.now() - t0.value);
       const avg = dt < 400 ? (Math.abs(e.translationX) / dt) * 1000 : 0;
       const velocity = Math.abs(e.velocityX) >= avg ? e.velocityX : Math.sign(e.translationX) * avg;
-      rotX.value = withSpring(0, { damping: 12 });
-      rotY.value = withDecay({ velocity: velocity * 0.35, deceleration: 0.994 }, (finished) => {
-        if (finished) rotY.value = withSpring(Math.round(rotY.value / 180) * 180, { damping: 14 });
-      });
+      rotX.value = withSpring(0, { damping: 14, stiffness: 120 });
+      // Élan : on prévoit où la carte s'arrêterait, on arrondit à une face (recto ou verso),
+      // puis on y va d'un seul mouvement qui part exactement à la vitesse du doigt et ralentit
+      // en douceur. Pas de second ressort : la carte se pose franchement, sans tanguer.
+      const v = velocity * 0.4; // degrés par seconde
+      const target = Math.round((rotY.value + v * 0.42) / 180) * 180;
+      const dist = target - rotY.value;
+      const ms = Math.abs(v) > 40 && dist * v > 0 ? ((3 * dist) / v) * 1000 : 0;
+      if (ms > 0) rotY.value = withTiming(target, { duration: Math.max(320, Math.min(2600, ms)), easing: Easing.out(Easing.cubic) });
+      else rotY.value = withSpring(target, { damping: 16, stiffness: 140, velocity: v });
       const speed = Math.abs(velocity);
       if (speed >= SPIN_SPEED) scheduleOnRN(onSpin, speed);
     });
 
   const doubleTap = Gesture.Tap()
-    .enabled(!burning)
+    .enabled(!burning && active)
     .numberOfTaps(2)
     .onEnd(() => {
       scheduleOnRN(flipFeel);
-      rotY.value = withTiming(Math.round(rotY.value / 180) * 180 + 180, { duration: 520, easing: Easing.out(Easing.cubic) });
+      // La carte bondit, se retourne et retombe à plat avec un léger dépassement.
+      hop.value = withSequence(withTiming(1, { duration: 190, easing: Easing.out(Easing.quad) }), withSpring(0, { damping: 11, stiffness: 170 }));
+      rotY.value = withSpring(Math.round(rotY.value / 180) * 180 + 180, FLIP_SPRING);
     });
 
   const zoomStyle = useAnimatedStyle(() => ({
@@ -200,14 +245,33 @@ export function CardStage({ card, imageSource, imageUri, backNote, width, rotY, 
     const n = ((((a + 180) % 360) + 360) % 360) - 180;
     return Math.abs(n) < 90;
   };
-  const frontStyle = useAnimatedStyle(() => ({
-    opacity: isFront(rotY.value) ? 1 : 0,
-    transform: [{ perspective: 1100 }, { rotateX: `${rotX.value}deg` }, { rotateY: `${rotY.value}deg` }, { scale: scale.value }],
-  }));
-  const backStyle = useAnimatedStyle(() => ({
-    opacity: isFront(rotY.value) ? 0 : 1,
-    transform: [{ perspective: 1100 }, { rotateX: `${rotX.value}deg` }, { rotateY: `${rotY.value + 180}deg` }, { scale: scale.value }],
-  }));
+  // Soulevée (au doigt) ou en plein bond (retournement).
+  const frontStyle = useAnimatedStyle(() => {
+    const s = scale.value * (1 + lift.value * 0.035 + hop.value * 0.07);
+    return {
+      opacity: isFront(rotY.value) ? 1 : 0,
+      transform: [
+        { translateY: -hop.value * height * 0.06 },
+        { perspective: 1100 },
+        { rotateX: `${rotX.value}deg` },
+        { rotateY: `${rotY.value}deg` },
+        { scale: s },
+      ],
+    };
+  });
+  const backStyle = useAnimatedStyle(() => {
+    const s = scale.value * (1 + lift.value * 0.035 + hop.value * 0.07);
+    return {
+      opacity: isFront(rotY.value) ? 0 : 1,
+      transform: [
+        { translateY: -hop.value * height * 0.06 },
+        { perspective: 1100 },
+        { rotateX: `${rotX.value}deg` },
+        { rotateY: `${rotY.value + 180}deg` },
+        { scale: s },
+      ],
+    };
+  });
   // La partie brûlée disparaît : la zone visible rétrécit du bas vers le haut.
   const clipStyle = useAnimatedStyle(() => ({ height: m + (height + m) * (1 - burn.value) }));
   const edgeStyle = useAnimatedStyle(() => ({
@@ -218,6 +282,16 @@ export function CardStage({ card, imageSource, imageUri, backNote, width, rotY, 
     opacity: Math.min(1, lighter.value * 3) * (1 - Math.min(1, burn.value * 6)),
     transform: [{ translateY: 70 - lighter.value * 62 }],
   }));
+  // Chaleur : la photo rougeoie au-dessus de la ligne de feu, de plus en plus fort.
+  // Lueur et bord carbonisé s'éteignent à la fin, quand il ne reste plus rien de la carte.
+  const endFade = (b: number) => {
+    'worklet';
+    return Math.max(0, Math.min(1, (0.92 - b) / 0.12));
+  };
+  const heatStyle = useAnimatedStyle(() => ({
+    opacity: burn.value > 0 ? Math.min(1, burn.value * 4) * (0.75 + Math.sin(burn.value * 60) * 0.25) * endFade(burn.value) : 0,
+  }));
+  const charStyle = useAnimatedStyle(() => ({ opacity: endFade(burn.value) }));
   const flameStyle = useAnimatedStyle(() => ({
     opacity: lighter.value > 0.4 ? 1 : 0,
     transform: [{ scale: lighter.value > 0.4 ? 0.6 + (lighter.value - 0.4) * 0.8 : 0 }],
@@ -238,7 +312,7 @@ export function CardStage({ card, imageSource, imageUri, backNote, width, rotY, 
         >
           <Animated.View style={[{ position: 'absolute', left: m, top: m, width, height }, zoomStyle]}>
             <Animated.View style={[StyleSheet.absoluteFill, styles.face, frontStyle]}>
-              <CardFace card={card} width={width} tilt={tilt} imageSource={imageSource} imageUri={imageUri} />
+              <CardFace card={card} width={width} tilt={tilt} imageSource={imageSource} imageUri={imageUri} animated={active} />
             </Animated.View>
             <Animated.View style={[StyleSheet.absoluteFill, styles.face, backStyle]}>
               <CardBack width={width}>
@@ -261,12 +335,16 @@ export function CardStage({ card, imageSource, imageUri, backNote, width, rotY, 
             </Animated.View>
           </Animated.View>
           {onFire ? (
+            // Lueur de chaleur au-dessus de la ligne de feu
+            <Animated.View pointerEvents="none" style={[styles.char, { height: height * 0.42, left: m, right: m }, heatStyle]}>
+              <LinearGradient colors={['rgba(255,140,40,0)', 'rgba(255,120,30,0.28)', 'rgba(255,80,10,0.55)']} style={StyleSheet.absoluteFill} />
+            </Animated.View>
+          ) : null}
+          {onFire ? (
             // Bord carbonisé qui suit la ligne de feu
-            <LinearGradient
-              pointerEvents="none"
-              colors={['rgba(0,0,0,0)', 'rgba(60,22,4,0.75)', 'rgba(14,6,2,0.98)']}
-              style={[styles.char, { height: height * 0.14, left: m, right: m }]}
-            />
+            <Animated.View pointerEvents="none" style={[styles.char, { height: height * 0.14, left: m, right: m }, charStyle]}>
+              <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(60,22,4,0.75)', 'rgba(14,6,2,0.98)']} style={StyleSheet.absoluteFill} />
+            </Animated.View>
           ) : null}
         </Animated.View>
         </View>
@@ -297,6 +375,7 @@ export function CardStage({ card, imageSource, imageUri, backNote, width, rotY, 
         <View pointerEvents="none" style={[styles.poof, { width, height }]}>
           <Shockwave trigger={poof} color="rgba(160,155,150,0.6)" size={width * 0.9} />
           <Burst trigger={poof} colors={['#8A8580', '#5E5A57', '#FFB347']} count={26} radius={width * 0.75} />
+          <Burst trigger={poof} colors={['#FFE08A', '#FF7A1A']} count={12} radius={width * 0.45} />
         </View>
       ) : null}
     </View>

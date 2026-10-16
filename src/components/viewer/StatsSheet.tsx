@@ -4,10 +4,10 @@
  * « <nom de la carte> utilise <nom de l'attaque> ! ».
  */
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { ATTACK_NAME_MAX, type Attack, MAX_HP, MAX_POWER, STATUS_KINDS, kindEffect, kindLabel, kindOf, powerLabel } from '../../battle/stats';
@@ -24,9 +24,11 @@ export function StatsSheet({ card, onClose, onRename }: { card: Card; onClose():
   const b = card.battle;
   const y = useSharedValue(height);
   const fade = useSharedValue(0);
+  const hp = useCountUp(b.hp);
 
   useEffect(() => {
-    y.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
+    // Le panneau monte d'un ressort ferme (léger dépassement, caché par le rab sous l'écran).
+    y.value = withSpring(0, { damping: 19, stiffness: 190, mass: 0.9 });
     fade.value = withTiming(1, { duration: 250 });
   }, [y, fade]);
 
@@ -46,7 +48,7 @@ export function StatsSheet({ card, onClose, onRename }: { card: Card; onClose():
     })
     .onEnd((e) => {
       if (e.translationY > 90 || e.velocityY > 700) scheduleOnRN(close);
-      else y.value = withTiming(0, { duration: 200 });
+      else y.value = withSpring(0, { damping: 18, stiffness: 220, velocity: e.velocityY });
     });
 
   const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
@@ -76,27 +78,34 @@ export function StatsSheet({ card, onClose, onRename }: { card: Card; onClose():
             </View>
           </GestureDetector>
 
-          <View style={styles.hpRow}>
-            <Ionicons name="heart" size={18} color={colors.danger} />
-            <AppText style={styles.hpValue}>{b.hp}</AppText>
-            <AppText variant="caption">PV</AppText>
-            <View style={styles.meter}>
-              <View style={[styles.meterFill, { width: `${Math.min(100, (b.hp / MAX_HP) * 100)}%`, backgroundColor: colors.danger }]} />
+          <Rise index={0}>
+            <View style={styles.hpRow}>
+              <Ionicons name="heart" size={18} color={colors.danger} />
+              <AppText style={styles.hpValue}>{hp}</AppText>
+              <AppText variant="caption">PV</AppText>
+              <Meter value={Math.min(1, b.hp / MAX_HP)} color={colors.danger} delay={180} />
             </View>
-          </View>
+          </Rise>
 
-          <AttackRow slot={0} attack={b.attacks[0]} title="Attaque classique" sub="Illimitée" accent={colors.text} onRename={onRename} />
-          <AttackRow
-            slot={1}
-            attack={b.attacks[1]}
-            title="Attaque spéciale"
-            sub={`${b.uses}× par combat`}
-            accent={r.color}
-            onRename={onRename}
-          />
-          <AppText variant="caption" style={styles.foot}>
-            Touche un nom pour le changer. En combat, on lira « {card.name ?? 'ta carte'} utilise … ! »
-          </AppText>
+          <Rise index={1}>
+            <AttackRow slot={0} attack={b.attacks[0]} title="Attaque classique" sub="Illimitée" accent={colors.text} onRename={onRename} meterDelay={260} />
+          </Rise>
+          <Rise index={2}>
+            <AttackRow
+              slot={1}
+              attack={b.attacks[1]}
+              title="Attaque spéciale"
+              sub={`${b.uses}× par combat`}
+              accent={r.color}
+              onRename={onRename}
+              meterDelay={340}
+            />
+          </Rise>
+          <Rise index={3}>
+            <AppText variant="caption" style={styles.foot}>
+              Touche un nom pour le changer. En combat, on lira « {card.name ?? 'ta carte'} utilise … ! »
+            </AppText>
+          </Rise>
         </Animated.View>
       </KeyboardAvoidingView>
     </View>
@@ -110,6 +119,7 @@ function AttackRow({
   sub,
   accent,
   onRename,
+  meterDelay = 0,
 }: {
   slot: 0 | 1;
   attack: Attack;
@@ -117,6 +127,7 @@ function AttackRow({
   sub: string;
   accent: string;
   onRename(slot: 0 | 1, name: string): void;
+  meterDelay?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(attack.name);
@@ -181,14 +192,55 @@ function AttackRow({
       <View style={styles.powerRow}>
         <Ionicons name="flash" size={13} color={colors.gold} />
         <AppText style={styles.powerText}>{powerLabel(attack)}</AppText>
-        {power !== null ? (
-          <View style={styles.meter}>
-            <View style={[styles.meterFill, { width: `${power * 100}%`, backgroundColor: colors.gold }]} />
-          </View>
-        ) : null}
+        {power !== null ? <Meter value={power} color={colors.gold} delay={meterDelay} /> : null}
       </View>
     </View>
   );
+}
+
+/** Ligne du panneau qui monte en fondu, l'une après l'autre. */
+function Rise({ index, children }: { index: number; children: ReactNode }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    p.value = withDelay(90 + index * 60, withSpring(1, { damping: 16, stiffness: 170 }));
+  }, [p, index]);
+  const style = useAnimatedStyle(() => ({ opacity: Math.min(1, p.value * 1.4), transform: [{ translateY: (1 - p.value) * 22 }] }));
+  return <Animated.View style={style}>{children}</Animated.View>;
+}
+
+/** Jauge qui se remplit à l'ouverture du panneau. */
+function Meter({ value, color, delay }: { value: number; color: string; delay: number }) {
+  const w = useSharedValue(0);
+  useEffect(() => {
+    w.value = withDelay(delay, withTiming(value, { duration: 620, easing: Easing.out(Easing.cubic) }));
+  }, [w, value, delay]);
+  const style = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
+  return (
+    <View style={styles.meter}>
+      <Animated.View style={[styles.meterFill, { backgroundColor: color }, style]} />
+    </View>
+  );
+}
+
+/** Nombre qui défile jusqu'à sa valeur à l'ouverture. */
+function useCountUp(target: number, duration = 600) {
+  const [shown, setShown] = useState(0);
+  const from = useRef(0);
+  useEffect(() => {
+    const start = from.current;
+    const t0 = Date.now();
+    let raf = 0;
+    const step = () => {
+      const k = Math.min(1, (Date.now() - t0) / duration);
+      const v = Math.round(start + (target - start) * (1 - (1 - k) ** 3));
+      from.current = v;
+      setShown(v);
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return shown;
 }
 
 const styles = StyleSheet.create({
@@ -201,7 +253,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 20,
-    paddingBottom: 34,
+    // Rab sous le bord de l'écran : le ressort d'ouverture peut dépasser sans laisser de vide.
+    paddingBottom: 34 + 40,
+    marginBottom: -40,
     gap: 12,
   },
   head: { paddingTop: 10 },
