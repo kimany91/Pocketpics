@@ -28,11 +28,17 @@ function gauss(rng: Rng) {
 }
 
 /** Précision du bot sur la barre : plus le niveau est haut, plus il vise près de la cible. */
-export function botTimings(level: number, hits: number, rng: Rng = Math.random): number[] {
+/**
+ * Précision du bot pour chaque coup. `edge` (0 → 1, caché) : l'adversaire du
+ * mode solo s'adapte aux cartes du joueur (voir `hiddenAdjust`) : moins de
+ * coups ratés, une visée plus serrée et des critiques en plus.
+ */
+export function botTimings(level: number, hits: number, rng: Rng = Math.random, edge = 0): number[] {
   const skill = skillOf(level);
   return Array.from({ length: hits }, () => {
-    if (rng() < 0.14 - 0.12 * skill) return timingMultiplier(null);
-    const spread = 0.55 - 0.42 * skill;
+    if (rng() < (0.14 - 0.12 * skill) * (1 - edge)) return timingMultiplier(null);
+    if (edge > 0 && rng() < edge * 0.3) return timingMultiplier(0);
+    const spread = (0.55 - 0.42 * skill) * (1 - 0.6 * edge);
     return timingMultiplier(Math.min(1, Math.abs(gauss(rng)) * spread));
   });
 }
@@ -125,7 +131,7 @@ function specialWish(b: Battle, side: SideId, skill: number): number {
 }
 
 /** Action du bot pour son tour (la précision des coups est comprise dans l'action). */
-export function botAction(b: Battle, side: SideId, level: number, rng: Rng = Math.random): Action {
+export function botAction(b: Battle, side: SideId, level: number, rng: Rng = Math.random, edge = 0): Action {
   const skill = skillOf(level);
   const me = activeOf(b, side);
   const foe = activeOf(b, other(side));
@@ -149,7 +155,7 @@ export function botAction(b: Battle, side: SideId, level: number, rng: Rng = Mat
 
   const attack = (slot: 0 | 1): Action => {
     const r = resolveAttack(b, side, slot);
-    return { type: 'attack', slot, timings: botTimings(level, r ? hitsOf(r.attack) : 1, rng) };
+    return { type: 'attack', slot, timings: botTimings(level, r ? hitsOf(r.attack) : 1, rng, edge) };
   };
 
   // Concentrée : on lâche le gros coup tout de suite.

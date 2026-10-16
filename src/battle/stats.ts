@@ -56,8 +56,8 @@ export const ATTACK_NAME_MAX = 20;
 export const MIRROR_MIN_RANK = 5;
 
 // Commune → Divine. Chaque rang tape plus fort et encaisse plus.
-const HP = [50, 56, 62, 70, 78, 88, 100, 115];
-const POWER = [12, 14, 16, 18, 21, 24, 28, 32];
+const HP = [50, 56, 62, 70, 78, 88, 100, 115, 135];
+const POWER = [12, 14, 16, 18, 21, 24, 28, 32, 38];
 
 /** Réglages des effets, partagés par le moteur, le bot et l'affichage. */
 export const BATTLE = {
@@ -283,6 +283,6 @@ export function powerLabel(a: Attack): string {
   return String(a.power);
 }
 
-/** PV maximum possibles (Divine la plus robuste), pour dessiner les jauges. */
+/** PV maximum possibles (Galaxy la plus robuste), pour dessiner les jauges. */
 export const MAX_HP = Math.round(HP[HP.length - 1] * 1.08);
 export const MAX_POWER = Math.round(POWER[POWER.length - 1] * 1.08 * SPECIAL.basic.factor);

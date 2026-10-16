@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { botAction, botReplacement } from '../src/battle/bot';
+import { botAction, botReplacement, botTimings } from '../src/battle/bot';
 import { type FighterInput, act, createBattle, replace } from '../src/battle/engine';
-import { LEVELS_PER_WORLD, TOTAL_LEVELS, getLevel, levelFighters, levelMmr, starsFor } from '../src/battle/levels';
+import { ADVENTURE_LEVELS, DIVINE_GATE, TOTAL_LEVELS, firstLevel, getLevel, hiddenAdjust, lastLevel, levelFighters, levelMmr, needsDivine, starsFor, worldOf, worldSize } from '../src/battle/levels';
 import { generateStats } from '../src/battle/stats';
 import { mapLayout } from '../src/components/map/mapLayout';
 import { getRarity } from '../src/game/rarity';
@@ -13,18 +13,23 @@ import { OLD_WORLD_PLACES, fromOldLevel, migrateState } from '../src/storage/mod
 
 const power = (n: number) => levelFighters(getLevel(n)!).reduce((s, f) => s + f.battle.hp * f.battle.attacks[0].power, 0);
 
-test('aventure : 20 mondes de 5 niveaux, un boss tous les 5 niveaux', () => {
-  assert.equal(TOTAL_LEVELS, 100);
+test('aventure : 20 mondes de 5 niveaux, puis la Galerie et ses 30 niveaux', () => {
+  assert.equal(TOTAL_LEVELS, 130);
+  assert.equal(ADVENTURE_LEVELS, 100);
   assert.equal(getLevel(0), null);
-  assert.equal(getLevel(101), null);
-  assert.deepEqual(ARENAS.map((a) => a.n), Array.from({ length: 20 }, (_, i) => i + 1));
-  assert.equal(new Set(ARENAS.map((a) => a.id)).size, 20, 'id uniques');
+  assert.equal(getLevel(131), null);
+  assert.deepEqual(ARENAS.map((a) => a.n), Array.from({ length: 21 }, (_, i) => i + 1));
+  assert.equal(new Set(ARENAS.map((a) => a.id)).size, 21, 'id uniques');
   assert.equal(ARENAS[0].place, 'Le Parc');
   assert.equal(ARENAS[19].place, 'La Lune');
+  assert.equal(ARENAS[20].place, 'La Galerie');
+  assert.equal(worldSize(21), 30);
+  assert.equal(firstLevel(21), 101);
+  assert.equal(lastLevel(21), 130);
   for (let n = 1; n <= TOTAL_LEVELS; n++) {
     const l = getLevel(n)!;
-    assert.equal(l.world.n, Math.ceil(n / LEVELS_PER_WORLD));
-    assert.equal(l.boss, n % 5 === 0);
+    assert.equal(l.world.n, worldOf(n));
+    assert.equal(l.boss, n <= 100 ? n % 5 === 0 : n === 130);
     const f = levelFighters(l);
     assert.equal(f.length, l.team);
     assert.equal(new Set(f.map((x) => x.ref)).size, f.length, 'cartes distinctes');
@@ -32,7 +37,64 @@ test('aventure : 20 mondes de 5 niveaux, un boss tous les 5 niveaux', () => {
   assert.equal(levelFighters(getLevel(1)!).length, 3);
   assert.equal(levelFighters(getLevel(100)!).length, 4);
   assert.equal(rankOf(levelMmr(1)).label, 'Papier I');
-  assert.equal(rankOf(levelMmr(100)).label, 'Légende III');
+  assert.equal(rankOf(levelMmr(130)).label, 'Légende III');
+});
+
+test('la Galerie : 4 Divines, puis une carte de plus qui monte d’un rang à chaque niveau, et la Galaxy au boss', () => {
+  const ranks = (n: number) => levelFighters(getLevel(n)!).map((f) => f.rarity);
+  assert.deepEqual(ranks(101), ['divine', 'divine', 'divine', 'divine']);
+  assert.deepEqual(ranks(102), ['mythic', 'divine', 'divine', 'divine', 'divine'], '5 cartes : une de plus que le joueur');
+  assert.deepEqual(ranks(103), ['legendary', 'divine', 'divine', 'divine', 'divine']);
+  assert.deepEqual(ranks(104), ['ultraLegendary', 'divine', 'divine', 'divine', 'divine']);
+  assert.deepEqual(ranks(105), ['divine', 'divine', 'divine', 'divine', 'divine']);
+  assert.deepEqual(ranks(106), ['mythic', 'divine', 'divine', 'divine', 'divine', 'divine']);
+  assert.equal(ranks(129).length, 8);
+  const boss = levelFighters(getLevel(130)!);
+  assert.equal(boss.length, 8);
+  assert.equal(boss[boss.length - 1].rarity, 'galaxy', 'le Grand Portrait garde sa Galaxy pour la fin');
+  assert.equal(boss[boss.length - 1].name, 'Le Grand Portrait');
+  assert.equal(boss.filter((f) => f.rarity === 'galaxy').length, 1);
+  for (let n = 101; n <= 130; n++) assert.equal(getLevel(n)!.botLevel, 10);
+  // aucun niveau ordinaire n'aligne de Galaxy
+  for (let n = 1; n <= 129; n++) assert.ok(levelFighters(getLevel(n)!).every((f) => f.rarity !== 'galaxy'), `niveau ${n}`);
+});
+
+test('sanctuaire de la Divine : après le Volcan, la suite demande la Divine', () => {
+  assert.equal(ARENAS[worldOf(DIVINE_GATE) - 1].place, 'Le Volcan');
+  assert.equal(DIVINE_GATE, lastLevel(worldOf(DIVINE_GATE)));
+  assert.ok(!needsDivine(DIVINE_GATE));
+  assert.ok(needsDivine(DIVINE_GATE + 1));
+  assert.equal(getLevel(DIVINE_GATE + 1)!.world.place, 'La Tempête');
+});
+
+test('difficulté cachée : rien avec des cartes normales, l’adversaire s’adapte à des cartes bien plus fortes', () => {
+  const deck = (rarities: string[]) => rarities.map((rarity) => ({ rarity }));
+  const starter = hiddenAdjust(getLevel(2)!, deck(['epic', 'superRare', 'superRare', 'rare']));
+  assert.deepEqual(starter, { edge: 0, mult: 1 }, 'cartes du départ : rien ne change');
+  const oneMythic = hiddenAdjust(getLevel(2)!, deck(['mythic', 'superRare', 'superRare', 'rare']));
+  const twoMythic = hiddenAdjust(getLevel(2)!, deck(['mythic', 'mythic', 'superRare', 'rare']));
+  const legendary = hiddenAdjust(getLevel(2)!, deck(['legendary', 'mythic', 'superRare', 'rare']));
+  assert.ok(oneMythic.edge > starter.edge, 'une Mythique : il s’adapte un peu');
+  assert.ok(twoMythic.edge > oneMythic.edge, 'deux Mythiques : encore plus');
+  assert.ok(legendary.edge > twoMythic.edge, 'une Légendaire : encore plus');
+  const cheat = hiddenAdjust(getLevel(2)!, deck(['divine', 'ultraLegendary', 'legendary', 'legendary']));
+  assert.equal(cheat.edge, 1);
+  assert.ok(cheat.mult > 1 && cheat.mult <= 1.8, 'cartes de fin de jeu au début : ses stats montent aussi, sans excès');
+  // au bon moment de l'aventure, les mêmes cartes ne déclenchent rien
+  const late = hiddenAdjust(getLevel(95)!, deck(['divine', 'ultraLegendary', 'legendary', 'legendary']));
+  assert.deepEqual(late, { edge: 0, mult: 1 });
+  // l'adversaire adapté rate moins et fait plus de critiques
+  let critN = 0, critE = 0, missN = 0, missE = 0;
+  for (let i = 0; i < 4000; i++) {
+    const [a] = botTimings(5, 1, Math.random, 0);
+    const [b] = botTimings(5, 1, Math.random, 1);
+    if (a >= 1.5) critN++;
+    if (b >= 1.5) critE++;
+    if (a === 0) missN++;
+    if (b === 0) missE++;
+  }
+  assert.ok(critE > critN * 1.5, `critiques : ${critN} → ${critE}`);
+  assert.ok(missE < missN, `ratés : ${missN} → ${missE}`);
 });
 
 test('difficulté : chaque niveau plus fort que le précédent dans son monde, chaque monde plus fort que celui d’avant', () => {
@@ -76,6 +138,10 @@ test('simulation : abordable au début, très dur à la fin même avec de très 
   assert.ok(rate(95, maxed) > 0.05, 'le Cosmos reste faisable avec un deck au maximum');
   const last = rate(100, maxed);
   assert.ok(last < 0.15, `boss de la Lune ultra dur même avec un deck au maximum (${last})`);
+  // la Galerie : faisable avec 4 Divines au début, presque impossible au Grand Portrait
+  const ultimate = deck(['divine', 'divine', 'divine', 'divine']);
+  assert.ok(rate(101, ultimate) > 0.4, 'Galerie, niveau 1 : faisable avec 4 Divines');
+  assert.ok(rate(130, ultimate) < 0.15, 'le Grand Portrait : le plus dur du jeu');
 });
 
 test('étoiles et sauvegarde : 3 sans perte, une sauvegarde de l’ancienne carte garde sa progression', () => {

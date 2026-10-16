@@ -68,7 +68,8 @@ export default function RoomScreen() {
   }, [t.phase]);
 
   const sorted = useMemo(
-    () => [...cards].sort((a, b) => getRarity(b.rarity).rank - getRarity(a.rarity).rank || b.obtainedAt - a.obtainedAt),
+    // la carte Galaxy est unique à chaque joueur : elle ne s'échange pas
+    () => cards.filter((c) => c.rarity !== 'galaxy').sort((a, b) => getRarity(b.rarity).rank - getRarity(a.rarity).rank || b.obtainedAt - a.obtainedAt),
     [cards],
   );
   const mine = t.myOffer.map((id) => cards.find((c) => c.id === id)).filter((c): c is Card => !!c);

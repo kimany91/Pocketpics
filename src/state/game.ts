@@ -5,6 +5,7 @@ import { setMusicVolume } from '../audio/music';
 import { setSfxVolume } from '../audio/sfx';
 import { ATTACK_NAME_MAX } from '../battle/stats';
 import { DRAW_PRICE, type SoloReward, soloReward } from '../game/economy';
+import { DIVINE_GATE, TOTAL_LEVELS, needsDivine } from '../battle/levels';
 import { planPack, rollLucky } from '../game/luck';
 import { finishMatch, settleAbandoned, startMatch } from '../game/rank';
 import { generatePack } from '../game/pack';
@@ -30,6 +31,10 @@ interface GameStore {
   renameAttack(id: string, slot: 0 | 1, name: string): void;
   /** Note une victoire au niveau `n` de l'aventure (débloque le suivant), garde les meilleures étoiles et verse les pièces. */
   winLevel(n: number, stars: number): SoloReward | null;
+  /** Sanctuaire de l'aventure (après le Volcan) : débloque la Divine dans les paquets et la suite de l'aventure. */
+  unlockDivine(): boolean;
+  /** Après la victoire contre le Grand Portrait : crée l'unique carte Galaxy du joueur (à partir d'une nouvelle photo). */
+  claimGalaxy(): Promise<Card | null>;
   /** Achète un tirage avec des pièces (seulement quand il n'en reste plus). */
   buyDraw(): boolean;
   /** Début d'un combat en ligne classé : la défaite est comptée d'avance. */
@@ -128,7 +133,7 @@ export const useGame = create<GameStore>((set, get) => ({
       drawnHashes: new Set(save.drawnHashes),
       now,
       rarities: (count) => {
-        const plan = planPack({ state: save.luck, cards: count, packIndex, lucky });
+        const plan = planPack({ state: save.luck, cards: count, packIndex, lucky, divine: save.divineUnlocked });
         luckAfter = plan.state;
         return plan.rarities;
       },
@@ -193,6 +198,7 @@ export const useGame = create<GameStore>((set, get) => ({
   winLevel(n, stars) {
     const save = get().save;
     if (!save || n < 1 || n > save.soloLevel + 1) return null;
+    if (needsDivine(n) && !save.divineUnlocked) return null; // la Divine se débloque d'abord au sanctuaire
     // pièces à la première victoire (un niveau déjà gagné a au moins 1 étoile)
     const reward = soloReward(!((save.soloStars[n - 1] ?? 0) > 0));
     const soloStars = [...save.soloStars];
@@ -202,6 +208,40 @@ export const useGame = create<GameStore>((set, get) => ({
     persistState(next);
     set({ save: next });
     return reward;
+  },
+
+  unlockDivine() {
+    const save = get().save;
+    if (!save || save.divineUnlocked || save.soloLevel < DIVINE_GATE) return false;
+    const next: SaveState = { ...save, divineUnlocked: true };
+    persistState(next);
+    set({ save: next });
+    return true;
+  },
+
+  async claimGalaxy() {
+    const save = get().save;
+    if (!save || save.galaxyClaimed || !((save.soloStars[TOTAL_LEVELS - 1] ?? 0) > 0)) return null;
+    const pack = await generatePack({
+      drawnAssetIds: new Set(save.drawnAssetIds),
+      drawnHashes: new Set(save.drawnHashes),
+      count: 1,
+      rarities: () => ['galaxy'],
+    });
+    const { card, photo } = pack.cards[0];
+    disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri } });
+    const cards = [...get().cards, card];
+    disk.saveIndex(cards);
+    const latest = get().save ?? save;
+    const next: SaveState = {
+      ...latest,
+      galaxyClaimed: true,
+      drawnAssetIds: [...new Set([...latest.drawnAssetIds, ...pack.consumedAssetIds])],
+      drawnHashes: [...new Set([...latest.drawnHashes, card.hash])],
+    };
+    persistState(next);
+    set({ cards, save: next, pendingPack: [card] });
+    return card;
   },
 
   buyDraw() {

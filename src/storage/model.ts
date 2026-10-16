@@ -23,8 +23,8 @@ export const DEFAULT_SOUND_VOLUME = 0.55;
 export const DEFAULT_MUSIC_VOLUME = 0.45;
 export const STATE_SCHEMA_VERSION = 1;
 
-/** Nombre de niveaux de l'aventure (20 mondes de 5 niveaux). */
-const SOLO_LEVELS = 100;
+/** Nombre de niveaux de l'aventure (20 mondes de 5 niveaux, puis les 30 de la Galerie). */
+const SOLO_LEVELS = 130;
 /** Version de la carte solo (2 = 20 mondes). */
 const SOLO_MAP = 2;
 
@@ -87,6 +87,10 @@ export interface SaveState {
   soloStars: number[];
   /** Version de la carte solo de la sauvegarde : 2 = 20 mondes (absent = l'ancienne carte de 10 mondes). */
   soloMap: number;
+  /** La Divine a été débloquée au sanctuaire de l'aventure : elle peut sortir des paquets (ajouté après : non si absent). */
+  divineUnlocked: boolean;
+  /** La carte Galaxy (une seule par joueur) a été gagnée contre le Grand Portrait (ajouté après : non si absent). */
+  galaxyClaimed: boolean;
   /** Compteurs de chance (malchance, paquets brillants). Ajouté après : remis à zéro si absent. */
   luck: LuckState;
   /** Pièces gagnées en solo (ajouté après : 0 si absent). */
@@ -178,6 +182,8 @@ export function createInitialState(now = Date.now()): SaveState {
     soloLevel: 0,
     soloStars: [],
     soloMap: SOLO_MAP,
+    divineUnlocked: false,
+    galaxyClaimed: false,
     luck: initialLuck(),
     coins: 0,
     bonusDraws: 0,
@@ -268,6 +274,8 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     soloLevel: Math.max(0, Math.min(SOLO_LEVELS, Math.floor(num(s.soloLevel, 0)))),
     soloStars: Array.isArray(s.soloStars) ? s.soloStars.slice(0, SOLO_LEVELS).map((x) => Math.max(0, Math.min(3, Math.floor(num(x, 0))))) : [],
     soloMap: SOLO_MAP,
+    divineUnlocked: s.divineUnlocked === true,
+    galaxyClaimed: s.galaxyClaimed === true,
     luck: migrateLuck(s.luck),
     coins: Math.max(0, Math.floor(num(s.coins, 0))),
     bonusDraws: Math.max(0, Math.floor(num(s.bonusDraws, 0))),

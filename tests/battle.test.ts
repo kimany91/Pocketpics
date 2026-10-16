@@ -146,8 +146,8 @@ test('changer de carte utilise le tour', () => {
   assert.throws(() => act(b, { type: 'switch', to: 0 }));
 });
 
-test('les arènes : 20 mondes de plus en plus durs, et le bot finit toujours ses parties', () => {
-  assert.equal(ARENAS.length, 20);
+test('les arènes : 21 mondes de plus en plus durs, et le bot finit toujours ses parties', () => {
+  assert.equal(ARENAS.length, 21);
   const power = (n: number) => arenaFighters(ARENAS[n - 1]).reduce((s, f) => s + f.battle.hp * f.battle.attacks[0].power, 0);
   for (let n = 2; n <= ARENAS.length; n++) assert.ok(power(n) >= power(n - 1) * 0.95, `arène ${n}`);
   // bot de niveau 10 contre bot de niveau 1 avec les mêmes cartes : le meilleur gagne nettement plus souvent

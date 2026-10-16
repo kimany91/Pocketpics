@@ -1,5 +1,6 @@
 /**
- * Les 20 mondes de l'aventure solo, dans l'ordre de la carte. Chaque monde a
+ * Les 21 mondes de l'aventure solo, dans l'ordre de la carte : 20 mondes de
+ * 5 niveaux (du Parc à la Lune), puis la Galerie, monde final de 30 niveaux. Chaque monde a
  * son adversaire et ses 4 cartes, de plus en plus rares en montant.
  *
  * `n` est la place sur la carte ; `id` ne change jamais : il nomme les
@@ -19,13 +20,19 @@ export interface ArenaCard {
 export interface Arena {
   /** Identifiant fixe (illustrations, musique, cartes du bot). */
   id: number;
-  /** Place sur la carte : 1 (Parc) → 20 (Lune). */
+  /** Place sur la carte : 1 (Parc) → 20 (Lune) → 21 (Galerie). */
   n: number;
   place: string;
   bot: string;
   /** Teinte de l'arène (fond, accents). */
   tint: string;
   cards: ArenaCard[];
+  /** Nombre de niveaux du monde (5 par défaut). */
+  levels?: number;
+  /** Monde final (la Galerie) : règles à part, route toute droite. */
+  final?: boolean;
+  /** Carte qui sert de portrait à l'adversaire (la 4e par défaut). */
+  portrait?: number;
 }
 
 export const ARENAS: readonly Arena[] = [
@@ -289,12 +296,37 @@ export const ARENAS: readonly Arena[] = [
       { name: 'Clair de Terre', rarity: 'divine' },
     ],
   },
+  {
+    // Le monde final, après la Lune : 30 niveaux en ligne droite, tous très durs.
+    // Cartes 0 à 3 : les quatre Divines du début ; 4 à 7 : celles qui s'ajoutent
+    // (Mythique d'abord, puis un rang de plus à chaque niveau) ; 8 : la Galaxy
+    // du Grand Portrait, au boss final.
+    id: 21,
+    n: 21,
+    place: 'La Galerie',
+    bot: 'Le Grand Portrait',
+    tint: '#B98CFF',
+    levels: 30,
+    final: true,
+    portrait: 8,
+    cards: [
+      { name: 'Portrait doré', rarity: 'divine' },
+      { name: 'Statue d\'ivoire', rarity: 'divine' },
+      { name: 'Vitrail céleste', rarity: 'divine' },
+      { name: 'Fresque éternelle', rarity: 'divine' },
+      { name: 'Sculpture de lumière', rarity: 'divine' },
+      { name: 'Tapisserie royale', rarity: 'divine' },
+      { name: 'Miroir sans fin', rarity: 'divine' },
+      { name: 'La Muse', rarity: 'divine' },
+      { name: 'Le Grand Portrait', rarity: 'galaxy' },
+    ],
+  },
 ];
 
 export const getArena = (n: number) => ARENAS.find((a) => a.n === n) ?? null;
 
-/** Portrait de l'adversaire d'un monde : l'illustration de sa 4e carte. */
-export const portraitRef = (arena: Arena) => botCardRef(arena.id, 3);
+/** Portrait de l'adversaire d'un monde : l'illustration de sa 4e carte (ou de celle qu'il désigne). */
+export const portraitRef = (arena: Arena) => botCardRef(arena.id, arena.portrait ?? 3);
 
 /** Identifiant d'une carte du bot, d'après l'`id` du monde (sert aussi à retrouver son illustration). */
 export const botCardRef = (arena: number, i: number) => `bot:${arena}:${i}`;

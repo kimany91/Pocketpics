@@ -18,20 +18,45 @@
  *    (au-delà de la Divine, chaque rang devient un bonus de stats) ;
  *  - le bot vise correctement dès le départ (4/10) et parfaitement à la fin.
  */
-import { getRarity, RARITIES } from '../game/rarity';
+import { DIVINE_RANK, GALAXY_RANK, RARITIES, getRarity } from '../game/rarity';
 import { ARENAS, type Arena, botCardRef } from './arenas';
 import type { FighterInput } from './engine';
 import { type BattleStats, generateStats } from './stats';
 
+/** Niveaux d'un monde ordinaire (le monde final, la Galerie, en a 30). */
 export const LEVELS_PER_WORLD = 5;
 export const WORLDS = ARENAS.length;
-export const TOTAL_LEVELS = WORLDS * LEVELS_PER_WORLD;
+const SIZES = ARENAS.map((a) => a.levels ?? LEVELS_PER_WORLD);
+const STARTS = SIZES.map((_, i) => 1 + SIZES.slice(0, i).reduce((x, y) => x + y, 0));
+export const TOTAL_LEVELS = SIZES.reduce((x, y) => x + y, 0);
+/** Mondes ordinaires (du Parc à la Lune) et leurs niveaux : la courbe de difficulté classique. */
+const REGULAR_WORLDS = ARENAS.filter((a) => !a.final).length;
+export const ADVENTURE_LEVELS = SIZES.slice(0, REGULAR_WORLDS).reduce((x, y) => x + y, 0);
+
+/** Nombre de niveaux du monde `w` (place sur la carte, 1 → WORLDS). */
+export const worldSize = (w: number) => SIZES[w - 1] ?? LEVELS_PER_WORLD;
+/** Premier et dernier niveau du monde `w`. */
+export const firstLevel = (w: number) => STARTS[w - 1];
+export const lastLevel = (w: number) => STARTS[w - 1] + SIZES[w - 1] - 1;
+/** Monde (place sur la carte) du niveau `n`. */
+export function worldOf(n: number): number {
+  let w = 1;
+  while (w < WORLDS && n >= STARTS[w]) w++;
+  return w;
+}
+
+/**
+ * Sanctuaire de la Divine, entre le Volcan et la Tempête : il faut y débloquer
+ * la Divine (une seule fois) pour jouer les niveaux suivants.
+ */
+export const DIVINE_GATE = lastLevel(ARENAS.findIndex((a) => a.id === 7) + 1);
+export const needsDivine = (n: number) => n > DIVINE_GATE;
 
 export interface Level {
   /** 1 → TOTAL_LEVELS */
   n: number;
   world: Arena;
-  /** Place dans le monde, 1 → 5 (5 = boss). */
+  /** Place dans le monde, 1 → 5 (5 = boss) ; 1 → 30 dans la Galerie (30 = le Grand Portrait). */
   index: number;
   boss: boolean;
   /** Habileté du bot, de 1 (maladroit) à 10 (redoutable). */
@@ -44,8 +69,8 @@ export interface Level {
   stars: number;
 }
 
-/** Avancement dans l'aventure, de 0 (niveau 1) à 1 (dernier niveau). */
-const progress = (n: number) => (n - 1) / (TOTAL_LEVELS - 1);
+/** Avancement dans l'aventure classique, de 0 (niveau 1) à 1 (boss de la Lune). */
+const progress = (n: number) => Math.min(1, (n - 1) / (ADVENTURE_LEVELS - 1));
 
 /** Réglages de la difficulté (ajustés par simulation, voir tests/levels.test.ts). */
 export const TUNE = {
@@ -73,18 +98,57 @@ export const TUNE = {
   botPow: 0.8,
 };
 
+/**
+ * La Galerie, monde final : 4 Divines au premier niveau ; au 2e, une 5e carte
+ * (Mythique) qui monte d'un rang à chaque niveau jusqu'à la Divine, puis une 6e
+ * arrive, et ainsi de suite jusqu'à 8 cartes ; les stats montent aussi d'un
+ * niveau à l'autre. Au 30e, le Grand Portrait aligne sa carte Galaxy.
+ */
+export const GALLERY = {
+  /** Multiplicateur des PV et de la puissance : du 1er au 29e niveau. */
+  multStart: 0.9,
+  multEnd: 1.05,
+  /** Le Grand Portrait. */
+  bossMult: 1.1,
+  /** Une carte de plus tous les `every` niveaux (à partir du 2e), jusqu'à `maxTeam`. */
+  every: 4,
+  maxTeam: 8,
+  /** Plus l'équipe est grande, plus chaque carte est allégée : × (4 / cartes)^teamScale. */
+  teamScale: 0.55,
+};
+
+/** Cartes en plus des 4 Divines au niveau `k` de la Galerie. */
+const galleryExtras = (k: number) => (k < 2 ? 0 : Math.min(GALLERY.maxTeam - 4, Math.floor((k - 2) / GALLERY.every) + 1));
+
 export function getLevel(n: number): Level | null {
   if (!Number.isInteger(n) || n < 1 || n > TOTAL_LEVELS) return null;
-  const w = Math.ceil(n / LEVELS_PER_WORLD);
-  const index = n - (w - 1) * LEVELS_PER_WORLD;
-  const boss = index === LEVELS_PER_WORLD;
+  const w = worldOf(n);
+  const world = ARENAS[w - 1];
+  const index = n - firstLevel(w) + 1;
+  const size = worldSize(w);
+  const boss = index === size;
+  if (world.final) {
+    const t = (index - 1) / Math.max(1, size - 2);
+    const team = boss ? GALLERY.maxTeam : 4 + galleryExtras(index);
+    const base = boss ? GALLERY.bossMult : GALLERY.multStart + (GALLERY.multEnd - GALLERY.multStart) * Math.min(1, t);
+    return {
+      n,
+      world,
+      index,
+      boss,
+      botLevel: 10,
+      mult: base * (4 / team) ** GALLERY.teamScale,
+      team,
+      stars: 5,
+    };
+  }
   const p = progress(n);
   const early = 1 + TUNE.early * Math.max(0, 1 - p / TUNE.earlyEnd);
-  const final = w === WORLDS ? TUNE.finalMult : 1;
+  const final = w === REGULAR_WORLDS ? TUNE.finalMult : 1;
   const mult = (TUNE.multBase + TUNE.multGrow * p ** TUNE.multPow) * early * final * (1 + TUNE.ramp * (index - 3)) * (boss ? TUNE.bossMult : 1);
   return {
     n,
-    world: ARENAS[w - 1],
+    world,
     index,
     boss,
     botLevel: Math.min(10, TUNE.botMin + TUNE.botGrow * p ** TUNE.botPow + (boss ? 0.5 : 0)),
@@ -94,8 +158,8 @@ export function getLevel(n: number): Level | null {
   };
 }
 
-/** Rangs de rareté ajoutés aux cartes de l'adversaire à ce niveau (seul le dernier monde en a). */
-const boostOf = (n: number) => (Math.ceil(n / LEVELS_PER_WORLD) === WORLDS ? TUNE.finalBoost : 0);
+/** Rangs de rareté ajoutés aux cartes de l'adversaire à ce niveau (seule la Lune en a). */
+const boostOf = (n: number) => (worldOf(n) === REGULAR_WORLDS ? TUNE.finalBoost : 0);
 
 const scale = (s: BattleStats, k: number): BattleStats => ({
   ...s,
@@ -112,14 +176,24 @@ const scale = (s: BattleStats, k: number): BattleStats => ({
  * (plutôt solide ou plutôt cogneuse), mais le hasard de ses stats ne rend pas
  * un monde plus facile que le précédent.
  */
-const AVERAGE_POWER = [601, 787, 995, 1264, 1646, 2117, 2806, 3690];
+export const AVERAGE_POWER = [601, 787, 995, 1264, 1646, 2117, 2806, 3690, 5130];
 /** Ce que vaut un rang de rareté sur les PV et la puissance (≈ ×1,13 chacun). */
 const RANK_STEP = 1.13;
 const evened = (s: BattleStats, rank: number) => Math.sqrt(AVERAGE_POWER[rank] / (s.hp * s.attacks[0].power));
 
-/** Les cartes de l'adversaire d'un niveau, prêtes pour le combat. */
-export function levelFighters(level: Level): FighterInput[] {
+const fighter = (w: Arena, i: number, name: string, rank: number, k: number): FighterInput => {
+  const ref = botCardRef(w.id, i);
+  const stats = generateStats(ref, rank);
+  return { ref, name, rarity: RARITIES[rank].id, battle: scale(stats, k * evened(stats, rank)) };
+};
+
+/**
+ * Les cartes de l'adversaire d'un niveau, prêtes pour le combat. `hidden` :
+ * renfort caché des stats (voir `hiddenAdjust`), 1 par défaut.
+ */
+export function levelFighters(level: Level, hidden = 1): FighterInput[] {
   const w = level.world;
+  if (w.final) return galleryFighters(level, hidden);
   // les plus faibles d'abord : avec une petite équipe, on garde les cartes modestes
   const cards = w.cards.map((c, i) => ({ ...c, i, rank: getRarity(c.rarity).rank })).sort((a, b) => a.rank - b.rank || a.i - b.i);
   const team = cards.slice(0, level.team);
@@ -130,17 +204,92 @@ export function levelFighters(level: Level): FighterInput[] {
     if (c === best && level.index === 1 && level.n > 1) rank -= 1; // entrée du monde : un peu plus douce
     if (c === best && level.boss) rank += 1; // boss : la meilleure carte monte d'un cran
     // au-delà de la Divine, chaque rang en trop devient un bonus de stats
-    const top = RARITIES.length - 1;
-    const over = RANK_STEP ** Math.max(0, rank - top);
-    rank = Math.max(0, Math.min(top, rank));
-    const ref = botCardRef(w.id, c.i);
-    const stats = generateStats(ref, rank);
-    return { ref, name: c.name, rarity: RARITIES[rank].id, battle: scale(stats, level.mult * over * evened(stats, rank)) };
+    const over = RANK_STEP ** Math.max(0, rank - DIVINE_RANK);
+    rank = Math.max(0, Math.min(DIVINE_RANK, rank));
+    return fighter(w, c.i, c.name, rank, level.mult * over * hidden);
   });
 }
 
+/** Les cartes de la Galerie : 4 Divines, puis celles qui s'ajoutent ; la Galaxy au boss final. */
+function galleryFighters(level: Level, hidden: number): FighterInput[] {
+  const w = level.world;
+  const k = level.index;
+  const out: FighterInput[] = [];
+  // les nouvelles venues d'abord (les plus faibles), les Divines ensuite
+  for (let j = galleryExtras(k) - 1; j >= 0; j--) {
+    const since = k - (2 + j * GALLERY.every);
+    const rank = level.boss ? DIVINE_RANK : Math.min(DIVINE_RANK, 4 + since);
+    out.push(fighter(w, 4 + j, w.cards[4 + j].name, rank, level.mult * hidden));
+  }
+  for (let i = 0; i < 4; i++) out.push(fighter(w, i, w.cards[i].name, DIVINE_RANK, level.mult * hidden));
+  if (level.boss) {
+    // le Grand Portrait garde sa Galaxy pour la fin, à la place de la dernière nouvelle venue
+    out.shift();
+    out.push(fighter(w, 8, w.cards[8].name, GALAXY_RANK, level.mult * hidden));
+  }
+  return out;
+}
+
+/* ---------------------------- Difficulté cachée ---------------------------- */
+
+/**
+ * Équipe qu'un joueur a normalement à ce point de l'aventure (rangs de rareté),
+ * de quoi mesurer si ses cartes sont « normales » ou bien au-dessus.
+ */
+const EXPECTED: [number, number[]][] = [
+  [1, [3, 2, 2, 1]], // cartes des paquets de départ
+  [30, [3, 2, 2, 1]],
+  [55, [5, 4, 3, 3]],
+  [75, [6, 5, 4, 4]],
+  [95, [7, 6, 5, 5]],
+  [ADVENTURE_LEVELS + 1, [7, 7, 7, 7]], // la Galerie : 4 Divines
+];
+const teamPower = (ranks: number[]) => ranks.reduce((s, r) => s + AVERAGE_POWER[r], 0);
+/** Puissance (Σ PV × coup classique) d'une équipe normale au niveau `n`. */
+export function expectedPower(n: number): number {
+  for (let i = 1; i < EXPECTED.length; i++) {
+    const [n1, r1] = EXPECTED[i];
+    if (n <= n1) {
+      const [n0, r0] = EXPECTED[i - 1];
+      const t = n1 === n0 ? 1 : Math.max(0, (n - n0) / (n1 - n0));
+      return teamPower(r0) + (teamPower(r1) - teamPower(r0)) * t;
+    }
+  }
+  return teamPower(EXPECTED[EXPECTED.length - 1][1]);
+}
+
+/** Réglages de la difficulté cachée (ajustés par simulation, voir tests/levels.test.ts). */
+export const HIDDEN = {
+  /** Au-delà de ce rapport (cartes du joueur / cartes normales), l'adversaire s'adapte. */
+  from: 1.0,
+  /** Écart de rapport pour atteindre l'adaptation maximale de la précision. */
+  span: 1.0,
+  /** Au-delà de ce rapport, ses stats montent aussi : +`gain` par point de rapport, jusqu'à `maxMult`. */
+  statsFrom: 1.7,
+  gain: 0.35,
+  maxMult: 1.8,
+};
+
+/**
+ * Algorithme caché (jamais montré dans le jeu) : au début d'un combat solo, on
+ * compare les cartes choisies par le joueur à celles qu'il a normalement à ce
+ * point de l'aventure. Avec des cartes normales ou faibles, rien ne change.
+ * Avec des cartes bien plus fortes (une Mythique dès le 2e niveau, plusieurs
+ * Légendaires…), l'adversaire s'adapte : il vise mieux, rate moins et fait
+ * plus de coups critiques (`edge`, de 0 à 1), et au-delà, ses stats montent
+ * (`mult`). Le combat reste captivant sans devenir impossible.
+ */
+export function hiddenAdjust(level: Level, team: { rarity: string }[]): { edge: number; mult: number } {
+  // d'après la rareté des cartes choisies (pas le hasard de leurs stats) : les cartes du départ valent exactement 1
+  const power = team.reduce((s, f) => s + AVERAGE_POWER[getRarity(f.rarity).rank], 0);
+  const ratio = power / expectedPower(level.n);
+  const edge = Math.max(0, Math.min(1, (ratio - HIDDEN.from) / HIDDEN.span));
+  const mult = Math.min(HIDDEN.maxMult, 1 + HIDDEN.gain * Math.max(0, ratio - HIDDEN.statsFrom));
+  return { edge, mult };
+}
+
 /** Rang affiché pour le bot : de Papier I (niveau 1) à Légende III (dernier niveau). */
-export const levelMmr = (n: number) => Math.round(progress(n) * 1700);
+export const levelMmr = (n: number) => Math.round(((n - 1) / (TOTAL_LEVELS - 1)) * 1700);
 
 /** Étoiles gagnées : 3 sans perdre de carte, 2 en en perdant une, 1 sinon. */
 export const starsFor = (cardsLost: number) => (cardsLost === 0 ? 3 : cardsLost === 1 ? 2 : 1);

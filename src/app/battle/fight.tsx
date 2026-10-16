@@ -38,7 +38,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ONLINE_TRACK, startBattleMusic, stopBattleMusic } from '../../audio/music';
 import { type Sfx, playSfx } from '../../audio/sfx';
-import { type Level, TOTAL_LEVELS, getLevel, levelFighters, levelMmr, starsFor } from '../../battle/levels';
+import { type Level, TOTAL_LEVELS, getLevel, hiddenAdjust, levelFighters, levelMmr, starsFor } from '../../battle/levels';
 import { botAction, botReplacement } from '../../battle/bot';
 import { portraitRef } from '../../battle/arenas';
 import { botArt } from '../../battle/botArt';
@@ -105,13 +105,17 @@ const toFighter = (c: Card): FighterInput => ({ ref: c.id, name: fighterName(c),
 
 /** L'adversaire du mode solo : le bot de l'arène, qui « réfléchit » un instant avant de jouer. */
 class BotController implements BattleController {
-  constructor(private level: number) {}
+  /** `edge` : adaptation cachée de l'adversaire aux cartes du joueur (voir hiddenAdjust). */
+  constructor(
+    private level: number,
+    private edge = 0,
+  ) {}
   async submit(move: Move, b: Battle): Promise<Step> {
     return applyMove(b, 0, move);
   }
   async next(b: Battle): Promise<Step> {
     await sleep(b.mustReplace === 1 ? 500 : 700);
-    return b.mustReplace === 1 ? replace(b, 1, botReplacement(b, 1, this.level)) : act(b, botAction(b, 1, this.level));
+    return b.mustReplace === 1 ? replace(b, 1, botReplacement(b, 1, this.level)) : act(b, botAction(b, 1, this.level, Math.random, this.edge));
   }
 }
 
@@ -172,7 +176,10 @@ export default function FightScreen() {
       art: botArt(portraitRef(level.world)),
       image: (ref) => ({ imageSource: botArt(ref) }),
     };
-    return { deck, foe, battle: createBattle(deck.map(toFighter), levelFighters(level)), controller: new BotController(level.botLevel) as BattleController };
+    // difficulté cachée : l'adversaire s'adapte si les cartes choisies sont bien au-dessus de la normale
+    const mine = deck.map(toFighter);
+    const hidden = hiddenAdjust(level, mine);
+    return { deck, foe, battle: createBattle(mine, levelFighters(level, hidden.mult)), controller: new BotController(level.botLevel, hidden.edge) as BattleController };
   });
   const deck = setup?.deck ?? [];
   const foeInfo = setup?.foe;

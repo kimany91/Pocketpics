@@ -9,10 +9,13 @@
  *    à la normale dès qu'elle est sortie.
  *  - Paquets brillants : de temps en temps, un paquet doré contient une carte
  *    Super Rare ou mieux. On le voit avant de l'ouvrir.
+ *  - Divine : impossible à tirer tant qu'elle n'est pas débloquée au sanctuaire
+ *    de l'aventure (après le Volcan) ; une Divine tirée devient alors une Ultra
+ *    Légendaire. La Galaxy, elle, ne sort jamais d'un paquet.
  *
  * Tout est pur (aucun accès disque) : l'état est rangé dans la sauvegarde.
  */
-import { RARITIES, type RarityId, getRarity, rollRarity } from './rarity';
+import { DIVINE_RANK, PACK_RARITIES, type RarityId, getRarity, rollRarity } from './rarity';
 
 export interface LuckState {
   /** Cartes tirées depuis la dernière Épique ou mieux. */
@@ -42,7 +45,7 @@ type Rng = () => number;
 
 /** Rareté tirée selon la table normale, mais seulement entre deux rangs. */
 export function rollRarityBetween(minRank: number, maxRank: number, rng: Rng = Math.random): RarityId {
-  const pool = RARITIES.filter((r) => r.rank >= minRank && r.rank <= maxRank);
+  const pool = PACK_RARITIES.filter((r) => r.rank >= minRank && r.rank <= maxRank);
   const total = pool.reduce((s, r) => s + r.weight, 0);
   let pick = rng() * total;
   for (const r of pool) {
@@ -54,8 +57,8 @@ export function rollRarityBetween(minRank: number, maxRank: number, rng: Rng = M
 
 /** Chance de base d'avoir ce rang ou mieux sur une carte. */
 function baseChance(rank: number) {
-  const total = RARITIES.reduce((s, r) => s + r.weight, 0);
-  return RARITIES.filter((r) => r.rank >= rank).reduce((s, r) => s + r.weight, 0) / total;
+  const total = PACK_RARITIES.reduce((s, r) => s + r.weight, 0);
+  return PACK_RARITIES.filter((r) => r.rank >= rank).reduce((s, r) => s + r.weight, 0) / total;
 }
 
 /** Chance d'obtenir ce palier sur la prochaine carte, compte tenu de la malchance accumulée. */
@@ -73,9 +76,11 @@ export function rollLucky(state: LuckState, packIndex: number, rng: Rng = Math.r
   return rng() < LUCK.lucky.chance;
 }
 
-/** Une carte, avec les coups de pouce de malchance. */
-function rollCard(state: LuckState, rng: Rng, floorRank = 0): RarityId {
-  let id = floorRank > 0 ? rollRarityBetween(floorRank, 7, rng) : rollRarity(rng);
+/** Une carte, avec les coups de pouce de malchance ; jamais au-dessus de `maxRank`. */
+function rollCard(state: LuckState, rng: Rng, floorRank = 0, maxRank = DIVINE_RANK): RarityId {
+  let id = floorRank > 0 ? rollRarityBetween(floorRank, maxRank, rng) : rollRarity(rng);
+  // Divine pas encore débloquée : une Divine tirée devient la rareté juste en dessous.
+  if (getRarity(id).rank > maxRank) id = rollRarityBetween(maxRank, maxRank, rng);
   // Palier par palier (le plus rare d'abord) : si la carte est en dessous et que la
   // malchance a fait monter la chance, elle peut être relevée à ce palier.
   for (const [tier, since] of [
@@ -89,7 +94,7 @@ function rollCard(state: LuckState, rng: Rng, floorRank = 0): RarityId {
     if (target <= base) continue;
     // Probabilité de relever, choisie pour que la chance totale du palier soit exactement `target`.
     const lift = (target - base) / (1 - base);
-    if (rng() < lift) id = rollRarityBetween(tier.rank, 7, rng);
+    if (rng() < lift) id = rollRarityBetween(tier.rank, maxRank, rng);
   }
   return id;
 }
@@ -107,7 +112,15 @@ function count(state: LuckState, id: RarityId): LuckState {
  * Raretés des `cards` cartes d'un paquet, et l'état de chance après lui.
  * `packIndex` = nombre de paquets déjà ouverts dans cette partie.
  */
-export function planPack(opts: { state: LuckState; cards: number; packIndex: number; lucky: boolean; rng?: Rng }): {
+export function planPack(opts: {
+  state: LuckState;
+  cards: number;
+  packIndex: number;
+  lucky: boolean;
+  rng?: Rng;
+  /** La Divine est-elle débloquée (sanctuaire de l'aventure) ? Sinon, aucune Divine dans les paquets. */
+  divine?: boolean;
+}): {
   rarities: RarityId[];
   state: LuckState;
 } {
@@ -122,7 +135,7 @@ export function planPack(opts: { state: LuckState; cards: number; packIndex: num
       // démarrage : la dernière carte est exactement la rareté promise, les autres restent en dessous
       id = i === opts.cards - 1 ? starter : rollRarityBetween(0, getRarity(starter).rank - 1, rng);
     } else {
-      id = rollCard(state, rng, opts.lucky && i === 0 ? LUCK.lucky.minRank : 0);
+      id = rollCard(state, rng, opts.lucky && i === 0 ? LUCK.lucky.minRank : 0, opts.divine === false ? DIVINE_RANK - 1 : DIVINE_RANK);
     }
     rarities.push(id);
     state = count(state, id);

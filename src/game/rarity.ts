@@ -11,9 +11,10 @@ export type RarityId =
   | 'mythic'
   | 'legendary'
   | 'ultraLegendary'
-  | 'divine';
+  | 'divine'
+  | 'galaxy';
 
-export type FrameStyle = 'solid' | 'gold' | 'chromatic' | 'divine';
+export type FrameStyle = 'solid' | 'gold' | 'chromatic' | 'divine' | 'galaxy';
 
 export interface Rarity {
   id: RarityId;
@@ -111,7 +112,26 @@ export const RARITIES: readonly Rarity[] = [
     frameStyle: 'divine',
     hype: 7,
   },
+  {
+    // Unique : jamais dans un paquet. Une seule par joueur, gagnée en battant le Grand Portrait.
+    id: 'galaxy',
+    rank: 8,
+    label: 'Galaxy',
+    weight: 0,
+    frame: ['#0B0630', '#3B1C8C', '#B23CFF', '#3FD0FF', '#FF5FCB', '#0B0630'],
+    color: '#B98CFF',
+    frameStyle: 'galaxy',
+    hype: 7,
+  },
 ];
+
+/** Rang de la Divine : la plus haute rareté qu'on peut tirer dans un paquet. */
+export const DIVINE_RANK = 7;
+/** Rang de la Galaxy (carte unique). */
+export const GALAXY_RANK = 8;
+
+/** Raretés qu'on peut obtenir dans un paquet (toutes sauf la Galaxy). */
+export const PACK_RARITIES: readonly Rarity[] = RARITIES.filter((r) => r.weight > 0);
 
 const BY_ID = new Map<string, Rarity>(RARITIES.map((r) => [r.id, r]));
 const TOTAL_WEIGHT = RARITIES.reduce((s, r) => s + r.weight, 0);

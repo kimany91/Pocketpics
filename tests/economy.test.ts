@@ -10,9 +10,9 @@ test('chaque niveau rapporte la même somme, une seule fois (à sa première vic
   assert.deepEqual(soloReward(false), { coins: 0, first: false });
 });
 
-test('équilibre : toute l’aventure (100 niveaux) rapporte 10 tirages, pas plus', () => {
+test('équilibre : toute l’aventure (130 niveaux) rapporte 13 tirages, pas plus', () => {
   const total = TOTAL_LEVELS * LEVEL_REWARD;
-  assert.equal(total / DRAW_PRICE, 10);
+  assert.equal(total / DRAW_PRICE, 13);
 });
 
 test('migration : une ancienne sauvegarde reçoit 0 pièce, Papier I, aucun ami, sans rien perdre', () => {

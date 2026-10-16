@@ -159,6 +159,7 @@ export const useTrade = create<TradeStore>((set, get) => {
     for (const tc of msg.cards) {
       const base = migrateCard(tc.card, now);
       if (!base || typeof tc.image !== 'string' || typeof tc.thumb !== 'string' || tc.image.length > MAX_IMAGE_B64) continue;
+      if (base.rarity === 'galaxy') continue; // une Galaxy ne s'échange pas
       // L'identité de la carte voyage avec elle ; nouvel id seulement en cas de collision.
       const id = owned.has(base.id) || cardExists(base.id) ? randomUUID() : base.id;
       // La photo d'origine appartient à l'autre joueur : elle ne concerne pas notre galerie.
@@ -189,7 +190,8 @@ export const useTrade = create<TradeStore>((set, get) => {
         if (s.phase !== 'room' || !Array.isArray(msg.cards)) return;
         set({
           ...unlocked,
-          peerOffer: msg.cards.slice(0, MAX_OFFER).map((c) => ({
+          // une Galaxy ne s'échange jamais (unique à chaque joueur) : on l'ignore si elle arrive quand même
+          peerOffer: msg.cards.filter((c) => String(c.rarity) !== 'galaxy').slice(0, MAX_OFFER).map((c) => ({
             id: String(c.id),
             name: typeof c.name === 'string' ? c.name.slice(0, 28) : null,
             rarity: String(c.rarity),
