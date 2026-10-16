@@ -1,6 +1,6 @@
 """Musiques de combat de PocketPics : une par monde de l'aventure.
 
-    python3 scripts/generate-music.py            # les 20 mondes
+    python3 scripts/generate-music.py            # les 21 mondes
     python3 scripts/generate-music.py 3 17       # seulement les mondes 3 et 17 (par id)
 
 Le rendu est déterministe : relancer un monde redonne exactement le même fichier.
@@ -12,8 +12,10 @@ avec ffmpeg. Chaque morceau est une vraie petite composition, en boucle :
   - des instruments qui collent au lieu (steel drum à la plage, accordéon au
     marché, flûte et harpe en forêt, cuivres au palais, synthés au cosmos,
     orgue de manège à la foire, banjo à la ferme, thérémine au manoir, oud et
-    darbouka au désert, chœur sombre et glas sur la Lune…) ;
-  - 4 parties de 8 mesures (en 4/4, ou en 12/8 pour la gigue des pirates) :
+    darbouka au désert, chœur sombre et glas sur la Lune, grand orgue et
+    cloches tubulaires à la Galerie…) ;
+  - 4 parties de 8 mesures (en 4/4, en 12/8 pour la gigue des pirates, en 3/4
+    pour la valse de la Galerie) :
     A (le thème), B (le développement, d'autres accords), A' (le thème varié,
     à l'octave, avec une seconde voix) et C (un pont plus calme qui remonte
     vers le début) ;
@@ -488,6 +490,18 @@ def i_drone(m, dur, vel, rng):
     return sig * envelope(n, a=0.8, d=0.5, s=1, r=1.0) * vel * 0.15
 
 
+def i_tubular(m, dur, vel, rng):
+    """Cloches tubulaires : partiels inharmoniques graves qui tiennent longtemps."""
+    f0 = hz(m)
+    n = int(SR * (dur + 2.5))
+    t = taxis(n)
+    sig = np.zeros(n)
+    for ratio, amp, dec in ((1, 1, 0.9), (2.0, 0.45, 1.3), (3.01, 0.3, 1.8), (4.16, 0.2, 2.6), (5.43, 0.12, 3.5), (6.79, 0.06, 5)):
+        sig += amp * np.sin(TWO_PI * f0 * ratio * t) * np.exp(-t * dec)
+    sig += noise(n, rng) * np.exp(-t * 600) * 0.15
+    return sig * np.clip(t / 0.003, 0, 1) * vel * 0.5
+
+
 INSTRUMENTS = {
     'pluck': i_pluck,
     'uke': lambda m, d, v, r: i_pluck(m, d, v, r, bright=1, sustain=0.5, pos=0.25),
@@ -534,6 +548,10 @@ INSTRUMENTS = {
     'choirlead': lambda m, d, v, r: i_choir(m, d, v, r, formants=((520, 1.0, 110), (900, 0.5, 130), (2500, 0.15, 200)), attack=0.09) * 1.3,
     'choiroo': lambda m, d, v, r: i_choir(m, d, v, r, formants=((400, 1.0, 100), (800, 0.45, 120), (2400, 0.1, 200))),
     'drone': i_drone,
+    # monde 21
+    'grandorgue': lambda m, d, v, r: i_organ(m, d, v, r, drawbars=(1, 0.85, 0.5, 0.6, 0.2, 0.35, 0, 0.3, 0, 0.12, 0, 0.1)),
+    'pedal': lambda m, d, v, r: i_organ(m, d, v, r, drawbars=(1, 0.75, 0.3, 0.25)) * 2.2,
+    'tubular': i_tubular,
 }
 
 
@@ -792,6 +810,7 @@ MODES = {
     'phrygian': [0, 1, 3, 5, 7, 8, 10],
     'harmonic': [0, 2, 3, 5, 7, 8, 11],
     'hijaz': [0, 1, 4, 5, 7, 8, 10],  # phrygien dominant (maqâm hijaz)
+    'hungarian': [0, 2, 3, 6, 7, 8, 11],  # mineur hongrois (deux secondes augmentées)
 }
 ROMAN = {'I': 0, 'II': 2, 'III': 4, 'IV': 5, 'V': 7, 'VI': 9, 'VII': 11}
 
@@ -834,6 +853,9 @@ CELLS = {
     # mesures à 12/8 : ici l'unité est la croche (3 par temps, 12 par mesure)
     'jig': [[1, 1, 1], [2, 1], [1, 1, 1], [2, 1, 1, 1, 1], [3], [1, 1, 1, 3], [2, 1, 2, 1]],
     'jigcalm': [[6], [3, 3], [6, 3, 3], [9, 3], [12]],
+    # valse à 3/4 : 12 doubles croches par mesure
+    'waltz': [[4, 4, 4], [8, 4], [4, 8], [12], [6, 2, 4], [4, 2, 2, 4], [2, 2, 4, 4], [4, 4, 2, 2]],
+    'waltzcalm': [[12], [8, 4], [4, 4, 4], [6, 6]],
 }
 
 
@@ -904,14 +926,14 @@ def motif(rng, style, bars=2, shape=None, bl=16):
     return r, moves
 
 
-def realize(scale, mot, bar0, chords, start_idx, lo, hi, cadence=None, bl=16):
+def realize(scale, mot, bar0, chords, start_idx, lo, hi, cadence=None, bl=16, strong=None):
     """Pose un motif sur des accords à partir du degré start_idx : temps forts sur des notes de l'accord."""
     r, moves = mot
     root, tones = chords[bar0 % len(chords)]
     idx = scale.chord_degrees_near(start_idx, root, tones)
     out = []
     lo_i, hi_i = scale.index_near(lo), scale.index_near(hi)
-    half = bl // 2
+    half = strong or bl // 2  # temps forts (les demi-mesures ; le 1er temps seul en 3/4)
     for i, ((pos, dur), mv) in enumerate(zip(r, moves)):
         bar = bar0 + pos // bl
         root, tones = chords[bar % len(chords)]
@@ -939,7 +961,7 @@ def realize(scale, mot, bar0, chords, start_idx, lo, hi, cadence=None, bl=16):
     return out
 
 
-def section_melody(rng, scale, chords, bar0, style, center, rng_range=9, bl=16, max_run=None):
+def section_melody(rng, scale, chords, bar0, style, center, rng_range=9, bl=16, max_run=None, strong=None):
     """8 mesures : motif, sa réponse transposée (fin ouverte), reprise du motif, conclusion qui descend sur la tonique."""
     lo, hi = center - rng_range, center + rng_range
     c = scale.index_near(center)
@@ -947,10 +969,10 @@ def section_melody(rng, scale, chords, bar0, style, center, rng_range=9, bl=16, 
     tail = motif(rng, style, shape='fall', bl=bl)
     shift = int(rng.choice([2, 1, -1, 3]))
     notes = []
-    notes += realize(scale, m1, bar0 + 0, chords, c, lo, hi, bl=bl)
-    notes += realize(scale, m1, bar0 + 2, chords, c + shift, lo, hi, cadence='open', bl=bl)
-    notes += realize(scale, m1, bar0 + 4, chords, c, lo, hi, bl=bl)
-    notes += realize(scale, tail, bar0 + 6, chords, c + 1, lo, hi, cadence='close', bl=bl)
+    notes += realize(scale, m1, bar0 + 0, chords, c, lo, hi, bl=bl, strong=strong)
+    notes += realize(scale, m1, bar0 + 2, chords, c + shift, lo, hi, cadence='open', bl=bl, strong=strong)
+    notes += realize(scale, m1, bar0 + 4, chords, c, lo, hi, bl=bl, strong=strong)
+    notes += realize(scale, tail, bar0 + 6, chords, c + 1, lo, hi, cadence='close', bl=bl, strong=strong)
     if max_run:
         notes = limit_runs(scale, notes, max_run)
     return notes
@@ -990,12 +1012,13 @@ def harmonize(scale, notes, below=True):
     return out
 
 
-def sparse(notes, bl=16):
+def sparse(notes, bl=16, step=None):
     """Version longue et calme d'une mélodie (pour le pont)."""
     out = []
     for p, d, m in notes:
-        if p % (bl // 2) == 0:
-            out.append((p, bl // 2, m))
+        step = step or bl // 2
+        if p % step == 0:
+            out.append((p, step, m))
     return out
 
 
@@ -1040,6 +1063,10 @@ COMP = {
     'jig': [(0, 2, 'all'), (2, 1, 'all'), (3, 2, 'all'), (5, 1, 'all'), (6, 2, 'all'), (8, 1, 'all'), (9, 2, 'all'), (11, 1, 'all')],
     'stab12': [(0, 2, 'all'), (3, 1, 'all'), (9, 2, 'all')],
     'half12': [(0, 6, 'all'), (6, 6, 'all')],
+    # 3/4
+    'waltz': [(4, 4, 'all'), (8, 4, 'all')],
+    'waltzarp': [(i * 2, 2, [0, 1, 2, 3, 2, 1][i]) for i in range(6)],
+    'bellhit': [(0, 12, 0)],
 }
 
 BASS = {
@@ -1063,11 +1090,13 @@ BASS = {
     # 12/8
     'jig': [(0, 2, 'R'), (3, 2, 'F'), (6, 2, 'O'), (9, 2, 'F'), (11, 1, 'A')],
     'long12': [(0, 10, 'R'), (10, 2, 'A')],
+    # 3/4
+    'waltz': [(0, 6, 'R'), (8, 3, 'F')],
 }
 
 
 # ------------------------------------------------------------------------------
-# Les 20 mondes (clé = id fixe du monde, pas sa place sur la carte)
+# Les 21 mondes (clé = id fixe du monde, pas sa place sur la carte)
 # ------------------------------------------------------------------------------
 
 WORLDS = {
@@ -1236,6 +1265,15 @@ WORLDS = {
         drums={'A': {'D': 'x.....x...x.....', 'S': '........x.......', 'h': '..x...x...x...x.'}, 'B': {'D': 'x.....x...x...x.', 'K': 'x.....x...x.....', 'S': '........x.......', 'M': '............x.x.', 'h': 'x.x.x.x.x.x.x.x.'}, 'C': {'D': 'x.......x.......'}},
         fill='MLDD', intro_keep=('D',), timpani=True, toll=[0, 8, 16, 24], echo=True, echo_buses=('layer',), mix=dict(lead=0.9, counter=0.45, comp=0.5, bass=0.85, pad=0.5, drums=0.85, layer=0.35, fx=0.45), reverb=0.4,
     ),
+    21: dict(  # La Galerie : la grande valse finale, dans un musée du cosmos
+        max_run=3, name='La Galerie', key=63, mode='hungarian', bpm=110, swing=0.0, beats=3, style='waltz', style_c='waltzcalm',
+        prog={'A': ['i', 'i', 'bVI', 'bVI', 'VII', 'VII', 'V', 'V7'], 'B': ['iv', 'iv', 'i', 'i', 'bVI', 'VII', 'V', 'V'], 'C': ['bVI', 'bVI', 'i', 'i', 'iv', 'iv', 'V', 'V7']},
+        lead='grandorgue', lead2='violins', counter='harpsi', comp=('harpsi', 'waltz'), comp_c=('celesta', 'waltzarp'), bass=('pedal', 'waltz'), bass_c='long12', pad='choir',
+        layers=[dict(inst='brass', pattern='waltz', sections=("A'",), vel=0.45, shift=-12), dict(inst='tubular', pattern='bellhit', sections=('B', "A'"), vel=0.6, shift=12)],
+        center=75,
+        drums={'A': {'P': 'x...........', 'h': '....x...x...'}, 'B': {'D': 'x...........', 'P': 'x...........', 'S': '....x...x...', 'h': 'x.x.x.x.x.x.'}, 'C': {'P': 'x...........'}},
+        fill='PPPD', intro_keep=('P',), timpani=True, toll=[0, 16], mix=dict(lead=0.9, counter=0.4, comp=0.5, bass=0.85, pad=0.5, drums=0.75, layer=0.4, fx=0.45), reverb=0.42,
+    ),
 }
 
 
@@ -1249,11 +1287,13 @@ def render(wid):
     rng = np.random.default_rng(1000 + wid)
     # pas par temps : 4 doubles croches (4/4) ou 3 croches (12/8, gigue)
     sub = spec.get('sub', 4)
-    BL = 4 * sub
+    beats = spec.get('beats', 4)  # temps par mesure : 4, ou 3 pour une valse
+    BL = beats * sub
     HALF = BL // 2
+    STRONG = HALF if beats == 4 else BL
     beat = 60 / spec['bpm']
     bars = 32
-    loop = bars * 4 * beat
+    loop = bars * beats * beat
     tail = 2.5
     n_total = int(SR * (loop + tail))
     scale = Scale(spec['key'], spec['mode'])
@@ -1292,9 +1332,9 @@ def render(wid):
 
     center = spec['center']
     mr = spec.get('max_run')
-    melody_a = section_melody(rng, scale, chords_of('A'), 0, spec['style'], center, bl=BL, max_run=mr)
-    melody_b = section_melody(rng, scale, chords_of('B'), 0, spec['style'], center + 3, bl=BL, max_run=mr)
-    melody_c = section_melody(rng, scale, chords_of('C'), 0, spec.get('style_c', 'calm'), center - 2, bl=BL, max_run=mr)
+    melody_a = section_melody(rng, scale, chords_of('A'), 0, spec['style'], center, bl=BL, max_run=mr, strong=STRONG)
+    melody_b = section_melody(rng, scale, chords_of('B'), 0, spec['style'], center + 3, bl=BL, max_run=mr, strong=STRONG)
+    melody_c = section_melody(rng, scale, chords_of('C'), 0, spec.get('style_c', 'calm'), center - 2, bl=BL, max_run=mr, strong=STRONG)
 
     # --- mélodies
     for p, d, m in melody_a:
@@ -1306,7 +1346,7 @@ def render(wid):
         play('lead', spec['lead2'], m, 16 * BL + p, d, 0.35)
     for p, d, m in harmonize(scale, melody_a):
         play('counter', spec['counter'], m, 16 * BL + p, d, 0.5)
-    for p, d, m in sparse(melody_c, bl=BL):
+    for p, d, m in sparse(melody_c, bl=BL, step=STRONG):
         play('lead', spec['lead2'], m, 24 * BL + p, d, 0.6)
 
     # --- accompagnement (avec conduite des voix)
@@ -1320,7 +1360,7 @@ def render(wid):
         voicings.append(v)
         light = section == 'A' and bar < 2
         for pos, dur, which in COMP[pattern]:
-            if light and pos % HALF:
+            if light and pos % STRONG:
                 continue
             notes = v if which == 'all' else [v[which % len(v)] + (12 if isinstance(which, int) and which >= len(v) else 0)]
             for k, m in enumerate(notes):
@@ -1448,7 +1488,7 @@ def render(wid):
     # pompe sur la grosse caisse (styles électroniques)
     if spec.get('duck'):
         duck = np.ones(n_total)
-        for q in range(bars * 4):
+        for q in range(bars * beats):
             i = int(at(q * sub) * SR)
             m = min(int(SR * beat * 0.6), n_total - i)
             duck[i : i + m] = np.minimum(duck[i : i + m], 0.55 + 0.45 * (np.arange(m) / m) ** 0.5)

@@ -89,11 +89,11 @@ Les effets en cours disparaissent quand la carte quitte le terrain (sauf l'étou
 
 **Mise en scène.** Le décor est l'illustration du monde, floutée sous un voile sombre (`src/components/battle/ArenaBackdrop.tsx`). Le combat s'ouvre sur un écran « VS » d'environ 1,6 s (un toucher le passe), puis les cartes tombent sur leur socle. Au repos, elles flottent doucement. Une carte qui attaque fonce en diagonale vers l'adversaire en laissant une traînée. La carte touchée prend un éclat, une onde et des étincelles, sa jauge clignote, et l'écran tremble selon la part de PV perdue. Un critique ou un coup de grâce ajoute un éclair blanc. Le cadre du message prend la couleur du camp dont il parle, et un onglet dit à qui est le tour.
 
-**Musique.** Chaque monde a sa propre musique de combat, composée par `python3 scripts/generate-music.py` (tout est synthétisé, rien sous licence) et encodée en AAC (`assets/music/world-<id>.m4a`, numérotés par l'id fixe du monde, 8 Mo pour les 20). Les combats en ligne prennent celle de la Tempête. La musique démarre en fondu au début du combat et s'arrête en fondu à la fin. Son volume se règle à part (45 % par défaut, enregistré dans la sauvegarde) dans la fenêtre « Son », ouverte depuis l'icône 🔊 de l'accueil ou depuis l'icône ♪ en combat.
+**Musique.** Chaque monde a sa propre musique de combat, composée par `python3 scripts/generate-music.py` (tout est synthétisé, rien sous licence) et encodée en AAC (`assets/music/world-<id>.m4a`, numérotés par l'id fixe du monde, 8,3 Mo pour les 21). Les combats en ligne prennent celle de la Tempête. La musique démarre en fondu au début du combat et s'arrête en fondu à la fin. Son volume se règle à part (45 % par défaut, enregistré dans la sauvegarde) dans la fenêtre « Son », ouverte depuis l'icône 🔊 de l'accueil ou depuis l'icône ♪ en combat.
 
 Chaque morceau est une vraie petite composition en boucle (48 à 84 s), pas un accord qui se répète :
 
-- **4 parties de 8 mesures** (en 4/4, ou en 12/8 pour la gigue des Pirates) : A (le thème), B (le développement, sur une autre grille d'accords), A' (le thème à l'octave avec une seconde voix à la tierce) et C (un pont plus calme, sur une troisième grille, qui remonte vers le début). Breaks de batterie en fin de partie, cymbale au début de la suivante.
+- **4 parties de 8 mesures** (en 4/4, en 12/8 pour la gigue des Pirates, en 3/4 pour la valse de la Galerie) : A (le thème), B (le développement, sur une autre grille d'accords), A' (le thème à l'octave avec une seconde voix à la tierce) et C (un pont plus calme, sur une troisième grille, qui remonte vers le début). Breaks de batterie en fin de partie, cymbale au début de la suivante.
 - **Des mélodies construites** : un motif de 2 mesures qui suit un contour (arche, montée, vague…), sa réponse transposée sur les accords suivants (fin ouverte), la reprise du motif, puis une conclusion qui descend sur la tonique. Les temps forts tombent sur des notes de l'accord, et jamais plus de trois fois la même note d'affilée dans les nouveaux mondes.
 - **Basse et accompagnement écrits par style** (rebond, reggae, oum-pa, marche, pompe électronique, galop métal, polka, deux-temps country, maqsoum, wagonnet, basse acide…), avec des accords qui s'enchaînent par le plus court chemin.
 
@@ -120,7 +120,8 @@ Dans l'ordre de la carte (n° = id du monde et du fichier) :
 | 9 | Le Palais | Sib majeur, 112 | Fanfare royale | Cuivres, clavecin en basse d'Alberti, caisse claire de marche |
 | 19 | Néon | Fa mineur, 148 | Ville cyberpunk | Lead carré en écho, supersaw en contretemps, basse acide, lasers |
 | 10 | Le Cosmos | La mineur, 128 | Synthwave spatiale | Cloche, synthés, nappes, écho |
-| 20 | La Lune | Sib phrygien, 94 | Combat final | Chœur sombre, cuivres graves, cordes spiccato, taïkos, timbales, glas, célesta en écho |
+| 20 | La Lune | Sib phrygien, 94 | Épique et menaçant | Chœur sombre, cuivres graves, cordes spiccato, taïkos, timbales, glas, célesta en écho |
+| 21 | La Galerie | Mib mineur hongrois, 110 en 3/4 | Grande valse finale | Grand orgue, violons, clavecin, chœur, orgue au pédalier, cloches tubulaires, cuivres, timbales, glas |
 
 **Déroulé.** Avant le combat, on choisit 4 cartes (la première commence ; « Auto » prend les plus fortes). L'adversaire en a 4 aussi. On voit sa carte active et ses remplaçantes. Changer de carte est possible à tout moment, mais ça utilise le tour. Une carte K.O. est remplacée sans perdre de tour. Le camp qui n'a plus de carte debout perd.
 

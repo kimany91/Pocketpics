@@ -29,6 +29,7 @@ const TRACKS: Record<number, number> = {
   18: require('../../assets/music/world-18.m4a'),
   19: require('../../assets/music/world-19.m4a'),
   20: require('../../assets/music/world-20.m4a'),
+  21: require('../../assets/music/world-21.m4a'),
 };
 /** Morceau des combats en ligne. */
 export const ONLINE_TRACK = 8;
