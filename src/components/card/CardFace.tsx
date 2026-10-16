@@ -19,6 +19,7 @@ import { CARD_RATIO, fonts } from '../../theme';
 import { Twinkles } from '../fx';
 import { Frame, Sweep } from './Frame';
 import { Foil } from './Foil';
+import { DivineHalo } from './DivineHalo';
 import { DivineOrnaments } from './Ornaments';
 
 export interface CardLike {
@@ -85,10 +86,12 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
   const small = width < 140;
   const fx = effectKey(rarity);
   const large = quality === 'full' && width >= 140;
-  const ornate = rarity.frameStyle === 'divine' && width >= 150;
+  // Divine : halo et ornements à toutes les tailles, pour la reconnaître partout (même en miniature).
+  const divine = rarity.frameStyle === 'divine';
 
   return (
     <View style={{ width, height }}>
+    {divine ? <DivineHalo width={width} height={height} /> : null}
     <View style={[styles.card, { width, height, borderRadius: radius }]}>
       <Frame rarity={rarity} width={width} height={height} animated={animated} />
       <View
@@ -101,10 +104,10 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
           <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={card.id} transition={quality === 'thumb' ? 120 : 0} />
         ) : null}
         {rarity.frameStyle === 'chromatic' && !tilt ? <Holo colors={CHROMA_HOLO} opacity={0.18} animated={animated} width={width} height={height} /> : null}
-        {rarity.frameStyle === 'divine' && !tilt ? <Holo colors={DIVINE_HOLO} opacity={0.42} animated={animated} width={width} height={height} /> : null}
+        {rarity.frameStyle === 'divine' && !tilt ? <Holo colors={DIVINE_HOLO} opacity={0.42} animated={animated} width={width} height={height} duration={1800} /> : null}
         {fx === 'mythic' && tilt ? <HoloFoil tilt={tilt} width={width} height={height} {...FOILS[fx]} /> : null}
         {fx && fx !== 'mythic' && tilt ? <Foil kind={fx} tilt={tilt} width={width} height={height} intensity={quality === 'thumb' ? 0.55 : 1} /> : null}
-        {rarity.frameStyle === 'divine' && animated ? <Sweep width={width} height={height} duration={3200} intensity={0.45} /> : null}
+        {rarity.frameStyle === 'divine' && animated ? <Sweep width={width} height={height} duration={1800} intensity={0.5} /> : null}
         {fx && animated && large ? <Twinkles width={width - border * 2} height={height - border * 2} {...SPARKS[fx]} /> : null}
         {rarity.frameStyle === 'divine' && animated && !large && width >= 100 ? <Twinkles width={width - border * 2} height={height - border * 2} /> : null}
         {tilt && rarity.rank >= 1 && rarity.rank < 5 ? (
@@ -121,7 +124,7 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
       </View>
       <Gem color={rarity.color} size={Math.max(7, width * 0.07)} right={border + width * 0.035} top={border + width * 0.035} />
     </View>
-    {ornate ? <DivineOrnaments width={width} height={height} /> : null}
+    {divine ? <DivineOrnaments width={width} height={height} /> : null}
     </View>
   );
 });
@@ -130,13 +133,13 @@ const CHROMA_HOLO = ['rgba(255,111,168,0.9)', 'rgba(255,230,107,0.9)', 'rgba(124
 const DIVINE_HOLO = ['rgba(255,236,170,0.95)', 'rgba(220,224,235,0.7)', 'rgba(255,214,120,0.95)', 'rgba(255,190,230,0.5)', 'rgba(190,230,255,0.55)', 'rgba(255,240,190,0.95)'];
 
 /** Pellicule holographique qui glisse lentement sur la photo. */
-function Holo({ colors, opacity, animated, width, height }: { colors: string[]; opacity: number; animated: boolean; width: number; height: number }) {
+function Holo({ colors, opacity, animated, width, height, duration = 4200 }: { colors: string[]; opacity: number; animated: boolean; width: number; height: number; duration?: number }) {
   const p = useSharedValue(0);
   useEffect(() => {
     if (!animated) return;
-    p.value = withRepeat(withTiming(1, { duration: 4200, easing: Easing.inOut(Easing.sin) }), -1, true);
+    p.value = withRepeat(withTiming(1, { duration, easing: Easing.inOut(Easing.sin) }), -1, true);
     return () => cancelAnimation(p);
-  }, [animated, p]);
+  }, [animated, duration, p]);
   const style = useAnimatedStyle(() => ({
     transform: [{ translateX: interpolate(p.value, [0, 1], [-width * 0.5, 0]) }, { translateY: interpolate(p.value, [0, 1], [0, -height * 0.25]) }],
   }));

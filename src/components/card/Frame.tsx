@@ -14,14 +14,15 @@ import Animated, {
 import type { Rarity } from '../../game/rarity';
 
 const CHROMA = ['#FF6FA8', '#FFB86B', '#FFE66B', '#7CFFB2', '#6ED8FF', '#8C8CFF', '#D58CFF', '#FF6FA8'];
-const DIVINE = ['#FFF4CF', '#D9DCE6', '#F5CF63', '#FFFFFF', '#BFC5D2', '#FFE08A', '#F0F0F5', '#FFF4CF'];
+/** Or et argent, avec des reflets rose, cyan et lilas : la couleur qui tourne se voit bien. */
+const DIVINE = ['#FFF4CF', '#FF9AD5', '#F5CF63', '#FFFFFF', '#7FE3FF', '#FFE08A', '#C9A6FF', '#FFF4CF'];
 
 export function Frame({ rarity, width, height, animated }: { rarity: Rarity; width: number; height: number; animated: boolean }) {
   switch (rarity.frameStyle) {
     case 'chromatic':
       return <Spinning colors={CHROMA} width={width} height={height} animated={animated} duration={5000} />;
     case 'divine':
-      return <Spinning colors={DIVINE} width={width} height={height} animated={animated} duration={7000} />;
+      return <Spinning colors={DIVINE} width={width} height={height} animated duration={2600} />;
     case 'gold':
       return (
         <View style={StyleSheet.absoluteFill}>

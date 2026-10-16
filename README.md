@@ -46,7 +46,7 @@ Chaque rareté haute a sa mise en scène :
 | Mythique | léger reflet holographique, scintillements rouges | lueur et braises rouges |
 | Légendaire | foil holo doré (bandes de diffraction, paillettes, reflet de lumière) qui s'allume quand on penche, scintillements dorés | salle dorée, rayons et poussière d'or |
 | Ultra Légendaire | le même foil en arc-en-ciel | rayons et lueurs chromatiques |
-| Divine | foil chromatique et or à double bande croisée, paillettes intenses, forme ornementée (couronne, filigranes, gemmes) | espace : étoiles, nébuleuses, étoiles filantes |
+| Divine | foil chromatique et or à double bande croisée, paillettes intenses, forme ornementée (couronne, filigranes, gemmes), contour or irisé qui tourne vite et **halo lumineux** qui respire et change de couleur (or, rose, cyan, violet) ; halo et ornements à toutes les tailles, même en miniature en combat, pour reconnaître une Divine partout | espace : étoiles, nébuleuses, étoiles filantes |
 
 ## Combat
 
@@ -166,7 +166,7 @@ Dans l'ordre de la carte (n° = id du monde et du fichier) :
 
 **Tout est vivant** (`src/components/map/live.tsx`) : herbes hautes, fleurs, arbres, palmiers, sapins et parasols ondulent, chacun à son rythme ; un arbre sur deux a des yeux qui regardent à gauche, à droite et clignent (l'arbre géant de la forêt aussi) ; des passants traversent le marché, le parc, la plage et le port, des gardes marchent devant le palais ; le canard nage dans la mare ; oiseaux, papillons et mouettes volent ; bateaux et bouées tanguent, les vagues vont et viennent ; le faisceau du phare tourne ; les drapeaux du château flottent ; le chalet fume ; il neige sur la montagne et il pleut dans la tempête ; la lave bouillonne et le volcan fume ; les cristaux et les étoiles scintillent, les planètes flottent, des étoiles filantes traversent le Cosmos. Pour rester fluide sur téléphone, seuls les mondes proches de l'écran sont animés ; les autres sont dessinés immobiles.
 
-Les niveaux sont des pastilles dorées avec leur numéro, et leurs étoiles au-dessus une fois gagnés. Les boss sont plus grands, avec une couronne et le portrait de l'adversaire. Un repère à ton initiale sautille au-dessus du niveau à jouer, et la carte s'ouvre centrée dessus. Toucher un niveau ouvre sa fiche : adversaire et son rang, difficulté (1 à 5 flammes), ses cartes, gains, étoiles obtenues, puis « Jouer ». Les niveaux pas encore débloqués s'ouvrent aussi, pour tout voir à l'avance : seul « Jouer » est bloqué. La carte est calculée une fois (positions, route, décors placés au hasard mais toujours au même endroit, jamais sur la route) et dessinée monde par monde en SVG.
+Les niveaux sont des pastilles dorées avec leur numéro, et leurs étoiles au-dessus une fois gagnés. Les boss sont plus grands, avec une couronne et le portrait de l'adversaire. Un repère à ton initiale sautille au-dessus du niveau à jouer, et la carte s'ouvre centrée dessus. Toucher un niveau ouvre sa fiche : adversaire et son rang, difficulté (1 à 5 flammes), ses cartes, gains, étoiles obtenues, puis « Jouer ». Toucher une carte de l'adversaire l'ouvre en grand, en 3D comme dans la collection (on la fait tourner, on la retourne), avec ses PV et ses attaques. Les niveaux pas encore débloqués s'ouvrent aussi, pour tout voir à l'avance : seul « Jouer » est bloqué. La carte est calculée une fois (positions, route, décors placés au hasard mais toujours au même endroit, jamais sur la route) et dessinée monde par monde en SVG.
 
 ## Pièces (`src/game/economy.ts`)
 

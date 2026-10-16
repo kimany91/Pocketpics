@@ -11,8 +11,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { portraitRef } from '../battle/arenas';
 import { botArt } from '../battle/botArt';
+import { type FighterInput, makeFighter } from '../battle/engine';
 import { type Level, TOTAL_LEVELS, getLevel, levelFighters, levelMmr } from '../battle/levels';
 import { AppText } from '../components/AppText';
+import { InspectFighter } from '../components/battle/InspectFighter';
 import { Button } from '../components/Button';
 import { CardFace } from '../components/card/CardFace';
 import { CoinChip, CoinIcon } from '../components/Coin';
@@ -73,6 +75,8 @@ export default function SoloScreen() {
 
 function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Level; best: number; done: boolean; locked: boolean; onClose(): void; bottom: number }) {
   const foes = useMemo(() => levelFighters(level), [level]);
+  // Carte de l'adversaire ouverte en grand, en 3D comme dans la collection.
+  const [inspect, setInspect] = useState<FighterInput | null>(null);
   const look = WORLD_LOOKS[level.world.n - 1];
   const rank = rankOf(levelMmr(level.n));
   return (
@@ -122,10 +126,19 @@ function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Lev
 
           <View style={styles.cards}>
             {foes.map((f) => (
-              <View key={f.ref} style={{ alignItems: 'center', gap: 4 }}>
+              <Pressable
+                key={f.ref}
+                onPress={() => {
+                  haptic.light();
+                  setInspect(f);
+                }}
+                style={({ pressed }) => [{ alignItems: 'center', gap: 4 }, pressed && { transform: [{ scale: 0.94 }] }]}
+                accessibilityRole="button"
+                accessibilityLabel={`Voir ${f.name}`}
+              >
                 <CardFace card={{ id: f.ref, rarity: f.rarity, name: f.name }} imageSource={botArt(f.ref)} width={64} quality="thumb" animated={false} />
                 <AppText style={styles.cardStat}>{`❤ ${f.battle.hp}`}</AppText>
-              </View>
+              </Pressable>
             ))}
           </View>
 
@@ -160,6 +173,16 @@ function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Lev
           </View>
         </View>
       </Animated.View>
+      {inspect ? (
+        <InspectFighter
+          fighter={makeFighter(inspect)}
+          card={{ id: inspect.ref, rarity: inspect.rarity, name: inspect.name }}
+          imageSource={botArt(inspect.ref)}
+          owner={`Carte de ${level.world.bot}`}
+          status={level.boss ? `Boss · Niveau ${level.n}` : `Niveau ${level.n}`}
+          onClose={() => setInspect(null)}
+        />
+      ) : null}
     </View>
   );
 }
