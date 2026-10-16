@@ -37,8 +37,9 @@ js = js.replace(/"(\/assets\/[^"]+)"/g, (m, path) => {
   if (!existsSync(file)) return m;
   if (!keepFont(path)) return '"data:,"';
   if (extname(path) === '.m4a') {
-    // musique : fichier à côté de la page (world-3.<empreinte>.m4a → music/world-3.m4a)
-    const name = `${basename(path).split('.')[0]}.m4a`;
+    // musique : fichier à côté de la page (world-3.<empreinte>.m4a → music/world-3.mp4 ; même
+    // conteneur MP4, mais l'extension .mp4 est servie par tous les hébergeurs)
+    const name = `${basename(path).split('.')[0]}.mp4`;
     copyFileSync(file, join(outDir, 'music', name));
     music.push(name);
     return `(self.__ppBase+"music/${name}")`;
