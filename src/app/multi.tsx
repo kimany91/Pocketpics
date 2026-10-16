@@ -1,6 +1,6 @@
 /** Multijoueur : mon rang, mes amis, et créer / rejoindre un combat classé. */
 import { router } from 'expo-router';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText } from '../components/AppText';
 import { Header } from '../components/Header';
@@ -24,7 +24,16 @@ export default function MultiScreen() {
     <Screen edges={['top', 'bottom']}>
       <Header title="Multijoueur" />
       <ScrollView contentContainerStyle={styles.content}>
-        {rank ? <RankCard mmr={shownMmr(rank)} wins={rank.wins} losses={rank.losses} /> : null}
+        {rank ? (
+          <Pressable
+            onPress={() => router.push('/ranks')}
+            style={({ pressed }) => pressed && { transform: [{ scale: 0.98 }], opacity: 0.9 }}
+            accessibilityRole="button"
+            accessibilityLabel="Voir tous les rangs"
+          >
+            <RankCard mmr={shownMmr(rank)} wins={rank.wins} losses={rank.losses} />
+          </Pressable>
+        ) : null}
         <View style={{ gap: 10, marginTop: 14 }}>
           <Tile
             icon="people"

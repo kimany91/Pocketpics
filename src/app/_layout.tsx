@@ -78,6 +78,7 @@ export default function RootLayout() {
         <Stack.Screen name="friends" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="solo" options={{ animation: 'fade' }} />
         <Stack.Screen name="multi" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="ranks" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="online/host" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
         <Stack.Screen name="online/join" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
         <Stack.Screen name="online/scan" options={{ animation: 'slide_from_bottom' }} />

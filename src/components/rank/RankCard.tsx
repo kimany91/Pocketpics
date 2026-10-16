@@ -1,4 +1,5 @@
-/** Mon rang en ligne : emblème, nom du rang, barre vers la division suivante, bilan. */
+/** Mon rang en ligne : emblème, nom du rang, barre vers la division suivante, bilan. Le toucher ouvre tous les rangs. */
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -32,6 +33,7 @@ export function RankCard({ mmr, wins, losses }: { mmr: number; wins: number; los
           {wins + losses > 0 ? `  ·  ${wins} V – ${losses} D` : ''}
         </AppText>
       </View>
+      <Ionicons name="chevron-forward" size={20} color={colors.textDim} />
     </View>
   );
 }
