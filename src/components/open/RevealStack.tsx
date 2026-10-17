@@ -29,8 +29,10 @@ import { RevealCard, type RevealCardHandle } from './RevealCard';
 const GOLD = ['#F7C948', '#FFF1B8', '#E0A526'];
 const CHROMA = ['#FF7EB3', '#FFD36E', '#8CFFB4', '#6EC8FF', '#B48CFF'];
 const DIVINE = ['#FFE7A0', '#FFFFFF', '#D9DCE6', '#F5CF63', '#FFB3DA', '#A6E4FF'];
+const GALAXY = ['#B98CFF', '#FFFFFF', '#3FD0FF', '#FF5FCB', '#6F7BFF', '#E6DBFF'];
 
 function fxColors(r: Rarity): string[] {
+  if (r.frameStyle === 'galaxy') return GALAXY;
   if (r.frameStyle === 'divine') return DIVINE;
   if (r.frameStyle === 'chromatic') return CHROMA;
   if (r.frameStyle === 'gold') return GOLD;
@@ -38,6 +40,7 @@ function fxColors(r: Rarity): string[] {
 }
 
 function raysFor(r: Rarity) {
+  if (r.frameStyle === 'galaxy') return ['#B98CFF', '#3FD0FF', '#FF5FCB'];
   if (r.frameStyle === 'divine') return ['#FFE7A0', '#FFFFFF', '#FFB3DA'];
   if (r.frameStyle === 'chromatic') return ['#FF9AD0', '#7FD8FF', '#9DFFC5'];
   return ['#F7C948', '#FFF1B8'];
@@ -237,7 +240,7 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
 
       {revealed && hype >= 4 ? <Flash key={`f-${index}`} trigger={fx} color={hype >= 5 ? '#FFFFFF' : rarity.color} peak={hype >= 5 ? 0.9 : 0.35} /> : null}
       {!revealed && level >= 4 ? <Flash trigger={upFx} color={shown.color} peak={0.12 + (level - 4) * 0.06} /> : null}
-      {revealed && hype >= 7 ? <Flash key={`g-${index}`} trigger={fx} color="#FFE7A0" peak={0.5} /> : null}
+      {revealed && hype >= 7 ? <Flash key={`g-${index}`} trigger={fx} color={rarity.frameStyle === 'galaxy' ? '#C9A6FF' : '#FFE7A0'} peak={0.5} /> : null}
     </View>
   );
 }

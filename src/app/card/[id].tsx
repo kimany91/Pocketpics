@@ -98,10 +98,11 @@ export default function CardScreen() {
   const hasNext = index >= 0 && index < list.length - 1;
 
   const r = getRarity(card?.rarity ?? 'common');
-  const divine = r.frameStyle === 'divine';
+  // Divine et Galaxy ont des ornements qui débordent : la carte est un peu plus petite.
+  const divine = r.frameStyle === 'divine' || r.frameStyle === 'galaxy';
   const baseW = Math.min(width * 0.78, (height * 0.56) / CARD_RATIO, 380);
   // La Divine est un peu plus petite pour laisser la place à ses ornements.
-  const widthOf = (c: Card) => baseW * (getRarity(c.rarity).frameStyle === 'divine' ? 0.84 : 1);
+  const widthOf = (c: Card) => baseW * (['divine', 'galaxy'].includes(getRarity(c.rarity).frameStyle) ? 0.84 : 1);
   const cardW = baseW * (divine ? 0.84 : 1);
   const stageH = baseW * CARD_RATIO;
   /** Écart entre deux cartes : la voisine dépasse d'une vingtaine de points sur le bord de l'écran. */

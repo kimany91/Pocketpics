@@ -21,6 +21,7 @@ import { Frame, Sweep } from './Frame';
 import { Foil } from './Foil';
 import { DivineHalo } from './DivineHalo';
 import { DivineOrnaments } from './Ornaments';
+import { ChromaticPhoto, GALAXY_COLORS, GalaxyGem, GalaxyHalo, GalaxyOrnaments, GalaxyTwinkles, GalaxyWindowGlow } from './Galaxy';
 
 export interface CardLike {
   id: string;
@@ -56,6 +57,10 @@ const FOILS: Record<string, { colors: string[]; strength: number }> = {
     colors: ['rgba(255,111,168,0.85)', 'rgba(255,230,107,0.85)', 'rgba(124,255,178,0.85)', 'rgba(110,216,255,0.85)', 'rgba(213,140,255,0.85)', 'rgba(255,111,168,0.85)'],
     strength: 0.5,
   },
+  galaxy: {
+    colors: ['rgba(185,140,255,0.9)', 'rgba(255,95,203,0.85)', 'rgba(63,208,255,0.9)', 'rgba(255,255,255,0.95)', 'rgba(111,123,255,0.85)', 'rgba(185,140,255,0.9)'],
+    strength: 0.7,
+  },
   divine: {
     colors: ['rgba(255,240,190,0.95)', 'rgba(255,140,200,0.8)', 'rgba(255,236,120,0.9)', 'rgba(130,255,200,0.8)', 'rgba(255,255,255,0.95)', 'rgba(120,200,255,0.85)', 'rgba(205,150,255,0.85)', 'rgba(255,240,190,0.95)'],
     strength: 0.7,
@@ -67,9 +72,11 @@ const SPARKS: Record<string, { colors: string[]; count: number; size: number }> 
   gold: { colors: ['#FFD25E', '#FFF3C2', '#F7B733'], count: 3, size: 0.08 },
   chromatic: { colors: ['#FF7EB3', '#FFE07A', '#8CFFB4', '#7CCBFF', '#C9A6FF'], count: 11, size: 0.1 },
   divine: { colors: ['#FFFFFF', '#FFE7A0', '#FFB3DA', '#A6E4FF', '#FFF6D8'], count: 14, size: 0.12 },
+  galaxy: { colors: GALAXY_COLORS, count: 12, size: 0.1 },
 };
 
 function effectKey(rarity: ReturnType<typeof getRarity>) {
+  if (rarity.frameStyle === 'galaxy') return 'galaxy';
   if (rarity.frameStyle === 'divine') return 'divine';
   if (rarity.frameStyle === 'chromatic') return 'chromatic';
   if (rarity.frameStyle === 'gold') return 'gold';
@@ -79,7 +86,9 @@ function effectKey(rarity: ReturnType<typeof getRarity>) {
 export const CardFace = memo(function CardFace({ card, width, quality = 'full', animated = true, tilt, imageUri, imageSource }: Props) {
   const rarity = getRarity(card.rarity);
   const height = width * CARD_RATIO;
-  const border = Math.max(3, width * (quality === 'thumb' ? 0.05 : 0.042));
+  // Galaxy : un cadre plus large, pour qu'on voie bien l'espace autour de la photo.
+  const galaxy = rarity.frameStyle === 'galaxy';
+  const border = Math.max(3, width * (galaxy ? (quality === 'thumb' ? 0.09 : 0.1) : quality === 'thumb' ? 0.05 : 0.042));
   const radius = width * 0.07;
   const innerRadius = Math.max(2, radius - border * 0.7);
   const uri = imageUri ?? (quality === 'thumb' ? cardThumbUri(card.id) : cardImageUri(card.id));
@@ -92,8 +101,10 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
   return (
     <View style={{ width, height }}>
     {divine ? <DivineHalo width={width} height={height} /> : null}
+    {galaxy ? <GalaxyHalo width={width} height={height} /> : null}
     <View style={[styles.card, { width, height, borderRadius: radius }]}>
       <Frame rarity={rarity} width={width} height={height} animated={animated} />
+      {galaxy ? <GalaxyWindowGlow top={border} left={border} width={width - border * 2} height={height - border * 2} radius={innerRadius} border={border} /> : null}
       <View
         pointerEvents="none"
         style={[styles.window, { top: border, left: border, right: border, bottom: border, borderRadius: innerRadius }]}
@@ -103,6 +114,7 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
         ) : uri ? (
           <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={card.id} transition={quality === 'thumb' ? 120 : 0} />
         ) : null}
+        {galaxy ? <ChromaticPhoto width={width - border * 2} height={height - border * 2} /> : null}
         {rarity.frameStyle === 'chromatic' && !tilt ? <Holo colors={CHROMA_HOLO} opacity={0.18} animated={animated} width={width} height={height} /> : null}
         {rarity.frameStyle === 'divine' && !tilt ? <Holo colors={DIVINE_HOLO} opacity={0.42} animated={animated} width={width} height={height} duration={1800} /> : null}
         {fx === 'mythic' && tilt ? <HoloFoil tilt={tilt} width={width} height={height} {...FOILS[fx]} /> : null}
@@ -122,9 +134,15 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
         ) : null}
         <View style={[StyleSheet.absoluteFill, styles.innerStroke, { borderRadius: innerRadius }]} pointerEvents="none" />
       </View>
-      <Gem color={rarity.color} size={Math.max(7, width * 0.07)} right={border + width * 0.035} top={border + width * 0.035} />
+      {galaxy ? <GalaxyTwinkles width={width} height={height} /> : null}
+      {galaxy ? (
+        <GalaxyGem size={Math.max(7, width * 0.07)} right={border + width * 0.035} top={border + width * 0.035} />
+      ) : (
+        <Gem color={rarity.color} size={Math.max(7, width * 0.07)} right={border + width * 0.035} top={border + width * 0.035} />
+      )}
     </View>
     {divine ? <DivineOrnaments width={width} height={height} /> : null}
+    {galaxy ? <GalaxyOrnaments width={width} height={height} /> : null}
     </View>
   );
 });

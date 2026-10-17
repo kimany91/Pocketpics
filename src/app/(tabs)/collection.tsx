@@ -100,7 +100,7 @@ export default function CollectionScreen() {
       return () => setFocused(false);
     }, []),
   );
-  const hasHolo = useMemo(() => cards.some((c) => ['chromatic', 'divine'].includes(getRarity(c.rarity).frameStyle)), [cards]);
+  const hasHolo = useMemo(() => cards.some((c) => ['chromatic', 'divine', 'galaxy'].includes(getRarity(c.rarity).frameStyle)), [cards]);
   const favCount = useMemo(() => cards.filter((c) => c.favorite).length, [cards]);
   const [sort, setSort] = useState<Sort>('recent');
   const cols = width > 600 ? 4 : 3;
@@ -329,7 +329,7 @@ const Thumb = memo(function Thumb({
   const r = getRarity(card.rarity);
   const height = width * CARD_RATIO;
   // Cartes chromatiques (Ultra Légendaire, Divine) : le reflet suit les mouvements du téléphone.
-  const holo = r.frameStyle === 'chromatic' || r.frameStyle === 'divine';
+  const holo = r.frameStyle === 'chromatic' || r.frameStyle === 'divine' || r.frameStyle === 'galaxy';
   // Masquée pendant que la carte est affichée en grand (elle s'est « envolée » de la grille).
   const away = useCollectionView((s) => s.openId === card.id);
   const box = useRef<View>(null);

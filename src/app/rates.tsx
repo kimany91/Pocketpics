@@ -7,7 +7,7 @@ import { AppText } from '../components/AppText';
 import { CardFace } from '../components/card/CardFace';
 import { Rise } from '../components/Rise';
 import { CARDS_PER_PACK, MAX_STORED_DRAWS } from '../game/draws';
-import { RARITIES, formatChance } from '../game/rarity';
+import { PACK_RARITIES, RARITIES, formatChance } from '../game/rarity';
 import { useGame } from '../state/game';
 import { resetWebSave } from '../storage/disk';
 import { colors } from '../theme';
@@ -26,10 +26,11 @@ export default function RatesScreen() {
         <AppText variant="caption" style={{ marginBottom: 18 }}>
           {`Un tirage toutes les 12 h, jusqu'à ${MAX_STORED_DRAWS} en réserve. Chaque paquet contient ${CARDS_PER_PACK} photos de ta galerie, jamais deux fois la même.`}
         </AppText>
-        <AppText variant="label" style={{ marginTop: 4, marginBottom: 4, color: colors.textDim }}>
+        <GalaxyRow owned={cards.some((c) => c.rarity === 'galaxy')} />
+        <AppText variant="label" style={{ marginTop: 22, marginBottom: 4, color: colors.textDim }}>
           CHANCES DE BASE PAR CARTE
         </AppText>
-        {[...RARITIES].reverse().map((r, i) => {
+        {[...PACK_RARITIES].reverse().map((r, i) => {
           const owned = cards.filter((c) => c.rarity === r.id).length;
           return (
             <Rise key={r.id} visit={1} index={i} delay={140} dy={14} style={styles.row}>
@@ -49,6 +50,28 @@ export default function RatesScreen() {
         {Platform.OS === 'web' ? <WebReset /> : null}
       </ScrollView>
     </View>
+  );
+}
+
+/** La Galaxy ne sort d'aucun paquet : carte unique, gagnée contre le boss final. */
+function GalaxyRow({ owned }: { owned: boolean }) {
+  const galaxy = RARITIES.find((r) => r.id === 'galaxy');
+  if (!galaxy) return null;
+  return (
+    <Rise visit={1} index={0} delay={100} dy={14} style={styles.galaxy}>
+      <View style={{ padding: 8 }}>
+        <CardFace card={{ id: 'preview-galaxy', rarity: 'galaxy', name: null }} width={44} quality="thumb" imageUri="" />
+      </View>
+      <View style={{ flex: 1 }}>
+        <AppText variant="heading" style={{ color: galaxy.color }}>
+          Galaxy
+        </AppText>
+        <AppText variant="caption">{owned ? 'Elle est dans ta collection !' : 'Unique, à gagner contre le Grand Portrait'}</AppText>
+      </View>
+      <AppText variant="heading" style={[styles.pct, { color: galaxy.color }]}>
+        {owned ? '1 / 1' : '✦'}
+      </AppText>
+    </Rise>
   );
 }
 
@@ -89,4 +112,16 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   pct: { fontVariant: ['tabular-nums'] },
+  galaxy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(185,140,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(185,140,255,0.28)',
+    overflow: 'hidden',
+  },
 });

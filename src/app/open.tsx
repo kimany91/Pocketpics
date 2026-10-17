@@ -1,5 +1,9 @@
-/** Ouverture d'un paquet : déchirure → les cartes jaillissent → révélations → récapitulatif. */
-import { router } from 'expo-router';
+/**
+ * Ouverture d'un paquet : déchirure → les cartes jaillissent → révélations → récapitulatif.
+ * Avec `?galaxy=1` : naissance de la carte Galaxy (gagnée contre le Grand Portrait) :
+ * vortex cosmique → la carte sort de la galaxie → on la fait monter jusqu'à Galaxy → vue 3D.
+ */
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
@@ -17,12 +21,13 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { playSfx } from '../audio/sfx';
+import { playRiser, playSfx } from '../audio/sfx';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { CardBack } from '../components/card/CardBack';
 import { CardFace } from '../components/card/CardFace';
-import { Burst, Embers, Flash, Glow } from '../components/fx';
+import { GalaxySpace } from '../components/card/ViewerEnvironment';
+import { Burst, Embers, Flash, Glow, Shockwave } from '../components/fx';
 import { CardFanOut } from '../components/open/CardFanOut';
 import { REVEAL_CAPTION_H, revealCardWidth } from '../components/open/layout';
 import { PackTear } from '../components/open/PackTear';
@@ -42,8 +47,10 @@ type Phase = 'pack' | 'fan' | 'waiting' | 'reveal' | 'summary';
 const AMBIENT = ['#B99CFF', '#FFFFFF', '#7CCBFF', '#FFD9A0'];
 
 export default function OpenScreen() {
+  const { galaxy } = useLocalSearchParams<{ galaxy?: string }>();
   // Changer de clé relance une session complète : « Paquet suivant ».
   const [round, setRound] = useState(0);
+  if (galaxy === '1') return <GalaxySession />;
   return <PackSession key={round} onNext={() => setRound((r) => r + 1)} />;
 }
 
@@ -285,7 +292,210 @@ function SummaryCard({ card, width, delay, best }: { card: Card; width: number; 
   );
 }
 
+/* --------------------------------- Galaxy -------------------------------- */
+
+const galaxySwirl = require('../../assets/fx/galaxy-swirl.png');
+const GALAXY_FX = ['#B98CFF', '#FFFFFF', '#3FD0FF', '#FF5FCB', '#6F7BFF'];
+/** Durée du vortex avant que la carte ne se pose. */
+const VORTEX_MS = 2700;
+
+type GalaxyState = { kind: 'loading' } | { kind: 'ready'; card: Card } | { kind: 'already'; cardId: string | null } | { kind: 'locked' } | { kind: 'error'; message: string };
+
+/**
+ * Naissance de la carte Galaxy. `claimGalaxy()` prépare la carte pendant le vortex ;
+ * si elle a déjà été réclamée (ou que le boss n'est pas battu), un message poli s'affiche.
+ */
+function GalaxySession() {
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const [state, setState] = useState<GalaxyState>(() => {
+    const save = useGame.getState().save;
+    if (save?.galaxyClaimed) return { kind: 'already', cardId: useGame.getState().cards.find((c) => c.rarity === 'galaxy')?.id ?? null };
+    return { kind: 'loading' };
+  });
+  const [phase, setPhase] = useState<'vortex' | 'reveal'>('vortex');
+  const [landed, setLanded] = useState(false);
+  const started = useRef(false);
+  const tilt = useSharedValue(0);
+
+  useEffect(() => {
+    if (started.current || state.kind !== 'loading') return;
+    started.current = true;
+    useGame
+      .getState()
+      .claimGalaxy()
+      .then((card) => {
+        if (card) return setState({ kind: 'ready', card });
+        const save = useGame.getState().save;
+        if (save?.galaxyClaimed) setState({ kind: 'already', cardId: useGame.getState().cards.find((c) => c.rarity === 'galaxy')?.id ?? null });
+        else setState({ kind: 'locked' });
+      })
+      .catch((e) =>
+        setState({
+          kind: 'error',
+          message:
+            e instanceof NoPhotosLeftError
+              ? 'Il faut une photo encore jamais tirée pour créer ta carte Galaxy. Prends une nouvelle photo, puis reviens la réclamer !'
+              : e instanceof Error
+                ? e.message
+                : String(e),
+        }),
+      );
+  }, [state.kind]);
+
+  // Le vortex terminé et la carte prête : on passe aux révélations.
+  useEffect(() => {
+    if (landed && state.kind === 'ready') setPhase('reveal');
+  }, [landed, state.kind]);
+
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
+  const playing = state.kind === 'loading' || state.kind === 'ready';
+
+  return (
+    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <GalaxySpace width={width} height={height} tilt={tilt} />
+      {playing && phase === 'vortex' ? <Vortex waiting={landed && state.kind === 'loading'} onLanded={() => setLanded(true)} /> : null}
+      {state.kind === 'ready' && phase === 'reveal' ? (
+        <RevealStack cards={[state.card]} firsts={new Set(['galaxy'])} onDone={() => router.replace(`/card/${state.card.id}`)} />
+      ) : null}
+      {state.kind === 'already' ? (
+        <GalaxyNotice
+          title="Ta carte Galaxy est déjà là"
+          text="Il n'existe qu'une seule Galaxy par joueur, et la tienne brille déjà dans ta collection."
+          primary={state.cardId ? { label: 'Voir ma Galaxy', onPress: () => router.replace(`/card/${state.cardId}`) } : undefined}
+          onClose={close}
+        />
+      ) : null}
+      {state.kind === 'locked' ? (
+        <GalaxyNotice title="La Galaxy se mérite" text="Cette carte unique se gagne en battant le Grand Portrait, le boss du niveau 130 de l'aventure." onClose={close} />
+      ) : null}
+      {state.kind === 'error' ? <GalaxyNotice title="La Galaxy attend une photo" text={state.message} onClose={close} /> : null}
+    </View>
+  );
+}
+
+/**
+ * Le vortex : une galaxie tourbillonne et grandit, puis une carte en jaillit en
+ * tournoyant et se pose au centre (même place que la carte des révélations).
+ */
+function Vortex({ waiting, onLanded }: { waiting: boolean; onLanded(): void }) {
+  const { width: sw, height: sh } = useWindowDimensions();
+  const cardW = revealCardWidth(sw, sh);
+  const swirl = useSharedValue(0);
+  const grow = useSharedValue(0);
+  const card = useSharedValue(0);
+  const glow = useSharedValue(0);
+  const [boom, setBoom] = useState(0);
+  const [caption, setCaption] = useState(0);
+  const size = Math.max(sw, sh) * 1.2;
+
+  useEffect(() => {
+    playRiser(VORTEX_MS);
+    haptic.light();
+    swirl.value = withTiming(1, { duration: VORTEX_MS + 2400, easing: Easing.out(Easing.cubic) });
+    grow.value = withTiming(1, { duration: VORTEX_MS, easing: Easing.inOut(Easing.quad) });
+    glow.value = withTiming(1, { duration: VORTEX_MS, easing: Easing.in(Easing.quad) });
+    card.value = withDelay(VORTEX_MS - 1100, withTiming(1, { duration: 1100, easing: Easing.out(Easing.back(1.1)) }));
+    const timers = [
+      setTimeout(() => setCaption(1), 300),
+      ...[600, 1100, 1500, 1800, 2050, 2250, 2400].map((t, i) => setTimeout(() => (i > 3 ? haptic.medium() : haptic.light()), t)),
+      setTimeout(() => {
+        setBoom(1);
+        playSfx('up7', { volume: 0.8 });
+        haptic.sequence(['heavy', 'rigid', 'heavy'], 80);
+      }, VORTEX_MS),
+      setTimeout(() => setCaption(2), VORTEX_MS + 100),
+      setTimeout(onLanded, VORTEX_MS + 650),
+    ];
+    return () => timers.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const swirlStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(1, grow.value * 2) * (1 - card.value * 0.85),
+    transform: [{ scaleY: 0.7 }, { rotate: `${swirl.value * 1440}deg` }, { scale: 0.15 + grow.value * 1.05 }],
+  }));
+  const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value * 0.9, transform: [{ scale: 0.4 + glow.value * 0.8 }] }));
+  const cardStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(1, card.value * 3),
+    transform: [{ perspective: 1200 }, { rotateY: `${(1 - card.value) * 1080}deg` }, { rotateZ: `${(1 - card.value) * -40}deg` }, { scale: 0.05 + card.value * 0.95 }],
+  }));
+
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      <View style={[StyleSheet.absoluteFill, styles.centerAbs]} pointerEvents="none">
+        <Animated.View style={[{ width: size, height: size }, swirlStyle]}>
+          <Animated.Image source={galaxySwirl} style={{ width: size, height: size }} />
+        </Animated.View>
+      </View>
+      <View style={[styles.stage, { paddingBottom: REVEAL_CAPTION_H }]} pointerEvents="none">
+        <View style={{ width: sw, height: cardW * CARD_RATIO + 40, alignItems: 'center', justifyContent: 'center' }}>
+          <Animated.View style={[{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }, glowStyle]}>
+            <Glow color="#B98CFF" size={cardW * 2.8} />
+          </Animated.View>
+          <Shockwave trigger={boom} color="#8FE8FF" size={cardW * 1.2} />
+          <Shockwave trigger={boom} color="#FF6FD0" size={cardW * 1.2} delay={150} />
+          <Burst trigger={boom} colors={GALAXY_FX} count={40} radius={cardW * 1.3} />
+          <Animated.View style={cardStyle}>
+            <CardBack width={cardW} />
+          </Animated.View>
+        </View>
+      </View>
+      <View style={[styles.vortexCaption, { top: sh * 0.12 }]} pointerEvents="none">
+        {caption >= 1 ? (
+          <Animated.Text key={`c${caption}`} entering={FadeIn.duration(600)} style={styles.galaxyTitle}>
+            {caption === 1 ? 'Le Grand Portrait s’efface…' : waiting ? 'Les étoiles s’alignent…' : 'Une carte naît des étoiles'}
+          </Animated.Text>
+        ) : null}
+      </View>
+      <Flash trigger={boom} color="#E6DBFF" peak={0.7} />
+    </View>
+  );
+}
+
+function GalaxyNotice({ title, text, primary, onClose }: { title: string; text: string; primary?: { label: string; onPress(): void }; onClose(): void }) {
+  return (
+    <Animated.View entering={FadeInUp.duration(450)} style={[styles.centered, { gap: 10 }]}>
+      <View style={styles.noticeCard}>
+        <AppText style={styles.noticeStar}>✦</AppText>
+        <AppText variant="title" style={{ textAlign: 'center' }}>
+          {title}
+        </AppText>
+        <AppText variant="caption" style={{ textAlign: 'center', lineHeight: 19, marginBottom: 10 }}>
+          {text}
+        </AppText>
+        {primary ? <Button label={primary.label} icon="sparkles" size="lg" onPress={primary.onPress} /> : null}
+        <Button label="Retour" kind={primary ? 'ghost' : 'secondary'} onPress={onClose} />
+      </View>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
+  stage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  vortexCaption: { position: 'absolute', left: 24, right: 24, alignItems: 'center' },
+  galaxyTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 20,
+    color: '#EDE3FF',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(185,140,255,0.9)',
+    textShadowRadius: 14,
+    textShadowOffset: { width: 0, height: 0 },
+  },
+  noticeCard: {
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'stretch',
+    gap: 10,
+    padding: 22,
+    borderRadius: 24,
+    backgroundColor: 'rgba(12,8,34,0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(185,140,255,0.35)',
+  },
+  noticeStar: { fontSize: 30, color: '#C9A6FF', textAlign: 'center', textShadowColor: '#B98CFF', textShadowRadius: 16, textShadowOffset: { width: 0, height: 0 } },
   luckyBanner: { position: 'absolute', left: 24, right: 24, alignItems: 'center', gap: 2 },
   luckyTitle: { fontFamily: fonts.black, fontSize: 22, color: '#FFD86B', letterSpacing: 0.5, textShadowColor: 'rgba(255,190,60,0.6)', textShadowRadius: 12 },
   root: { flex: 1, backgroundColor: '#060608' },

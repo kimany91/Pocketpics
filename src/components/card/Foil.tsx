@@ -16,16 +16,18 @@ const glitterA = require('../../../assets/fx/glitter-a.png');
 const glitterB = require('../../../assets/fx/glitter-b.png');
 const glowTex = require('../../../assets/fx/glow.png');
 
-export type FoilKind = 'gold' | 'chromatic' | 'divine';
+export type FoilKind = 'gold' | 'chromatic' | 'divine' | 'galaxy';
 
 const SPECTRUM = ['#FF3B6B', '#FF9F2E', '#FFF04A', '#4BFF8A', '#2EE6FF', '#3D7BFF', '#B04BFF', '#FF3B6B'];
 const GOLD = ['#7A4A08', '#F7C948', '#FFF6CF', '#D9962A', '#FFE9A0', '#9C6410', '#FFF2B8', '#7A4A08'];
+const NEBULA = ['#B04BFF', '#FF5FCB', '#FFFFFF', '#3FD0FF', '#6F7BFF', '#FFE3FF', '#7FE6FF', '#B04BFF'];
 const DIVINE = ['#FF6FB5', '#FFD46B', '#FFFFFF', '#7CFFC8', '#6EC8FF', '#FFF2C4', '#C98CFF', '#FF6FB5'];
 
 const SETTINGS: Record<FoilKind, { bands: string[]; band: number; glitter: number; glare: number; tint: string; second: boolean }> = {
   gold: { bands: GOLD, band: 0.36, glitter: 0, glare: 0.5, tint: '#FFE6A0', second: false },
   chromatic: { bands: SPECTRUM, band: 0.4, glitter: 0.45, glare: 0.45, tint: '#FFFFFF', second: false },
   divine: { bands: DIVINE, band: 0.48, glitter: 0.6, glare: 0.6, tint: '#FFF6DA', second: true },
+  galaxy: { bands: NEBULA, band: 0.3, glitter: 0.55, glare: 0.3, tint: '#E6DBFF', second: false },
 };
 
 export function Foil({

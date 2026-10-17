@@ -4,10 +4,11 @@
  *  - Légendaire : salle dorée, rayons d'or, poussière dorée
  *  - Ultra Légendaire : la même chose en chromatique
  *  - Divine : l'espace (étoiles, nébuleuses, étoiles filantes)
+ *  - Galaxy : au cœur d'une galaxie spirale qui tourne, nébuleuses et pluie d'étoiles
  */
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   type SharedValue,
@@ -24,6 +25,8 @@ import type { Rarity } from '../../game/rarity';
 import { Embers, Glow, Rays } from '../fx';
 
 const CHROMA = ['#FF7EB3', '#FFE07A', '#8CFFB4', '#7CCBFF', '#C9A6FF'];
+const galaxyTex = require('../../../assets/fx/galaxy.jpg');
+const swirlTex = require('../../../assets/fx/galaxy-swirl.png');
 
 export function hasEnvironment(rarity: Rarity) {
   return rarity.rank >= 4;
@@ -41,6 +44,7 @@ export function ViewerEnvironment(props: { rarity: Rarity; width: number; height
 
 function Scene({ rarity, width, height, tilt }: { rarity: Rarity; width: number; height: number; tilt: SharedValue<number> }) {
   const size = Math.max(width, height);
+  if (rarity.frameStyle === 'galaxy') return <GalaxySpace width={width} height={height} tilt={tilt} />;
   if (rarity.frameStyle === 'divine') return <Space width={width} height={height} tilt={tilt} />;
   if (rarity.frameStyle === 'chromatic') {
     return (
@@ -154,6 +158,82 @@ function Space({ width, height, tilt }: { width: number; height: number; tilt: S
       <View style={[styles.center, { opacity: 0.22 }]}>
         <Rays colors={['#FFE7A0', '#FFFFFF']} size={size * 1.4} visible duration={40000} />
       </View>
+    </View>
+  );
+}
+
+/**
+ * Décor de la Galaxy : on est dans la galaxie. Le fond d'espace respire, une grande
+ * spirale tourne (vue un peu de biais), une seconde plus petite tourne en sens inverse,
+ * des nébuleuses colorées dérivent et des étoiles filent. Parallaxe selon l'inclinaison.
+ */
+export function GalaxySpace({ width, height, tilt }: { width: number; height: number; tilt: SharedValue<number> }) {
+  const stars = useMemo(
+    () =>
+      Array.from({ length: 110 }, (_, i) => ({
+        x: halton(i + 3, 2) * (width + 60) - 30,
+        y: halton(i + 3, 3) * height,
+        s: 1 + halton(i + 3, 5) * 2.2,
+        twinkle: i % 3 === 0,
+        delay: Math.round(halton(i + 3, 7) * 3000),
+        depth: 0.4 + halton(i + 3, 11) * 0.6,
+      })),
+    [width, height],
+  );
+  const size = Math.max(width, height);
+  const turn = useSharedValue(0);
+  const breath = useSharedValue(0);
+  useEffect(() => {
+    turn.value = withRepeat(withTiming(1, { duration: 60000, easing: Easing.linear }), -1, false);
+    breath.value = withRepeat(withTiming(1, { duration: 7000, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => {
+      cancelAnimation(turn);
+      cancelAnimation(breath);
+    };
+  }, [turn, breath]);
+  const bg = useAnimatedStyle(() => ({ transform: [{ translateX: -tilt.value * 10 }, { scale: 1.08 + breath.value * 0.06 }] }));
+  const big = useAnimatedStyle(() => ({
+    opacity: 0.55 + breath.value * 0.2,
+    transform: [{ translateX: -tilt.value * 14 }, { scaleY: 0.62 }, { rotate: `${turn.value * 360}deg` }],
+  }));
+  const small = useAnimatedStyle(() => ({ transform: [{ translateX: -tilt.value * 22 }, { scaleY: 0.55 }, { rotate: `${-turn.value * 720}deg` }] }));
+  const near = useAnimatedStyle(() => ({ transform: [{ translateX: -tilt.value * 20 }] }));
+  const far = useAnimatedStyle(() => ({ transform: [{ translateX: -tilt.value * 8 }] }));
+  const spiral = size * 1.5;
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <LinearGradient colors={['#0B0630', '#160A3C', '#07041C', '#010008']} locations={[0, 0.4, 0.75, 1]} style={StyleSheet.absoluteFill} />
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: 0.6 }, bg]}>
+        <Image source={galaxyTex} resizeMode="cover" style={StyleSheet.absoluteFill} />
+      </Animated.View>
+      <LinearGradient colors={['rgba(5,3,20,0.55)', 'rgba(5,3,20,0)', 'rgba(5,3,20,0.6)']} locations={[0, 0.45, 1]} style={StyleSheet.absoluteFill} />
+      <Nebula color="#8A3CFF" size={size * 0.95} x={width * 0.2} y={height * 0.25} duration={15000} />
+      <Nebula color="#FF4FC0" size={size * 0.7} x={width * 0.85} y={height * 0.3} duration={12000} />
+      <Nebula color="#2EC8FF" size={size * 0.75} x={width * 0.75} y={height * 0.75} duration={17000} />
+      <Nebula color="#4A5BFF" size={size * 0.8} x={width * 0.15} y={height * 0.8} duration={20000} />
+      <View style={styles.center}>
+        <Animated.View style={[{ width: spiral, height: spiral }, big]}>
+          <Image source={swirlTex} style={{ width: spiral, height: spiral }} />
+        </Animated.View>
+      </View>
+      <View style={[styles.center, { opacity: 0.45 }]}>
+        <Animated.View style={[{ width: spiral * 0.45, height: spiral * 0.45 }, small]}>
+          <Image source={swirlTex} style={{ width: spiral * 0.45, height: spiral * 0.45, tintColor: '#FFC2F0' }} />
+        </Animated.View>
+      </View>
+      <Animated.View style={[StyleSheet.absoluteFill, far]}>
+        {stars.filter((s) => s.depth < 0.7).map((s, i) => (
+          <Star key={i} {...s} />
+        ))}
+      </Animated.View>
+      <Animated.View style={[StyleSheet.absoluteFill, near]}>
+        {stars.filter((s) => s.depth >= 0.7).map((s, i) => (
+          <Star key={i} {...s} />
+        ))}
+      </Animated.View>
+      <ShootingStar width={width} height={height} delay={600} />
+      <ShootingStar width={width} height={height} delay={2900} />
+      <ShootingStar width={width} height={height} delay={5100} />
     </View>
   );
 }

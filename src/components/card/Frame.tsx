@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import type { Rarity } from '../../game/rarity';
+import { GalaxyFrame } from './Galaxy';
 
 const CHROMA = ['#FF6FA8', '#FFB86B', '#FFE66B', '#7CFFB2', '#6ED8FF', '#8C8CFF', '#D58CFF', '#FF6FA8'];
 /** Or et argent, avec des reflets rose, cyan et lilas : la couleur qui tourne se voit bien. */
@@ -21,6 +22,8 @@ export function Frame({ rarity, width, height, animated }: { rarity: Rarity; wid
   switch (rarity.frameStyle) {
     case 'chromatic':
       return <Spinning colors={CHROMA} width={width} height={height} animated={animated} duration={5000} />;
+    case 'galaxy':
+      return <GalaxyFrame width={width} height={height} radius={width * 0.07} />;
     case 'divine':
       return <Spinning colors={DIVINE} width={width} height={height} animated duration={2600} />;
     case 'gold':
