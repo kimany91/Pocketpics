@@ -25,6 +25,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Ellipse, G, Line, Path, Rect } from 'react-native-svg';
 
+import { ARENAS, portraitRef } from '../../battle/arenas';
+import { botArt } from '../../battle/botArt';
 import { Embers, Glow, Twinkles } from '../fx';
 import {
   BIGTOP_FLAG,
@@ -35,6 +37,7 @@ import {
   DecorSprite,
   EARTH_LAND,
   FAIR,
+  GRAND,
   FARM,
   FERRIS_CARS,
   FerrisRim,
@@ -70,7 +73,7 @@ import {
 import type { Placed, WorldArea } from './mapLayout';
 import { type DecorKind, OUTLINE as OL, SKY_H } from './worlds';
 
-type Motion = 'sway' | 'swayBig' | 'bob' | 'pulse' | 'twinkle' | 'float' | 'spin' | 'squash' | 'wobble' | 'peck' | 'scan' | 'still';
+type Motion = 'sway' | 'swayBig' | 'bob' | 'pulse' | 'twinkle' | 'float' | 'spin' | 'squash' | 'wobble' | 'peck' | 'scan' | 'hover' | 'still';
 
 const MOTION: Partial<Record<DecorKind, Motion>> = {
   tree: 'sway',
@@ -132,6 +135,9 @@ const MOTION: Partial<Record<DecorKind, Motion>> = {
   vending: 'still',
   // Lune
   dish: 'scan',
+  // Galerie
+  frame: 'hover',
+  pedestal: 'still',
 };
 
 /** Décors animés (les autres restent dans le grand SVG). */
@@ -256,7 +262,7 @@ export function LiveDecor({ d, seed, top }: { d: Placed; seed: number; top: numb
   const s = d.scale;
   const size = BOX * s;
   const period =
-    (motion === 'swayBig' ? 1700 : motion === 'bob' ? 2200 : motion === 'spin' ? 9000 : motion === 'peck' ? 2400 : motion === 'scan' ? 5200 : motion === 'float' ? (d.kind === 'cloud' ? 4200 : 3000) : 2600) + hash(seed) * 1600;
+    (motion === 'swayBig' ? 1700 : motion === 'bob' ? 2200 : motion === 'spin' ? 9000 : motion === 'peck' ? 2400 : motion === 'scan' ? 5200 : motion === 'float' ? (d.kind === 'cloud' ? 4200 : 3000) : motion === 'hover' ? 3400 : 2600) + hash(seed) * 1600;
   const t = useOsc(period, hash(seed + 7) * 1500, motion !== 'spin' && motion !== 'peck');
   const off = (BASE - BOX / 2) * s;
   const flipK = d.flip ? -1 : 1;
@@ -286,6 +292,8 @@ export function LiveDecor({ d, seed, top }: { d: Placed; seed: number; top: numb
         const a = v < 0.12 ? Math.sin((v / 0.12) * Math.PI) : v > 0.2 && v < 0.3 ? Math.sin(((v - 0.2) / 0.1) * Math.PI) : 0;
         return { transform: [{ translateY: off }, { rotate: `${a * 24 * flipK}deg` }, { translateY: -off }, { translateX: a * 2 * flipK * s }] };
       }
+      case 'hover':
+        return { transform: [{ translateY: (v - 0.5) * 10 }, { rotate: `${(v - 0.5) * 5 * flipK}deg` }] };
       case 'scan':
         return { transform: [{ translateY: off }, { rotate: `${(v - 0.5) * 14}deg` }, { translateY: -off }] };
       default:
@@ -307,6 +315,8 @@ export function LiveDecor({ d, seed, top }: { d: Placed; seed: number; top: numb
       {k === 'gem' ? <LampGlow x={size / 2} y={py(-18)} s={s * 1.2} seed={seed} color="#5FD8F0" /> : null}
       {k === 'vending' ? <LampGlow x={size / 2} y={py(-26)} s={s * 1.3} seed={seed} color="#FF4FD8" /> : null}
       {k === 'holo' ? <LampGlow x={size / 2} y={py(-34)} s={s} seed={seed} color="#5FF2FF" /> : null}
+      {k === 'pedestal' && seed % 3 === 2 ? <LampGlow x={size / 2} y={py(-50)} s={s} seed={seed} color="#B48CFF" /> : null}
+      {k === 'frame' ? <LampGlow x={size / 2} y={py(-40)} s={s * 1.3} seed={seed} color="#8E6BFF" /> : null}
       <Svg width={size} height={size} viewBox={`${-BOX / 2} ${-BASE} ${BOX} ${BOX}`}>
         <DecorSprite kind={d.kind} x={0} y={0} scale={1} flip={d.flip} seed={seed} noEyes />
       </Svg>
@@ -1434,6 +1444,117 @@ function Rover() {
   );
 }
 
+/* ------------------------------ Galerie ------------------------------ */
+
+function GalleryLive({ area, width, seed }: { area: WorldArea; width: number; seed: number }) {
+  const h = area.bottom - area.top;
+  const hero = area.hero;
+  const hy = hero.y - area.top;
+  const hasArt = botArt(portraitRef(ARENAS[area.w - 1])) !== undefined;
+  const spots = useMemo(() => {
+    const out: { x: number; y: number; dir: 1 | -1 }[] = [];
+    for (let y = h - 320, i = 0; y > hy + 260; y -= 430, i++) out.push({ x: i % 2 ? width * 0.06 : width * 0.94, y, dir: i % 2 ? 1 : -1 });
+    return out;
+  }, [h, hy, width]);
+  return (
+    <>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <Twinkles width={width} height={h} count={22} colors={['#FFFFFF', '#D9CCFF', '#FFE9A8']} size={0.045} />
+      </View>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <Embers width={width} height={h} colors={['#FFE29A', '#C9A6FF']} count={12} speed={0.3} size={9} />
+      </View>
+      {spots.map((p, i) => (
+        <GallerySpot key={i} x={p.x} y={p.y} dir={p.dir} seed={seed + i} len={230} />
+      ))}
+      <ShootingStar width={width} height={h * 0.5} seed={seed + 3} top={h * 0.2} />
+      {/* le Grand Portrait : ses deux projecteurs, son cadre qui luit, et ses yeux dans l'ombre */}
+      <GallerySpot x={width * 0.04} y={hy - GRAND.h / 2 - 70} dir={1} seed={seed + 11} len={340} wide aim={-38} />
+      <GallerySpot x={width * 0.96} y={hy - GRAND.h / 2 - 70} dir={-1} seed={seed + 12} len={340} wide aim={-38} />
+      <FrameRim x={hero.x} y={hy} />
+      {hasArt ? null : <PortraitEyes x={hero.x} y={hy - GRAND.h / 2 + GRAND.border + (GRAND.h - 2 * GRAND.border) * 0.4} w={(GRAND.w - 2 * GRAND.border) * 0.15} seed={seed} />}
+    </>
+  );
+}
+
+/**
+ * Projecteur accroché en (x, y) : un cône de lumière chaude qui descend vers le
+ * tapis et balaie doucement. `aim` : inclinaison de repos (vers le milieu).
+ */
+function GallerySpot({ x, y, dir, seed, len, wide, aim = -28 }: { x: number; y: number; dir: 1 | -1; seed: number; len: number; wide?: boolean; aim?: number }) {
+  const t = useOsc(4200 + hash(seed) * 2200, hash(seed + 1) * 1500);
+  const W = wide ? 170 : 120;
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: -len / 2 }, { rotate: `${dir * (aim + (t.value - 0.5) * 22)}deg` }, { translateY: len / 2 }],
+  }));
+  return (
+    <>
+      <Animated.View pointerEvents="none" style={[styles.abs, { left: x - W / 2, top: y, width: W, height: len }, style]}>
+        <Svg width={W} height={len}>
+          <Path d={`M${W / 2 - 5} 0 L0 ${len} H${W} L${W / 2 + 5} 0 Z`} fill="#FFE9B0" opacity={0.1} />
+          <Path d={`M${W / 2 - 3} 0 L${W * 0.22} ${len} H${W * 0.78} L${W / 2 + 3} 0 Z`} fill="#FFF6DA" opacity={0.08} />
+          <Ellipse cx={W / 2} cy={len - 4} rx={W * 0.42} ry={10} fill="#FFE9B0" opacity={0.12} />
+        </Svg>
+      </Animated.View>
+      <Part x={x} y={y} w={22} h={18}>
+        <Path d="M-7 -4 H7 L9 6 H-9 Z" fill="#3A2F58" stroke={OL} strokeWidth={1.6} strokeLinejoin="round" />
+        <Ellipse cx={0} cy={6} rx={8} ry={2.6} fill="#FFF3C4" />
+        <Line x1={0} y1={-4} x2={0} y2={-9} stroke={OL} strokeWidth={1.6} />
+      </Part>
+    </>
+  );
+}
+
+/** Le cadre du Grand Portrait luit et respire. */
+function FrameRim({ x, y }: { x: number; y: number }) {
+  const t = useOsc(1800, 0);
+  const style = useAnimatedStyle(() => ({ opacity: 0.25 + t.value * 0.6, transform: [{ scale: 1 + t.value * 0.015 }] }));
+  const corners = useAnimatedStyle(() => ({ opacity: 0.4 + t.value * 0.6 }));
+  const W = GRAND.w + 10;
+  const H = GRAND.h + 10;
+  return (
+    <>
+      <Animated.View pointerEvents="none" style={[styles.abs, { left: x - W / 2, top: y - H / 2, width: W, height: H, borderRadius: 12, borderWidth: 3, borderColor: '#FFE9A0' }, style]} />
+      <Animated.View pointerEvents="none" style={[styles.abs, { left: x - W / 2 - 30, top: y - H / 2 - 30, width: W + 60, height: H + 60 }, corners]}>
+        {[
+          [0, 0],
+          [W + 60, 0],
+          [0, H + 60],
+          [W + 60, H + 60],
+        ].map(([cx, cy], i) => (
+          <Glow key={i} color="#FFE29A" size={60} style={{ left: cx - 30, top: cy - 30 }} />
+        ))}
+        <Glow color="#C9A6FF" size={90} style={{ left: (W + 60) / 2 - 45, top: -28 }} />
+      </Animated.View>
+    </>
+  );
+}
+
+/** Les yeux du Grand Portrait, quand sa toile reste dans l'ombre : ils luisent, regardent, clignent. */
+function PortraitEyes({ x, y, w, seed }: { x: number; y: number; w: number; seed: number }) {
+  const look = useOsc(3600, 400);
+  const blink = useSharedValue(1);
+  useEffect(() => {
+    blink.value = withRepeat(withSequence(withDelay(2800 + hash(seed) * 2000, withTiming(0.08, { duration: 90 })), withTiming(1, { duration: 140 })), -1);
+    return () => cancelAnimation(blink);
+  }, [blink, seed]);
+  const glow = useOsc(1400, 0);
+  const style = useAnimatedStyle(() => ({ transform: [{ translateX: (look.value - 0.5) * 4 }, { scaleY: blink.value }] }));
+  const halo = useAnimatedStyle(() => ({ opacity: 0.35 + glow.value * 0.45 }));
+  const box = w + 16;
+  return (
+    <>
+      <Animated.View pointerEvents="none" style={[styles.abs, { left: x - 40, top: y - 22 }, halo]}>
+        <Glow color="#FFD54F" size={80} stretchX={1} />
+      </Animated.View>
+      <Animated.View pointerEvents="none" style={[styles.abs, { left: x - box / 2, top: y - 4, width: box, height: 8 }, style]}>
+        <View style={[styles.abs, { left: 2, top: 0.6, width: 12, height: 6.8, borderRadius: 6, backgroundColor: '#FFE27A' }]} />
+        <View style={[styles.abs, { right: 2, top: 0.6, width: 12, height: 6.8, borderRadius: 6, backgroundColor: '#FFE27A' }]} />
+      </Animated.View>
+    </>
+  );
+}
+
 /* --------------------------- Couche vivante d'un monde -------------------------- */
 
 const SKINS = ['#F2C7A5', '#D9A27A', '#A8714E', '#7A4E33'];
@@ -1484,6 +1605,7 @@ export function WorldLive({ area, width, liveDecor }: { area: WorldArea; width: 
       {kind === 'skyIslands' ? <IslandsLive x={hero.x} y={hy} side={side} seed={w * 17} /> : null}
       {kind === 'skyline' ? <SkylineLive x={hero.x} y={hy} side={side} seed={w * 17} /> : null}
       {kind === 'moonBase' ? <MoonLive area={area} width={width} seed={w * 17} /> : null}
+      {kind === 'grandFrame' ? <GalleryLive area={area} width={width} seed={w * 17} /> : null}
 
       {/* habitants, bêtes et engins */}
       {kind === 'pond' ? (

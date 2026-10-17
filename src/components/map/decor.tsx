@@ -520,6 +520,8 @@ export function HeroDecor({ kind, x, y, side, width, live = false }: { kind: Her
     case 'skyline':
     case 'moonBase':
       return <NewHero kind={kind} x={x} y={y} side={side} width={width} live={live} />;
+    case 'grandFrame':
+      return <GrandFrame x={x} y={y} live={live} />;
     case 'pond':
       return (
         <G transform={`translate(${x} ${y})`}>
@@ -727,6 +729,15 @@ export function Road({ d, look, w, rails }: { d: string; look: WorldLook; w: num
               <Path d={r} stroke="#C9D1DA" strokeWidth={2.4} fill="none" strokeLinejoin="round" />
             </G>
           ))}
+        </G>
+      ) : style === 'carpet' ? (
+        <G>
+          <Path d={d} stroke="#6E0A1E" strokeWidth={w - 16} fill="none" opacity={0.45} />
+          <Path d={d} stroke={look.roadEdge} strokeWidth={w - 8} fill="none" strokeLinecap="round" opacity={0.95} />
+          <Path d={d} stroke={look.road} strokeWidth={w - 12} fill="none" strokeLinecap="round" />
+          <Path d={d} stroke="#7E0B22" strokeWidth={w - 22} fill="none" opacity={0.35} />
+          <Path d={d} stroke={look.roadLine} strokeWidth={5} fill="none" strokeDasharray="0.1 22" strokeLinecap="round" opacity={0.9} />
+          <Path d={d} stroke={look.roadLine} strokeWidth={1.6} fill="none" strokeDasharray="6 16" strokeDashoffset={-8} opacity={0.55} />
         </G>
       ) : style === 'neon' ? (
         <G>
@@ -1609,9 +1620,260 @@ function newDecor(kind: DecorKind, seed: number, face: boolean, live: boolean): 
           <Path d="M7 -52 Q10 -49 13 -53" stroke={OL} strokeWidth={1.6} fill="#ECEEF3" />
         </G>
       );
+    /* ---- Galerie ---- */
+    case 'pillar':
+      return (
+        <G>
+          <Shadow rx={18} />
+          <Rect x={-15} y={-10} width={30} height={10} rx={2} fill="#E9E2F5" stroke={OL} strokeWidth={2} />
+          <Rect x={-12} y={-16} width={24} height={6} rx={1.5} fill={GOLD} stroke={OL} strokeWidth={1.8} />
+          <Rect x={-10} y={-80} width={20} height={64} fill="#F4F0FA" stroke={OL} strokeWidth={2.4} />
+          <Rect x={4} y={-79} width={5} height={62} fill="#DCD2EE" />
+          <Path d="M-5 -78 V-18 M0 -78 V-18 M5 -78 V-18" stroke="#CFC3E4" strokeWidth={1.3} />
+          <Path d="M-8 -66 Q-2 -58 -6 -48 Q-9 -40 -3 -30" stroke="#B9AACF" strokeWidth={1} fill="none" opacity={0.8} />
+          <Rect x={-14} y={-86} width={28} height={6} rx={2} fill={GOLD} stroke={OL} strokeWidth={2} />
+          <Circle cx={-13} cy={-84} r={3.6} fill={GOLD} stroke={OL} strokeWidth={1.4} />
+          <Circle cx={13} cy={-84} r={3.6} fill={GOLD} stroke={OL} strokeWidth={1.4} />
+          <Rect x={-16} y={-92} width={32} height={6} rx={1.5} fill="#F4F0FA" stroke={OL} strokeWidth={2} />
+          {seed % 2 ? (
+            <G>
+              <Circle cx={0} cy={-101} r={12} fill="#C9A6FF" opacity={0.22} />
+              <Circle cx={0} cy={-100} r={6.5} fill="#B48CFF" stroke={OL} strokeWidth={1.6} />
+              <Circle cx={-2} cy={-102} r={2.2} fill="#FFFFFF" opacity={0.8} />
+            </G>
+          ) : null}
+        </G>
+      );
+    case 'pedestal': {
+      const obj = seed % 3;
+      return (
+        <G>
+          <Shadow rx={17} />
+          <Rect x={-16} y={-6} width={32} height={6} rx={1.5} fill={GOLD} stroke={OL} strokeWidth={1.8} />
+          <Rect x={-12} y={-30} width={24} height={24} fill="#2E2357" stroke={OL} strokeWidth={2.2} />
+          <Path d="M-8 -26 Q-2 -18 -6 -10" stroke="#4A3C82" strokeWidth={1.4} fill="none" />
+          <Rect x={-5} y={-21} width={10} height={5} rx={1} fill={GOLD} stroke={OL} strokeWidth={1} />
+          <Rect x={-16} y={-35} width={32} height={6} rx={1.5} fill={GOLD} stroke={OL} strokeWidth={1.8} />
+          {obj === 0 ? (
+            // buste de marbre
+            <G>
+              <Path d="M-12 -35 Q-12 -46 0 -47 Q12 -46 12 -35 Z" fill="#F4F0FA" stroke={OL} strokeWidth={2} strokeLinejoin="round" />
+              <Rect x={-3} y={-51} width={6} height={6} fill="#F4F0FA" />
+              <Ellipse cx={0} cy={-57} rx={7.5} ry={9} fill="#F4F0FA" stroke={OL} strokeWidth={2} />
+              <Path d="M-7 -60 Q-6 -67 0 -67 Q7 -67 7.5 -59 Q4 -63 0 -62 Q-4 -64 -7 -60 Z" fill="#DCD2EE" stroke={OL} strokeWidth={1.2} />
+              <Path d="M-4 -56 q1.5 1.2 3 0 M1.5 -56 q1.5 1.2 3 0" stroke={OL} strokeWidth={1.1} fill="none" strokeLinecap="round" />
+              <Path d="M5 -40 Q2 -44 -4 -43" stroke="#DCD2EE" strokeWidth={1.4} fill="none" />
+            </G>
+          ) : obj === 1 ? (
+            // amphore dorée
+            <G>
+              <Path d="M-5 -35 Q-12 -40 -11 -49 Q-10 -56 -5 -58 V-62 H5 V-58 Q10 -56 11 -49 Q12 -40 5 -35 Z" fill="#6A2FC2" stroke={OL} strokeWidth={2} strokeLinejoin="round" />
+              <Path d="M-10.5 -48 H10.5 M-9 -42 H9" stroke={GOLD} strokeWidth={2} />
+              <Rect x={-6} y={-64} width={12} height={3} rx={1} fill={GOLD} stroke={OL} strokeWidth={1.2} />
+              <Path d="M-6 -56 Q-9 -52 -7 -46" stroke="#B48CFF" strokeWidth={1.6} fill="none" strokeLinecap="round" />
+            </G>
+          ) : (
+            // orbe de lumière
+            <G>
+              <Path d="M-6 -35 L-3 -40 H3 L6 -35 Z" fill={GOLD} stroke={OL} strokeWidth={1.4} strokeLinejoin="round" />
+              <Circle cx={0} cy={-50} r={15} fill="#C9A6FF" opacity={0.2} />
+              <Circle cx={0} cy={-50} r={10.5} fill="#8E6BFF" stroke={OL} strokeWidth={2} />
+              <Path d="M-6 -50 Q0 -57 6 -50 Q0 -44 -6 -50" stroke="#E8DEFF" strokeWidth={1.4} fill="none" />
+              <Circle cx={-3.5} cy={-54} r={2.6} fill="#FFFFFF" opacity={0.8} />
+            </G>
+          )}
+        </G>
+      );
+    }
+    case 'frame':
+      return <FloatingFrame seed={seed} />;
+    case 'stanchion':
+      return (
+        <G>
+          <Ellipse cx={0} cy={0} rx={7} ry={2.6} fill="rgba(0,0,0,0.3)" />
+          <Ellipse cx={0} cy={-2} rx={6} ry={2.4} fill={GOLD} stroke={OL} strokeWidth={1.4} />
+          <Rect x={-1.8} y={-24} width={3.6} height={22} fill={GOLD} stroke={OL} strokeWidth={1.2} />
+          <Circle cx={0} cy={-26} r={3.6} fill={GOLD} stroke={OL} strokeWidth={1.4} />
+          <Circle cx={-1} cy={-27} r={1.2} fill="#FFF6C8" />
+        </G>
+      );
   }
   return null;
 }
+
+const GOLD = '#E8B43A';
+
+/** Ce que montre un cadre de la Galerie : vide, tourbillon, nuit étoilée, formes. */
+function Canvas({ kind, x, y, w, h }: { kind: number; x: number; y: number; w: number; h: number }) {
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  return (
+    <G>
+      <Rect x={x} y={y} width={w} height={h} fill={['#1A1236', '#16224F', '#0E0B26', '#F3E6C8'][kind]} />
+      {kind === 0 ? (
+        <G>
+          <Ellipse cx={cx} cy={cy} rx={w * 0.38} ry={h * 0.36} fill="#2C1E58" />
+          <Ellipse cx={cx} cy={cy} rx={w * 0.18} ry={h * 0.18} fill="#3E2A7A" opacity={0.8} />
+        </G>
+      ) : kind === 1 ? (
+        <G>
+          <Path d={`M${cx} ${cy} m-2 0 a2 2 0 1 1 4 0 a5 5 0 1 1 -10 0 a8 8 0 1 1 16 0`} stroke="#F7D46B" strokeWidth={1.8} fill="none" />
+          <Path d={`M${x + 3} ${y + h * 0.78} q${w * 0.2} -6 ${w * 0.4} 0 t${w * 0.4} 0`} stroke="#5FB2F0" strokeWidth={2} fill="none" />
+          <Path d={`M${x + 3} ${y + h * 0.22} q${w * 0.25} 5 ${w * 0.5} 0`} stroke="#8EA8FF" strokeWidth={1.6} fill="none" />
+        </G>
+      ) : kind === 2 ? (
+        <G>
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Circle key={i} cx={x + ((i * 37 + 9) % 100) / 100 * w} cy={y + ((i * 53 + 11) % 100) / 100 * h} r={i % 3 ? 0.9 : 1.5} fill="#FFFFFF" />
+          ))}
+          <Path d={`M${cx + 4} ${cy - 8} a7 7 0 1 0 0 14 a5.5 5.5 0 1 1 0 -14 Z`} fill="#FFE9A8" />
+        </G>
+      ) : (
+        <G>
+          <Circle cx={x + w * 0.35} cy={y + h * 0.38} r={Math.min(w, h) * 0.2} fill="#E5532A" />
+          <Path d={`M${x + w * 0.45} ${y + h * 0.9} L${x + w * 0.75} ${y + h * 0.35} L${x + w * 0.95} ${y + h * 0.9} Z`} fill="#3D5BD9" />
+          <Rect x={x + w * 0.1} y={y + h * 0.66} width={w * 0.3} height={h * 0.2} fill="#F2C14E" />
+          <Path d={`M${x} ${y + h * 0.2} L${x + w} ${y + h * 0.75}`} stroke={OL} strokeWidth={1.2} />
+        </G>
+      )}
+    </G>
+  );
+}
+
+/** Cadre doré qui flotte dans le vide de la Galerie (pied en bas, sous le cadre). */
+export function FloatingFrame({ seed }: { seed: number }) {
+  const tall = seed % 2 === 0;
+  const w = tall ? 42 : 54;
+  const h = tall ? 54 : 40;
+  const x = -w / 2;
+  const y = -12 - h;
+  const b = 6;
+  return (
+    <G>
+      <Ellipse cx={0} cy={0} rx={w * 0.42} ry={3} fill="#8E6BFF" opacity={0.22} />
+      <Rect x={x - 3} y={y - 3} width={w + 6} height={h + 6} rx={4} fill="#B48CFF" opacity={0.16} />
+      <Rect x={x} y={y} width={w} height={h} rx={2.5} fill={GOLD} stroke={OL} strokeWidth={2.4} />
+      <Rect x={x + 2.5} y={y + 2.5} width={w - 5} height={h - 5} fill="none" stroke="#FFE9A0" strokeWidth={1.2} />
+      <Rect x={x + b - 1.5} y={y + b - 1.5} width={w - 2 * b + 3} height={h - 2 * b + 3} fill="#9E6B1E" />
+      <Canvas kind={(seed >> 1) % 4} x={x + b} y={y + b} w={w - 2 * b} h={h - 2 * b} />
+      <Rect x={x + b} y={y + b} width={w - 2 * b} height={h - 2 * b} fill="none" stroke={OL} strokeWidth={1.4} />
+      {[
+        [x, y],
+        [x + w, y],
+        [x, y + h],
+        [x + w, y + h],
+      ].map(([px, py], i) => (
+        <Circle key={i} cx={px} cy={py} r={3.4} fill={GOLD} stroke={OL} strokeWidth={1.4} />
+      ))}
+      <Path d={`M-7 ${y} Q0 ${y - 9} 7 ${y} Z`} fill={GOLD} stroke={OL} strokeWidth={1.6} strokeLinejoin="round" />
+      <Circle cx={0} cy={y - 3} r={1.6} fill="#FFF6C8" />
+    </G>
+  );
+}
+
+/* ------------------------------ Le Grand Portrait ------------------------------ */
+
+/** Toile du Grand Portrait (repère : coin haut-gauche de la toile), quand son illustration n'est pas là. */
+export function GrandCanvas({ w, h, eyes = true }: { w: number; h: number; eyes?: boolean }) {
+  const cx = w / 2;
+  return (
+    <G>
+      <Rect x={0} y={0} width={w} height={h} fill="#0E0822" />
+      <Ellipse cx={cx} cy={h * 0.48} rx={w * 0.62} ry={h * 0.55} fill="#1E1048" />
+      <Ellipse cx={cx} cy={h * 0.42} rx={w * 0.42} ry={h * 0.38} fill="#2D1766" opacity={0.9} />
+      <Ellipse cx={cx} cy={h * 0.36} rx={w * 0.22} ry={h * 0.2} fill="#4A2696" opacity={0.7} />
+      <Path d={`M${w * 0.1} ${h * 0.2} Q${w * 0.35} ${h * 0.05} ${w * 0.6} ${h * 0.18} T${w * 0.95} ${h * 0.12}`} stroke="#6B47C9" strokeWidth={2} fill="none" opacity={0.6} />
+      <Path d={`M${w * 0.05} ${h * 0.62} Q${w * 0.3} ${h * 0.5} ${w * 0.55} ${h * 0.62}`} stroke="#3B6FD9" strokeWidth={2} fill="none" opacity={0.45} />
+      {/* silhouette : tête et épaules dans l'ombre */}
+      <Path
+        d={`M${cx - w * 0.42} ${h} Q${cx - w * 0.4} ${h * 0.72} ${cx - w * 0.16} ${h * 0.66} Q${cx - w * 0.2} ${h * 0.56} ${cx - w * 0.19} ${h * 0.42} Q${cx - w * 0.18} ${h * 0.2} ${cx} ${h * 0.2} Q${cx + w * 0.18} ${h * 0.2} ${cx + w * 0.19} ${h * 0.42} Q${cx + w * 0.2} ${h * 0.56} ${cx + w * 0.16} ${h * 0.66} Q${cx + w * 0.4} ${h * 0.72} ${cx + w * 0.42} ${h} Z`}
+        fill="#090515"
+        opacity={0.92}
+      />
+      {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+        <Circle key={i} cx={((i * 37 + 13) % 100) / 100 * w} cy={((i * 59 + 7) % 100) / 100 * h * 0.55} r={i % 3 ? 0.9 : 1.4} fill="#FFFFFF" opacity={0.7} />
+      ))}
+      {eyes ? (
+        <G>
+          <Ellipse cx={cx - w * 0.075} cy={h * 0.4} rx={5} ry={2.6} fill="#FFE27A" />
+          <Ellipse cx={cx + w * 0.075} cy={h * 0.4} rx={5} ry={2.6} fill="#FFE27A" />
+        </G>
+      ) : null}
+    </G>
+  );
+}
+
+/** Rosace dorée (coins du Grand Portrait). */
+function Rosette({ x, y, r }: { x: number; y: number; r: number }) {
+  return (
+    <G transform={`translate(${x} ${y})`}>
+      {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
+        <Ellipse key={a} cx={0} cy={-r * 0.75} rx={r * 0.32} ry={r * 0.5} fill={GOLD} stroke={OL} strokeWidth={1.4} transform={`rotate(${a})`} />
+      ))}
+      <Circle cx={0} cy={0} r={r * 0.55} fill="#F7D46B" stroke={OL} strokeWidth={1.8} />
+      <Circle cx={0} cy={0} r={r * 0.25} fill="#B98236" />
+    </G>
+  );
+}
+
+/**
+ * Le Grand Portrait : un cadre doré géant, centré en (x, y), au-dessus du
+ * dernier niveau. La toile est sombre et mystérieuse ; l'illustration du boss
+ * se pose par-dessus quand elle existe (voir SagaMap).
+ */
+export function GrandFrame({ x, y, live }: { x: number; y: number; live: boolean }) {
+  const W = GRAND.w;
+  const H = GRAND.h;
+  const b = GRAND.border;
+  const L = x - W / 2;
+  const T = y - H / 2;
+  return (
+    <G>
+      <Circle cx={x} cy={y} r={W * 0.95} fill="#6A2FC2" opacity={0.08} />
+      <Circle cx={x} cy={y} r={W * 0.75} fill="#8E6BFF" opacity={0.1} />
+      <Ellipse cx={x} cy={T + H + 14} rx={W * 0.5} ry={10} fill="#000000" opacity={0.35} />
+      {/* volutes sur les côtés */}
+      {[-1, 1].map((d) => (
+        <G key={d}>
+          <Path d={`M${x + d * (W / 2 - 4)} ${y - 40} q${d * 26} 10 ${d * 20} 36 q${d * -6} 18 ${d * 8} 30`} stroke={OL} strokeWidth={9} fill="none" strokeLinecap="round" />
+          <Path d={`M${x + d * (W / 2 - 4)} ${y - 40} q${d * 26} 10 ${d * 20} 36 q${d * -6} 18 ${d * 8} 30`} stroke={GOLD} strokeWidth={5} fill="none" strokeLinecap="round" />
+          <Circle cx={x + d * (W / 2 + 24)} cy={y + 26} r={5} fill={GOLD} stroke={OL} strokeWidth={1.6} />
+        </G>
+      ))}
+      {/* cadre en biseaux */}
+      <Rect x={L} y={T} width={W} height={H} rx={8} fill={GOLD} stroke={OL} strokeWidth={3} />
+      <Rect x={L + 5} y={T + 5} width={W - 10} height={H - 10} rx={5} fill="#C98F2A" />
+      <Rect x={L + 8} y={T + 8} width={W - 16} height={H - 16} rx={4} fill="none" stroke="#FFE9A0" strokeWidth={2} />
+      <Rect x={L + 13} y={T + 13} width={W - 26} height={H - 26} rx={3} fill="#F2CD6A" />
+      <Path d={`M${L + 13} ${T + 20} H${L + W - 13} M${L + 13} ${T + H - 20} H${L + W - 13}`} stroke="#B98236" strokeWidth={1.4} strokeDasharray="3 5" />
+      <Rect x={L + b - 4} y={T + b - 4} width={W - 2 * b + 8} height={H - 2 * b + 8} fill="#8A5A18" stroke={OL} strokeWidth={2} />
+      <G transform={`translate(${L + b} ${T + b})`}>
+        <GrandCanvas w={W - 2 * b} h={H - 2 * b} eyes={!live} />
+      </G>
+      <Rect x={L + b} y={T + b} width={W - 2 * b} height={H - 2 * b} fill="none" stroke={OL} strokeWidth={2.4} />
+      {/* rosaces aux coins, couronne en haut */}
+      <Rosette x={L + 4} y={T + 4} r={14} />
+      <Rosette x={L + W - 4} y={T + 4} r={14} />
+      <Rosette x={L + 4} y={T + H - 4} r={14} />
+      <Rosette x={L + W - 4} y={T + H - 4} r={14} />
+      <Path
+        d={`M${x - 46} ${T + 2} Q${x - 40} ${T - 20} ${x - 22} ${T - 26} Q${x - 12} ${T - 46} ${x} ${T - 50} Q${x + 12} ${T - 46} ${x + 22} ${T - 26} Q${x + 40} ${T - 20} ${x + 46} ${T + 2} Z`}
+        fill={GOLD}
+        stroke={OL}
+        strokeWidth={2.6}
+        strokeLinejoin="round"
+      />
+      <Path d={`M${x} ${T - 44} V${T - 4} M${x - 20} ${T - 22} L${x - 6} ${T - 4} M${x + 20} ${T - 22} L${x + 6} ${T - 4} M${x - 36} ${T - 6} L${x - 14} ${T}  M${x + 36} ${T - 6} L${x + 14} ${T}`} stroke="#B98236" strokeWidth={1.6} />
+      <Circle cx={x} cy={T - 30} r={7} fill="#B48CFF" stroke={OL} strokeWidth={2} />
+      <Circle cx={x - 2} cy={T - 32} r={2.2} fill="#FFFFFF" opacity={0.85} />
+      {/* plaque en bas du cadre */}
+      <Rect x={x - 80} y={T + H - 14} width={160} height={24} rx={5} fill="#F7D46B" stroke={OL} strokeWidth={2.4} />
+      <Rect x={x - 76} y={T + H - 10} width={152} height={16} rx={3} fill="none" stroke="#B98236" strokeWidth={1.2} />
+    </G>
+  );
+}
+/** Taille du Grand Portrait (la même que GRAND_FRAME dans mapLayout). */
+export const GRAND = { w: 232, h: 268, border: 24 };
 
 /* ------------------------------ Nouveaux grands décors ------------------------------ */
 

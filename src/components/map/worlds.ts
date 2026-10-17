@@ -1,5 +1,5 @@
 /**
- * Habillage des 20 mondes de la carte, dans l'ordre de la carte (indice =
+ * Habillage des 21 mondes de la carte, dans l'ordre de la carte (indice =
  * place - 1) : couleurs du sol, de la route, et les décors qu'on y sème (avec
  * leur fréquence). Les décors eux-mêmes sont dessinés dans decor.tsx.
  */
@@ -96,7 +96,12 @@ export type DecorKind =
   | 'crater'
   | 'moonFlag'
   | 'dish'
-  | 'lander';
+  | 'lander'
+  // Galerie
+  | 'pillar'
+  | 'pedestal'
+  | 'frame'
+  | 'stanchion';
 
 /** Grand décor d'un monde, posé à côté de la route. */
 export type HeroKind =
@@ -119,7 +124,8 @@ export type HeroKind =
   | 'castle'
   | 'skyline'
   | 'ringPlanet'
-  | 'moonBase';
+  | 'moonBase'
+  | 'grandFrame';
 
 export type TextureKind = 'tuft' | 'pebble' | 'dot' | 'sparkle' | 'confetti' | 'dune' | 'puff' | 'crater';
 
@@ -132,15 +138,17 @@ export interface WorldLook {
   /** Ligne pointillée au milieu de la route (ou joints des planches). */
   roadLine: string;
   /** Allure de la route : pointillés (par défaut), planches, rails de mine, bords néon. */
-  roadStyle?: 'planks' | 'rails' | 'neon';
+  roadStyle?: 'planks' | 'rails' | 'neon' | 'carpet';
   /** Couleur des pastilles de niveau. */
   node: string;
   decor: [DecorKind, number][];
   hero: HeroKind;
   /** Texture du sol. */
   texture: TextureKind;
-  /** Ciel noir au-dessus de l'horizon (tout en haut de la carte : la Lune). */
+  /** Ciel noir au-dessus de l'horizon (en haut de la Lune). */
   sky?: string;
+  /** Route toute droite au milieu, niveaux régulièrement espacés (la Galerie). */
+  straight?: boolean;
 }
 
 export const OUTLINE = '#2B1B12';
@@ -186,7 +194,12 @@ export const WORLD_LOOKS: WorldLook[] = [
   { ground: '#1E1745', speck: '#2C2363', road: '#8E7BFF', roadEdge: '#3E2F94', roadLine: '#E2DBFF', node: '#9A6BFF', hero: 'ringPlanet', texture: 'sparkle', decor: [['planet', 3], ['asteroid', 4], ['star', 8], ['crystal', 2]] },
   // 20 · La Lune
   { ground: '#C3C7D3', speck: '#A6ABBC', road: '#E9EBF1', roadEdge: '#767B92', roadLine: '#A9AEBF', node: '#5A6BA8', hero: 'moonBase', texture: 'crater', sky: '#07071A', decor: [['crater', 5], ['rock', 3], ['moonFlag', 1], ['dish', 2], ['lander', 1]] },
+  // 21 · La Galerie (monde final) : décors posés en ordre, voir mapLayout
+  { ground: '#150D2E', speck: '#3A2A6E', road: '#A3122C', roadEdge: '#E8B43A', roadLine: '#F7D46B', roadStyle: 'carpet', node: '#6A2FC2', hero: 'grandFrame', texture: 'sparkle', straight: true, decor: [['frame', 2], ['pillar', 2], ['pedestal', 2], ['stanchion', 1]] },
 ];
+
+/** Le vide du sanctuaire de la Divine, entre le Volcan et la Tempête. */
+export const SANCTUARY_VOID = '#07051A';
 
 /** Hauteur du ciel noir en haut du dernier monde (la Lune), horizon compris. */
 export const SKY_H = 250;

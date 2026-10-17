@@ -1,6 +1,7 @@
 /**
- * Aventure solo : la carte des 20 mondes. On touche un niveau débloqué pour
- * voir l'adversaire, ses cartes et ce qu'il rapporte, puis « Jouer ».
+ * Aventure solo : la carte des 21 mondes. On touche un niveau débloqué pour
+ * voir l'adversaire, ses cartes et ce qu'il rapporte, puis « Jouer ». Après
+ * le Volcan, on débloque d'abord la Divine au sanctuaire (cérémonie).
  */
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -25,13 +26,15 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { portraitRef } from '../battle/arenas';
 import { botArt } from '../battle/botArt';
 import { type FighterInput, makeFighter } from '../battle/engine';
-import { type Level, TOTAL_LEVELS, getLevel, levelFighters, levelMmr } from '../battle/levels';
+import { DIVINE_GATE, type Level, TOTAL_LEVELS, getLevel, levelFighters, levelMmr, needsDivine } from '../battle/levels';
 import { AppText } from '../components/AppText';
 import { InspectFighter } from '../components/battle/InspectFighter';
 import { Button, Glint } from '../components/Button';
 import { CardFace } from '../components/card/CardFace';
 import { CoinChip, CoinIcon } from '../components/Coin';
+import { DivineCeremony } from '../components/map/DivineCeremony';
 import { SagaMap } from '../components/map/SagaMap';
+import type { Rect4 } from '../components/map/Sanctuary';
 import { OUTLINE, WORLD_LOOKS } from '../components/map/worlds';
 import { RankEmblem } from '../components/rank/RankEmblem';
 import { Rise } from '../components/Rise';
@@ -49,9 +52,15 @@ export default function SoloScreen() {
   const stars = useGame((s) => s.save?.soloStars ?? []);
   const coins = useGame((s) => s.save?.coins ?? 0);
   const name = useGame((s) => s.save?.playerName ?? '?');
+  const divineUnlocked = useGame((s) => s.save?.divineUnlocked ?? false);
   const [open, setOpen] = useState<Level | null>(null);
+  // cérémonie du sanctuaire : d'où part la carte (null : pas de cérémonie)
+  const [ceremony, setCeremony] = useState<{ from: Rect4 | null } | null>(null);
+  const [focusKey, setFocusKey] = useState(0);
   const totalStars = stars.reduce((a, b) => a + b, 0);
   const current = Math.min(TOTAL_LEVELS, cleared + 1);
+  /** Le Volcan est battu, la Divine attend au sanctuaire. */
+  const gated = cleared >= DIVINE_GATE && !divineUnlocked;
 
   // Tous les niveaux s'ouvrent, même verrouillés : on peut voir l'adversaire et ses cartes, pas y jouer.
   const pick = (n: number) => {
@@ -61,7 +70,16 @@ export default function SoloScreen() {
 
   return (
     <View style={styles.root}>
-      <SagaMap cleared={cleared} stars={stars} playerInitial={name.slice(0, 1).toUpperCase()} onPick={pick} topInset={insets.top} />
+      <SagaMap
+        cleared={cleared}
+        stars={stars}
+        playerInitial={name.slice(0, 1).toUpperCase()}
+        onPick={pick}
+        divineUnlocked={divineUnlocked}
+        onSanctuary={(from) => setCeremony({ from })}
+        focusKey={focusKey}
+        topInset={insets.top}
+      />
 
       {/* en-tête fixe */}
       <View style={[styles.header, { paddingTop: insets.top + 6 }]} pointerEvents="box-none">
@@ -82,13 +100,38 @@ export default function SoloScreen() {
         </Rise>
       </View>
 
-      {cleared < TOTAL_LEVELS && !open ? (
+      {cleared < TOTAL_LEVELS && !open && !ceremony ? (
         <Animated.View entering={ZoomIn.springify().damping(13).stiffness(220)} style={[styles.playWrap, { bottom: Math.max(insets.bottom, 14) + 6 }]} pointerEvents="box-none">
-          <PlayButton label={`Niveau ${current}`} onPress={() => pick(current)} />
+          {gated ? (
+            <PlayButton label="La Divine t’attend" icon="sparkles" onPress={() => setCeremony({ from: null })} />
+          ) : (
+            <PlayButton label={`Niveau ${current}`} onPress={() => pick(current)} />
+          )}
         </Animated.View>
       ) : null}
 
-      {open ? <LevelSheet level={open} best={stars[open.n - 1] ?? 0} done={(stars[open.n - 1] ?? 0) > 0} locked={open.n > cleared + 1} onClose={() => setOpen(null)} bottom={insets.bottom} /> : null}
+      {open ? (
+        <LevelSheet
+          level={open}
+          best={stars[open.n - 1] ?? 0}
+          done={(stars[open.n - 1] ?? 0) > 0}
+          locked={open.n > cleared + 1}
+          divineLocked={needsDivine(open.n) && !divineUnlocked}
+          onClose={() => setOpen(null)}
+          bottom={insets.bottom}
+        />
+      ) : null}
+
+      {ceremony ? (
+        <DivineCeremony
+          from={ceremony.from}
+          onUnlock={() => useGame.getState().unlockDivine()}
+          onDone={() => {
+            setCeremony(null);
+            setFocusKey((k) => k + 1);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -120,7 +163,7 @@ function RoundBack() {
  * Gros bouton doré « Niveau N » : il rebondit doucement pour attirer l'œil,
  * un reflet le traverse, et il s'enfonce sur sa tranche au toucher.
  */
-function PlayButton({ label, onPress }: { label: string; onPress(): void }) {
+function PlayButton({ label, onPress, icon = 'play' }: { label: string; onPress(): void; icon?: 'play' | 'sparkles' }) {
   const focused = useScreenFocus();
   const press = useSharedValue(0);
   const bob = useSharedValue(0);
@@ -146,12 +189,12 @@ function PlayButton({ label, onPress }: { label: string; onPress(): void }) {
         onPressOut={() => (press.value = withSpring(0, springs.release))}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`Jouer le ${label.toLowerCase()}`}
+        accessibilityLabel={icon === 'play' ? `Jouer le ${label.toLowerCase()}` : label}
         style={styles.playBase}
       >
         <Animated.View style={[styles.play, face]}>
           <Glint />
-          <Ionicons name="play" size={18} color="#141414" />
+          <Ionicons name={icon} size={18} color="#141414" />
           <AppText style={styles.playText}>{label}</AppText>
         </Animated.View>
       </Pressable>
@@ -164,8 +207,33 @@ function PlayButton({ label, onPress }: { label: string; onPress(): void }) {
  * cascade (titre, étoiles une à une, adversaire, cartes, boutons). On la
  * ferme en la faisant glisser vers le bas, par le fond ou par « Fermer ».
  */
-function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Level; best: number; done: boolean; locked: boolean; onClose(): void; bottom: number }) {
+function LevelSheet({
+  level,
+  best,
+  done,
+  locked: notYet,
+  divineLocked,
+  onClose,
+  bottom,
+}: {
+  level: Level;
+  best: number;
+  done: boolean;
+  locked: boolean;
+  /** Après le Volcan : la Divine n'est pas encore débloquée au sanctuaire. */
+  divineLocked: boolean;
+  onClose(): void;
+  bottom: number;
+}) {
+  const locked = notYet || divineLocked;
   const foes = useMemo(() => levelFighters(level), [level]);
+  // Grand Portrait battu : sa carte Galaxy se réclame ici (on peut réessayer si ça a échoué)
+  const galaxyClaimed = useGame((s) => s.save?.galaxyClaimed ?? false);
+  const finalWon = level.n === TOTAL_LEVELS && done;
+  const { width: screenW } = useWindowDimensions();
+  // grandes équipes (Galerie : jusqu'à 8 cartes) : deux rangées, cartes un peu plus petites
+  const perRow = foes.length > 4 ? Math.ceil(foes.length / 2) : foes.length;
+  const cardW = Math.min(64, Math.floor((screenW - 36 - (perRow - 1) * 10) / perRow));
   // Carte de l'adversaire ouverte en grand, en 3D comme dans la collection.
   const [inspect, setInspect] = useState<FighterInput | null>(null);
   const look = WORLD_LOOKS[level.world.n - 1];
@@ -240,7 +308,13 @@ function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Lev
 
         <View style={styles.sheetBody}>
           <Rise visit={1} index={1} delay={140} style={styles.oppRow}>
-            <Image source={botArt(portraitRef(level.world))} style={[styles.oppImg, { borderColor: look.node }]} />
+            {botArt(portraitRef(level.world)) !== undefined ? (
+              <Image source={botArt(portraitRef(level.world))} style={[styles.oppImg, { borderColor: look.node }]} />
+            ) : (
+              <View style={[styles.oppImg, styles.oppEmpty, { borderColor: look.node }]}>
+                <Ionicons name="sparkles" size={22} color="#FFE29A" />
+              </View>
+            )}
             <View style={{ flex: 1, gap: 2 }}>
               <AppText variant="heading">{level.world.bot}</AppText>
               <View style={styles.flames}>
@@ -258,7 +332,7 @@ function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Lev
             </View>
           </Rise>
 
-          <View style={styles.cards}>
+          <View style={[styles.cards, perRow < foes.length && { maxWidth: perRow * cardW + (perRow - 1) * 10 + 2, alignSelf: 'center' }]}>
             {foes.map((f, i) => (
               <Rise key={f.ref} visit={1} index={i} delay={230} dy={26} scale={0.8}>
                 <FoeCard
@@ -268,7 +342,7 @@ function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Lev
                   }}
                   label={`Voir ${f.name}`}
                 >
-                  <CardFace card={{ id: f.ref, rarity: f.rarity, name: f.name }} imageSource={botArt(f.ref)} width={64} quality="thumb" animated={false} />
+                  <CardFace card={{ id: f.ref, rarity: f.rarity, name: f.name }} imageSource={botArt(f.ref)} width={cardW} quality="thumb" animated={false} />
                   <AppText style={styles.cardStat}>{`❤ ${f.battle.hp}`}</AppText>
                 </FoeCard>
               </Rise>
@@ -276,6 +350,12 @@ function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Lev
           </View>
 
           <Rise visit={1} index={4} delay={230} style={{ gap: 12 }}>
+            {divineLocked ? (
+              <View style={styles.divineLock}>
+                <Ionicons name="lock-closed" size={15} color="#FFE29A" />
+                <AppText style={styles.divineLockText}>Débloque d’abord la Divine au sanctuaire</AppText>
+              </View>
+            ) : null}
             <View style={styles.rewards}>
               {done ? (
                 <AppText variant="caption">Pièces déjà gagnées : rejoue pour améliorer tes étoiles.</AppText>
@@ -291,10 +371,33 @@ function LevelSheet({ level, best, done, locked, onClose, bottom }: { level: Lev
             <AppText variant="caption">3 étoiles si tu gagnes sans perdre de carte, 2 en en perdant une.</AppText>
           </Rise>
 
+          {finalWon ? (
+            <Rise visit={1} index={5} delay={230}>
+              {galaxyClaimed ? (
+                <View style={styles.galaxyDone}>
+                  <Ionicons name="planet" size={16} color="#C9A6FF" />
+                  <AppText style={styles.galaxyDoneText}>Ta carte Galaxy est dans ta collection</AppText>
+                </View>
+              ) : (
+                <Button
+                  label="Réclamer ta carte Galaxy"
+                  icon="planet"
+                  size="lg"
+                  shimmer
+                  onPress={() => {
+                    haptic.heavy();
+                    onClose();
+                    router.push({ pathname: '/open', params: { galaxy: '1' } });
+                  }}
+                />
+              )}
+            </Rise>
+          ) : null}
+
           <Rise visit={1} index={5} delay={230} style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
             <Button label="Fermer" kind="secondary" style={{ flex: 1 }} onPress={() => close()} />
             <Button
-              label={locked ? `Après le niv. ${level.n - 1}` : done ? 'Rejouer' : 'Jouer'}
+              label={divineLocked ? 'Verrouillé' : locked ? `Après le niv. ${level.n - 1}` : done ? 'Rejouer' : 'Jouer'}
               icon={locked ? 'lock-closed' : 'flash'}
               size="lg"
               disabled={locked}
@@ -383,7 +486,12 @@ const styles = StyleSheet.create({
   oppImg: { width: 54, height: 54, borderRadius: 27, borderWidth: 3 },
   flames: { flexDirection: 'row', alignItems: 'center', gap: 1 },
   rankText: { fontFamily: fonts.bold, fontSize: 10, color: colors.textDim, marginTop: 2 },
-  cards: { flexDirection: 'row', gap: 10, justifyContent: 'center', paddingVertical: 4 },
+  cards: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, rowGap: 8, justifyContent: 'center', paddingVertical: 4 },
+  galaxyDone: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 8, borderRadius: 12, backgroundColor: 'rgba(106,47,194,0.22)' },
+  galaxyDoneText: { fontFamily: fonts.bold, fontSize: 13, color: '#E9DEFF' },
+  oppEmpty: { backgroundColor: '#1A1236', alignItems: 'center', justifyContent: 'center' },
+  divineLock: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12, backgroundColor: 'rgba(106,47,194,0.28)', borderWidth: 2, borderColor: 'rgba(201,166,255,0.5)' },
+  divineLockText: { flex: 1, fontFamily: fonts.bold, fontSize: 13, color: '#F1E9FF' },
   cardStat: { fontFamily: fonts.bold, fontSize: 11, color: colors.textDim },
   rewards: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   rewardText: { fontFamily: fonts.black, fontSize: 16, color: colors.gold },

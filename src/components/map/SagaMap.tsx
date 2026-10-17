@@ -1,8 +1,10 @@
 /**
  * La carte de l'aventure solo : une longue route qui serpente vers le haut à
- * travers les 20 mondes, du Parc jusqu'à la Lune. Chaque monde a son sol, ses
- * décors, son grand décor, son panneau, et son adversaire qui attend à côté
- * de son boss.
+ * travers les 21 mondes, du Parc jusqu'à la Galerie. Chaque monde a son sol,
+ * ses décors, son grand décor, son panneau, et son adversaire qui attend à
+ * côté de son boss. Entre le Volcan et la Tempête, le sanctuaire de la Divine
+ * barre la route tant que la Divine n'est pas débloquée ; tout en haut, la
+ * route file droit jusqu'au Grand Portrait.
  *
  * Chaque monde est un SVG à part (une seule image géante serait trop lourde
  * sur téléphone) ; la route est tracée en entier dans chacun, et chaque SVG
@@ -17,13 +19,15 @@ import Svg, { G, Path, Rect } from 'react-native-svg';
 
 import { ARENAS, portraitRef } from '../../battle/arenas';
 import { botArt } from '../../battle/botArt';
-import { LEVELS_PER_WORLD, TOTAL_LEVELS, WORLDS, getLevel } from '../../battle/levels';
+import { DIVINE_GATE, TOTAL_LEVELS, WORLDS, firstLevel, getLevel, lastLevel, needsDivine, worldOf } from '../../battle/levels';
 import { colors, fonts } from '../../theme';
 import { AppText } from '../AppText';
 import { Embers, Glow, Twinkles } from '../fx';
-import { DecorSprite, HeroDecor, MoonSky, Road, Texture } from './decor';
+import { DecorSprite, GRAND, HeroDecor, MoonSky, Road, Texture } from './decor';
 import { WorldLive, isLive } from './live';
 import { type MapLayout, ROAD_W, type WorldArea, mapLayout } from './mapLayout';
+import { PlayerPin } from './Pin';
+import { type Rect4, SanctuarySection, type SanctuaryState } from './Sanctuary';
 import { OUTLINE, SKY_H, WORLD_LOOKS } from './worlds';
 
 /** Portrait de l'adversaire du monde à la place w (illustration de sa meilleure carte, d'après l'id fixe du monde). */
@@ -34,10 +38,10 @@ const portraitOf = (w: number) => botArt(portraitRef(ARENAS[w - 1]));
 /** `alive` : le monde est près de l'écran, ses décors s'animent (sinon, dessin immobile, plus léger). */
 const WorldSection = memo(function WorldSection({ area, layout, alive }: { area: WorldArea; layout: MapLayout; alive: boolean }) {
   const look = WORLD_LOOKS[area.w - 1];
-  const next = WORLD_LOOKS[area.w] ?? null;
+  const next = area.nextGround;
   const h = area.bottom - area.top;
   const W = layout.width;
-  // bord ondulé du monde suivant, en haut de celui-ci
+  // bord ondulé du monde suivant (ou du sanctuaire), en haut de celui-ci
   let wave = '';
   if (next) {
     const t = area.top;
@@ -54,22 +58,60 @@ const WorldSection = memo(function WorldSection({ area, layout, alive }: { area:
         ))}
         {next ? (
           <G>
-            <Path d={wave} fill={next.ground} />
+            <Path d={wave} fill={next} />
             <Path d={wave} fill="none" stroke="rgba(0,0,0,0.18)" strokeWidth={3} />
           </G>
         ) : null}
+        {/* en haut de la Lune : le ciel noir ; la route le traverse vers la Galerie */}
+        {look.sky && area.sky ? (
+          <G transform={`translate(0 ${area.top})`}>
+            <MoonSky width={W} h={SKY_H} sky={look.sky} earth={{ x: area.sky.earth.x, y: area.sky.earth.y - area.top }} live={alive} />
+          </G>
+        ) : null}
         <HeroDecor kind={area.hero.kind} x={area.hero.x} y={area.hero.y} side={area.hero.side} width={W} live={alive} />
-        {/* route : ombre, bordure, chaussée, pointillés (ou planches, rails, néons) */}
+        {/* route : ombre, bordure, chaussée, pointillés (ou planches, rails, néons, tapis) */}
         <Road d={layout.road} look={look} w={ROAD_W} rails={area.rails} />
-        {/* tout en haut : le ciel noir, la route passe derrière l'horizon */}
-        {look.sky && area.sky ? <MoonSky width={W} h={SKY_H} sky={look.sky} earth={area.sky.earth} live={alive} /> : null}
         {area.decor.map((d, i) => (alive && isLive(d.kind) ? null : <DecorSprite key={i} {...d} seed={i + area.w * 13} />))}
+        {area.ropes ? (
+          <G>
+            {[area.ropes.left, area.ropes.right].map((d, i) => (
+              <G key={i}>
+                <Path d={d} stroke={OUTLINE} strokeWidth={5} fill="none" strokeLinecap="round" />
+                <Path d={d} stroke="#B3132F" strokeWidth={2.8} fill="none" strokeLinecap="round" />
+                <Path d={d} stroke="#FF6B86" strokeWidth={0.9} fill="none" opacity={0.6} />
+              </G>
+            ))}
+          </G>
+        ) : null}
       </Svg>
+      {look.straight ? <GrandPortrait area={area} /> : null}
       <WorldLife area={area} width={W} />
       {alive ? <WorldLive area={area} width={W} liveDecor={area.decor.flatMap((d, i) => (isLive(d.kind) ? [{ d, seed: i + area.w * 13 }] : []))} /> : null}
     </View>
   );
 });
+
+/**
+ * Toile et plaque du Grand Portrait : l'illustration du boss final se pose dans
+ * le cadre doré dès qu'elle existe (sinon, la toile sombre dessinée reste).
+ */
+function GrandPortrait({ area }: { area: WorldArea }) {
+  const art = portraitOf(area.w);
+  const { x, y } = area.hero;
+  const local = y - area.top;
+  const iw = GRAND.w - GRAND.border * 2;
+  const ih = GRAND.h - GRAND.border * 2;
+  return (
+    <>
+      {art !== undefined ? <Image source={art} resizeMode="cover" style={[styles.abs, { left: x - iw / 2, top: local - ih / 2, width: iw, height: ih }]} /> : null}
+      <View style={[styles.abs, { left: x - 80, top: local + GRAND.h / 2 - 14, width: 160, height: 24, alignItems: 'center', justifyContent: 'center' }]}>
+        <AppText style={styles.plaque} numberOfLines={1}>
+          {ARENAS[area.w - 1]?.bot.toUpperCase()}
+        </AppText>
+      </View>
+    </>
+  );
+}
 
 /** Ce qui bouge dans un monde : braises du volcan, éclairs, étoiles, lumière du phare. */
 function WorldLife({ area, width }: { area: WorldArea; width: number }) {
@@ -134,8 +176,9 @@ type NodeState = 'done' | 'open' | 'current' | 'locked';
 function LevelNode({ n, state, stars, onPress }: { n: number; state: NodeState; stars: number; onPress(): void }) {
   const level = getLevel(n);
   const boss = !!level?.boss;
-  const w = Math.ceil(n / LEVELS_PER_WORLD);
+  const w = worldOf(n);
   const look = WORLD_LOOKS[w - 1];
+  const art = boss ? portraitOf(w) : undefined;
   const size = boss ? 68 : 54;
   const locked = state === 'locked';
 
@@ -159,12 +202,14 @@ function LevelNode({ n, state, stars, onPress }: { n: number; state: NodeState; 
           end={{ x: 0.8, y: 1 }}
         />
         <View style={[styles.nodeInner, { width: size - 14, height: size - 14, borderRadius: size, backgroundColor: locked ? '#6E747D' : look.node }, state === 'open' && styles.nodeOpen]}>
-          {boss && !locked ? (
-            <Image source={portraitOf(w)} style={{ width: size - 16, height: size - 16, borderRadius: size }} />
+          {boss && !locked && art !== undefined ? (
+            <Image source={art} style={{ width: size - 16, height: size - 16, borderRadius: size }} />
+          ) : boss && !locked ? (
+            <Ionicons name="sparkles" size={size * 0.38} color="#FFE29A" />
           ) : locked ? (
             <Ionicons name="lock-closed" size={size * 0.32} color="#D7DBE0" />
           ) : (
-            <AppText style={[styles.nodeNum, { fontSize: n >= 10 ? 19 : 22 }]}>{n}</AppText>
+            <AppText style={[styles.nodeNum, { fontSize: n >= 100 ? 16 : n >= 10 ? 19 : 22 }]}>{n}</AppText>
           )}
         </View>
       </View>
@@ -198,26 +243,8 @@ function LevelNode({ n, state, stars, onPress }: { n: number; state: NodeState; 
   );
 }
 
-/** Repère du joueur qui sautille au-dessus du niveau à jouer. */
-function PlayerPin({ initial }: { initial: string }) {
-  const hop = useSharedValue(0);
-  useEffect(() => {
-    hop.value = withRepeat(withTiming(1, { duration: 520, easing: Easing.out(Easing.quad) }), -1, true);
-    return () => cancelAnimation(hop);
-  }, [hop]);
-  const style = useAnimatedStyle(() => ({ transform: [{ translateY: -hop.value * 9 }] }));
-  return (
-    <Animated.View style={[styles.pin, style]} pointerEvents="none">
-      <View style={styles.pinHead}>
-        <AppText style={styles.pinText}>{initial}</AppText>
-      </View>
-      <View style={styles.pinTip} />
-    </Animated.View>
-  );
-}
-
 function WorldSign({ area }: { area: WorldArea }) {
-  const level = getLevel((area.w - 1) * LEVELS_PER_WORLD + 1);
+  const level = getLevel(firstLevel(area.w));
   if (!level) return null;
   const look = WORLD_LOOKS[area.w - 1];
   return (
@@ -234,7 +261,7 @@ function WorldSign({ area }: { area: WorldArea }) {
 }
 
 function Mascot({ area, defeated }: { area: WorldArea; defeated: boolean }) {
-  const level = getLevel(area.w * LEVELS_PER_WORLD);
+  const level = getLevel(lastLevel(area.w));
   const bob = useSharedValue(0);
   useEffect(() => {
     bob.value = withRepeat(withTiming(1, { duration: 1500 + area.w * 70, easing: Easing.inOut(Easing.sin) }), -1, true);
@@ -269,6 +296,9 @@ export function SagaMap({
   stars,
   playerInitial,
   onPick,
+  divineUnlocked,
+  onSanctuary,
+  focusKey = 0,
   topInset = 0,
 }: {
   /** Niveaux terminés (le suivant est à jouer). */
@@ -276,29 +306,47 @@ export function SagaMap({
   stars: number[];
   playerInitial: string;
   onPick(n: number): void;
+  /** La Divine a été débloquée au sanctuaire (sinon les niveaux après le Volcan restent fermés). */
+  divineUnlocked: boolean;
+  /** La carte Divine touchée quand le sanctuaire est atteint : sa place à l'écran. */
+  onSanctuary(from: Rect4): void;
+  /** Changer cette valeur fait défiler la carte jusqu'au niveau à jouer. */
+  focusKey?: number;
   topInset?: number;
 }) {
   const { width, height } = useWindowDimensions();
   const layout = mapLayout(width);
   const scroll = useRef<ScrollView>(null);
   const current = Math.min(TOTAL_LEVELS, cleared + 1);
-  const startY = Math.max(0, Math.min(layout.height - height, layout.nodes[current - 1].y - height * 0.55));
+  /** Le Volcan est battu mais la Divine pas encore débloquée : le joueur attend au sanctuaire. */
+  const gated = cleared >= DIVINE_GATE && !divineUnlocked;
+  const sanctuaryState: SanctuaryState = cleared < DIVINE_GATE ? 'far' : divineUnlocked ? 'open' : 'ready';
+  const focusY = (gated ? layout.sanctuary.y : layout.nodes[current - 1].y) - height * 0.55;
+  const startY = Math.max(0, Math.min(layout.height - height, focusY));
 
-  // Mondes animés : ceux qui touchent l'écran (avec une marge), recalculés au défilement.
-  const aliveFor = (y: number) =>
-    layout.worlds
-      .filter((a) => a.bottom > y - 250 && a.top < y + height + 250)
-      .map((a) => a.w)
-      .join(',');
+  // Mondes animés : ceux qui touchent l'écran (avec une marge), recalculés au défilement ; « s » : le sanctuaire.
+  const aliveFor = (y: number) => {
+    const near = (top: number, bottom: number) => bottom > y - 250 && top < y + height + 250;
+    const ids: string[] = layout.worlds.filter((a) => near(a.top, a.bottom)).map((a) => String(a.w));
+    if (near(layout.sanctuary.top, layout.sanctuary.bottom)) ids.push('s');
+    return ids.join(',');
+  };
   const [alive, setAlive] = useState(() => aliveFor(startY));
-  const aliveSet = new Set(alive.split(',').map(Number));
+  const aliveSet = new Set(alive.split(','));
 
-  // Au départ, on centre la carte sur le niveau à jouer.
+  // Au départ, on centre la carte sur le niveau à jouer (ou sur le sanctuaire).
   useEffect(() => {
     const t = setTimeout(() => scroll.current?.scrollTo({ y: startY, animated: false }), 30);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [width]);
+  // Sur demande (après la cérémonie), on glisse jusqu'au niveau à jouer.
+  useEffect(() => {
+    if (!focusKey) return;
+    const t = setTimeout(() => scroll.current?.scrollTo({ y: startY, animated: true }), 120);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey]);
 
   return (
     <ScrollView
@@ -313,24 +361,35 @@ export function SagaMap({
       }}
     >
       {layout.worlds.map((a) => (
-        <WorldSection key={a.w} area={a} layout={layout} alive={aliveSet.has(a.w)} />
+        <WorldSection key={a.w} area={a} layout={layout} alive={aliveSet.has(String(a.w))} />
       ))}
+      <SanctuarySection
+        s={layout.sanctuary}
+        width={width}
+        nextGround={WORLD_LOOKS[worldOf(DIVINE_GATE + 1) - 1].ground}
+        alive={aliveSet.has('s')}
+        state={sanctuaryState}
+        playerInitial={playerInitial}
+        onUnlock={onSanctuary}
+      />
       {layout.worlds.map((a) => (
         <WorldSign key={`s${a.w}`} area={a} />
       ))}
-      {layout.worlds.map((a) => (
-        <Mascot key={`m${a.w}`} area={a} defeated={(stars[a.w * LEVELS_PER_WORLD - 1] ?? 0) > 0} />
-      ))}
+      {layout.worlds.map((a) =>
+        WORLD_LOOKS[a.w - 1].straight ? null : <Mascot key={`m${a.w}`} area={a} defeated={(stars[lastLevel(a.w) - 1] ?? 0) > 0} />,
+      )}
       {layout.nodes.map((p, i) => {
         const n = i + 1;
-        const boss = n % LEVELS_PER_WORLD === 0;
+        const boss = !!getLevel(n)?.boss;
         const size = boss ? 68 : 54;
         const won = (stars[i] ?? 0) > 0;
-        const state: NodeState = n <= cleared ? (won ? 'done' : 'open') : n === current && cleared < TOTAL_LEVELS ? 'current' : 'locked';
+        // après le Volcan, rien ne se joue tant que la Divine n'est pas débloquée (les niveaux gagnés gardent leurs étoiles)
+        const barred = needsDivine(n) && !divineUnlocked;
+        const state: NodeState = won ? 'done' : barred ? 'locked' : n <= cleared ? 'open' : n === current && cleared < TOTAL_LEVELS ? 'current' : 'locked';
         return (
           <View key={n} style={[styles.abs, { left: p.x - size / 2, top: p.y - size / 2 }]}>
             <LevelNode n={n} state={state} stars={stars[i] ?? 0} onPress={() => onPick(n)} />
-            {state === 'current' ? (
+            {state === 'current' && !gated ? (
               <View style={[styles.abs, { left: size / 2 - 20, top: boss ? -86 : -62 }]}>
                 <PlayerPin initial={playerInitial} />
               </View>
@@ -356,14 +415,11 @@ const styles = StyleSheet.create({
   bossTag: { position: 'absolute', bottom: -12, width: 74, alignItems: 'center', height: 19, borderRadius: 6, backgroundColor: '#C8283C', borderWidth: 2, borderColor: OUTLINE, justifyContent: 'center' },
   bossText: { fontFamily: fonts.black, fontSize: 10, color: '#FFFFFF', letterSpacing: 0.5 },
   stars: { position: 'absolute', flexDirection: 'row', gap: 1 },
+  plaque: { fontFamily: fonts.black, fontSize: 10, letterSpacing: 0.6, color: '#4A2A00' },
   nodeOpen: { borderColor: '#FFFFFF' },
   newTag: { position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: '#FF4F6E', borderWidth: 2.5, borderColor: OUTLINE, alignItems: 'center', justifyContent: 'center' },
   newText: { fontFamily: fonts.black, fontSize: 13, lineHeight: 16, color: '#FFFFFF' },
   starIcon: { textShadowColor: OUTLINE, textShadowOffset: { width: 0, height: 1.5 }, textShadowRadius: 1 },
-  pin: { alignItems: 'center', width: 40 },
-  pinHead: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#FFFFFF', borderWidth: 3, borderColor: OUTLINE, alignItems: 'center', justifyContent: 'center' },
-  pinText: { fontFamily: fonts.black, fontSize: 17, color: '#141414' },
-  pinTip: { width: 0, height: 0, borderLeftWidth: 7, borderRightWidth: 7, borderTopWidth: 10, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: OUTLINE, marginTop: -1 },
   sign: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10, borderWidth: 3, borderColor: OUTLINE, alignItems: 'center', minWidth: 120 },
   signKicker: { fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.2, color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase' },
   signName: { fontFamily: fonts.black, fontSize: 19, color: '#FFFFFF', letterSpacing: 0.5, textShadowColor: OUTLINE, textShadowOffset: { width: 1.5, height: 2 }, textShadowRadius: 0 },

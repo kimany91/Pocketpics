@@ -172,15 +172,37 @@ test('étoiles et sauvegarde : 3 sans perte, une sauvegarde de l’ancienne cart
 
 test('carte : chaque niveau sur la route, de bas en haut, décors hors de la route', () => {
   const L = mapLayout(390);
-  assert.equal(L.nodes.length, 100);
+  assert.equal(L.nodes.length, TOTAL_LEVELS);
+  assert.equal(L.nodes.length, 130);
   for (let i = 1; i < L.nodes.length; i++) assert.ok(L.nodes[i].y < L.nodes[i - 1].y, 'on remonte la carte');
   assert.ok(L.nodes.every((p) => p.x > 40 && p.x < 350));
-  assert.equal(L.worlds.length, 20);
+  assert.equal(L.worlds.length, 21);
   for (const w of L.worlds) {
     assert.ok(w.bottom > w.top);
     assert.ok(w.decor.length > 8, `monde ${w.w} assez décoré`);
     for (const d of w.decor) for (const n of L.nodes) assert.ok(Math.hypot(d.x - n.x, d.y - n.y) > 40, `décor sur le niveau (monde ${w.w})`);
+    // chaque niveau du monde est bien dans sa bande
+    for (let n = firstLevel(w.w); n <= lastLevel(w.w); n++) assert.ok(L.nodes[n - 1].y > w.top && L.nodes[n - 1].y < w.bottom, `niveau ${n} dans le monde ${w.w}`);
   }
   assert.equal(L.worlds[0].bottom, L.height);
-  assert.equal(L.worlds[19].top, 0);
+  assert.equal(L.worlds[20].top, 0);
+  for (let i = 1; i < 20; i++) if (i !== worldOf(DIVINE_GATE)) assert.equal(L.worlds[i].bottom, L.worlds[i - 1].top, `mondes ${i} et ${i + 1} collés`);
+
+  // la Galerie : 30 niveaux sur une route toute droite au milieu, régulièrement espacés
+  const g = L.nodes.slice(firstLevel(21) - 1, lastLevel(21));
+  assert.equal(g.length, 30);
+  assert.ok(g.every((p) => p.x === 195), 'route droite au milieu');
+  const steps = g.slice(1).map((p, i) => g[i].y - p.y);
+  assert.ok(steps.every((d) => Math.abs(d - steps[0]) < 1e-6 && d > 80), 'niveaux régulièrement espacés');
+
+  // le sanctuaire de la Divine : une bande de vide entre le Volcan et la Tempête, rien dedans
+  const s = L.sanctuary;
+  const gate = worldOf(DIVINE_GATE);
+  assert.equal(s.bottom, L.worlds[gate - 1].top);
+  assert.equal(s.top, L.worlds[gate].bottom);
+  assert.ok(s.bottom - s.top > 400, 'assez de place pour la carte Divine');
+  assert.equal(s.x, 195, 'le pont passe au milieu');
+  assert.ok(L.nodes[DIVINE_GATE - 1].y > s.bottom && L.nodes[DIVINE_GATE].y < s.top, 'le Volcan en dessous, la Tempête au-dessus');
+  assert.ok(L.nodes.every((p) => p.y > s.bottom || p.y < s.top), 'aucun niveau dans le vide');
+  for (const w of L.worlds) for (const d of w.decor) assert.ok(d.y > s.bottom || d.y < s.top, 'aucun décor dans le vide');
 });

@@ -22,12 +22,14 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 
-import { LEVELS_PER_WORLD, TOTAL_LEVELS, getLevel } from '../../battle/levels';
+import { DIVINE_GATE, TOTAL_LEVELS, firstLevel, getLevel } from '../../battle/levels';
+import { CardFace } from '../../components/card/CardFace';
 import { AppText } from '../../components/AppText';
 import { CoinChip } from '../../components/Coin';
 import { DecorSprite, Earth, Road, Texture } from '../../components/map/decor';
 import { railPaths, smoothPath } from '../../components/map/mapLayout';
-import { OUTLINE, WORLD_LOOKS } from '../../components/map/worlds';
+import { SANCTUARY_CARD, sanctuaryArt } from '../../components/map/Sanctuary';
+import { OUTLINE, SANCTUARY_VOID, WORLD_LOOKS } from '../../components/map/worlds';
 import { RankEmblem } from '../../components/rank/RankEmblem';
 import { Rise } from '../../components/Rise';
 import { RollingNumber } from '../../components/RollingNumber';
@@ -50,8 +52,11 @@ export default function BattleTab() {
   const isOnline = useSocial((s) => s.isOnline);
   useSocial((s) => s.presence);
   const online = friends.filter((f) => isOnline(f.code)).length;
+  const divineUnlocked = useGame((s) => s.save?.divineUnlocked ?? false);
   const current = Math.min(TOTAL_LEVELS, cleared + 1);
   const level = getLevel(current);
+  /** Le Volcan est battu : la Divine attend au sanctuaire avant la suite. */
+  const gated = cleared >= DIVINE_GATE && !divineUnlocked && cleared < TOTAL_LEVELS;
   const panelW = width - 32;
   const myRank = rankOf(rank ? shownMmr(rank) : 0);
   const { visit, focused } = useEntrance();
@@ -69,19 +74,23 @@ export default function BattleTab() {
           <Panel
             label="Aventure solo"
             onPress={() => router.push('/solo')}
-            border={level ? WORLD_LOOKS[level.world.n - 1].node : colors.gold}
+            border={gated ? '#C9A6FF' : level ? WORLD_LOOKS[level.world.n - 1].node : colors.gold}
             width={panelW}
             focused={focused}
             visit={visit}
             shineDelay={420}
-            art={<SoloScene width={panelW} world={level?.world.n ?? 1} level={current} />}
+            art={gated ? <SanctuaryScene width={panelW} /> : <SoloScene width={panelW} world={level?.world.n ?? 1} level={current} />}
           >
             <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(8,8,12,0.88)']} style={[StyleSheet.absoluteFill, { top: '45%' }]} />
             <View style={styles.panelText}>
               <AppText style={styles.kicker}>Solo</AppText>
               <AppText style={styles.big}>Aventure</AppText>
               <AppText style={styles.sub}>
-                {cleared >= TOTAL_LEVELS ? 'Aventure terminée · rejoue tes niveaux' : `Monde ${level?.world.n} · ${level?.world.place} · Niveau ${current}/${TOTAL_LEVELS}`}
+                {cleared >= TOTAL_LEVELS
+                  ? 'Aventure terminée · rejoue tes niveaux'
+                  : gated
+                    ? 'Le sanctuaire de la Divine t’attend'
+                    : `Monde ${level?.world.n} · ${level?.world.place} · Niveau ${current}/${TOTAL_LEVELS}`}
               </AppText>
               <View style={styles.metaRow}>
                 <Ionicons name="star" size={14} color={colors.gold} />
@@ -308,8 +317,9 @@ function SoloScene({ width, world, level }: { width: number; world: number; leve
     [0.62, 0.18, 0.8],
     [0.2, 0.14, 0.85],
   ];
-  const first = (world - 1) * LEVELS_PER_WORLD + 1;
+  const first = firstLevel(world);
   const nodes = [pts[1], pts[2], pts[3]];
+  if (look.straight) return <GalleryScene width={width} h={h} first={first} level={level} />;
   return (
     <Svg width={width} height={h}>
       <Rect x={0} y={0} width={width} height={h} fill={look.ground} />
@@ -347,6 +357,77 @@ function SoloScene({ width, world, level }: { width: number; world: number; leve
         );
       })}
     </Svg>
+  );
+}
+
+/** La Galerie : le tapis rouge file droit vers le haut, entre colonnes et cadres dorés. */
+function GalleryScene({ width, h, first, level }: { width: number; h: number; first: number; level: number }) {
+  const look = WORLD_LOOKS[WORLD_LOOKS.length - 1];
+  const rx = width * 0.66;
+  const road = `M${rx} ${h + 40} L${rx} -40`;
+  const nodes = [h * 0.78, h * 0.5, h * 0.22];
+  const decor: [Parameters<typeof DecorSprite>[0]['kind'], number, number, number][] = [
+    ['frame', width * 0.1, h * 0.36, 1.15],
+    ['frame', width * 0.3, h * 0.2, 0.9],
+    ['frame', width * 0.95, h * 0.62, 1.05],
+    ['pillar', rx - 74, h * 0.66, 0.95],
+    ['pillar', rx + 74, h * 0.66, 0.95],
+    ['pedestal', rx + 74, h * 0.36, 0.9],
+    ['pedestal', rx - 74, h * 0.36, 0.9],
+  ];
+  return (
+    <Svg width={width} height={h}>
+      <Rect x={0} y={0} width={width} height={h} fill={look.ground} />
+      <Circle cx={rx} cy={h * 0.1} r={width * 0.5} fill="#6A2FC2" opacity={0.12} />
+      {Array.from({ length: 40 }, (_, i) => (
+        <Texture key={i} kind="sparkle" x={((i * 97) % 100) / 100 * width} y={((i * 53) % 100) / 100 * h} color={look.speck} />
+      ))}
+      <Road d={road} look={look} w={38} />
+      {nodes.flatMap((y, i) => [
+        <DecorSprite key={`l${i}`} kind="stanchion" x={rx - 44} y={y + 30} scale={1} flip={false} seed={i} />,
+        <DecorSprite key={`r${i}`} kind="stanchion" x={rx + 44} y={y + 30} scale={1} flip seed={i} />,
+      ])}
+      {decor.map(([k, x, y, s], i) => (
+        <DecorSprite key={i} kind={k} x={x} y={y} scale={s} flip={i % 2 === 1} seed={i * 3 + 1} />
+      ))}
+      {nodes.map((y, i) => {
+        const n = first + 2 - i;
+        const on = n <= level;
+        return (
+          <G key={i}>
+            <Circle cx={rx} cy={y + 3} r={23} fill="rgba(0,0,0,0.35)" />
+            <Circle cx={rx} cy={y} r={22} fill={on ? '#F6C33C' : '#A3A9B1'} stroke={OUTLINE} strokeWidth={3} />
+            <Circle cx={rx} cy={y} r={15} fill={on ? look.node : '#6E747D'} stroke={OUTLINE} strokeWidth={2.5} />
+          </G>
+        );
+      })}
+    </Svg>
+  );
+}
+
+/** Le sanctuaire : le vide, le pont de lumière, et la Divine qui attend. */
+function SanctuaryScene({ width }: { width: number }) {
+  const h = 290;
+  const bx = width * 0.7;
+  const cw = 84;
+  return (
+    <View style={{ width, height: h }}>
+      <Svg width={width} height={h}>
+        <Rect x={0} y={0} width={width} height={h} fill={SANCTUARY_VOID} />
+        <Circle cx={bx} cy={h * 0.36} r={width * 0.42} fill="#1A0F45" opacity={0.7} />
+        {Array.from({ length: 24 }, (_, i) => (
+          <Circle key={i} cx={(((i * 37 + 11) % 100) / 100) * width} cy={((i * 59 + 7) % 100) / 100 * h} r={i % 4 ? 0.8 : 1.4} fill="#FFFFFF" opacity={0.35 + (i % 3) * 0.15} />
+        ))}
+        <Rect x={bx - 22} y={0} width={44} height={h} fill="#B48CFF" opacity={0.07} />
+        <Rect x={bx - 11} y={-2} width={22} height={h + 4} fill="#3B3358" stroke={OUTLINE} strokeWidth={2.4} />
+        <Path d={`M${bx} 0 V${h}`} stroke="#FFE9A0" strokeWidth={2.2} strokeDasharray="10 12" opacity={0.85} />
+        <Circle cx={bx} cy={h * 0.36} r={74} fill="#FFE29A" opacity={0.1} />
+        <Path d={`M${bx - 62} ${h * 0.36 + 66} A62 12 0 1 0 ${bx + 62} ${h * 0.36 + 66} A62 12 0 1 0 ${bx - 62} ${h * 0.36 + 66} Z`} fill="#2B2350" stroke={OUTLINE} strokeWidth={2.4} />
+      </Svg>
+      <View style={{ position: 'absolute', left: bx - cw / 2, top: h * 0.36 - (cw * 1.4) / 2 }}>
+        <CardFace card={SANCTUARY_CARD} imageSource={sanctuaryArt()} width={cw} quality="thumb" />
+      </View>
+    </View>
   );
 }
 
