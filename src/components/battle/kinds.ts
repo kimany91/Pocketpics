@@ -108,3 +108,12 @@ export function attackHint(b: Battle, me: Fighter, foe: Fighter, attack: Attack,
       return { text: special ? `Puissance ${p}` : `Puissance ${p}`, hot: false };
   }
 }
+
+/** « Tour de Léo », « Tour du Grand Portrait », « Tour de la Reine »… (article contracté). */
+export function turnOf(name: string): string {
+  if (/^Le /.test(name)) return `Tour du ${name.slice(3)}`;
+  if (/^Les /.test(name)) return `Tour des ${name.slice(4)}`;
+  if (/^La /.test(name)) return `Tour de la ${name.slice(3)}`;
+  if (/^L['’]/.test(name)) return `Tour de l’${name.slice(2)}`;
+  return `Tour de ${name}`;
+}

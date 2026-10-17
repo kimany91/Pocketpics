@@ -14,6 +14,7 @@
  * pièces qui défilent).
  */
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
@@ -71,7 +72,7 @@ import { DIVISION_POINTS, rankOf, shownMmr } from '../../game/rank';
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { type ActKind, type FighterStatus, FighterView, HpBar, type Popup, type ReactKind, STRIKE_MS, type StrikeKind } from '../../components/battle/FighterView';
-import { KIND_LOOK, STATUS_LOOK, activeStatuses, attackHint } from '../../components/battle/kinds';
+import { KIND_LOOK, STATUS_LOOK, activeStatuses, attackHint, turnOf } from '../../components/battle/kinds';
 import { FitLines, FitText, type TextPart, fitFontSize } from '../../components/battle/FitText';
 import { ArenaBackdrop } from '../../components/battle/ArenaBackdrop';
 import { InspectFighter } from '../../components/battle/InspectFighter';
@@ -128,6 +129,8 @@ interface Foe {
   label: string;
   art?: { uri: string } | number;
   image(ref: string): { imageSource?: number; imageUri?: string };
+  /** Monde final : la Galerie (`gallery`) ou son boss, le Grand Portrait (`portrait`). */
+  stage?: 'gallery' | 'portrait';
 }
 
 const ONLINE_TINT = '#7C9CFF';
@@ -172,9 +175,12 @@ export default function FightScreen() {
       name: level.world.bot,
       tint: level.world.tint,
       mmr: levelMmr(level.n),
-      label: `${level.boss ? 'Boss · ' : ''}Monde ${level.world.n} · Niveau ${level.n}`,
+      label: level.world.final
+        ? `${level.boss ? 'Boss final' : level.world.place} · Niveau ${level.n}`
+        : `${level.boss ? 'Boss · ' : ''}Monde ${level.world.n} · Niveau ${level.n}`,
       art: botArt(portraitRef(level.world)),
       image: (ref) => ({ imageSource: botArt(ref) }),
+      stage: level.world.final ? (level.boss ? 'portrait' : 'gallery') : undefined,
     };
     // difficulté cachée : l'adversaire s'adapte si les cartes choisies sont bien au-dessus de la normale
     const mine = deck.map(toFighter);
@@ -192,6 +198,8 @@ export default function FightScreen() {
   /** Gains en fin de combat : pièces (solo) ou points de rang (en ligne). */
   const [reward, setReward] = useState<SoloReward | null>(null);
   const [starsWon, setStarsWon] = useState(0);
+  /** Victoire contre le Grand Portrait alors que la carte Galaxy n'est pas encore gagnée. */
+  const [galaxyWin, setGalaxyWin] = useState(false);
   const [rankChange, setRankChange] = useState<{ before: number; after: number } | null>(null);
   const [endReason, setEndReason] = useState<'gone' | 'lost' | null>(null);
   const [turnLeft, setTurnLeft] = useState<number | null>(null);
@@ -216,7 +224,9 @@ export default function FightScreen() {
   const punchV = useSharedValue(0);
   /** L'écran tremble, d'autant plus que le coup est fort (après l'arrêt sur image `delay`). */
   const shake = (power: number, delay = 0) => {
-    const a = Math.min(14, power);
+    // la Galerie, monde final : les coups secouent un peu plus fort
+    const heavy = setup?.foe.stage ? 1.25 : 1;
+    const a = Math.min(14 * heavy, power * heavy);
     const seq = (k: number) =>
       withDelay(
         delay,
@@ -486,6 +496,18 @@ export default function FightScreen() {
             // la nouvelle carte arrive sans les chiffres de la précédente
             setPopups((all) => (e.side === 0 ? [[], all[1]] : [all[0], []]));
             doEnter(e.side);
+            const cosmic = getRarity(view.sides[e.side].fighters[e.to]?.rarity ?? '').frameStyle === 'galaxy';
+            if (cosmic) {
+              // la carte Galaxy surgit d'un tourbillon : éclair violet, l'écran tremble
+              playSfx('ultra', { volume: 0.8 });
+              haptic.heavy();
+              flashScreen('#B98CFF', 0.4);
+              shake(9, 700);
+              punch(0.03);
+              say([{ text: `${foeInfo.name} révèle sa carte ` }, { text: 'Galaxy', bold: true, color: '#3FD0FF' }, { text: ' !' }], e.side);
+              await sleep(1700);
+              break;
+            }
             playSfx('swipe', { volume: 0.7 });
             if (e.side === 0) say(e.forced ? [{ text: 'À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }] : [{ text: 'Reviens ! À toi, ' }, nameParts(e.fighter, 0), { text: ' !' }], e.side);
             else say([{ text: `${foeInfo.name} ${e.forced ? 'envoie' : 'rappelle sa carte et envoie'} ` }, nameParts(e.fighter, 1), { text: ' !' }], e.side);
@@ -518,6 +540,7 @@ export default function FightScreen() {
       const stars = starsFor(battle.sides[0].fighters.filter((f) => f.hp <= 0).length);
       setStarsWon(stars);
       setReward(winLevel(level.n, stars));
+      if (level.world.final && level.boss && !useGame.getState().save?.galaxyClaimed) setGalaxyWin(true);
     }
     if (winner === 0) {
       playSfx('win');
@@ -740,7 +763,7 @@ export default function FightScreen() {
 
   return (
     <View style={styles.root}>
-      <ArenaBackdrop art={foeInfo.art} tint={foeInfo.tint} width={width} height={height} />
+      <ArenaBackdrop art={foeInfo.art} tint={foeInfo.tint} width={width} height={height} final={!!foeInfo.stage} />
       <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) }}>
         <View style={styles.header}>
           <Pressable onPress={() => setQuitting(true)} hitSlop={12} style={styles.round} accessibilityLabel="Abandonner le combat">
@@ -763,9 +786,18 @@ export default function FightScreen() {
               <AppText variant="label" style={{ color: getRarity(foe.rarity).color }}>
                 {getRarity(foe.rarity).label}
               </AppText>
-              <View style={styles.dots}>
+              {/* cartes restantes : des points plus petits quand l'adversaire en a plus de 4 (jusqu'à 8) */}
+              <View style={[styles.dots, shown.sides[1].fighters.length > 4 && styles.dotsMany]}>
                 {shown.sides[1].fighters.map((f, i) => (
-                  <View key={i} style={[styles.dot, f.hp > 0 ? { backgroundColor: foeInfo.tint } : styles.dotKo, i === shown.sides[1].active && styles.dotActive]} />
+                  <View
+                    key={i}
+                    style={[
+                      styles.dot,
+                      shown.sides[1].fighters.length > 4 && styles.dotSmall,
+                      f.hp > 0 ? { backgroundColor: getRarity(f.rarity).frameStyle === 'galaxy' ? '#3FD0FF' : foeInfo.tint } : styles.dotKo,
+                      i === shown.sides[1].active && styles.dotActive,
+                    ]}
+                  />
                 ))}
               </View>
             </View>
@@ -947,7 +979,9 @@ export default function FightScreen() {
 
       <Flash trigger={flash.n} color={flash.color} peak={flash.peak} />
       {koStamp.n > 0 && result === null ? <KoStamp key={koStamp.n} won={koStamp.won} /> : null}
-      {intro ? <VsIntro arenaLabel={foeInfo.label} bot={foeInfo.name} tint={foeInfo.tint} width={width} myMmr={myMmr} foeMmr={foeInfo.mmr} onDone={endIntro} /> : null}
+      {intro ? (
+        <VsIntro arenaLabel={foeInfo.label} bot={foeInfo.name} tint={foeInfo.tint} width={width} myMmr={myMmr} foeMmr={foeInfo.mmr} stage={foeInfo.stage} art={foeInfo.art} onDone={endIntro} />
+      ) : null}
 
       {inspect ? (
         <InspectOverlay inspect={inspect} battle={shown} deck={deck} foe={foeInfo} onClose={() => setInspect(null)} />
@@ -958,7 +992,7 @@ export default function FightScreen() {
         online ? (
           <OnlineResult won={result === 0} change={rankChange} opp={foeInfo.name} reason={endReason} />
         ) : level ? (
-          <ResultOverlay won={result === 0} levelN={level.n} deck={deck.map((c) => c.id).join(',')} reward={reward} stars={starsWon} />
+          <ResultOverlay won={result === 0} levelN={level.n} deck={deck.map((c) => c.id).join(',')} reward={reward} stars={starsWon} galaxy={galaxyWin} />
         ) : null
       ) : null}
       {quitting ? (
@@ -1117,7 +1151,7 @@ function TurnTab({ mine, bot, tint, left = null }: { mine: boolean; bot: string;
       style={[styles.turnTab, mine ? { left: 14, backgroundColor: hurry ? colors.danger : colors.gold } : { right: 14, backgroundColor: tint }]}
     >
       <AppText style={styles.turnText} numberOfLines={1}>
-        {mine ? (left !== null ? `Ton tour · ${left} s` : 'Ton tour') : `Tour de ${bot}`}
+        {mine ? (left !== null ? `Ton tour · ${left} s` : 'Ton tour') : turnOf(bot)}
       </AppText>
     </Animated.View>
   );
@@ -1364,8 +1398,29 @@ function ResultStar({ index, earned, show }: { index: number; earned: boolean; s
   );
 }
 
-function ResultOverlay({ won, levelN, deck, reward, stars }: { won: boolean; levelN: number; deck: string; reward: SoloReward | null; stars: number }) {
+const GALAXY_COLORS = ['#B23CFF', '#3FD0FF', '#FF5FCB', colors.gold, '#FFFFFF', '#7C5CFF'];
+
+function ResultOverlay({
+  won,
+  levelN,
+  deck,
+  reward,
+  stars,
+  galaxy = false,
+}: {
+  won: boolean;
+  levelN: number;
+  deck: string;
+  reward: SoloReward | null;
+  stars: number;
+  /** Victoire contre le Grand Portrait, carte Galaxy pas encore gagnée : célébration cosmique et bouton de révélation. */
+  galaxy?: boolean;
+}) {
   const { width, height } = useWindowDimensions();
+  // suivi en direct : une fois la carte révélée (retour de l'écran d'ouverture), le bouton disparaît
+  const galaxyClaimed = useGame((s) => s.save?.galaxyClaimed ?? false);
+  const cosmic = won && galaxy;
+  const canReveal = cosmic && !galaxyClaimed;
   const next = levelN < TOTAL_LEVELS ? getLevel(levelN + 1) : null;
   // les étoiles tombent une à une, chacune avec son petit son
   const [starsShown, setStarsShown] = useState(0);
@@ -1386,26 +1441,27 @@ function ResultOverlay({ won, levelN, deck, reward, stars }: { won: boolean; lev
   const raysSize = Math.min(width * 1.1, 420);
   return (
     <Animated.View entering={FadeIn.duration(won ? 300 : 500)} style={[StyleSheet.absoluteFill, styles.overlay, !won && styles.overlayLost]}>
-      {won ? <Confetti width={width} height={height} colors={CONFETTI} count={34} /> : null}
+      {won ? <Confetti width={width} height={height} colors={cosmic ? GALAXY_COLORS : CONFETTI} count={cosmic ? 44 : 34} /> : null}
       <View style={{ alignItems: 'center', justifyContent: 'center' }}>
         {won ? (
           <View pointerEvents="none" style={{ position: 'absolute', width: raysSize, height: raysSize }}>
-            <Rays colors={[colors.gold, '#FFF3C2']} size={raysSize} visible />
+            <Rays colors={cosmic ? ['#B23CFF', '#3FD0FF', colors.gold] : [colors.gold, '#FFF3C2']} size={raysSize} visible duration={cosmic ? 9000 : 14000} />
           </View>
         ) : null}
         <View pointerEvents="none" style={{ position: 'absolute', width: 260, height: 260, opacity: won ? 0.55 : 0.35 }}>
-          <Glow color={won ? colors.gold : '#5A6A8A'} size={260} />
+          <Glow color={cosmic ? '#B98CFF' : won ? colors.gold : '#5A6A8A'} size={260} />
         </View>
         {won ? (
           <View style={{ position: 'absolute' }}>
-            <Burst trigger={1} colors={[colors.gold, '#FFF3C2', colors.success]} count={30} radius={170} />
+            <Burst trigger={1} colors={cosmic ? GALAXY_COLORS : [colors.gold, '#FFF3C2', colors.success]} count={cosmic ? 40 : 30} radius={cosmic ? 200 : 170} />
           </View>
         ) : null}
         <Animated.View
           entering={won ? ZoomIn.springify().damping(10) : FadeInDown.duration(700)}
-          style={[styles.medal, { backgroundColor: won ? colors.gold : colors.surface2 }, won ? styles.medalWon : styles.medalLost]}
+          style={[styles.medal, { backgroundColor: won ? colors.gold : colors.surface2 }, won ? styles.medalWon : styles.medalLost, cosmic && styles.medalGalaxy]}
         >
-          <Ionicons name={won ? 'trophy' : 'refresh'} size={40} color={won ? '#141414' : colors.textDim} />
+          {cosmic ? <LinearGradient colors={['#3B1C8C', '#B23CFF', '#3FD0FF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 48 }]} /> : null}
+          <Ionicons name={cosmic ? 'planet' : won ? 'trophy' : 'refresh'} size={40} color={cosmic ? '#FFFFFF' : won ? '#141414' : colors.textDim} />
         </Animated.View>
       </View>
       {won ? (
@@ -1417,13 +1473,17 @@ function ResultOverlay({ won, levelN, deck, reward, stars }: { won: boolean; lev
       ) : null}
       <View style={{ alignItems: 'center', marginTop: 22, paddingHorizontal: 32 }}>
         <Animated.View entering={won ? ZoomIn.delay(160).springify().damping(9) : FadeIn.delay(250).duration(600)}>
-          <AppText variant="display" style={won ? styles.winTitle : styles.loseTitle}>
+          <AppText variant="display" style={won ? [styles.winTitle, cosmic && styles.galaxyTitle] : styles.loseTitle}>
             {won ? 'Victoire !' : 'Défaite'}
           </AppText>
         </Animated.View>
         <Animated.View entering={FadeInDown.delay(won ? 320 : 450)}>
           <AppText variant="body" style={{ textAlign: 'center', color: colors.textDim, marginTop: 6 }}>
-            {won
+            {cosmic
+              ? canReveal
+                ? 'Le Grand Portrait est tombé ! Une carte Galaxy, unique, t’attend.'
+                : 'Le Grand Portrait est tombé ! Tu as terminé toute l’aventure.'
+              : won
               ? next
                 ? next.world.n !== getLevel(levelN)?.world.n
                   ? `Monde terminé ! Direction ${next.world.place}.`
@@ -1452,6 +1512,7 @@ function ResultOverlay({ won, levelN, deck, reward, stars }: { won: boolean; lev
         )
       ) : null}
       <Animated.View entering={FadeInDown.delay(won ? 900 : 650).springify().damping(16)} style={{ alignSelf: 'stretch', gap: 10, marginTop: 30, paddingHorizontal: 32 }}>
+        {canReveal ? <RevealGalaxyButton /> : null}
         {won && next ? (
           <Button label={`Niveau ${next.n}`} size="lg" icon="arrow-forward" onPress={() => router.replace({ pathname: '/battle/deck', params: { level: String(next.n) } })} />
         ) : null}
@@ -1459,6 +1520,24 @@ function ResultOverlay({ won, levelN, deck, reward, stars }: { won: boolean; lev
         <Button label="Retour à la carte" kind="secondary" onPress={() => router.back()} />
       </Animated.View>
     </Animated.View>
+  );
+}
+
+/** « Révèle ta carte Galaxy » : le bouton respire dans un halo cosmique, et mène à l'écran d'ouverture. */
+function RevealGalaxyButton() {
+  const glow = useSharedValue(0);
+  useEffect(() => {
+    glow.value = withRepeat(withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(glow);
+  }, [glow]);
+  const glowStyle = useAnimatedStyle(() => ({ opacity: 0.45 + glow.value * 0.5, transform: [{ scaleX: 1 + glow.value * 0.08 }] }));
+  return (
+    <View>
+      <Animated.View pointerEvents="none" style={[styles.revealGlow, glowStyle]}>
+        <Glow color="#B98CFF" size={92} stretchX={4.2} />
+      </Animated.View>
+      <Button label="Révèle ta carte Galaxy" size="lg" icon="planet" onPress={() => router.push({ pathname: '/open', params: { galaxy: '1' } })} />
+    </View>
   );
 }
 
@@ -1567,7 +1646,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dots: { flexDirection: 'row', gap: 5 },
+  dotsMany: { gap: 3, flexShrink: 1, flexWrap: 'wrap' },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  dotSmall: { width: 6, height: 6, borderRadius: 3 },
   dotKo: { borderWidth: 1.5, borderColor: colors.textFaint },
   dotActive: { transform: [{ scale: 1.3 }] },
   message: {
@@ -1629,6 +1710,9 @@ const styles = StyleSheet.create({
   overlay: { backgroundColor: 'rgba(5,5,7,0.88)', alignItems: 'center', justifyContent: 'center', zIndex: 20 },
   dialog: { width: '86%', maxWidth: 380, padding: 22, borderRadius: 24, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   medal: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center' },
+  medalGalaxy: { borderColor: '#E3D2FF', shadowColor: '#B98CFF', overflow: 'hidden' },
+  galaxyTitle: { color: '#E3D2FF', textShadowColor: '#4B1D8F' },
+  revealGlow: { position: 'absolute', left: 0, right: 0, top: -16, bottom: -16, alignItems: 'center', justifyContent: 'center' },
   medalWon: { borderWidth: 4, borderColor: '#FFF3C2', shadowColor: colors.gold, shadowOpacity: 0.8, shadowRadius: 22 },
   medalLost: { borderWidth: 2, borderColor: colors.borderStrong },
   overlayLost: { backgroundColor: 'rgba(6,7,12,0.92)' },

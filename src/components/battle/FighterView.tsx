@@ -21,7 +21,8 @@
  *  3. `react` sur la carte touchée : image d'impact blanche figée (`hitstop`),
  *     puis recul, traits d'impact, onde et étincelles de la couleur de l'attaque.
  *  4. K.O. : la carte se fissure et tremble, puis éclate en morceaux (`shatter`).
- * Une nouvelle carte arrive en vol depuis le bord de l'écran et atterrit sur son socle.
+ * Une nouvelle carte arrive en vol depuis le bord de l'écran et atterrit sur son socle ;
+ * une carte Galaxy, elle, surgit d'un tourbillon cosmique.
  * Tout tourne sur le fil UI (valeurs partagées Reanimated).
  */
 import { Ionicons } from '@expo/vector-icons';
@@ -48,7 +49,7 @@ import { getRarity } from '../../game/rarity';
 import { CARD_RATIO, colors, fonts } from '../../theme';
 import { AppText } from '../AppText';
 import { CardFace, type CardLike } from '../card/CardFace';
-import { Burst, Glow, ImpactLines, RayBurst, Shockwave } from '../fx';
+import { Burst, Glow, ImpactLines, RayBurst, Shockwave, Vortex } from '../fx';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -250,6 +251,9 @@ export const FighterView = memo(function FighterView({
    */
   const born = useRef({ act: act.key, react: react.key, strike: strike?.key ?? 0, cast: cast?.key ?? 0 }).current;
   const castNew = !!cast && cast.key !== born.cast;
+  /** Carte Galaxy : arrivée par un tourbillon cosmique. */
+  const cosmic = r.frameStyle === 'galaxy';
+  const [vortex, setVortex] = useState(0);
   const height = width * CARD_RATIO;
   /** Côté vers lequel la carte esquive (vers le bord de l'écran), et d'où elle arrive. */
   const side = facing === 1 ? -1 : 1;
@@ -564,6 +568,25 @@ export const FighterView = memo(function FighterView({
   // Arrivée : la carte arrive en vol depuis le bord de l'écran et atterrit sur son socle
   useEffect(() => {
     if (!enter) return;
+    if (cosmic) {
+      // elle surgit du centre d'un tourbillon, en tournoyant, puis se pose
+      setVortex((n) => n + 1);
+      entry.value = withDelay(380, withTiming(1, { duration: 160 }));
+      x.value = 0;
+      y.value = -10;
+      y.value = withDelay(380, withSpring(0, { damping: 10, stiffness: 160 }));
+      rot.value = side * 200;
+      rot.value = withDelay(380, withTiming(0, { duration: 520, easing: Easing.out(Easing.cubic) }));
+      scale.value = 0.15;
+      scale.value = withDelay(380, withSequence(withTiming(1.12, { duration: 420, easing: Easing.out(Easing.back(1.4)) }), withSpring(1, { damping: 8, stiffness: 220 })));
+      landGlow.value = withDelay(700, withSequence(withTiming(1, { duration: 100 }), withTiming(0, { duration: 900 })));
+      const t1 = setTimeout(() => setBurst((b) => ({ n: b.n + 1, colors: ['#B23CFF', '#3FD0FF', '#FF5FCB', '#FFFFFF'] })), 760);
+      const t2 = setTimeout(() => setLanded((n) => n + 1), 800);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    }
     const fly = { duration: 330, easing: Easing.out(Easing.cubic) };
     entry.value = withTiming(1, { duration: 120 });
     x.value = side * width * 1.1;
@@ -650,6 +673,11 @@ export const FighterView = memo(function FighterView({
       <Animated.View pointerEvents="none" style={[styles.abs, { left: -width * 0.45, top: (height - width * 1.9) / 2 }, backGlowStyle]}>
         <Glow color={r.color} size={width * 1.9} />
       </Animated.View>
+      {cosmic ? (
+        <View pointerEvents="none" style={[styles.abs, styles.point, { left: width / 2, top: height / 2 }]}>
+          <Vortex trigger={vortex} colors={['#B23CFF', '#3FD0FF']} size={width * 3} duration={950} />
+        </View>
+      ) : null}
       {/* Attaque spéciale : rayons et halo de la couleur de l'attaque */}
       <View pointerEvents="none" style={[styles.abs, styles.point, { left: width / 2, top: height / 2 }]}>
         {cast && castNew ? <RayBurst trigger={cast.key} color={cast.color} size={width * 2.7} /> : null}

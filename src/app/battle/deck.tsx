@@ -60,6 +60,15 @@ export default function DeckScreen() {
   const online = onlineParam === '1';
   const level = online ? undefined : (getLevel(Number(levelParam)) ?? undefined);
   const foes = useMemo(() => (level ? levelFighters(level) : []), [level]);
+  const foeGroups = useMemo(() => {
+    const groups: { rarity: string; count: number }[] = [];
+    for (const f of foes) {
+      const g = groups.find((x) => x.rarity === f.rarity);
+      if (g) g.count++;
+      else groups.push({ rarity: f.rarity, count: 1 });
+    }
+    return groups;
+  }, [foes]);
   const match = useMatch();
   const cards = useGame((s) => s.cards);
   const insets = useSafeAreaInsets();
@@ -158,14 +167,15 @@ export default function DeckScreen() {
             ))}
             <AppText variant="caption" style={{ marginLeft: 4 }}>{`${foes.length} cartes`}</AppText>
           </View>
+          {/* raretés de l'adversaire, regroupées (jusqu'à 8 cartes dans la Galerie) */}
           <View style={styles.gems}>
-            {foes.map((c, i) => {
-              const r = getRarity(c.rarity);
+            {foeGroups.map(({ rarity, count }) => {
+              const r = getRarity(rarity);
               return (
-                <View key={i} style={styles.gemRow}>
+                <View key={rarity} style={styles.gemRow}>
                   <View style={[styles.gem, { backgroundColor: r.color }]} />
-                  <AppText variant="caption" style={{ color: colors.textDim }}>
-                    {r.label}
+                  <AppText variant="caption" style={{ color: r.frameStyle === 'galaxy' ? r.color : colors.textDim }}>
+                    {count > 1 ? `${r.label} ×${count}` : r.label}
                   </AppText>
                 </View>
               );

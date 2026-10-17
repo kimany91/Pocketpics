@@ -476,6 +476,49 @@ export function RayBurst({ trigger, color, size, duration = 700 }: { trigger: nu
   );
 }
 
+/* ---------------------------------- Vortex --------------------------------- */
+
+/**
+ * Tourbillon cosmique (arrivée d'une carte Galaxy) : deux couronnes de rayons
+ * tournent en sens contraire et se resserrent vers le centre, autour d'un cœur
+ * lumineux qui éclate à la fin. Une seule valeur animée.
+ */
+export function Vortex({ trigger, colors, size, duration = 900 }: { trigger: number; colors: [string, string]; size: number; duration?: number }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    if (trigger <= 0) return;
+    p.value = 0;
+    p.value = withTiming(1, { duration, easing: Easing.inOut(Easing.quad) });
+    return () => cancelAnimation(p);
+  }, [trigger, p, duration]);
+  const ringA = useAnimatedStyle(() => {
+    const t = p.value;
+    return {
+      opacity: t === 0 || t === 1 ? 0 : t < 0.2 ? t / 0.2 : t > 0.8 ? (1 - t) / 0.2 : 1,
+      transform: [{ rotate: `${t * 540}deg` }, { scale: 1.3 - t * 0.9 }],
+    };
+  });
+  const ringB = useAnimatedStyle(() => {
+    const t = p.value;
+    return {
+      opacity: t === 0 || t === 1 ? 0 : (t < 0.2 ? t / 0.2 : t > 0.8 ? (1 - t) / 0.2 : 1) * 0.8,
+      transform: [{ rotate: `${-t * 420 + 20}deg` }, { scale: 1.1 - t * 0.7 }],
+    };
+  });
+  const core = useAnimatedStyle(() => {
+    const t = p.value;
+    return { opacity: t === 0 ? 0 : t < 0.75 ? t / 0.75 : 1 - (t - 0.75) / 0.25, transform: [{ scale: 0.3 + t * 0.9 }] };
+  });
+  const img = { position: 'absolute' as const, width: size, height: size, marginLeft: -size / 2, marginTop: -size / 2 };
+  return (
+    <View pointerEvents="none" style={styles.center}>
+      <Animated.Image source={raysTex} style={[img, { tintColor: colors[0] }, ringA]} />
+      <Animated.Image source={raysTex} style={[img, { tintColor: colors[1] }, ringB]} />
+      <Animated.Image source={glowTex} style={[img, { width: size * 0.6, height: size * 0.6, marginLeft: -size * 0.3, marginTop: -size * 0.3, tintColor: '#FFFFFF' }, core]} />
+    </View>
+  );
+}
+
 /* --------------------------------- Confettis -------------------------------- */
 
 interface ConfettiSpec {

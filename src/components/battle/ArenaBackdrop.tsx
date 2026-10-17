@@ -2,6 +2,8 @@
  * Décor du combat : l'illustration de l'arène, très floue, sous un voile
  * sombre teinté, avec un sol plus clair où se tiennent les cartes et quelques
  * poussières de lumière qui montent doucement. Le décor ne capte pas le toucher.
+ * La Galerie (`final`) est plus sombre, avec une lueur or et violette et des
+ * poussières dorées : on sent la fin de l'aventure.
  */
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
@@ -11,7 +13,7 @@ import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, wi
 import { colors } from '../../theme';
 import { Embers, Glow } from '../fx';
 
-export function ArenaBackdrop({ art, tint, width, height }: { art?: ImageSourcePropType; tint: string; width: number; height: number }) {
+export function ArenaBackdrop({ art, tint, width, height, final }: { art?: ImageSourcePropType; tint: string; width: number; height: number; final?: boolean }) {
   // Lente respiration de la lumière : le décor vit sans attirer l'œil.
   const drift = useSharedValue(0);
   useEffect(() => {
@@ -38,9 +40,24 @@ export function ArenaBackdrop({ art, tint, width, height }: { art?: ImageSourceP
       <Animated.View style={[styles.abs, { left: width * 0.5 - width * 0.55, top: height * 0.06 }, lightStyle]}>
         <Glow color={tint} size={width * 1.1} />
       </Animated.View>
+      {final ? (
+        <>
+          {/* Galerie : voile plus sombre et lueur dorée au sol */}
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,2,10,0.35)' }]} />
+          <View style={[styles.abs, { left: -width * 0.1, top: height * 0.42, opacity: 0.18 }]}>
+            <Glow color="#F7C948" size={width * 0.6} stretchX={2} />
+          </View>
+        </>
+      ) : null}
       {/* bords assombris */}
-      <LinearGradient colors={['rgba(0,0,0,0.55)', 'transparent', 'transparent', 'rgba(0,0,0,0.55)']} locations={[0, 0.18, 0.82, 1]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
-      <Embers width={width} height={height * 0.62} colors={[tint, '#FFFFFF']} count={10} speed={0.6} size={10} />
+      <LinearGradient
+        colors={final ? ['rgba(0,0,0,0.8)', 'transparent', 'transparent', 'rgba(0,0,0,0.8)'] : ['rgba(0,0,0,0.55)', 'transparent', 'transparent', 'rgba(0,0,0,0.55)']}
+        locations={[0, 0.18, 0.82, 1]}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <Embers width={width} height={height * 0.62} colors={final ? ['#F7C948', tint, '#FFFFFF'] : [tint, '#FFFFFF']} count={final ? 14 : 10} speed={0.6} size={10} />
     </View>
   );
 }

@@ -11,6 +11,7 @@ import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, wi
 
 import { colors, fonts } from '../../theme';
 import { AppText } from '../AppText';
+import { turnOf } from './kinds';
 
 export function TurnBanner({ mine, name, tint, width }: { mine: boolean; name: string; tint: string; width: number }) {
   /** 0 → 1 : entrée ; 1 → 2 : sortie de l'autre côté. */
@@ -51,7 +52,7 @@ export function TurnBanner({ mine, name, tint, width }: { mine: boolean; name: s
         <View style={[styles.edge, { bottom: 0, backgroundColor: 'rgba(0,0,0,0.25)' }]} />
         <Animated.View style={[styles.textWrap, text]}>
           <AppText style={styles.text} numberOfLines={1}>
-            {mine ? 'À toi de jouer !' : `Tour de ${name}`}
+            {mine ? 'À toi de jouer !' : turnOf(name)}
           </AppText>
         </Animated.View>
       </Animated.View>
