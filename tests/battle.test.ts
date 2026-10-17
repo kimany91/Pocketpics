@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { ARENAS, arenaFighters } from '../src/battle/arenas';
 import { botAction, botReplacement, botTimings } from '../src/battle/bot';
-import { type Battle, type FighterInput, act, createBattle, qualityOf, replace, resolveAttack, timingMultiplier } from '../src/battle/engine';
+import { type Battle, type FighterInput, act, createBattle, qualityOf, replace, resolveAttack, tapMultiplier, timingMultiplier } from '../src/battle/engine';
 import { type Attack, type BattleStats, MIRROR_MIN_RANK, SPECIAL, generateStats, minRankOf, normalizeStats } from '../src/battle/stats';
 import { RARITIES } from '../src/game/rarity';
 import { migrateCard, migrateState } from '../src/storage/model';
@@ -56,6 +56,23 @@ test('précision : le centre fait un critique, le bord fait peu, rater ne fait r
   assert.ok(timingMultiplier(1) < 0.5);
   assert.equal(timingMultiplier(null), 0);
   assert.ok(timingMultiplier(0.2) > timingMultiplier(0.6));
+});
+
+test('appui du joueur : pareil dans la zone verte, très puni en dehors', () => {
+  assert.equal(tapMultiplier(0), 1.5);
+  assert.equal(tapMultiplier(null), 0);
+  for (const d of [0, 0.03, 0.06, 0.1, 0.2, 0.25]) assert.equal(tapMultiplier(d), timingMultiplier(d));
+  assert.ok(Math.abs(tapMultiplier(1) - 0.1) < 1e-9);
+  assert.ok(tapMultiplier(0.3) < 0.75 && tapMultiplier(0.3) > tapMultiplier(0.8));
+  // appuyer au hasard ne rapporte plus grand-chose
+  let tap = 0;
+  let old = 0;
+  for (let i = 0; i <= 1000; i++) {
+    tap += tapMultiplier(i / 1000);
+    old += timingMultiplier(i / 1000);
+  }
+  assert.ok(tap / 1001 < 0.65, `moyenne au hasard ${tap / 1001}`);
+  assert.ok(tap < old * 0.8);
 });
 
 test('attaque simple, K.O., remplacement et victoire', () => {

@@ -11,7 +11,7 @@ import Animated, { Easing, FadeIn, ZoomIn, cancelAnimation, useAnimatedStyle, us
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { playSfx } from '../../audio/sfx';
-import { type Quality, qualityOf, timingMultiplier } from '../../battle/engine';
+import { type Quality, qualityOf, tapMultiplier } from '../../battle/engine';
 import { colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
 import { AppText } from '../AppText';
@@ -65,7 +65,7 @@ export function TimingBar({
     if (finished.current || !running.current) return;
     running.current = false;
     cancelAnimation(pos);
-    const mult = timingMultiplier(distance);
+    const mult = tapMultiplier(distance);
     const q = qualityOf(mult);
     timings.current.push(mult);
     setPhase('stopped');

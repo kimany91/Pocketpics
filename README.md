@@ -83,7 +83,7 @@ Les effets en cours disparaissent quand la carte quitte le terrain (sauf l'étou
 
 (± 8 % selon la carte.)
 
-**Précision (façon Undertale).** On choisit une attaque, puis une barre apparaît : on touche pour lancer le curseur, et on retouche quand il passe sur la cible au centre. Au centre, c'est un critique (× 1,5). Au bord, le coup ne fait que × 0,4, et s'il n'y a pas de deuxième toucher, l'attaque est ratée. La double frappe enchaîne deux passages.
+**Précision (façon Undertale).** On choisit une attaque, puis une barre apparaît : on touche pour lancer le curseur, et on retouche quand il passe sur la cible au centre. Au centre, c'est un critique (× 1,5). Dans la zone verte, les dégâts baissent doucement jusqu'à × 1,075 au bord de la zone. En dehors, ça coûte cher (`tapMultiplier`) : de × 0,75 juste après la zone jusqu'à × 0,1 au bout de la barre. S'il n'y a pas de deuxième toucher, l'attaque est ratée. Appuyer n'importe quand ne suffit donc pas : en simulation, un joueur qui joue au hasard (cartes, remplaçantes et appuis) avec le deck de départ gagne le boss du Parc 5 % du temps, contre environ 90 % pour un joueur qui vise. Les bots gardent leur propre visée (`timingMultiplier`). La double frappe enchaîne deux passages.
 
 **Voir une carte.** En plein combat, on touche sa carte ou celle de l'adversaire pour la voir en 3D, comme dans la collection (rotation au doigt, zoom, dos), avec ses PV actuels, ses attaques et les utilisations de spéciale restantes. Quand on touche une remplaçante, trois boutons apparaissent : Annuler, Info (la même vue) et Envoyer. Le combat est en pause pendant qu'on regarde.
 

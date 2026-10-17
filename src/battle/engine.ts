@@ -169,6 +169,22 @@ export function timingMultiplier(distance: number | null): number {
   return 1.3 - 0.9 * d;
 }
 
+/**
+ * Précision d'un appui du JOUEUR sur la barre → multiplicateur. Pareil que
+ * `timingMultiplier` dans la zone verte (|écart| ≤ 0,25) et sur la cible
+ * (coup critique), mais un appui en dehors de la zone coûte cher : de ×0,75 au
+ * bord de la zone jusqu'à ×0,1 au bout de la barre. Appuyer n'importe quand ne
+ * suffit donc plus à gagner : il faut viser. (Les bots gardent `timingMultiplier`,
+ * leur visée est réglée à part.)
+ */
+export const TAP_ZONE = 0.25;
+export function tapMultiplier(distance: number | null): number {
+  if (distance === null) return 0;
+  const d = Math.max(0, Math.min(1, distance));
+  if (d <= TAP_ZONE) return timingMultiplier(d);
+  return 0.75 - ((d - TAP_ZONE) / (1 - TAP_ZONE)) * 0.65;
+}
+
 export function qualityOf(mult: number): Quality {
   if (mult <= 0) return 'miss';
   if (mult >= 1.5) return 'crit';
