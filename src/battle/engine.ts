@@ -63,6 +63,11 @@ export interface Battle {
   mustReplace: SideId | null;
   winner: SideId | null;
   turnCount: number;
+  /**
+   * Camp qui « triche » quand il est trop dépassé (seulement l'adversaire du
+   * mode solo ; jamais en ligne). Caché : rien ne l'affiche. Voir `catchUpMult`.
+   */
+  catchUp?: SideId;
 }
 
 export type Quality = 'miss' | 'weak' | 'good' | 'great' | 'crit';
@@ -137,9 +142,10 @@ export function makeFighter(c: FighterInput): Fighter {
   };
 }
 
-export function createBattle(mine: FighterInput[], theirs: FighterInput[]): Battle {
+export function createBattle(mine: FighterInput[], theirs: FighterInput[], opts: { catchUp?: SideId } = {}): Battle {
   if (mine.length === 0 || theirs.length === 0) throw new Error('Chaque camp doit avoir au moins une carte');
   return {
+    ...(opts.catchUp !== undefined ? { catchUp: opts.catchUp } : {}),
     sides: [
       { fighters: mine.map(makeFighter), active: 0, last: null },
       { fighters: theirs.map(makeFighter), active: 0, last: null },
@@ -152,6 +158,25 @@ export function createBattle(mine: FighterInput[], theirs: FighterInput[]): Batt
 }
 
 export const other = (s: SideId): SideId => (s === 0 ? 1 : 0);
+
+/** Force d'une carte : PV max × puissance du coup classique. */
+export const cardStrength = (f: Fighter) => f.maxHp * Math.max(1, f.attacks[0].power);
+
+/**
+ * Triche cachée du mode solo, recalculée à chaque coup selon les deux cartes en
+ * jeu : quand la carte du joueur est beaucoup plus forte que celle d'en face
+ * (plus de ×1,5, par ex. une Épique contre une Commune ≈ ×2,1), la carte
+ * dépassée frappe plus fort qu'elle ne devrait : +50 % par point d'écart
+ * au-delà de ×1,5, jusqu'à ×1,7. Le joueur garde l'avantage, il est seulement
+ * moins écrasant. Rien n'est tiré au début du combat : si les cartes en jeu
+ * sont d'un niveau proche, il n'y a aucun bonus.
+ */
+export const CATCH_UP = { from: 1.3, gain: 1, max: 2 };
+export function catchUpMult(attacker: Fighter, target: Fighter): number {
+  const gap = cardStrength(target) / cardStrength(attacker);
+  if (gap <= CATCH_UP.from) return 1;
+  return Math.min(CATCH_UP.max, 1 + CATCH_UP.gain * (gap - CATCH_UP.from));
+}
 export const activeOf = (b: Battle, s: SideId) => b.sides[s].fighters[b.sides[s].active];
 export const aliveBench = (b: Battle, s: SideId) =>
   b.sides[s].fighters.map((f, i) => ({ f, i })).filter(({ f, i }) => f.hp > 0 && i !== b.sides[s].active);
@@ -409,6 +434,9 @@ export function act(input: Battle, action: Action, rng: Rng = Math.random): { ba
     mult *= BATTLE.guardFactor;
     flags.guarded = true;
   }
+
+  // triche cachée (solo) : la carte trop dépassée frappe plus fort, sans rien afficher
+  if (b.catchUp === side) mult *= catchUpMult(f, target);
 
   const hits = hitsOf(attack);
   let landed = false;

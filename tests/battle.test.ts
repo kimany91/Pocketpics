@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { ARENAS, arenaFighters } from '../src/battle/arenas';
 import { botAction, botReplacement, botTimings } from '../src/battle/bot';
-import { type Battle, type FighterInput, act, createBattle, qualityOf, replace, resolveAttack, tapMultiplier, timingMultiplier } from '../src/battle/engine';
+import { type Battle, type FighterInput, act, createBattle, qualityOf, replace, resolveAttack, tapMultiplier, timingMultiplier, catchUpMult, makeFighter } from '../src/battle/engine';
 import { type Attack, type BattleStats, MIRROR_MIN_RANK, SPECIAL, generateStats, minRankOf, normalizeStats } from '../src/battle/stats';
 import { RARITIES } from '../src/game/rarity';
 import { migrateCard, migrateState } from '../src/storage/model';
@@ -366,4 +366,24 @@ test('toutes les arènes se terminent avec les nouvelles attaques', () => {
       }
     }
   }
+});
+
+test('triche cachée du solo : la carte trop dépassée frappe plus fort, le joueur garde l’avantage', () => {
+  const card = (hp: number, power: number) => makeFighter({ ref: `c${hp}-${power}`, name: 'c', rarity: 'common', battle: { hp, uses: 2, attacks: [{ kind: 'basic', name: 'b', power }, { kind: 'basic', name: 's', power }] } as never });
+  const weak = card(60, 10);
+  assert.equal(catchUpMult(weak, card(66, 10)), 1, 'écart faible : rien');
+  const boost = catchUpMult(weak, card(120, 10)); // écart ×2
+  assert.ok(boost > 1.5 && boost < 2, `écart ×2 → ${boost}`);
+  assert.equal(catchUpMult(weak, card(600, 10)), 2, 'plafond');
+  assert.equal(catchUpMult(card(120, 10), weak), 1, 'jamais quand c’est le bot le plus fort');
+  // seulement pour le camp désigné, et rien en ligne (pas de catchUp)
+  const mk = (catchUp?: 0 | 1) =>
+    createBattle([fighter('a', stats(120, atk('basic', 10), 9))], [fighter('x', stats(60, atk('basic', 10), 9))], catchUp === undefined ? {} : { catchUp });
+  const dmg = (b: Battle) => {
+    b = { ...b, turn: 1 };
+    const r = act(b, { type: 'attack', slot: 0, timings: [1] }, half);
+    return 120 - r.battle.sides[0].fighters[0].hp;
+  };
+  assert.ok(dmg(mk(1)) > dmg(mk()) * 1.5, `${dmg(mk(1))} vs ${dmg(mk())}`);
+  assert.equal(dmg(mk(0)), dmg(mk()));
 });

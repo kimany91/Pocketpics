@@ -185,7 +185,7 @@ export default function FightScreen() {
     // difficulté cachée : l'adversaire s'adapte si les cartes choisies sont bien au-dessus de la normale
     const mine = deck.map(toFighter);
     const hidden = hiddenAdjust(level, mine);
-    return { deck, foe, battle: createBattle(mine, levelFighters(level, hidden.mult)), controller: new BotController(level.botLevel, hidden.edge) as BattleController };
+    return { deck, foe, battle: createBattle(mine, levelFighters(level, hidden.mult), { catchUp: 1 }), controller: new BotController(level.botLevel, hidden.edge) as BattleController };
   });
   const deck = setup?.deck ?? [];
   const foeInfo = setup?.foe;
