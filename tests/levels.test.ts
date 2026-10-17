@@ -83,18 +83,18 @@ test('difficulté cachée : rien avec des cartes normales, l’adversaire s’ad
   // au bon moment de l'aventure, les mêmes cartes ne déclenchent rien
   const late = hiddenAdjust(getLevel(95)!, deck(['divine', 'ultraLegendary', 'legendary', 'legendary']));
   assert.deepEqual(late, { edge: 0, mult: 1 });
-  // l'adversaire adapté rate moins et fait plus de critiques
+  // l'adversaire adapté vise moins à côté et fait plus de critiques
   let critN = 0, critE = 0, missN = 0, missE = 0;
   for (let i = 0; i < 4000; i++) {
     const [a] = botTimings(5, 1, Math.random, 0);
     const [b] = botTimings(5, 1, Math.random, 1);
     if (a >= 1.5) critN++;
     if (b >= 1.5) critE++;
-    if (a === 0) missN++;
-    if (b === 0) missE++;
+    if (a < 0.75) missN++;
+    if (b < 0.75) missE++;
   }
   assert.ok(critE > critN * 1.5, `critiques : ${critN} → ${critE}`);
-  assert.ok(missE < missN, `ratés : ${missN} → ${missE}`);
+  assert.ok(missE < missN, `appuis à côté : ${missN} → ${missE}`);
 });
 
 test('difficulté : chaque niveau plus fort que le précédent dans son monde, chaque monde plus fort que celui d’avant', () => {

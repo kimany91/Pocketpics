@@ -196,6 +196,10 @@ test('la précision du bot progresse avec son niveau', () => {
   assert.ok(avg(10) > avg(1) + 0.2);
 });
 
+test('le bot appuie toujours, comme un joueur : jamais de coup raté à 0', () => {
+  for (const level of [1, 5, 10]) for (const t of botTimings(level, 4000)) assert.ok(t > 0);
+});
+
 /* ------------------------- Nouvelles attaques spéciales ------------------------- */
 
 const atk = (kind: Attack['kind'], power = 10): Attack => ({ kind, name: kind, power });

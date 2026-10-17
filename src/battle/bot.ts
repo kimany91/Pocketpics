@@ -15,6 +15,7 @@ import {
   isEnraged,
   other,
   resolveAttack,
+  tapMultiplier,
   timingMultiplier,
 } from './engine';
 import { kindOf } from './stats';
@@ -27,16 +28,18 @@ function gauss(rng: Rng) {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng());
 }
 
-/** Précision du bot sur la barre : plus le niveau est haut, plus il vise près de la cible. */
 /**
- * Précision du bot pour chaque coup. `edge` (0 → 1, caché) : l'adversaire du
- * mode solo s'adapte aux cartes du joueur (voir `hiddenAdjust`) : moins de
- * coups ratés, une visée plus serrée et des critiques en plus.
+ * Précision du bot pour chaque coup : plus le niveau est haut, plus il vise
+ * près de la cible. Comme un joueur, il appuie toujours : pas de coup raté à
+ * 0 dégât, mais parfois un appui à côté de la zone verte, puni comme celui
+ * d'un joueur (`tapMultiplier`). `edge` (0 → 1, caché) : l'adversaire du mode
+ * solo s'adapte aux cartes du joueur (voir `hiddenAdjust`) : moins d'appuis à
+ * côté, une visée plus serrée et des critiques en plus.
  */
 export function botTimings(level: number, hits: number, rng: Rng = Math.random, edge = 0): number[] {
   const skill = skillOf(level);
   return Array.from({ length: hits }, () => {
-    if (rng() < (0.14 - 0.12 * skill) * (1 - edge)) return timingMultiplier(null);
+    if (rng() < (0.2 - 0.17 * skill) * (1 - edge)) return tapMultiplier(0.3 + rng() * 0.7);
     if (edge > 0 && rng() < edge * 0.3) return timingMultiplier(0);
     const spread = (0.55 - 0.42 * skill) * (1 - 0.6 * edge);
     return timingMultiplier(Math.min(1, Math.abs(gauss(rng)) * spread));
