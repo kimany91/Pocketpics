@@ -22,6 +22,7 @@ import { CARD_RATIO, colors, fonts } from '../../theme';
 import { haptic, revealHaptics } from '../../utils/haptics';
 import { AppText } from '../AppText';
 import { CardBack } from '../card/CardBack';
+import { ChromaticTag } from '../card/Chromatic';
 import { Burst, Flash, Glow, LightPillar, Rays, Shockwave } from '../fx';
 import { REVEAL_CAPTION_H, revealCardWidth } from './layout';
 import { RevealCard, type RevealCardHandle } from './RevealCard';
@@ -225,7 +226,7 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
 
         <View style={styles.caption}>
           {revealed ? (
-            <RarityBanner key={`b-${index}`} rarity={rarity} first={firstIndexes.has(index)} />
+            <RarityBanner key={`b-${index}`} rarity={rarity} first={firstIndexes.has(index)} chromatic={card.chromatic} />
           ) : level > 0 ? (
             <LevelLabel key={`l-${index}-${level}`} rarity={shown} />
           ) : (
@@ -299,7 +300,7 @@ function LevelLabel({ rarity }: { rarity: Rarity }) {
   );
 }
 
-function RarityBanner({ rarity, first }: { rarity: Rarity; first: boolean }) {
+function RarityBanner({ rarity, first, chromatic }: { rarity: Rarity; first: boolean; chromatic?: boolean }) {
   const big = rarity.hype >= 5;
   const p = useSharedValue(0);
   useEffect(() => {
@@ -323,6 +324,11 @@ function RarityBanner({ rarity, first }: { rarity: Rarity; first: boolean }) {
       >
         {big ? rarity.label.toUpperCase() : rarity.label}
       </Animated.Text>
+      {chromatic ? (
+        <Animated.View entering={ZoomIn.delay(big ? 620 : 180).springify().damping(11)} style={{ marginTop: 8 }}>
+          <ChromaticTag />
+        </Animated.View>
+      ) : null}
       {first ? (
         <Animated.View entering={ZoomIn.delay(big ? 700 : 250).springify().damping(11)} style={[styles.first, { borderColor: rarity.color }]}>
           <AppText style={[styles.firstText, { color: rarity.color }]}>{`PREMIÈRE ${rarity.label.toUpperCase()} !`}</AppText>
