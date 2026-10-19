@@ -105,6 +105,8 @@ export interface SaveState {
   friendCode: string | null;
   /** Amis ajoutés (ajouté après : liste vide si absent). */
   friends: Friend[];
+  /** Cartes épinglées sur le profil, dans l'ordre choisi (6 au plus). */
+  pinned: string[];
   [extra: string]: unknown;
 }
 
@@ -191,10 +193,14 @@ export function createInitialState(now = Date.now()): SaveState {
     rank: initialRank(),
     friendCode: null,
     friends: [],
+    pinned: [],
   };
 }
 
 const FRIEND_CODE = /^[0-9A-Z]{10}$/;
+
+/** Nombre de cartes qu'on peut épingler sur son profil. */
+export const MAX_PINNED = 6;
 
 function migrateFriends(raw: unknown): Friend[] {
   if (!Array.isArray(raw)) return [];
@@ -283,5 +289,6 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     rank: migrateRank(s.rank),
     friendCode: typeof s.friendCode === 'string' && FRIEND_CODE.test(s.friendCode) ? s.friendCode : null,
     friends: migrateFriends(s.friends),
+    pinned: Array.isArray(s.pinned) ? s.pinned.filter((x): x is string => typeof x === 'string').slice(0, MAX_PINNED) : [],
   };
 }

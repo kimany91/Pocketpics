@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ComponentProps, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   type GestureResponderEvent,
@@ -31,6 +31,7 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { AppText } from '../../components/AppText';
+import { CardActions } from '../../components/card/CardActions';
 import { CardFace } from '../../components/card/CardFace';
 import { Screen } from '../../components/Screen';
 import { RARITIES, getRarity } from '../../game/rarity';
@@ -43,10 +44,14 @@ import { useMotionTilt } from '../../utils/motionTilt';
 
 const sparkleTex = require('../../../assets/fx/sparkle.png');
 
+type IconName = ComponentProps<typeof Ionicons>['name'];
+
 type Sort = 'recent' | 'rarity';
 
 /** Valeur du filtre « favoris » (distincte de tout id de rareté). */
 const FAVORITES = '__favorites__';
+/** Valeur du filtre « épinglées sur le profil ». */
+const PINNED = '__pinned__';
 const GAP = 10;
 
 /* ------------------------------------------------------------------------ */
@@ -102,6 +107,10 @@ export default function CollectionScreen() {
   );
   const hasHolo = useMemo(() => cards.some((c) => ['chromatic', 'divine', 'galaxy'].includes(getRarity(c.rarity).frameStyle)), [cards]);
   const favCount = useMemo(() => cards.filter((c) => c.favorite).length, [cards]);
+  // Cartes épinglées sur le profil : repère dans la grille, filtre, et menu d'appui long.
+  const pinned = useGame((s) => s.save?.pinned);
+  const pinnedSet = useMemo(() => new Set(pinned ?? []), [pinned]);
+  const [menuId, setMenuId] = useState<string | null>(null);
   const [sort, setSort] = useState<Sort>('recent');
   const cols = width > 600 ? 4 : 3;
   const cardW = (width - 32 - GAP * (cols - 1)) / cols;
@@ -120,13 +129,19 @@ export default function CollectionScreen() {
 
   const data = useMemo(() => {
     const list =
-      filter === FAVORITES ? cards.filter((c) => c.favorite) : filter ? cards.filter((c) => c.rarity === filter) : [...cards];
+      filter === FAVORITES
+        ? cards.filter((c) => c.favorite)
+        : filter === PINNED
+          ? cards.filter((c) => pinnedSet.has(c.id))
+          : filter
+            ? cards.filter((c) => c.rarity === filter)
+            : [...cards];
     return list.sort((a, b) =>
       sort === 'rarity'
         ? getRarity(b.rarity).rank - getRarity(a.rarity).rank || b.obtainedAt - a.obtainedAt
         : b.obtainedAt - a.obtainedAt,
     );
-  }, [cards, filter, sort]);
+  }, [cards, filter, sort, pinnedSet]);
   const dataRef = useRef(data);
 
   // À chaque nouvel ordre : on retient d'où vient chaque carte pour la faire glisser à sa nouvelle place.
@@ -191,10 +206,12 @@ export default function CollectionScreen() {
     fn();
   };
 
-  // Plus aucun favori : on revient à toutes les cartes plutôt que d'afficher une grille vide.
+  // Plus aucun favori (ou plus aucune épinglée) : on revient à toutes les cartes
+  // plutôt que d'afficher une grille vide.
   useEffect(() => {
     if (filter === FAVORITES && favCount === 0) setFilter(null);
-  }, [filter, favCount]);
+    if (filter === PINNED && pinnedSet.size === 0) setFilter(null);
+  }, [filter, favCount, pinnedSet]);
 
   // Cartes visibles, pour faire briller de temps en temps une carte rare à l'écran (une ou deux à la fois).
   const visible = useRef<string[]>([]);
@@ -233,6 +250,12 @@ export default function CollectionScreen() {
     router.push(`/card/${id}`);
   }, []);
 
+  // Appui long : le menu de la carte (épingler sur le profil, favori).
+  const onLongPress = useCallback((id: string) => {
+    haptic.medium();
+    setMenuId(id);
+  }, []);
+
   return (
     <Screen>
       <View style={styles.header}>
@@ -248,6 +271,15 @@ export default function CollectionScreen() {
         <View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
             <Chip label="Toutes" count={cards.length} active={filter === null} onPress={() => reorder(() => setFilter(null))} />
+            {pinnedSet.size > 0 ? (
+              <Chip
+                label="Épinglées"
+                icon="pin"
+                count={pinnedSet.size}
+                active={filter === PINNED}
+                onPress={() => reorder(() => setFilter(filter === PINNED ? null : PINNED))}
+              />
+            ) : null}
             {favCount > 0 ? (
               <Chip label="★ Favoris" count={favCount} color={colors.gold} active={filter === FAVORITES} onPress={() => reorder(() => setFilter(filter === FAVORITES ? null : FAVORITES))} />
             ) : null}
@@ -280,13 +312,23 @@ export default function CollectionScreen() {
             onViewableItemsChanged={onViewable}
             viewabilityConfig={VIEWABILITY}
             renderItem={({ item, index }) => (
-              <Thumb card={item} width={cardW} motion={motion} entry={entryFor(item.id, index)} onOpen={onOpen} />
+              <Thumb
+                card={item}
+                width={cardW}
+                motion={motion}
+                entry={entryFor(item.id, index)}
+                pinned={pinnedSet.has(item.id)}
+                onOpen={onOpen}
+                onLongPress={onLongPress}
+              />
             )}
           />
           {/* Fondu en haut : les cartes glissent sous les filtres au lieu d'être coupées net. */}
           <LinearGradient pointerEvents="none" colors={[colors.bg, 'rgba(9,9,11,0)']} style={styles.topFade} />
         </View>
       )}
+
+      {menuId ? <CardActions cardId={menuId} onClose={() => setMenuId(null)} /> : null}
     </Screen>
   );
 }
@@ -318,13 +360,18 @@ const Thumb = memo(function Thumb({
   width,
   motion,
   entry,
+  pinned,
   onOpen,
+  onLongPress,
 }: {
   card: Card;
   width: number;
   motion: SharedValue<number>;
   entry: Entry;
+  /** Épinglée sur le profil : petite pastille en coin. */
+  pinned: boolean;
   onOpen(id: string, rect: ThumbRect | null): void;
+  onLongPress(id: string): void;
 }) {
   const r = getRarity(card.rarity);
   const height = width * CARD_RATIO;
@@ -417,14 +464,26 @@ const Thumb = memo(function Thumb({
             haptic.tick();
             measure().then((rect) => onOpen(card.id, rect));
           }}
+          onLongPress={() => onLongPress(card.id)}
+          delayLongPress={420}
           accessibilityRole="button"
-          accessibilityLabel={card.name ? `${card.name}, ${r.label}` : `Carte ${r.label}`}
+          accessibilityLabel={`${card.name ? `${card.name}, ${r.label}` : `Carte ${r.label}`}${pinned ? ', épinglée sur ton profil' : ''}`}
+          accessibilityHint="Appui long pour épingler la carte sur ton profil ou la mettre en favori"
         >
           <CardFace card={card} width={width} quality="thumb" animated={r.rank >= 6} tilt={holo ? motion : undefined} />
           {sheen > 0 ? <Sheen key={sheen} width={width} height={height} rank={r.rank} color={r.color} onDone={endSheen} /> : null}
-          {card.favorite ? (
-            <View style={styles.favBadge} pointerEvents="none">
-              <Ionicons name="star" size={11} color="#1A1406" />
+          {card.favorite || pinned ? (
+            <View style={styles.badges} pointerEvents="none">
+              {card.favorite ? (
+                <View style={[styles.badge, { backgroundColor: colors.gold }]}>
+                  <Ionicons name="star" size={11} color="#1A1406" />
+                </View>
+              ) : null}
+              {pinned ? (
+                <View style={[styles.badge, { backgroundColor: colors.text }]}>
+                  <Ionicons name="pin" size={11} color="#101014" />
+                </View>
+              ) : null}
             </View>
           ) : null}
         </Pressable>
@@ -598,7 +657,23 @@ function SortSwitch({ value, onChange }: { value: Sort; onChange(s: Sort): void 
   );
 }
 
-function Chip({ label, count, active, onPress, color }: { label: string; count: number; active: boolean; onPress(): void; color?: string }) {
+function Chip({
+  label,
+  count,
+  active,
+  onPress,
+  color,
+  icon,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onPress(): void;
+  /** Pastille de couleur devant l'intitulé (raretés). */
+  color?: string;
+  /** Icône devant l'intitulé, à la place de la pastille. */
+  icon?: IconName;
+}) {
   const on = useSharedValue(active ? 1 : 0);
   const squish = useSharedValue(0);
   const bump = useSharedValue(0);
@@ -633,7 +708,8 @@ function Chip({ label, count, active, onPress, color }: { label: string; count: 
       accessibilityState={{ selected: active }}
     >
       <Animated.View style={[styles.chip, box]}>
-        {color ? <View style={[styles.dot, { backgroundColor: color }]} /> : null}
+        {icon ? <Ionicons name={icon} size={12} color={active ? '#0B0B0D' : colors.textDim} /> : null}
+        {!icon && color ? <View style={[styles.dot, { backgroundColor: color }]} /> : null}
         <Animated.Text style={[styles.chipLabel, ink]}>{label}</Animated.Text>
         <Animated.Text style={[styles.chipCount, ink, num]}>{shown}</Animated.Text>
       </Animated.View>
@@ -731,14 +807,11 @@ const styles = StyleSheet.create({
   chipCount: { fontFamily: fonts.bold, fontSize: 12, fontVariant: ['tabular-nums'], opacity: 0.8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   topFade: { position: 'absolute', left: 0, right: 0, top: 0, height: 12 },
-  favBadge: {
-    position: 'absolute',
-    left: 5,
-    top: 5,
+  badges: { position: 'absolute', left: 5, top: 5, flexDirection: 'row', gap: 4 },
+  badge: {
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: colors.gold,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,

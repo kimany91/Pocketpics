@@ -203,6 +203,8 @@ export default function FightScreen() {
   const [galaxyWin, setGalaxyWin] = useState(false);
   const [rankChange, setRankChange] = useState<{ before: number; after: number } | null>(null);
   const [endReason, setEndReason] = useState<'gone' | 'lost' | null>(null);
+  /** L'adversaire est parti : le combat ne compte pour personne. */
+  const [cancelled, setCancelled] = useState(false);
   const [turnLeft, setTurnLeft] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<Mode>('idle');
@@ -528,6 +530,23 @@ export default function FightScreen() {
     setBusy(false);
   };
 
+  /**
+   * Combat annulé : l'adversaire est parti. Ça ne compte pour personne — celui
+   * qui reste ne gagne rien (sinon abandonner serait un cadeau), et celui qui
+   * est parti a déjà perdu ses points de son côté.
+   */
+  const cancel = () => {
+    if (!foeInfo) return;
+    setCancelled(true);
+    setResult(0);
+    setEndReason('gone');
+    setMode('idle');
+    stopBattleMusic(music.current, 600);
+    useGame.getState().cancelRanked();
+    setRankChange(null);
+    haptic.warning();
+  };
+
   /** Fin du combat : pièces en solo, points de rang en ligne. */
   const finish = (winner: SideId, reason: 'gone' | 'lost' | null = null) => {
     if (!foeInfo) return;
@@ -562,7 +581,7 @@ export default function FightScreen() {
   const lostConnection = useMatch((s) => s.lostConnection);
   useEffect(() => {
     if (!online || result !== null) return;
-    if (oppGone) finish(0, 'gone');
+    if (oppGone) cancel();
     else if (lostConnection) finish(1, 'lost');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online, oppGone, lostConnection, result]);
@@ -996,7 +1015,7 @@ export default function FightScreen() {
 
       {result !== null ? (
         online ? (
-          <OnlineResult won={result === 0} change={rankChange} opp={foeInfo.name} reason={endReason} />
+          <OnlineResult outcome={cancelled ? 'cancel' : result === 0 ? 'win' : 'loss'} change={rankChange} opp={foeInfo.name} reason={endReason} />
         ) : level ? (
           <ResultOverlay won={result === 0} levelN={level.n} deck={deck.map((c) => c.id).join(',')} reward={reward} stars={starsWon} galaxy={galaxyWin} />
         ) : null
@@ -1547,8 +1566,24 @@ function RevealGalaxyButton() {
   );
 }
 
-/** Fin d'un combat en ligne : le rang avant/après, la barre qui se remplit (ou se vide), promotion éventuelle. */
-function OnlineResult({ won, change, opp, reason }: { won: boolean; change: { before: number; after: number } | null; opp: string; reason: 'gone' | 'lost' | null }) {
+/**
+ * Fin d'un combat en ligne : le rang avant/après, la barre qui se remplit (ou
+ * se vide), promotion éventuelle. `cancel` : l'adversaire est parti, rien ne
+ * bouge pour celui qui reste.
+ */
+function OnlineResult({
+  outcome,
+  change,
+  opp,
+  reason,
+}: {
+  outcome: 'win' | 'loss' | 'cancel';
+  change: { before: number; after: number } | null;
+  opp: string;
+  reason: 'gone' | 'lost' | null;
+}) {
+  const won = outcome === 'win';
+  const cancelled = outcome === 'cancel';
   const before = change?.before ?? 0;
   const after = change?.after ?? before;
   const rb = rankOf(before);
@@ -1583,9 +1618,9 @@ function OnlineResult({ won, change, opp, reason }: { won: boolean; change: { be
   const { width, height } = useWindowDimensions();
   return (
     <Animated.View entering={FadeIn.duration(won ? 300 : 500)} style={[StyleSheet.absoluteFill, styles.overlay, !won && styles.overlayLost]}>
-      {won ? <Confetti width={width} height={height} colors={[...CONFETTI, shownRank.tier.color]} count={30} /> : null}
+      {won && !cancelled ? <Confetti width={width} height={height} colors={[...CONFETTI, shownRank.tier.color]} count={30} /> : null}
       <View style={{ alignItems: 'center', justifyContent: 'center', height: 150 }}>
-        {won ? (
+        {won && !cancelled ? (
           <View pointerEvents="none" style={{ position: 'absolute', width: Math.min(width * 1.05, 400), height: Math.min(width * 1.05, 400) }}>
             <Rays colors={[shownRank.tier.color, '#FFF3C2']} size={Math.min(width * 1.05, 400)} visible />
           </View>
@@ -1598,12 +1633,12 @@ function OnlineResult({ won, change, opp, reason }: { won: boolean; change: { be
         <RankEmblem key={shownRank.index} rank={shownRank} size={110} />
       </View>
       <Animated.View entering={FadeInDown.delay(200)} style={{ alignItems: 'center', marginTop: 18, paddingHorizontal: 32, gap: 6 }}>
-        <AppText variant="display" style={won ? styles.winTitle : styles.loseTitle}>
-          {won ? 'Victoire !' : 'Défaite'}
+        <AppText variant="display" style={cancelled ? styles.cancelTitle : won ? styles.winTitle : styles.loseTitle}>
+          {cancelled ? 'Combat annulé' : won ? 'Victoire !' : 'Défaite'}
         </AppText>
         {reason ? (
           <AppText variant="caption" style={{ textAlign: 'center' }}>
-            {reason === 'gone' ? `${opp} a quitté le combat.` : 'Connexion perdue : le combat compte comme une défaite.'}
+            {reason === 'gone' ? `${opp} a quitté le combat. Ton rang ne bouge pas.` : 'Connexion perdue : le combat compte comme une défaite.'}
           </AppText>
         ) : null}
         {second && (promoted || demoted) ? (
@@ -1617,7 +1652,7 @@ function OnlineResult({ won, change, opp, reason }: { won: boolean; change: { be
           <Animated.View style={[styles.rankFill, { backgroundColor: shownRank.tier.color }, fillStyle]} />
         </View>
         <AppText style={[styles.delta, { color: delta > 0 ? colors.success : delta < 0 ? colors.danger : colors.textDim }]}>
-          {!change ? '' : delta === 0 && !won ? 'Aucun point perdu : tu es au plus bas' : `${delta >= 0 ? '+' : '−'}${Math.abs(delta)} points de rang`}
+          {cancelled ? 'Aucun point gagné ni perdu' : !change ? '' : delta === 0 && !won ? 'Aucun point perdu : tu es au plus bas' : `${delta >= 0 ? '+' : '−'}${Math.abs(delta)} points de rang`}
         </AppText>
         {change ? <AppText variant="caption">{`${ra.points}/${DIVISION_POINTS} dans ${ra.label}`}</AppText> : null}
       </Animated.View>
@@ -1722,6 +1757,7 @@ const styles = StyleSheet.create({
   medalWon: { borderWidth: 4, borderColor: '#FFF3C2', shadowColor: colors.gold, shadowOpacity: 0.8, shadowRadius: 22 },
   medalLost: { borderWidth: 2, borderColor: colors.borderStrong },
   overlayLost: { backgroundColor: 'rgba(6,7,12,0.92)' },
+  cancelTitle: { color: colors.textDim, textAlign: 'center' },
   winTitle: { color: colors.gold, textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 4 }, textShadowRadius: 0 },
   loseTitle: { color: colors.textDim },
 });

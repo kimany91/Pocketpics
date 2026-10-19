@@ -11,11 +11,13 @@ import { create } from 'zustand';
 
 import { shownMmr } from '../game/rank';
 import { useGame } from '../state/game';
+import { readThumbBase64Sync } from '../storage/disk';
 import { type MqttConnection } from '../trade/mqtt';
 import { connectRelay, deps } from '../trade/online';
 import { newOnlineCode } from '../trade/relayCore';
 import { useMatch } from './match';
-import { CHALLENGE_TTL_MS, type SocialMsg, inboxTopic, isOnline, newFriendCode, openFor, presenceTopic, sealFor } from './socialCore';
+import { sanitizeFighter } from './battleNet';
+import { CHALLENGE_TTL_MS, type PinnedCard, type SocialMsg, inboxTopic, isOnline, newFriendCode, openFor, presenceTopic, sealFor } from './socialCore';
 
 export interface Presence {
   name: string;
@@ -41,6 +43,11 @@ interface SocialStore {
   challenge: Challenge | null;
   /** Défi envoyé. */
   outgoing: { to: string; name: string; room: string; at: number; state: 'waiting' | 'declined' } | null;
+  /**
+   * Cartes épinglées des amis, telles qu'ils nous les ont envoyées. `cards` est
+   * incomplet tant que `n` cartes ne sont pas arrivées.
+   */
+  pins: Record<string, { at: number; n: number; cards: PinnedCard[] }>;
 
   start(): void;
   stop(): void;
@@ -53,6 +60,8 @@ interface SocialStore {
   cancelChallenge(): void;
   acceptChallenge(): Challenge | null;
   declineChallenge(): void;
+  /** Demande à un ami ses cartes épinglées (il doit être en ligne). */
+  askPins(code: string): void;
   /** Republie ma présence (pseudo ou rang changé). */
   announce(): void;
   isOnline(code: string): boolean;
@@ -88,6 +97,34 @@ export const useSocial = create<SocialStore>((set, get) => {
   const sendRequest = (to: string, kind: 'req' | 'ok') => sendTo(to, { k: kind, from: myCode(), ...profile(), at: now() });
 
   const friendCodes = () => (save()?.friends ?? []).map((f) => f.code);
+
+  /** Mes cartes épinglées, prêtes à être montrées à un ami. */
+  const myPins = (): PinnedCard[] => {
+    const s = save();
+    const cards = useGame.getState().cards;
+    const out: PinnedCard[] = [];
+    for (const id of s?.pinned ?? []) {
+      const c = cards.find((x) => x.id === id);
+      if (!c) continue;
+      let thumb = '';
+      try {
+        thumb = readThumbBase64Sync(c.id);
+      } catch {}
+      out.push({ ref: c.id, name: c.name ?? '', rarity: c.rarity, battle: c.battle, thumb });
+    }
+    return out;
+  };
+
+  /** Une carte par message : avec son image, six d'un coup ne passeraient pas. */
+  const sendPins = (to: string) => {
+    const cards = myPins();
+    const at = now();
+    if (cards.length === 0) {
+      sendTo(to, { k: 'pin', from: myCode(), at, i: 0, n: 0, card: null });
+      return;
+    }
+    cards.forEach((card, i) => sendTo(to, { k: 'pin', from: myCode(), at, i, n: cards.length, card }));
+  };
 
   const handle = (topic: string, payload: Uint8Array) => {
     const mine = myCode();
@@ -125,6 +162,25 @@ export const useSocial = create<SocialStore>((set, get) => {
         case 'cancel':
           if (get().challenge?.room === m.room) set({ challenge: null });
           return;
+        case 'pins?':
+          // seulement pour un ami, et seulement ce qui est épinglé sur mon profil
+          if (friend) sendPins(m.from);
+          return;
+        case 'pin': {
+          if (!friend) return;
+          const n = Math.max(0, Math.min(12, Math.floor(Number(m.n) || 0)));
+          const old = get().pins[m.from];
+          const fresh = !old || old.at < m.at ? { at: m.at, n, cards: [] } : old;
+          // aucune carte épinglée : on le sait tout de suite
+          if (n === 0) {
+            set({ pins: { ...get().pins, [m.from]: { at: m.at, n: 0, cards: [] } } });
+            return;
+          }
+          const card = sanitizeFighter(m.card);
+          if (!card || fresh.cards.some((c) => c.ref === card.ref)) return;
+          set({ pins: { ...get().pins, [m.from]: { ...fresh, n, cards: [...fresh.cards, card] } } });
+          return;
+        }
       }
       return;
     }
@@ -184,6 +240,7 @@ export const useSocial = create<SocialStore>((set, get) => {
     requests: [],
     challenge: null,
     outgoing: null,
+    pins: {},
 
     start() {
       if (!save() || get().status === 'online' || get().status === 'connecting') return;
@@ -251,6 +308,12 @@ export const useSocial = create<SocialStore>((set, get) => {
       const c = get().challenge;
       if (c) sendTo(c.from, { k: 'decline', from: myCode(), room: c.room, at: now() });
       set({ challenge: null });
+    },
+
+    askPins(code) {
+      if (!save()?.friends.some((f) => f.code === code)) return;
+      set({ pins: { ...get().pins, [code]: get().pins[code] ?? { at: 0, n: 0, cards: [] } } });
+      sendTo(code, { k: 'pins?', from: myCode(), at: now() });
     },
 
     announce() {

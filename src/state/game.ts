@@ -7,9 +7,10 @@ import { ATTACK_NAME_MAX } from '../battle/stats';
 import { DRAW_PRICE, type SoloReward, soloReward } from '../game/economy';
 import { DIVINE_GATE, TOTAL_LEVELS, needsDivine } from '../battle/levels';
 import { planPack, rollLucky } from '../game/luck';
-import { finishMatch, settleAbandoned, startMatch } from '../game/rank';
+import { cancelMatch, finishMatch, settleAbandoned, startMatch } from '../game/rank';
 import { generatePack } from '../game/pack';
 import * as disk from '../storage/disk';
+import { MAX_PINNED } from '../storage/model';
 import type { Card, Friend, SaveState } from '../storage/model';
 
 interface GameStore {
@@ -41,6 +42,8 @@ interface GameStore {
   startRanked(oppMmr: number, opp: string): void;
   /** Fin d'un combat en ligne classé. */
   finishRanked(won: boolean): { before: number; after: number } | null;
+  /** Combat en ligne annulé (l'adversaire est parti) : le rang ne bouge pas. */
+  cancelRanked(): void;
   /** Remet à zéro la série de victoires / défaites en ligne (difficulté cachée). */
   resetStreak(): void;
   /** Donne un code ami au joueur s'il n'en a pas encore. */
@@ -49,6 +52,11 @@ interface GameStore {
   upsertFriend(friend: Pick<Friend, 'code' | 'name'> & Partial<Friend>): void;
   removeFriend(code: string): void;
   toggleFavorite(id: string): void;
+  /**
+   * Épingle (ou retire) une carte du profil. Au-delà de `MAX_PINNED`, rien ne
+   * se passe : l'écran le dit. Rend ce qui s'est passé.
+   */
+  togglePin(id: string): 'pinned' | 'unpinned' | 'full';
   setPlayerName(name: string): void;
   /** `persist: false` pendant qu'on fait glisser le réglage, `true` au relâchement. */
   setSoundVolume(volume: number, persist?: boolean): void;
@@ -281,6 +289,14 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ save: next });
   },
 
+  cancelRanked() {
+    const save = get().save;
+    if (!save || !save.rank.pending) return;
+    const next: SaveState = { ...save, rank: cancelMatch(save.rank) };
+    persistState(next);
+    set({ save: next });
+  },
+
   ensureFriendCode(make) {
     const save = get().save;
     if (!save) return '';
@@ -346,6 +362,18 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ cards });
   },
 
+  togglePin(id) {
+    const save = get().save;
+    if (!save) return 'full';
+    const has = save.pinned.includes(id);
+    if (!has && save.pinned.length >= MAX_PINNED) return 'full';
+    const pinned = has ? save.pinned.filter((x) => x !== id) : [...save.pinned, id];
+    const next: SaveState = { ...save, pinned };
+    persistState(next);
+    set({ save: next });
+    return has ? 'unpinned' : 'pinned';
+  },
+
   setPlayerName(rawName) {
     const save = get().save;
     const name = rawName.trim().slice(0, 24);
@@ -377,6 +405,13 @@ export const useGame = create<GameStore>((set, get) => ({
     const cards = get().cards.filter((c) => !remove.has(c.id));
     disk.saveIndex(cards);
     set({ cards });
+    // une carte donnée ne doit pas garder sa place sur le profil
+    const save = get().save;
+    if (save?.pinned.some((id) => remove.has(id))) {
+      const next: SaveState = { ...save, pinned: save.pinned.filter((id) => !remove.has(id)) };
+      persistState(next);
+      set({ save: next });
+    }
   },
 
   destroyCard(id) {
@@ -393,6 +428,8 @@ export const useGame = create<GameStore>((set, get) => ({
         ...save,
         drawnHashes: hashStillOwned ? save.drawnHashes : save.drawnHashes.filter((h) => h !== card.hash),
         drawnAssetIds: card.sourceId ? save.drawnAssetIds.filter((a) => a !== card.sourceId) : save.drawnAssetIds,
+        // brûlée : elle libère sa place sur le profil
+        pinned: save.pinned.filter((x) => x !== id),
       };
       persistState(next);
       set({ save: next });

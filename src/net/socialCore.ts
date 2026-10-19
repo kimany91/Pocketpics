@@ -13,6 +13,7 @@
  */
 import nacl from 'tweetnacl';
 
+import type { NetFighter } from './battleNet';
 import { utf8Decode, utf8Encode } from '../trade/mqtt';
 import { roomKey, roomTopic } from '../trade/relayCore';
 
@@ -45,6 +46,9 @@ export const inboxTopic = (code: string) => roomTopic(code, 'inbox/');
 export const presenceTopic = (code: string) => roomTopic(code, 'presence/');
 const keyOf = (code: string) => roomKey(code, 'friend/');
 
+/** Une carte épinglée, telle qu'un ami la reçoit (même forme qu'une carte de combat). */
+export type PinnedCard = NetFighter;
+
 export type SocialMsg =
   | { k: 'presence'; from: string; name: string; mmr: number; online: boolean; at: number }
   /** Demande d'ami (ou « je t'ai ajouté »). */
@@ -53,7 +57,15 @@ export type SocialMsg =
   | { k: 'ok'; from: string; name: string; mmr: number; at: number }
   | { k: 'challenge'; from: string; name: string; mmr: number; room: string; at: number }
   | { k: 'decline'; from: string; room: string; at: number }
-  | { k: 'cancel'; from: string; room: string; at: number };
+  | { k: 'cancel'; from: string; room: string; at: number }
+  /** « Montre-moi les cartes épinglées sur ton profil. » */
+  | { k: 'pins?'; from: string; at: number }
+  /**
+   * Une carte épinglée, en réponse. Une carte par message : avec son image,
+   * une carte pèse déjà des dizaines de kilo-octets, et six d'un coup ne
+   * passeraient pas sur un relais public.
+   */
+  | { k: 'pin'; from: string; at: number; i: number; n: number; card: PinnedCard | null };
 
 /** Chiffre un message pour le propriétaire du code `to` (sa boîte ou sa présence). */
 export function sealFor(to: string, msg: SocialMsg): Uint8Array {

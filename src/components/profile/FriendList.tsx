@@ -19,6 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { rankOf } from '../../game/rank';
+import { groupFriends } from '../../net/friends';
 import { useSocial } from '../../net/social';
 import { useGame } from '../../state/game';
 import type { Friend } from '../../storage/model';
@@ -39,18 +40,17 @@ export function FriendList({ fresh, active }: { fresh: string[]; active: boolean
   const presence = useSocial((s) => s.presence);
   const isOnline = useSocial((s) => s.isOnline);
   const challengeFriend = useSocial((s) => s.challengeFriend);
-  const sorted = [...friends].sort(
-    (a, b) => Number(isOnline(b.code)) - Number(isOnline(a.code)) || a.name.localeCompare(b.name),
-  );
+  // une ligne par personne : deux appareils (ou une réinstallation) ne font pas deux amis
+  const people = groupFriends(friends, isOnline);
 
   return (
     <View>
       <Animated.View layout={layout}>
         <AppText variant="heading" style={styles.section}>
-          {friends.length ? `Tes amis · ${friends.length}` : 'Tes amis'}
+          {people.length ? `Tes amis · ${people.length}` : 'Tes amis'}
         </AppText>
       </Animated.View>
-      {friends.length === 0 ? (
+      {people.length === 0 ? (
         <Animated.View entering={FadeInDown.delay(160)} style={styles.empty}>
           <Ionicons name="people-outline" size={26} color={colors.textDim} />
           <AppText variant="caption" style={{ flex: 1 }}>
@@ -58,21 +58,28 @@ export function FriendList({ fresh, active }: { fresh: string[]; active: boolean
           </AppText>
         </Animated.View>
       ) : (
-        sorted.map((f, i) => (
+        people.map(({ friend: f, codes, online }, i) => (
           <FriendRow
             key={f.code}
             index={i}
             friend={f}
-            online={isOnline(f.code)}
-            fresh={fresh.includes(f.code)}
+            online={online}
+            fresh={codes.some((c) => fresh.includes(c))}
             active={active}
             mmr={presence[f.code]?.mmr ?? f.mmr}
+            devices={codes.length}
             onChallenge={async () => {
               haptic.medium();
               await challengeFriend(f.code);
               router.push('/online/host');
             }}
-            onRemove={() => confirmAction(`Retirer ${f.name} ?`, 'Tu pourras le rajouter avec son code.', 'Retirer', () => removeFriend(f.code))}
+            onOpen={() => {
+              haptic.light();
+              router.push({ pathname: '/friend/[code]', params: { code: f.code } });
+            }}
+            onRemove={() =>
+              confirmAction(`Retirer ${f.name} ?`, 'Tu pourras le rajouter avec son code.', 'Retirer', () => codes.forEach((c) => removeFriend(c)))
+            }
           />
         ))
       )}
@@ -87,6 +94,8 @@ function FriendRow({
   index,
   fresh,
   active,
+  devices,
+  onOpen,
   onChallenge,
   onRemove,
 }: {
@@ -96,6 +105,10 @@ function FriendRow({
   index: number;
   fresh: boolean;
   active: boolean;
+  /** Nombre d'appareils de cette personne (2 ou plus : elle a plusieurs codes). */
+  devices: number;
+  /** Ouvre son profil (ses cartes épinglées). */
+  onOpen(): void;
   onChallenge(): void;
   onRemove(): void;
 }) {
@@ -117,7 +130,13 @@ function FriendRow({
       style={[styles.row, online && styles.rowOnline]}
     >
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.lit, litStyle]} />
-      <Pressable onLongPress={onRemove} style={styles.rowMain} accessibilityLabel={`${friend.name}, ${rank.label}, ${online ? 'en ligne' : 'hors ligne'}`}>
+      <Pressable
+        onPress={onOpen}
+        onLongPress={onRemove}
+        style={styles.rowMain}
+        accessibilityRole="button"
+        accessibilityLabel={`${friend.name}, ${rank.label}, ${online ? 'en ligne' : 'hors ligne'} — voir son profil`}
+      >
         <View>
           <RankEmblem rank={rank} size={34} still />
           {boom ? (
@@ -140,6 +159,7 @@ function FriendRow({
               <AppText variant="caption" style={online ? { color: colors.success } : undefined}>
                 {online ? 'en ligne' : friend.mutual ? 'hors ligne' : 'pas encore ajouté'}
               </AppText>
+              {devices > 1 ? <AppText variant="caption">{` · ${devices} appareils`}</AppText> : null}
             </AppText>
           </View>
         </View>

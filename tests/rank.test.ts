@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { LAST_INDEX, arenaMmr, finishMatch, initialRank, rankOf, settleAbandoned, shownMmr, stakes, startMatch } from '../src/game/rank';
+import { LAST_INDEX, arenaMmr, cancelMatch, finishMatch, initialRank, rankOf, settleAbandoned, shownMmr, stakes, startMatch } from '../src/game/rank';
 
 test('rangs : Papier I au départ, 3 divisions de 100 points par rang, jusqu’à Légende III', () => {
   assert.equal(rankOf(0).label, 'Papier I');
@@ -59,4 +59,25 @@ test('bots solo : Papier I en arène 1, Légende III en arène 10', () => {
   assert.equal(rankOf(arenaMmr(1)).label, 'Papier I');
   assert.equal(rankOf(arenaMmr(10)).label, 'Légende III');
   assert.ok(arenaMmr(5) > arenaMmr(4));
+});
+
+test('abandon : celui qui reste ne gagne rien, celui qui part perd ses points', () => {
+  const start = { mmr: 500, wins: 3, losses: 1, pending: null, streak: 2 };
+  // le combat commence : la défaite est retirée d'avance
+  const playing = startMatch(start, 520, 'Nova');
+  assert.ok(playing.mmr < 500, 'la mise est retirée pendant le combat');
+  // l'adversaire part : tout est rendu, rien d'autre ne bouge
+  const back = cancelMatch(playing);
+  assert.equal(back.mmr, 500);
+  assert.equal(back.pending, null);
+  assert.equal(back.wins, 3);
+  assert.equal(back.losses, 1);
+  assert.equal(back.streak, 2, 'la série ne bouge pas non plus');
+  // celui qui abandonne, lui, perd bien ses points
+  const quitter = finishMatch(playing, false);
+  assert.ok(quitter.state.mmr < 500);
+  assert.equal(quitter.state.losses, 2);
+  assert.equal(quitter.state.streak, -1);
+  // rien en cours : annuler ne change rien
+  assert.deepEqual(cancelMatch(start), start);
 });

@@ -1,7 +1,7 @@
 /**
  * Onglet Profil : le profil public du joueur, c'est-à-dire ce que ses amis
  * voient de lui. Son pseudo et son rang, son code ami et son QR code, ses
- * statistiques, ses cartes favorites, et ses amis (ajout par code ou par QR
+ * statistiques, ses cartes épinglées, et ses amis (ajout par code ou par QR
  * code, demandes reçues, et la liste pour les défier).
  *
  * Les blocs « amis » sont les mêmes que ceux de l'écran Amis
@@ -11,11 +11,11 @@ import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 
 import { AppText } from '../../components/AppText';
-import { FavoriteCards } from '../../components/profile/FavoriteCards';
 import { FriendAdd } from '../../components/profile/FriendAdd';
 import { FriendCodeCard } from '../../components/profile/FriendCodeCard';
 import { FriendList } from '../../components/profile/FriendList';
 import { FriendRequests } from '../../components/profile/FriendRequests';
+import { PinnedCards } from '../../components/profile/PinnedCards';
 import { ProfileCard } from '../../components/profile/ProfileCard';
 import { ProfileStats } from '../../components/profile/ProfileStats';
 import { useFreshFriends, useSocialScreen } from '../../components/profile/social';
@@ -50,8 +50,8 @@ export default function ProfileTab() {
           <ProfileStats />
         </Section>
 
-        <Section visit={visit} index={4} title="Cartes favorites">
-          <FavoriteCards />
+        <Section visit={visit} index={4} title="Cartes épinglées">
+          <PinnedCards />
         </Section>
 
         <Rise visit={visit} index={5}>

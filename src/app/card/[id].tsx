@@ -1,7 +1,8 @@
 /**
  * Carte agrandie : on la fait tourner au doigt (semi-3D), on la retourne, on la
  * renomme. On glisse à côté de la carte pour passer à la voisine dans la
- * collection, et on peut la brûler pour la supprimer.
+ * collection, et on peut la brûler pour la supprimer. La barre du haut sert
+ * aussi à l'épingler sur son profil (6 cartes au plus) et à la mettre en favori.
  *
  * Ouverte depuis la grille, la carte s'envole de sa miniature et y retourne quand
  * on ferme. Les cartes voisines attendent en retrait de chaque côté.
@@ -9,7 +10,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type ComponentProps, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -43,7 +44,7 @@ import { powerLabel } from '../../battle/stats';
 import { getRarity } from '../../game/rarity';
 import { measureThumb, useCollectionView } from '../../state/collectionView';
 import { useGame } from '../../state/game';
-import type { Card } from '../../storage/model';
+import { MAX_PINNED, type Card } from '../../storage/model';
 import { CARD_RATIO, colors, fonts } from '../../theme';
 import { haptic, revealHaptics } from '../../utils/haptics';
 import { useMotionTilt } from '../../utils/motionTilt';
@@ -55,12 +56,23 @@ const SETTLE = { duration: 280, easing: Easing.out(Easing.cubic) };
 /** Taille des cartes voisines, en retrait. */
 const SIDE_SCALE = 0.76;
 
+/** Petite bulle de confirmation sous la barre du haut (favori, épinglage). */
+interface Toast {
+  key: number;
+  icon: ComponentProps<typeof Ionicons>['name'];
+  text: string;
+  /** Avertissement (profil déjà plein) : contour rouge, bulle plus longue. */
+  warn?: boolean;
+}
+
 export default function CardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const cards = useGame((s) => s.cards);
   const renameCard = useGame((s) => s.renameCard);
   const destroyCard = useGame((s) => s.destroyCard);
   const toggleFavorite = useGame((s) => s.toggleFavorite);
+  const togglePin = useGame((s) => s.togglePin);
+  const pinned = useGame((s) => s.save?.pinned);
   const renameAttack = useGame((s) => s.renameAttack);
   const orderIds = useCollectionView((s) => s.ids);
   const insets = useSafeAreaInsets();
@@ -76,12 +88,14 @@ export default function CardScreen() {
   const [statsOpen, setStatsOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [renamed, setRenamed] = useState(0);
-  const [toast, setToast] = useState<{ key: number; on: boolean } | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 1300);
+    // L'avertissement « profil plein » est une phrase : on la laisse plus longtemps.
+    const t = setTimeout(() => setToast(null), toast.warn ? 2600 : 1300);
     return () => clearTimeout(t);
   }, [toast]);
+  const say = (next: Omit<Toast, 'key'>) => setToast((prev) => ({ ...next, key: (prev?.key ?? 0) + 1 }));
   const lastSpin = useRef(0);
 
   // Ordre de défilement : celui de la grille si la carte y figure, sinon les plus récentes d'abord.
@@ -94,6 +108,7 @@ export default function CardScreen() {
   const byId = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
   const index = list.indexOf(currentId);
   const card = byId.get(currentId);
+  const isPinned = pinned?.includes(currentId) ?? false;
   const hasPrev = index > 0;
   const hasNext = index >= 0 && index < list.length - 1;
 
@@ -533,11 +548,28 @@ export default function CardScreen() {
           </Pressable>
           {list.length > 1 ? <AppText variant="caption" style={styles.position}>{`${index + 1} / ${list.length}`}</AppText> : null}
           <View style={styles.topRight}>
+            <PinButton
+              active={isPinned}
+              color={r.color}
+              onPress={() => {
+                const result = togglePin(card.id);
+                if (result === 'full') {
+                  say({ icon: 'alert-circle', text: `${MAX_PINNED} cartes épinglées au maximum — retires-en une d’abord`, warn: true });
+                } else {
+                  say(
+                    result === 'pinned'
+                      ? { icon: 'pin', text: 'Épinglée sur ton profil' }
+                      : { icon: 'pin-outline', text: 'Retirée de ton profil' },
+                  );
+                }
+                return result;
+              }}
+            />
             <FavoriteButton
               active={card.favorite}
               color={r.color}
               onPress={() => {
-                setToast((t) => ({ key: (t?.key ?? 0) + 1, on: !card.favorite }));
+                say(card.favorite ? { icon: 'star-outline', text: 'Retirée des favoris' } : { icon: 'star', text: 'Ajoutée aux favoris' });
                 toggleFavorite(card.id);
               }}
             />
@@ -548,7 +580,7 @@ export default function CardScreen() {
         </Animated.View>
       ) : null}
 
-      <FavToast toast={toast} top={insets.top + 58} />
+      <ActionToast toast={toast} top={insets.top + 58} />
 
       {statsOpen ? <StatsSheet key={card.id} card={card} onClose={() => setStatsOpen(false)} onRename={(slot, name) => renameAttack(card.id, slot, name)} /> : null}
 
@@ -688,7 +720,7 @@ function FavoriteButton({ active, color, onPress }: { active: boolean; color: st
           onPress();
         }}
       >
-        <View pointerEvents="none" style={styles.favBurst}>
+        <View pointerEvents="none" style={styles.btnBurst}>
           <Shockwave trigger={burst} color={colors.gold} size={56} duration={650} />
           <Burst trigger={burst} colors={[colors.gold, '#FFF3C2', color]} count={16} radius={46} />
         </View>
@@ -700,14 +732,77 @@ function FavoriteButton({ active, color, onPress }: { active: boolean; color: st
   );
 }
 
-/** Petite bulle sous la barre du haut qui confirme l'ajout ou le retrait des favoris. */
-function FavToast({ toast, top }: { toast: { key: number; on: boolean } | null; top: number }) {
+/**
+ * Épingle du profil : la carte épinglée est celle que les amis voient. L'épingle
+ * s'enfonce et la pastille se remplit quand on épingle ; quand le profil est
+ * plein, elle refuse en tremblant (le message le dit).
+ */
+function PinButton({ active, color, onPress }: { active: boolean; color: string; onPress(): 'pinned' | 'unpinned' | 'full' }) {
+  const pop = useSharedValue(1);
+  const dip = useSharedValue(0);
+  const shake = useSharedValue(0);
+  const [burst, setBurst] = useState(0);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateX: shake.value }, { translateY: dip.value }, { scale: pop.value }],
+  }));
+  return (
+    <View>
+      <Pressable
+        hitSlop={12}
+        style={[styles.round, active && styles.pinOn]}
+        accessibilityRole="button"
+        accessibilityState={{ selected: active }}
+        accessibilityLabel={active ? 'Retirer de mon profil' : 'Épingler sur mon profil'}
+        onPress={() => {
+          const result = onPress();
+          if (result === 'full') {
+            haptic.warning();
+            shake.value = withSequence(
+              withTiming(-5, { duration: 55 }),
+              withTiming(5, { duration: 70 }),
+              withTiming(-3, { duration: 60 }),
+              withSpring(0, { damping: 12, stiffness: 300 }),
+            );
+            return;
+          }
+          if (result === 'pinned') {
+            setBurst((b) => b + 1);
+            playSfx('up2', { volume: 0.45 });
+            haptic.success();
+            // L'épingle plonge puis se plante : petit « clac ».
+            dip.value = withSequence(withTiming(-7, { duration: 90, easing: Easing.out(Easing.quad) }), withTiming(2, { duration: 90 }), withSpring(0, { damping: 9, stiffness: 320 }));
+            pop.value = withSequence(withTiming(1.26, { duration: 120 }), withSpring(1, { damping: 8, stiffness: 240 }));
+          } else {
+            haptic.light();
+            pop.value = withSequence(withTiming(0.78, { duration: 90 }), withSpring(1, { damping: 10, stiffness: 240 }));
+          }
+        }}
+      >
+        <View pointerEvents="none" style={styles.btnBurst}>
+          <Shockwave trigger={burst} color={colors.text} size={52} duration={600} />
+          <Burst trigger={burst} colors={[colors.text, '#FFFFFF', color]} count={12} radius={42} />
+        </View>
+        <Animated.View style={style}>
+          <Ionicons name={active ? 'pin' : 'pin-outline'} size={20} color={colors.text} />
+        </Animated.View>
+      </Pressable>
+    </View>
+  );
+}
+
+/** Petite bulle sous la barre du haut qui confirme le favori ou l'épinglage. */
+function ActionToast({ toast, top }: { toast: Toast | null; top: number }) {
   if (!toast) return null;
   return (
     <View pointerEvents="none" style={[styles.toastRow, { top }]}>
-      <Animated.View key={toast.key} entering={FadeInDown.duration(220)} exiting={FadeOut.duration(200)} style={styles.toast}>
-        <Ionicons name={toast.on ? 'star' : 'star-outline'} size={12} color={colors.gold} />
-        <AppText style={styles.toastText}>{toast.on ? 'Ajoutée aux favoris' : 'Retirée des favoris'}</AppText>
+      <Animated.View
+        key={toast.key}
+        entering={FadeInDown.duration(220)}
+        exiting={FadeOut.duration(200)}
+        style={[styles.toast, toast.warn && styles.toastWarn]}
+      >
+        <Ionicons name={toast.icon} size={12} color={toast.warn ? colors.danger : colors.gold} />
+        <AppText style={styles.toastText}>{toast.text}</AppText>
       </Animated.View>
     </View>
   );
@@ -730,20 +825,24 @@ const styles = StyleSheet.create({
   pillStats: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 2 },
   pillValue: { fontFamily: fonts.bold, fontSize: 12, color: colors.textDim, fontVariant: ['tabular-nums'], marginRight: 4 },
   favOn: { backgroundColor: 'rgba(247,201,72,0.18)' },
-  favBurst: { position: 'absolute', left: 20, top: 20, width: 0, height: 0, alignItems: 'center', justifyContent: 'center' },
+  pinOn: { backgroundColor: 'rgba(245,243,238,0.22)' },
+  btnBurst: { position: 'absolute', left: 20, top: 20, width: 0, height: 0, alignItems: 'center', justifyContent: 'center' },
   toastRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 12 },
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
-    height: 28,
+    paddingVertical: 7,
+    minHeight: 28,
+    maxWidth: '88%',
     borderRadius: 14,
     backgroundColor: 'rgba(20,18,12,0.92)',
     borderWidth: 1,
     borderColor: 'rgba(247,201,72,0.35)',
   },
-  toastText: { fontFamily: fonts.semibold, fontSize: 11, color: colors.text },
+  toastWarn: { borderColor: 'rgba(255,90,103,0.45)' },
+  toastText: { fontFamily: fonts.semibold, fontSize: 11, color: colors.text, flexShrink: 1, lineHeight: 15 },
   root: { flex: 1, overflow: 'hidden' },
   empty: { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg },
   backdrop: { backgroundColor: 'rgba(5,5,7,0.72)' },

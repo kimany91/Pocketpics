@@ -22,8 +22,9 @@ import { CardFace } from '../../components/card/CardFace';
 import { Burst, Glow, Shockwave } from '../../components/fx';
 import { Header } from '../../components/Header';
 import { Message } from '../../components/online/Message';
-import { LoadingDots, OnlineDot, PulseRings, useLoop } from '../../components/online/Pulse';
+import { LoadingDots, OnlineDot, PulseRings } from '../../components/online/Pulse';
 import { Screen } from '../../components/Screen';
+import { TradeTransfer } from '../../components/trade/TradeTransfer';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import type { Card } from '../../storage/model';
@@ -40,6 +41,8 @@ export default function RoomScreen() {
   const cards = useGame((s) => s.cards);
   const { width } = useWindowDimensions();
   const focused = useIsFocused();
+  // le bilan ne remplace la mise en scène du transfert qu’une fois celle-ci jouée
+  const [revealed, setRevealed] = useState(false);
   const cols = 4;
   const gap = 8;
   const pickW = (width - 32 - gap * (cols - 1)) / cols;
@@ -63,9 +66,12 @@ export default function RoomScreen() {
   });
 
   useEffect(() => {
-    if (t.phase === 'done') haptic.success();
     if (t.phase === 'ended') haptic.warning();
   }, [t.phase]);
+
+  useEffect(() => {
+    if (revealed) haptic.success();
+  }, [revealed]);
 
   const sorted = useMemo(
     // la carte Galaxy est unique à chaque joueur : elle ne s'échange pas
@@ -74,8 +80,6 @@ export default function RoomScreen() {
   );
   const mine = t.myOffer.map((id) => cards.find((c) => c.id === id)).filter((c): c is Card => !!c);
 
-  if (t.phase === 'done') return <TradeDone received={t.received} given={t.givenCount} peer={t.peerName ?? 'ton ami'} onClose={exit} />;
-
   if (t.phase === 'ended' || t.phase === 'idle') {
     return (
       <Screen edges={['top', 'bottom']}>
@@ -83,6 +87,20 @@ export default function RoomScreen() {
           <Message icon="close-circle-outline" tone="info" title="Échange terminé" text={t.error ?? "L'échange a été fermé."} onBack={exit} />
         </View>
       </Screen>
+    );
+  }
+
+  if (t.phase === 'done' && revealed) return <TradeDone received={t.received} given={t.givenCount} peer={t.peerName ?? 'ton ami'} onClose={exit} />;
+
+  if (t.phase === 'transferring' || t.phase === 'done') {
+    return (
+      <TradeTransfer
+        sending={mine}
+        receiving={t.peerOffer}
+        finished={t.phase === 'done'}
+        peer={t.peerName ?? 'ton ami'}
+        onDone={() => setRevealed(true)}
+      />
     );
   }
 
@@ -102,7 +120,7 @@ export default function RoomScreen() {
             <PeerThumb key={c.id} card={c} />
           ))}
         </OfferRow>
-        <SwapBadge ready={t.myLocked && t.peerLocked} busy={t.phase === 'transferring'} />
+        <SwapBadge ready={t.myLocked && t.peerLocked} />
         <OfferRow title="Tu donnes" locked={t.myLocked} confirmed={t.myConfirmed} empty="Choisis des cartes ci-dessous">
           {mine.map((c) => (
             <OfferThumb key={c.id} from={1}>
@@ -146,12 +164,7 @@ export default function RoomScreen() {
       />
 
       <View style={styles.actions}>
-        {t.phase === 'transferring' ? (
-          <View style={styles.row}>
-            <Spinner />
-            <AppText variant="label">Échange en cours… ne quitte pas l'app</AppText>
-          </View>
-        ) : !t.myLocked ? (
+        {!t.myLocked ? (
           <Button label="Valider mon offre" size="lg" disabled={nothing} onPress={() => t.setLocked(true)} />
         ) : !t.peerLocked ? (
           <View style={{ gap: 8 }}>
@@ -228,32 +241,21 @@ function PickCard({ card, width, selected, disabled, onPress }: { card: Card; wi
   );
 }
 
-/** Pastille entre les deux offres : tourne quand tout le monde a validé, puis pendant l'échange. */
-function SwapBadge({ ready, busy }: { ready: boolean; busy: boolean }) {
+/** Pastille entre les deux offres : tourne quand tout le monde a validé. */
+function SwapBadge({ ready }: { ready: boolean }) {
   const flip = useSharedValue(0);
   useEffect(() => {
     flip.value = withSpring(ready ? 1 : 0, { damping: 11, stiffness: 140 });
   }, [ready, flip]);
-  const spin = useLoop(busy, 900);
-  const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${flip.value * 180 + spin.value * 360}deg` }, { scale: 1 + flip.value * 0.15 }] }));
+  const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${flip.value * 180}deg` }, { scale: 1 + flip.value * 0.15 }] }));
   const c = ready ? colors.gold : colors.textDim;
   return (
     <View style={styles.swap}>
-      {ready ? <PulseRings color={colors.gold} size={60} count={2} duration={1600} active={!busy} /> : null}
+      {ready ? <PulseRings color={colors.gold} size={60} count={2} duration={1600} /> : null}
       <Animated.View style={[styles.swapBadge, { borderColor: ready ? `${colors.gold}88` : colors.border }, style]}>
         <Ionicons name="swap-vertical" size={16} color={c} />
       </Animated.View>
     </View>
-  );
-}
-
-function Spinner() {
-  const p = useLoop(true, 900);
-  const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${p.value * 360}deg` }] }));
-  return (
-    <Animated.View style={style}>
-      <Ionicons name="sync" size={20} color={colors.gold} />
-    </Animated.View>
   );
 }
 

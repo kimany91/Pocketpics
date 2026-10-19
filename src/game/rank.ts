@@ -120,6 +120,15 @@ export function finishMatch(r: RankState, won: boolean): { state: RankState; bef
   };
 }
 
+/**
+ * Combat annulé (l'adversaire est parti) : la mise est rendue et rien ne
+ * change — ni les points, ni les victoires, ni la série. Sans ça, quitter un
+ * combat offrirait des points à l'autre : trop facile à exploiter.
+ */
+export function cancelMatch(r: RankState): RankState {
+  return r.pending ? { ...r, mmr: shownMmr(r), pending: null } : r;
+}
+
 /** Au lancement : un combat resté « en cours » a été quitté, c'est une défaite. */
 export function settleAbandoned(r: RankState): RankState {
   return r.pending ? finishMatch(r, false).state : r;

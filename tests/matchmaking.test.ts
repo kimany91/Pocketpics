@@ -8,6 +8,11 @@ import { MAX_MMR } from '../src/game/rank';
 import { getRarity } from '../src/game/rarity';
 import { BOT_MMR, BotPeer, STREAK, botFighters, botNetFighters, onlineBotLevel, pickBotMmr, pickBotName, pickBotOpponent, streakTier } from '../src/net/botMatch';
 import { BOT_NAMES } from '../src/net/botNames';
+import { groupFriends } from '../src/net/friends';
+import { sanitizeFighter } from '../src/net/battleNet';
+import { openFor, sealFor } from '../src/net/socialCore';
+import { generateStats } from '../src/battle/stats';
+import type { Friend } from '../src/storage/model';
 import { ANNOUNCE_TTL_MS, type LobbyConn, type Search, type Seeker, lobbyTopic, openLobby, pickOpponent, sealLobby, startSearch } from '../src/net/lobbyCore';
 
 /* ------------------------------ Salon d'attente ------------------------------ */
@@ -335,4 +340,49 @@ test('recherche : un relais qui ne répond jamais ne bloque pas le départ du co
   await wait(500);
   assert.ok(gaveUp, 'le combat part quand même');
   search.stop();
+});
+
+/* --------------------------- Une ligne par personne --------------------------- */
+
+const ami = (code: string, name: string, addedAt = 0): Friend => ({ code, name, mmr: 100, addedAt, mutual: true });
+
+test('amis : deux appareils d’une même personne ne font qu’une ligne', () => {
+  const friends = [ami('AAAAAAAAAA', 'Mehdi', 1), ami('BBBBBBBBBB', 'Mehdi', 2), ami('CCCCCCCCCC', 'Lou', 3)];
+  const online = (c: string) => c === 'BBBBBBBBBB';
+  const rows = groupFriends(friends, online);
+  assert.equal(rows.length, 2, 'deux personnes');
+  const mehdi = rows.find((r) => r.friend.name === 'Mehdi');
+  assert.ok(mehdi);
+  assert.equal(mehdi.online, true, 'en ligne si un de ses appareils l’est');
+  assert.equal(mehdi.friend.code, 'BBBBBBBBBB', 'on garde l’appareil allumé');
+  assert.deepEqual(mehdi.codes.sort(), ['AAAAAAAAAA', 'BBBBBBBBBB']);
+  assert.equal(rows[0].friend.name, 'Mehdi', 'les connectés d’abord');
+
+  // hors ligne des deux côtés : on garde le plus récemment ajouté
+  const off = groupFriends([ami('AAAAAAAAAA', 'Mehdi', 1), ami('BBBBBBBBBB', 'mehdi ', 5)], () => false);
+  assert.equal(off.length, 1, 'majuscules et espaces ignorés');
+  assert.equal(off[0].friend.code, 'BBBBBBBBBB');
+
+  // un pseudo générique ne suffit pas à dire que c'est la même personne
+  const vague = groupFriends([ami('AAAAAAAAAA', 'Ami'), ami('BBBBBBBBBB', 'Ami')], () => false);
+  assert.equal(vague.length, 2);
+});
+
+test('cartes épinglées : un message par carte, et une réponse vide quand il n’y en a aucune', () => {
+  // une carte épinglée voyage comme une carte de combat : les stats sont recalculées à l'arrivée
+  const card = { ref: 'abc123', name: 'Mon chat', rarity: 'epic', battle: generateStats('abc123', 3), thumb: 'AAAA' };
+  const msg = { k: 'pin', from: '0123456789', at: 42, i: 0, n: 3, card } as const;
+  const back = openFor('0123456789', sealFor('0123456789', msg));
+  assert.deepEqual(back, msg);
+  const checked = sanitizeFighter(card);
+  assert.ok(checked && checked.ref === 'abc123' && checked.rarity === 'epic' && checked.thumb === 'AAAA');
+  // une carte trafiquée est ramenée aux stats que sa rareté donne
+  const cheat = sanitizeFighter({ ...card, battle: { ...card.battle, hp: 99_999 } });
+  assert.ok(cheat && cheat.battle.hp < 9999);
+  // « je n'ai rien épinglé » : n = 0, pas de carte
+  const none = openFor('0123456789', sealFor('0123456789', { k: 'pin', from: 'AAAAAAAAAA', at: 1, i: 0, n: 0, card: null }));
+  assert.ok(none && none.k === 'pin' && none.n === 0 && none.card === null);
+  // la demande elle-même
+  const ask = openFor('0123456789', sealFor('0123456789', { k: 'pins?', from: 'AAAAAAAAAA', at: 7 }));
+  assert.ok(ask && ask.k === 'pins?');
 });
