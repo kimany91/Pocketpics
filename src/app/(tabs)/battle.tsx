@@ -1,6 +1,6 @@
 /**
  * Onglet Combat : on choisit entre l'aventure solo (la carte des mondes) et le
- * multijoueur (rang, amis, combats classés). Chaque choix est un grand
+ * multijoueur (rang et combats classés). Chaque choix est un grand
  * panneau illustré : un morceau du monde en cours pour le solo, l'emblème de
  * rang pour le multijoueur.
  */
@@ -35,7 +35,6 @@ import { Rise } from '../../components/Rise';
 import { RollingNumber } from '../../components/RollingNumber';
 import { Screen } from '../../components/Screen';
 import { rankOf, shownMmr } from '../../game/rank';
-import { useSocial } from '../../net/social';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
 import { easeOut, springs, useEntrance } from '../../theme/motion';
@@ -47,11 +46,7 @@ export default function BattleTab() {
   const cleared = useGame((s) => s.save?.soloLevel ?? 0);
   const totalStars = useGame((s) => (s.save?.soloStars ?? []).reduce((a, b) => a + b, 0));
   const rank = useGame((s) => s.save?.rank);
-  const friends = useGame((s) => s.save?.friends ?? []);
-  const requests = useSocial((s) => s.requests.length);
-  const isOnline = useSocial((s) => s.isOnline);
-  useSocial((s) => s.presence);
-  const online = friends.filter((f) => isOnline(f.code)).length;
+  const wins = rank?.wins ?? 0;
   const divineUnlocked = useGame((s) => s.save?.divineUnlocked ?? false);
   const current = Math.min(TOTAL_LEVELS, cleared + 1);
   const level = getLevel(current);
@@ -127,15 +122,12 @@ export default function BattleTab() {
               <AppText style={styles.big}>Classé</AppText>
               <AppText style={[styles.sub, { color: myRank.tier.color }]}>{myRank.label}</AppText>
               <View style={styles.metaRow}>
-                <View style={[styles.onlineDot, { backgroundColor: online ? colors.success : colors.textFaint }]} />
-                <AppText style={styles.meta}>{friends.length ? `${online} ami${online > 1 ? 's' : ''} en ligne` : 'Ajoute des amis'}</AppText>
+                <Ionicons name="trophy" size={13} color={colors.gold} />
+                <AppText style={styles.meta}>
+                  {wins ? `${wins} victoire${wins > 1 ? 's' : ''} classée${wins > 1 ? 's' : ''}` : 'Affronte des joueurs en ligne'}
+                </AppText>
               </View>
             </View>
-            {requests ? (
-              <View style={styles.badge}>
-                <AppText style={styles.badgeText}>{requests}</AppText>
-              </View>
-            ) : null}
             <PlayChip focused={focused} delay={450} />
           </Panel>
         </Rise>
@@ -444,12 +436,9 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
   meta: { fontFamily: fonts.semibold, fontSize: 12, color: 'rgba(255,255,255,0.75)' },
   dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.5)', marginHorizontal: 3 },
-  onlineDot: { width: 8, height: 8, borderRadius: 4 },
   playWrap: { position: 'absolute', right: 16, bottom: 18 },
   playGlow: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 21, boxShadow: '0px 0px 16px rgba(255,214,102,0.95)' },
   playChip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 42, paddingHorizontal: 16, borderRadius: 21, backgroundColor: colors.gold, borderWidth: 3, borderColor: OUTLINE },
   playText: { fontFamily: fonts.black, fontSize: 15, color: '#141414' },
   multiArt: { position: 'absolute', left: 26, top: 40, width: 100, alignItems: 'center' },
-  badge: { position: 'absolute', top: 12, right: 12, minWidth: 26, height: 26, borderRadius: 13, backgroundColor: colors.danger, borderWidth: 2.5, borderColor: OUTLINE, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
-  badgeText: { fontFamily: fonts.black, fontSize: 13, color: '#FFFFFF' },
 });

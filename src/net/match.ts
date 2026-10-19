@@ -8,7 +8,7 @@
  */
 import { create } from 'zustand';
 
-import type { Battle } from '../battle/engine';
+import { type Battle, createBattle } from '../battle/engine';
 import { getRarity } from '../game/rarity';
 import { shownMmr } from '../game/rank';
 import { useGame } from '../state/game';
@@ -30,6 +30,7 @@ import {
   sanitizeDeck,
   startBattle,
 } from './battleNet';
+import { type BotOpponent, BotPeer, botNetFighters } from './botMatch';
 import { Reliable, type Wire } from './reliable';
 
 export type MatchPhase = 'idle' | 'waiting' | 'joining' | 'lobby' | 'fighting' | 'over';
@@ -61,8 +62,15 @@ interface MatchStore {
   oppGone: boolean;
   /** C'est ma connexion qui a lâché (défaite). */
   lostConnection: boolean;
+  /**
+   * Adversaire du jeu, quand le combat aléatoire n'a trouvé personne. Jamais
+   * montré comme tel : l'écran l'affiche comme n'importe quel adversaire.
+   */
+  bot: BotOpponent | null;
 
   host(opts?: { code?: string; friend?: { code: string; name: string } }): Promise<void>;
+  /** Combat classé contre un adversaire du jeu (voir `botMatch.ts`). */
+  startBotMatch(opp: BotOpponent): void;
   join(code: string, opts?: { friend?: { code: string; name: string } }): Promise<void>;
   setDeck(cards: Card[]): void;
   /** Abandon en plein combat : l'adversaire gagne. */
@@ -96,6 +104,7 @@ const initial = {
   controller: null,
   oppGone: false,
   lostConnection: false,
+  bot: null,
 };
 
 /** Carte envoyée à l'adversaire. */
@@ -123,6 +132,18 @@ export const useMatch = create<MatchStore>((set, get) => {
     const controller = new HostController(channel, battle);
     channel.send({ t: 'start', battle });
     started(battle, controller);
+  };
+
+  /** L'adversaire du jeu « choisit ses cartes », puis le combat part. */
+  const beginBot = (opp: BotOpponent) => {
+    const mine = sanitizeDeck(myNet);
+    if (!mine) return;
+    const theirs = botNetFighters(opp);
+    const base = startBattle(mine, theirs);
+    // la triche cachée du solo s'applique aussi à lui (voir catchUpMult)
+    const battle: Battle = { ...base, catchUp: 1 };
+    set({ oppDeck: theirs, oppReady: true });
+    started(battle, new BotPeer(opp.botLevel));
   };
 
   const started = (battle: Battle, controller: BattleController) => {
@@ -201,6 +222,12 @@ export const useMatch = create<MatchStore>((set, get) => {
       }
     },
 
+    startBotMatch(opp) {
+      get().leave();
+      session++;
+      set({ ...initial, phase: 'lobby', role: 'host', bot: opp, opp: { name: opp.name, mmr: opp.mmr, friend: null } });
+    },
+
     async join(code, opts = {}) {
       get().leave();
       const token = ++session;
@@ -216,9 +243,18 @@ export const useMatch = create<MatchStore>((set, get) => {
     setDeck(cards) {
       if (get().phase !== 'lobby' || cards.length === 0) return;
       myNet = cards.map(toNetFighter);
-      channel.send({ t: 'deck', fighters: myNet });
+      const bot = get().bot;
+      if (!bot) channel.send({ t: 'deck', fighters: myNet });
       set({ myDeck: cards.map((c) => c.id), myReady: true });
-      begin();
+      if (!bot) return begin();
+      // il met un moment à valider ses cartes, comme tout le monde
+      const token = session;
+      setTimeout(
+        () => {
+          if (token === session && get().phase === 'lobby') beginBot(bot);
+        },
+        1200 + Math.random() * 2600,
+      );
     },
 
     quit() {

@@ -35,6 +35,8 @@ export const TIERS: readonly RankTier[] = [
 export const DIVISION_POINTS = 100;
 export const DIVISIONS = 3;
 export const LAST_INDEX = TIERS.length * DIVISIONS - 1;
+/** Rang maximal (Légende III). */
+export const MAX_MMR = LAST_INDEX * DIVISION_POINTS;
 const ROMAN = ['I', 'II', 'III'];
 
 /** Points Elo : facteur K et écart de référence. */

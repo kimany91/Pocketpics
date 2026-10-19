@@ -230,6 +230,36 @@ function galleryFighters(level: Level, hidden: number): FighterInput[] {
   return out;
 }
 
+/* -------------------------- Adversaires des classés -------------------------- */
+
+/** Niveau de l'aventure dont la force correspond à ce rang (inverse de `levelMmr`). */
+export function levelForMmr(mmr: number): Level {
+  const clamped = Math.max(0, Math.min(1700, mmr));
+  const n = Math.round((clamped / 1700) * (TOTAL_LEVELS - 1)) + 1;
+  return getLevel(Math.max(1, Math.min(TOTAL_LEVELS, n)))!;
+}
+
+/**
+ * Équipe de 4 cartes à la hauteur d'un joueur de ce rang : les illustrations du
+ * monde correspondant, ramenées à la puissance qu'a normalement un joueur
+ * arrivé là (`expectedPower`). Sert aux adversaires des combats classés
+ * (voir `src/net/botMatch.ts`).
+ */
+export function deckForMmr(mmr: number): { fighters: FighterInput[]; botLevel: number; level: number } {
+  const level = levelForMmr(mmr);
+  const w = level.world;
+  const picks = w.final
+    ? [0, 1, 2, 3].map((i) => ({ i, rank: DIVINE_RANK, name: w.cards[i].name }))
+    : w.cards
+        .map((c, i) => ({ i, rank: getRarity(c.rarity).rank, name: c.name }))
+        .sort((a, b) => a.rank - b.rank || a.i - b.i)
+        .slice(0, 4);
+  const base = picks.reduce((s, p) => s + AVERAGE_POWER[p.rank], 0);
+  // la puissance d'une carte vaut PV × coup, donc elle monte en k² : d'où la racine
+  const k = Math.sqrt(expectedPower(level.n) / base);
+  return { fighters: picks.map((p) => fighter(w, p.i, p.name, p.rank, k)), botLevel: level.botLevel, level: level.n };
+}
+
 /* ---------------------------- Difficulté cachée ---------------------------- */
 
 /**

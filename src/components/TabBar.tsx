@@ -22,9 +22,11 @@ const TABS: Record<string, { label: string; icon: IconName; iconActive: IconName
   collection: { label: 'Collection', icon: 'albums-outline', iconActive: 'albums' },
   battle: { label: 'Combat', icon: 'flash-outline', iconActive: 'flash' },
   trade: { label: 'Échange', icon: 'swap-horizontal-outline', iconActive: 'swap-horizontal' },
+  profile: { label: 'Profil', icon: 'person-outline', iconActive: 'person' },
 };
 
-const PILL_W = 62;
+/** Largeur de la pastille : elle doit tenir dans un onglet sur cinq (~72 px à 360 px de large). */
+const PILL_W = 56;
 
 export function TabBar({ state, navigation, insets, descriptors }: BottomTabBarProps) {
   const routes = state.routes.filter((r) => TABS[r.name]);
@@ -138,7 +140,9 @@ function TabItem({ label, icon, focused, badge, onPress }: { label: string; icon
         <Ionicons name={icon} size={23} color={color} />
         {badge !== undefined ? <Badge value={badge} /> : null}
       </Animated.View>
-      <Animated.Text style={[styles.label, labelStyle]}>{label}</Animated.Text>
+      <Animated.Text numberOfLines={1} style={[styles.label, labelStyle]}>
+        {label}
+      </Animated.Text>
     </Pressable>
   );
 }
@@ -186,8 +190,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gold,
     boxShadow: '0px 2px 10px rgba(247,201,72,0.7)',
   },
-  item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 4 },
-  label: { fontFamily: fonts.semibold, fontSize: 11, letterSpacing: 0.2 },
+  item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 2 },
+  // cinq onglets : les intitulés les plus longs (« Collection ») doivent tenir sur un écran étroit
+  label: { fontFamily: fonts.semibold, fontSize: 10.5, letterSpacing: 0.1 },
   badge: {
     position: 'absolute',
     top: -5,

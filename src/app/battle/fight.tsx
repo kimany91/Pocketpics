@@ -160,13 +160,15 @@ export default function FightScreen() {
       if (!m.start || !m.controller || !m.opp) return null;
       const thumbs = new Map((m.oppDeck ?? []).map((f) => [f.ref, f.thumb ? `data:image/jpeg;base64,${f.thumb}` : '']));
       const firstThumb = [...thumbs.values()].find(Boolean);
+      // ses cartes : les miniatures reçues, ou leurs illustrations quand il n'en a pas envoyé
+      const bot = m.bot;
       const foe: Foe = {
         name: m.opp.name,
         tint: ONLINE_TINT,
         mmr: m.opp.mmr,
         label: 'Combat classé',
-        art: firstThumb ? { uri: firstThumb } : undefined,
-        image: (ref) => ({ imageUri: thumbs.get(ref) || undefined }),
+        art: firstThumb ? { uri: firstThumb } : bot ? botArt(bot.fighters[0].ref) : undefined,
+        image: (ref) => (bot ? { imageSource: botArt(ref) } : { imageUri: thumbs.get(ref) || undefined }),
       };
       return { deck, foe, battle: m.start, controller: m.controller };
     }

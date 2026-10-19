@@ -3,6 +3,7 @@ import type { BottomTabNavigationOptions } from 'expo-router/build/react-navigat
 import { Easing } from 'react-native';
 
 import { TabBar } from '../../components/TabBar';
+import { useSocial } from '../../net/social';
 import { useDrawStatus } from '../../state/useDrawStatus';
 import { colors } from '../../theme';
 
@@ -27,6 +28,8 @@ const transitionSpec: BottomTabNavigationOptions['transitionSpec'] = {
 
 export default function TabsLayout() {
   const { available } = useDrawStatus(15000);
+  /** Demandes d'ami reçues : en pastille sur l'onglet Profil. */
+  const requests = useSocial((s) => s.requests.length);
   return (
     <Tabs
       tabBar={(props) => <TabBar {...props} />}
@@ -36,6 +39,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="collection" />
       <Tabs.Screen name="battle" />
       <Tabs.Screen name="trade" />
+      <Tabs.Screen name="profile" options={{ tabBarBadge: requests > 0 ? requests : undefined }} />
     </Tabs>
   );
 }
