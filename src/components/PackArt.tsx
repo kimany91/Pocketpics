@@ -16,7 +16,7 @@ export function PackArt({ width, shimmer = true, lucky = false }: { width: numbe
   return (
     <View style={[styles.pack, { width, height, borderRadius: width * 0.045 }]}>
       {lucky ? (
-        <LinearGradient
+        <LinearGradient pointerEvents="none"
           colors={['#7A5410', '#E9B84A', '#FFF1C2', '#C8902A', '#6B460C']}
           locations={[0, 0.3, 0.5, 0.72, 1]}
           start={{ x: 0, y: 0 }}
@@ -25,8 +25,8 @@ export function PackArt({ width, shimmer = true, lucky = false }: { width: numbe
         />
       ) : (
         <>
-          <LinearGradient colors={['#2C2B36', '#141419', '#24222E', '#0F0F13']} locations={[0, 0.35, 0.7, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-          <LinearGradient
+          <LinearGradient pointerEvents="none" colors={['#2C2B36', '#141419', '#24222E', '#0F0F13']} locations={[0, 0.35, 0.7, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          <LinearGradient pointerEvents="none"
             colors={['rgba(255,120,190,0.16)', 'rgba(255,220,120,0.10)', 'rgba(120,255,200,0.12)', 'rgba(120,180,255,0.16)', 'rgba(200,140,255,0.14)']}
             start={{ x: 0, y: 0.2 }}
             end={{ x: 1, y: 0.8 }}
@@ -47,7 +47,7 @@ export function PackArt({ width, shimmer = true, lucky = false }: { width: numbe
 
       <View style={styles.center}>
         <View style={[styles.emblem, { width: width * 0.3, height: width * 0.3 }]}>
-          <LinearGradient
+          <LinearGradient pointerEvents="none"
             colors={['#FF8FC0', '#FFD27A', '#8CFFC1', '#7CCBFF', '#B99CFF']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -72,7 +72,7 @@ function Crimp({ height, width, style, lucky }: { height: number; width: number;
   const n = Math.round(width / 5);
   return (
     <View style={[styles.crimp, { height }, style]}>
-      <LinearGradient colors={lucky ? ['#F5D27A', '#9C6A16'] : ['#4A4956', '#2A2933']} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={lucky ? ['#F5D27A', '#9C6A16'] : ['#4A4956', '#2A2933']} style={StyleSheet.absoluteFill} />
       <View style={styles.crimpRow}>
         {Array.from({ length: n }).map((_, i) => (
           <View key={i} style={styles.crimpLine} />

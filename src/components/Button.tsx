@@ -117,7 +117,7 @@ export function Glint() {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e: LayoutChangeEvent) => (w.value = e.nativeEvent.layout.width)}>
       <Animated.View style={[styles.glint, style]}>
-        <LinearGradient
+        <LinearGradient pointerEvents="none"
           colors={['rgba(255,206,92,0)', 'rgba(255,206,92,0.55)', 'rgba(255,255,255,0.95)', 'rgba(255,206,92,0.55)', 'rgba(255,206,92,0)']}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}

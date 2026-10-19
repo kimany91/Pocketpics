@@ -32,6 +32,13 @@ export interface NetFighter {
 export type BattleMsg =
   | { t: 'hello'; v: number; name: string; mmr: number; friend: string | null }
   | { t: 'deck'; fighters: NetFighter[] }
+  /**
+   * Miniature d'une carte, envoyée carte par carte APRÈS le deck. Les images
+   * pèsent cent fois plus que le reste : si elles voyageaient avec le deck, un
+   * relais lent ou qui limite le débit bloquerait le début du combat. Là, le
+   * combat part tout de suite et les images arrivent quand elles arrivent.
+   */
+  | { t: 'art'; ref: string; thumb: string }
   /** Hôte → invité : début du combat (état vu par l'hôte). */
   | { t: 'start'; battle: Battle }
   /** Invité → hôte : son action, ou la carte qu'il envoie après un K.O. */

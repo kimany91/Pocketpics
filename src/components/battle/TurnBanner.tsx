@@ -47,7 +47,7 @@ export function TurnBanner({ mine, name, tint, width }: { mine: boolean; name: s
     <View pointerEvents="none" style={styles.root}>
       <Animated.View style={[styles.streak, { width: width * 0.7 }, streak]} />
       <Animated.View style={[styles.band, { backgroundColor: color }, band]}>
-        <LinearGradient colors={['rgba(255,255,255,0.45)', 'rgba(255,255,255,0)']} locations={[0, 0.6]} style={StyleSheet.absoluteFill} />
+        <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0.45)', 'rgba(255,255,255,0)']} locations={[0, 0.6]} style={StyleSheet.absoluteFill} />
         <View style={[styles.edge, { top: 0 }]} />
         <View style={[styles.edge, { bottom: 0, backgroundColor: 'rgba(0,0,0,0.25)' }]} />
         <Animated.View style={[styles.textWrap, text]}>

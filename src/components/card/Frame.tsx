@@ -29,13 +29,13 @@ export function Frame({ rarity, width, height, animated }: { rarity: Rarity; wid
     case 'gold':
       return (
         <View style={StyleSheet.absoluteFill}>
-          <LinearGradient colors={rarity.frame as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          <LinearGradient pointerEvents="none" colors={rarity.frame as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
           {animated ? <Sweep width={width} height={height} /> : null}
         </View>
       );
     default:
       return (
-        <LinearGradient colors={rarity.frame as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient pointerEvents="none" colors={rarity.frame as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       );
   }
 }
@@ -52,7 +52,7 @@ function Spinning({ colors, width, height, animated, duration }: { colors: strin
   const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot.value}deg` }] }));
   return (
     <Animated.View style={[{ position: 'absolute', width: d, height: d, left: (width - d) / 2, top: (height - d) / 2 }, style]}>
-      <LinearGradient colors={colors as [string, string, ...string[]]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={colors as [string, string, ...string[]]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
     </Animated.View>
   );
 }
@@ -70,7 +70,7 @@ export function Sweep({ width, height, duration = 2600, intensity = 0.75 }: { wi
   }));
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: -height * 0.25, height: height * 1.5, width: band }, style]}>
-      <LinearGradient
+      <LinearGradient pointerEvents="none"
         colors={['rgba(255,255,255,0)', `rgba(255,255,255,${intensity})`, 'rgba(255,255,255,0)']}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}

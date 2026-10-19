@@ -86,7 +86,7 @@ function Bands({
   });
   return (
     <Animated.View style={[styles.layer, { width: width * 3.4, height: height * 1.8, mixBlendMode: 'color-dodge' }, style]}>
-      <LinearGradient colors={stops} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={stops} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
     </Animated.View>
   );
 }

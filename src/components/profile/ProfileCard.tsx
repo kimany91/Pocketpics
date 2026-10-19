@@ -48,7 +48,7 @@ export function ProfileCard({ active }: { active: boolean }) {
 
   return (
     <View style={[styles.card, { borderColor: `${rank.tier.color}59` }]}>
-      <LinearGradient
+      <LinearGradient pointerEvents="none"
         colors={[`${rank.tier.color}24`, 'rgba(255,255,255,0.02)', 'rgba(255,255,255,0)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}

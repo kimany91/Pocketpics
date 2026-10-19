@@ -76,7 +76,7 @@ export default function BattleTab() {
             shineDelay={420}
             art={gated ? <SanctuaryScene width={panelW} /> : <SoloScene width={panelW} world={level?.world.n ?? 1} level={current} />}
           >
-            <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(8,8,12,0.88)']} style={[StyleSheet.absoluteFill, { top: '45%' }]} />
+            <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0)', 'rgba(8,8,12,0.88)']} style={[StyleSheet.absoluteFill, { top: '45%' }]} />
             <View style={styles.panelText}>
               <AppText style={styles.kicker}>Solo</AppText>
               <AppText style={styles.big}>Aventure</AppText>
@@ -112,7 +112,7 @@ export default function BattleTab() {
             focused={focused}
             visit={visit}
             shineDelay={620}
-            art={<LinearGradient colors={['#1B2350', '#2A1B4F', '#120F24']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
+            art={<LinearGradient pointerEvents="none" colors={['#1B2350', '#2A1B4F', '#120F24']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
           >
             <Floating focused={focused} style={styles.multiArt}>
               <RankEmblem rank={myRank} size={92} />
@@ -235,7 +235,7 @@ function Shine({ width, height, focused, visit, delay }: { width: number; height
   }));
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: -height * 0.3, height: height * 1.6, width: band }, style]}>
-      <LinearGradient
+      <LinearGradient pointerEvents="none"
         colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.22)', 'rgba(255,255,255,0)']}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}

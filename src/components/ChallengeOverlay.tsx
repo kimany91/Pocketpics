@@ -102,7 +102,7 @@ export function ChallengeOverlay() {
           <Glow color={colors.gold} size={260} stretchX={1.6} />
         </Animated.View>
         <View style={[styles.card, { borderColor: `${rank.tier.color}66` }]}>
-          <LinearGradient colors={['rgba(247,201,72,0.16)', 'rgba(247,201,72,0.02)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          <LinearGradient pointerEvents="none" colors={['rgba(247,201,72,0.16)', 'rgba(247,201,72,0.02)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.border, borderStyle]} />
           <View style={styles.row}>
             <View style={styles.emblemBox}>

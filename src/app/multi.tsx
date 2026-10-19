@@ -94,7 +94,7 @@ function RandomButton({ focused, onPress }: { focused: boolean; onPress(): void 
     >
       <View style={styles.lip} />
       <Animated.View style={[styles.random, body]}>
-        <LinearGradient colors={['#2A2050', '#3B2A6B', '#1A1430']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient pointerEvents="none" colors={['#2A2050', '#3B2A6B', '#1A1430']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <Animated.View pointerEvents="none" style={[styles.randomGlow, glow]} />
         <Animated.View style={[styles.randomIcon, icon]}>
           <Ionicons name="shuffle" size={30} color="#141414" />

@@ -31,7 +31,7 @@ export function ArenaBackdrop({ art, tint, width, height, final }: { art?: Image
         </Animated.View>
       ) : null}
       {/* voile : sombre en haut et en bas, la teinte de l'arène au milieu */}
-      <LinearGradient
+      <LinearGradient pointerEvents="none"
         colors={['rgba(9,9,11,0.92)', `${tint}26`, 'rgba(9,9,11,0.55)', 'rgba(9,9,11,0.97)']}
         locations={[0, 0.38, 0.6, 0.86]}
         style={StyleSheet.absoluteFill}
@@ -50,7 +50,7 @@ export function ArenaBackdrop({ art, tint, width, height, final }: { art?: Image
         </>
       ) : null}
       {/* bords assombris */}
-      <LinearGradient
+      <LinearGradient pointerEvents="none"
         colors={final ? ['rgba(0,0,0,0.8)', 'transparent', 'transparent', 'rgba(0,0,0,0.8)'] : ['rgba(0,0,0,0.55)', 'transparent', 'transparent', 'rgba(0,0,0,0.55)']}
         locations={[0, 0.18, 0.82, 1]}
         start={{ x: 0, y: 0.5 }}

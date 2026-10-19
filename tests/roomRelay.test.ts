@@ -99,19 +99,20 @@ test('room : messages entre deux pages, et message retenu donné aux nouveaux ve
     a.onMessage((t, p) => t === topic && gotA.push(p));
     const big = new Uint8Array(12_000).map((_, i) => i % 199);
     b.publish(topic, big);
-    await wait(60);
+    // les morceaux partent à la file, avec une pause entre chacun
+    await wait(500);
     assert.ok(gotA.some((p) => p.length === big.length && p.every((x, i) => x === big[i])), 'gros message reçu à l’identique');
 
     // message retenu (présence) : reçu par une page déjà là et par une page qui arrive après
     const gotB: Uint8Array[] = [];
     b.onMessage((_t, p) => gotB.push(p));
     a.publish(topic, Uint8Array.of(9, 8, 7), true);
-    await wait(40);
+    await wait(80);
     assert.ok(gotB.some((p) => p.length === 3 && p[0] === 9));
     const c = await connectRoom('c', topic);
     const gotC: Uint8Array[] = [];
     c.onMessage((_t, p) => gotC.push(p));
-    await wait(40);
+    await wait(80);
     assert.ok(gotC.some((p) => p.length === 3 && p[0] === 9), 'le retenu est donné au nouveau venu');
     [a, b, c].forEach((x) => x.close());
   } finally {

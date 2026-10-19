@@ -27,7 +27,7 @@ export function FriendCodeCard({ active }: { active: boolean }) {
 
   return (
     <View style={styles.card}>
-      <LinearGradient
+      <LinearGradient pointerEvents="none"
         colors={['rgba(247,201,72,0.16)', 'rgba(247,201,72,0.03)', 'rgba(255,255,255,0)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}

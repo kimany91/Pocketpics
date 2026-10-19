@@ -28,7 +28,7 @@ export function RankCard({ mmr, wins, losses, active = true }: { mmr: number; wi
 
   return (
     <View style={[styles.card, { borderColor: `${c}66` }]}>
-      <LinearGradient colors={[`${c}26`, `${c}08`, 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={[`${c}26`, `${c}08`, 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <Shine active={active} every={5200} delay={1400} strength={0.1} duration={1100} />
       <RankEmblem rank={rank} size={68} still={!active} />
       <View style={{ flex: 1, gap: 6 }}>
@@ -36,7 +36,7 @@ export function RankCard({ mmr, wins, losses, active = true }: { mmr: number; wi
         <AppText style={[styles.label, { color: c }]}>{rank.label}</AppText>
         <View style={styles.track}>
           <Animated.View style={[styles.fill, fillStyle]}>
-            <LinearGradient colors={[rank.tier.color2, c]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+            <LinearGradient pointerEvents="none" colors={[rank.tier.color2, c]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
             <View style={styles.fillShine} />
             <View style={[styles.tip, { shadowColor: c }]} />
           </Animated.View>

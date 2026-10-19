@@ -5,7 +5,7 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
@@ -36,6 +36,14 @@ export function CodeInput({
 }) {
   const [focus, setFocus] = useState(false);
   const [shakes, setShakes] = useState(0);
+  // `autoFocus` ne suffit pas partout (le champ arrive avec une animation) :
+  // on le réclame aussi juste après l'affichage
+  const field = useRef<TextInput>(null);
+  useEffect(() => {
+    if (!autoFocus) return;
+    const t = setTimeout(() => field.current?.focus(), 350);
+    return () => clearTimeout(t);
+  }, [autoFocus]);
   useEffect(() => {
     if (invalid) setShakes((n) => n + 1);
   }, [invalid]);
@@ -46,12 +54,13 @@ export function CodeInput({
   return (
     <Animated.View style={shake}>
       <View style={[styles.ticket, { borderColor: color }]}>
-        <LinearGradient colors={[`${complete ? colors.success : colors.gold}14`, 'rgba(255,255,255,0.01)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient pointerEvents="none" colors={[`${complete ? colors.success : colors.gold}14`, 'rgba(255,255,255,0.01)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <View style={[styles.stub, { backgroundColor: `${color}1A` }]}>
           <Ionicons name={complete ? 'checkmark' : icon} size={22} color={invalid ? colors.danger : complete ? colors.success : colors.gold} />
         </View>
         <View style={[styles.perf, { borderColor: `${color}88` }]} />
         <TextInput
+          ref={field}
           value={value}
           onChangeText={onChangeText}
           autoFocus={autoFocus}
@@ -68,8 +77,8 @@ export function CodeInput({
           onBlur={() => setFocus(false)}
           accessibilityLabel={label}
         />
-        <View style={[styles.notch, { top: -9, borderColor: color }]} />
-        <View style={[styles.notch, { bottom: -9, borderColor: color }]} />
+        <View pointerEvents="none" style={[styles.notch, { top: -9, borderColor: color }]} />
+        <View pointerEvents="none" style={[styles.notch, { bottom: -9, borderColor: color }]} />
       </View>
       <View style={styles.slots}>
         {Array.from({ length: slots }, (_, i) => (

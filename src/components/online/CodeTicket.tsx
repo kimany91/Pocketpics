@@ -42,7 +42,7 @@ export function CodeTicket({
       accessibilityLabel={`${label} : ${code.split('').join(' ')}${onPress ? '. Touche pour le partager' : ''}`}
     >
       <View style={[styles.ticket, { borderColor: `${accent}55` }]}>
-        <LinearGradient colors={[`${accent}22`, `${accent}08`, 'rgba(255,255,255,0.02)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient pointerEvents="none" colors={[`${accent}22`, `${accent}08`, 'rgba(255,255,255,0.02)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
         <View style={[styles.stub, { backgroundColor: `${accent}1A` }]}>
           <Ionicons name={icon} size={22} color={accent} />
         </View>

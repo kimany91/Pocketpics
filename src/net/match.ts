@@ -55,6 +55,8 @@ interface MatchStore {
   myReady: boolean;
   oppReady: boolean;
   oppDeck: NetFighter[] | null;
+  /** Images des cartes de l'adversaire, reçues une par une (clé : la carte). */
+  oppArt: Record<string, string>;
   /** Combat au départ, vu de mon côté (je suis le camp 0). */
   start: Battle | null;
   controller: BattleController | null;
@@ -100,6 +102,7 @@ const initial = {
   myReady: false,
   oppReady: false,
   oppDeck: null,
+  oppArt: {},
   start: null,
   controller: null,
   oppGone: false,
@@ -107,13 +110,18 @@ const initial = {
   bot: null,
 };
 
-/** Carte envoyée à l'adversaire. */
+/** Carte envoyée à l'adversaire (sans son image : elle part à part, voir `sendArt`). */
 export function toNetFighter(c: Card): NetFighter {
-  let thumb = '';
+  return { ref: c.id, name: c.name ?? `Carte ${getRarity(c.rarity).label}`, rarity: c.rarity, battle: c.battle, thumb: '' };
+}
+
+/** Miniature d'une carte, en base64 (vide si elle n'est pas lisible). */
+function thumbOf(id: string): string {
   try {
-    thumb = readThumbBase64Sync(c.id);
-  } catch {}
-  return { ref: c.id, name: c.name ?? `Carte ${getRarity(c.rarity).label}`, rarity: c.rarity, battle: c.battle, thumb };
+    return readThumbBase64Sync(id);
+  } catch {
+    return '';
+  }
 }
 
 function me() {
@@ -157,6 +165,12 @@ export const useMatch = create<MatchStore>((set, get) => {
     set({ start: battle, controller, phase: 'fighting' });
   };
 
+  /** Image reçue pour une des cartes de l'adversaire. */
+  const gotArt = (ref: string, thumb: string) => {
+    if (!thumb || thumb.length > 300_000 || get().oppArt[ref]) return;
+    set({ oppArt: { ...get().oppArt, [ref]: `data:image/jpeg;base64,${thumb}` } });
+  };
+
   const handle = (m: BattleMsg) => {
     const s = get();
     switch (m.t) {
@@ -177,9 +191,14 @@ export const useMatch = create<MatchStore>((set, get) => {
         const deck = sanitizeDeck(m.fighters);
         if (!deck) return;
         set({ oppDeck: deck, oppReady: true });
+        // version précédente du jeu : les images voyageaient avec le deck
+        for (const f of deck) if (f.thumb) gotArt(f.ref, f.thumb);
         begin();
         return;
       }
+      case 'art':
+        if (typeof m.ref === 'string' && typeof m.thumb === 'string') gotArt(m.ref, m.thumb);
+        return;
       case 'start':
         if (s.role !== 'guest' || s.phase === 'fighting' || !m.battle) return;
         // créé tout de suite : les coups qui suivent ne doivent pas lui échapper
@@ -249,7 +268,14 @@ export const useMatch = create<MatchStore>((set, get) => {
       if (get().phase !== 'lobby' || cards.length === 0) return;
       myNet = cards.map(toNetFighter);
       const bot = get().bot;
-      if (!bot) channel.send({ t: 'deck', fighters: myNet });
+      if (!bot) {
+        channel.send({ t: 'deck', fighters: myNet });
+        // les images ensuite, une par une : elles ne retardent pas le combat
+        for (const c of cards) {
+          const thumb = thumbOf(c.id);
+          if (thumb) channel.send({ t: 'art', ref: c.id, thumb });
+        }
+      }
       set({ myDeck: cards.map((c) => c.id), myReady: true });
       if (!bot) return begin();
       // il met un moment à valider ses cartes, comme tout le monde

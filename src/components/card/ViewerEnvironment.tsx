@@ -49,7 +49,7 @@ function Scene({ rarity, width, height, tilt }: { rarity: Rarity; width: number;
   if (rarity.frameStyle === 'chromatic') {
     return (
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <LinearGradient colors={['#130C26', '#08060F', '#020205']} style={StyleSheet.absoluteFill} />
+        <LinearGradient pointerEvents="none" colors={['#130C26', '#08060F', '#020205']} style={StyleSheet.absoluteFill} />
         <View style={styles.center}>
           <Rays colors={['#FF8FC8', '#7FD8FF', '#9DFFC5']} size={size * 1.5} visible duration={22000} />
           <CyclingGlow size={size * 0.95} />
@@ -61,7 +61,7 @@ function Scene({ rarity, width, height, tilt }: { rarity: Rarity; width: number;
   if (rarity.frameStyle === 'gold') {
     return (
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <LinearGradient colors={['#21160A', '#0C0804', '#030201']} style={StyleSheet.absoluteFill} />
+        <LinearGradient pointerEvents="none" colors={['#21160A', '#0C0804', '#030201']} style={StyleSheet.absoluteFill} />
         <View style={styles.center}>
           <Rays colors={['#F7C948', '#FFF1B8']} size={size * 1.5} visible duration={26000} />
           <Glow color="#F7B733" size={size * 0.9} style={{ opacity: 0.45 }} />
@@ -73,7 +73,7 @@ function Scene({ rarity, width, height, tilt }: { rarity: Rarity; width: number;
   // Mythique
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <LinearGradient colors={['rgba(40,4,8,0.9)', 'rgba(8,2,3,0.92)']} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={['rgba(40,4,8,0.9)', 'rgba(8,2,3,0.92)']} style={StyleSheet.absoluteFill} />
       <View style={styles.center}>
         <Glow color="#FF2E45" size={size * 0.85} style={{ opacity: 0.35 }} />
       </View>
@@ -137,7 +137,7 @@ function Space({ width, height, tilt }: { width: number; height: number; tilt: S
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <LinearGradient colors={['#0A0522', '#120A35', '#05031A', '#000005']} locations={[0, 0.35, 0.7, 1]} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={['#0A0522', '#120A35', '#05031A', '#000005']} locations={[0, 0.35, 0.7, 1]} style={StyleSheet.absoluteFill} />
       <Nebula color="#7A3CFF" size={size * 0.9} x={width * 0.15} y={height * 0.2} duration={16000} />
       <Nebula color="#2E7BFF" size={size * 0.8} x={width * 0.85} y={height * 0.65} duration={19000} />
       <Nebula color="#FF5FB0" size={size * 0.6} x={width * 0.7} y={height * 0.12} duration={14000} />
@@ -202,11 +202,11 @@ export function GalaxySpace({ width, height, tilt }: { width: number; height: nu
   const spiral = size * 1.5;
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <LinearGradient colors={['#0B0630', '#160A3C', '#07041C', '#010008']} locations={[0, 0.4, 0.75, 1]} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={['#0B0630', '#160A3C', '#07041C', '#010008']} locations={[0, 0.4, 0.75, 1]} style={StyleSheet.absoluteFill} />
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: 0.6 }, bg]}>
         <Image source={galaxyTex} resizeMode="cover" style={StyleSheet.absoluteFill} />
       </Animated.View>
-      <LinearGradient colors={['rgba(5,3,20,0.55)', 'rgba(5,3,20,0)', 'rgba(5,3,20,0.6)']} locations={[0, 0.45, 1]} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={['rgba(5,3,20,0.55)', 'rgba(5,3,20,0)', 'rgba(5,3,20,0.6)']} locations={[0, 0.45, 1]} style={StyleSheet.absoluteFill} />
       <Nebula color="#8A3CFF" size={size * 0.95} x={width * 0.2} y={height * 0.25} duration={15000} />
       <Nebula color="#FF4FC0" size={size * 0.7} x={width * 0.85} y={height * 0.3} duration={12000} />
       <Nebula color="#2EC8FF" size={size * 0.75} x={width * 0.75} y={height * 0.75} duration={17000} />
@@ -279,7 +279,7 @@ function ShootingStar({ width, height, delay }: { width: number; height: number;
   }));
   return (
     <Animated.View style={[{ position: 'absolute', left: -len, top: 0, width: len, height: 2 }, style]}>
-      <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,250,230,0.95)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0)', 'rgba(255,250,230,0.95)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
     </Animated.View>
   );
 }

@@ -39,7 +39,27 @@ interface MatchmakingStore {
 
 let conns: MqttConnection[] = [];
 let search: Search | null = null;
+let deadline: ReturnType<typeof setTimeout> | null = null;
 let generation = 0;
+
+/** Un relais qui ne répond ni oui ni non ne doit pas bloquer la recherche. */
+const CONNECT_TIMEOUT_MS = 8000;
+
+function connectOrGiveUp(url: string, clientId: string, topic: string): Promise<MqttConnection> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('relais muet')), CONNECT_TIMEOUT_MS);
+    connectRelay(url, clientId, topic).then(
+      (c) => {
+        clearTimeout(t);
+        resolve(c);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
 
 const hex = (n: number) => Array.from(getRandomBytes(n), (b) => b.toString(16).padStart(2, '0')).join('');
 const myMmr = () => {
@@ -50,6 +70,8 @@ const myMmr = () => {
 /** Ferme la recherche et les relais (le combat en cours, lui, continue). */
 function stopSearch(gone = true) {
   generation++;
+  if (deadline) clearTimeout(deadline);
+  deadline = null;
   search?.stop(gone);
   search = null;
   const closing = conns;
@@ -65,11 +87,25 @@ export const useMatchmaking = create<MatchmakingStore>((set, get) => ({
     get().cancel();
     const gen = ++generation;
     set({ phase: 'searching', startedAt: Date.now() });
+    // jamais exactement la même attente : une recherche qui s'arrête toujours à
+    // la même seconde se repère tout de suite
+    const searchMs = SEARCH_MS - 1000 + Math.random() * 2000;
+
+    /** Personne : le combat part quand même. */
+    const giveUp = () => {
+      if (gen !== generation) return;
+      stopSearch();
+      useMatch.getState().startBotMatch(pickBotOpponent(myMmr(), useGame.getState().save?.rank.streak ?? 0));
+      set({ phase: 'found' });
+    };
+    // armé tout de suite : même si aucun relais ne répond (ou ne répond jamais),
+    // la recherche se termine toujours
+    deadline = setTimeout(giveUp, searchMs);
 
     // Tous les relais à la fois : deux joueurs se retrouvent même si l'un n'en joint qu'un.
     const topic = lobbyTopic();
     const base = hex(6);
-    const results = await Promise.allSettled(deps().urls.map((url, i) => connectRelay(url, `ppq-${base}${i}`, topic)));
+    const results = await Promise.allSettled(deps().urls.map((url, i) => connectOrGiveUp(url, `ppq-${base}${i}`, topic)));
     const ok = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
     if (gen !== generation) {
       ok.forEach((c) => c.close());
@@ -81,9 +117,8 @@ export const useMatchmaking = create<MatchmakingStore>((set, get) => ({
     search = startSearch({
       conns: ok,
       id: hex(8),
-      // jamais exactement le même temps d'attente : une recherche qui s'arrête
-      // toujours à la même seconde se repère tout de suite
-      searchMs: SEARCH_MS - 1000 + Math.random() * 2000,
+      // le même rendez-vous que le garde-fou ci-dessus (le premier des deux gagne)
+      searchMs: Math.max(1000, searchMs - (Date.now() - get().startedAt)),
       mmr: myMmr,
       async openRoom() {
         const code = newOnlineCode(getRandomBytes);
@@ -101,12 +136,7 @@ export const useMatchmaking = create<MatchmakingStore>((set, get) => ({
       },
       // trouvé : l'écran voit le salon de combat et enchaîne sur le choix des cartes
       onMatch: () => gen === generation && get().found(),
-      onGiveUp: () => {
-        if (gen !== generation) return;
-        stopSearch();
-        useMatch.getState().startBotMatch(pickBotOpponent(myMmr(), useGame.getState().save?.rank.streak ?? 0));
-        set({ phase: 'found' });
-      },
+      onGiveUp: giveUp,
     });
   },
 

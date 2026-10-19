@@ -67,7 +67,7 @@ export function GalaxyFrame({ width, height, radius }: { width: number; height: 
   return (
     <View style={StyleSheet.absoluteFill}>
       <Animated.View style={[{ position: 'absolute', width: d, height: d, left: (width - d) / 2, top: (height - d) / 2 }, rimStyle]}>
-        <LinearGradient colors={RIM as [string, string, ...string[]]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient pointerEvents="none" colors={RIM as [string, string, ...string[]]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
       </Animated.View>
       <View style={[styles.space, { top: rim, left: rim, right: rim, bottom: rim, borderRadius: Math.max(1, radius - rim) }]}>
         <Image source={galaxyTex} resizeMode="cover" style={StyleSheet.absoluteFill} />
@@ -91,7 +91,7 @@ export function GalaxyWindowGlow({ top, left, width, height, radius, border }: {
   const style = useAnimatedStyle(() => ({ opacity: 0.65 + breath.value * 0.35 }));
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: top - pad, left: left - pad, width: width + pad * 2, height: height + pad * 2, borderRadius: radius + pad, overflow: 'hidden' }, style]}>
-      <LinearGradient colors={['#8FF0FF', '#C9A6FF', '#FF7FD8', '#9FB0FF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={['#8FF0FF', '#C9A6FF', '#FF7FD8', '#9FB0FF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
     </Animated.View>
   );
 }
@@ -112,11 +112,11 @@ export function ChromaticPhoto({ width, height }: { width: number; height: numbe
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {/* Teinte : les couleurs de la photo sont remplacées par l'arc-en-ciel qui défile. */}
       <Animated.View style={[styles.layer, { width: width * 3.2, height: height * 1.9, opacity: 0.3, mixBlendMode: 'color' }, hue]}>
-        <LinearGradient colors={bands} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient pointerEvents="none" colors={bands} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
       </Animated.View>
       {/* Reflet irisé plus clair qui croise en sens inverse. */}
       <Animated.View style={[styles.layer, { width: width * 3, height: height * 1.8, mixBlendMode: 'soft-light' }, sheen]}>
-        <LinearGradient
+        <LinearGradient pointerEvents="none"
           colors={['rgba(255,255,255,0)', 'rgba(127,230,255,0.9)', 'rgba(255,255,255,0.95)', 'rgba(255,127,216,0.9)', 'rgba(255,255,255,0)', 'rgba(185,140,255,0.8)', 'rgba(255,255,255,0)']}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}

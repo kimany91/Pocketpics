@@ -91,7 +91,7 @@ export default function RanksScreen() {
           return (
             <View key={tier.id} pointerEvents="none" style={[styles.abs, { left: 0, right: 0, top, height: bottom - top }]}>
               {/* le rang commence en bas de sa bande (division I) : sa couleur et son nom sont là */}
-              <LinearGradient colors={['transparent', `${tier.color}${reached ? '14' : '08'}`, `${tier.color2}${reached ? '33' : '1A'}`]} style={StyleSheet.absoluteFill} />
+              <LinearGradient pointerEvents="none" colors={['transparent', `${tier.color}${reached ? '14' : '08'}`, `${tier.color2}${reached ? '33' : '1A'}`]} style={StyleSheet.absoluteFill} />
               <View style={[styles.tierLine, { backgroundColor: `${tier.color}${reached ? '66' : '2A'}` }]} />
               <AppText style={[styles.tierName, { color: tier.color, opacity: reached ? 0.9 : 0.4 }, t % 2 === 0 ? { right: 16 } : { left: 16 }]}>
                 {tier.label.toUpperCase()}
@@ -115,7 +115,7 @@ export default function RanksScreen() {
           />
           <View style={styles.fillShine} />
           <Animated.View style={[styles.abs, { left: 0, top: 0, width: BAR, height: 160 }, sweepStyle]}>
-            <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.75)', 'rgba(255,255,255,0)']} style={StyleSheet.absoluteFill} />
+            <LinearGradient pointerEvents="none" colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.75)', 'rgba(255,255,255,0)']} style={StyleSheet.absoluteFill} />
           </Animated.View>
         </Animated.View>
 
@@ -172,7 +172,7 @@ export default function RanksScreen() {
         {/* mon repère : il monte avec le remplissage */}
         <Animated.View pointerEvents="none" style={[styles.abs, { left: 0, right: 0, top: yOf(0) - 20, height: 40 }, markerStyle]}>
           <Animated.View style={[styles.abs, { left: cx - BAR / 2 - 4, top: 20, width: BAR + 8, height: 150 }, trailStyle]}>
-            <LinearGradient colors={['#FFFFFF', `${me.tier.color}AA`, `${me.tier.color}00`]} style={[StyleSheet.absoluteFill, { borderRadius: BAR }]} />
+            <LinearGradient pointerEvents="none" colors={['#FFFFFF', `${me.tier.color}AA`, `${me.tier.color}00`]} style={[StyleSheet.absoluteFill, { borderRadius: BAR }]} />
           </Animated.View>
           <View style={[styles.abs, { left: cx, top: 20 }]}>
             <Animated.View style={[styles.abs, { left: -50, top: -50 }, haloStyle]}>

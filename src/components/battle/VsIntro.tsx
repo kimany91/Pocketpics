@@ -110,7 +110,7 @@ function BandsIntro({
       <Pressable style={StyleSheet.absoluteFill} onPress={finish} accessibilityLabel="Passer l’introduction" />
       <View pointerEvents="none" style={styles.center}>
         <Animated.View style={[styles.band, { backgroundColor: tint }, topStyle]}>
-          {gallery ? <LinearGradient colors={[GOLD, '#E3B8FF', VIOLET]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} /> : null}
+          {gallery ? <LinearGradient pointerEvents="none" colors={[GOLD, '#E3B8FF', VIOLET]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} /> : null}
           <View style={styles.emblemSlot}>{emblems ? <RankEmblem rank={theirs} size={56} /> : null}</View>
           <View style={{ flex: 1, alignItems: 'flex-end' }}>
             <AppText style={[styles.small, { color: '#141414' }]} numberOfLines={1}>
@@ -209,13 +209,13 @@ function PortraitIntro({ bot, width, myMmr, art, onDone }: { bot: string; width:
               ) : (
                 // pas d'illustration : une toile cosmique et une silhouette
                 <>
-                  <LinearGradient colors={['#0B0630', '#3B1C8C', '#B23CFF']} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={StyleSheet.absoluteFill} />
+                  <LinearGradient pointerEvents="none" colors={['#0B0630', '#3B1C8C', '#B23CFF']} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={StyleSheet.absoluteFill} />
                   <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
                     <Ionicons name="person" size={fw * 0.5} color="rgba(255,233,163,0.5)" />
                   </View>
                 </>
               )}
-              <LinearGradient colors={['rgba(185,140,255,0)', 'rgba(20,8,40,0.55)']} style={StyleSheet.absoluteFill} />
+              <LinearGradient pointerEvents="none" colors={['rgba(185,140,255,0)', 'rgba(20,8,40,0.55)']} style={StyleSheet.absoluteFill} />
             </View>
             {[
               { left: -9, top: -9 },

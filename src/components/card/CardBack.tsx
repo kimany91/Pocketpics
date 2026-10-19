@@ -15,7 +15,7 @@ export function CardBack({ width, children, accent }: { width: number; children?
   const mark = width * 0.2;
   return (
     <View style={[styles.card, { width, height, borderRadius: radius }]}>
-      <LinearGradient colors={['#3A3A44', '#1B1B21', '#2E2E37']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={['#3A3A44', '#1B1B21', '#2E2E37']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <LinearGradient
         colors={['#18181E', '#0D0D11']}
         style={[styles.inner, { top: border, left: border, right: border, bottom: border, borderRadius: radius - border * 0.7 }]}

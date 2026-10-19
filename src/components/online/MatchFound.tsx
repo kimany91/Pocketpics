@@ -72,7 +72,7 @@ export function MatchFound({ me, opp, oppFallback = 'Adversaire', subtitle = 'Pl
     <View style={StyleSheet.absoluteFill} pointerEvents="auto">
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#050507' }, backStyle]} />
       <Animated.View style={[StyleSheet.absoluteFill, backStyle]} pointerEvents="none">
-        <LinearGradient colors={[`${meRank.tier.color}22`, 'transparent', `${colors.gold}22`]} start={{ x: 0, y: 0.2 }} end={{ x: 1, y: 0.8 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient pointerEvents="none" colors={[`${meRank.tier.color}22`, 'transparent', `${colors.gold}22`]} start={{ x: 0, y: 0.2 }} end={{ x: 1, y: 0.8 }} style={StyleSheet.absoluteFill} />
       </Animated.View>
       <Flash trigger={1} color="#FFF6D8" peak={0.55} />
       <View style={styles.center}>
@@ -111,7 +111,7 @@ function Plate({ player, fallback, width, you }: { player: Player | null; fallba
   const tint = rank ? rank.tier.color : colors.textDim;
   return (
     <View style={[styles.plate, { width, borderColor: `${tint}88` }]}>
-      <LinearGradient colors={[`${tint}33`, `${tint}05`]} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={[`${tint}33`, `${tint}05`]} style={StyleSheet.absoluteFill} />
       <AppText style={[styles.side, { color: you ? colors.gold : colors.textDim }]}>{you ? 'Toi' : 'Adversaire'}</AppText>
       <View style={{ height: 76, justifyContent: 'center' }}>
         {rank ? (

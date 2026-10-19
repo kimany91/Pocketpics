@@ -44,7 +44,7 @@ export function ScanFrame({ size = 240, bad = false, ok = false, active = true }
             <View style={[styles.corner, c, { right: 0, bottom: 0, borderRightWidth: 4, borderBottomWidth: 4, borderBottomRightRadius: 26 }]} />
           </Animated.View>
           <Animated.View style={[styles.line, line]}>
-            <LinearGradient colors={['transparent', color, 'transparent']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+            <LinearGradient pointerEvents="none" colors={['transparent', color, 'transparent']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
           </Animated.View>
         </Animated.View>
       </View>

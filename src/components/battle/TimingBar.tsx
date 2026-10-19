@@ -126,7 +126,7 @@ export function TimingBar({
       </View>
 
       <View style={[styles.bar, compact && { height: 50 }]} onLayout={(e) => setBarW(e.nativeEvent.layout.width)}>
-        <LinearGradient
+        <LinearGradient pointerEvents="none"
           colors={['rgba(255,90,103,0.30)', 'rgba(247,201,72,0.22)', 'rgba(79,224,168,0.38)', 'rgba(247,201,72,0.22)', 'rgba(255,90,103,0.30)']}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}

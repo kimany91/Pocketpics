@@ -195,7 +195,7 @@ function LevelNode({ n, state, stars, onPress }: { n: number; state: NodeState; 
       <View style={[styles.nodeShadow, { width: size * 0.9, height: size * 0.3, top: size * 0.82, borderRadius: size }]} />
       {state === 'current' ? <Animated.View style={[styles.abs, { width: size, height: size, borderRadius: size, borderWidth: 4, borderColor: '#FFFFFF' }, ring]} /> : null}
       <View style={[styles.nodeOuter, { width: size, height: size, borderRadius: size / 2 }]}>
-        <LinearGradient
+        <LinearGradient pointerEvents="none"
           colors={locked ? ['#C9CDD3', '#8C929B'] : boss ? ['#FFE9A0', '#F2A922', '#B8761A'] : ['#FFF0A8', '#F6C33C', '#C98C1C']}
           style={[StyleSheet.absoluteFill, { borderRadius: size / 2 }]}
           start={{ x: 0.2, y: 0 }}

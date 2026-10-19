@@ -163,7 +163,7 @@ function Holo({ colors, opacity, animated, width, height, duration = 4200 }: { c
   }));
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: width * 2, height: height * 1.6, opacity }, style]}>
-      <LinearGradient colors={colors as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={colors as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
     </Animated.View>
   );
 }
@@ -180,7 +180,7 @@ function HoloFoil({ tilt, width, height, colors, strength }: { tilt: SharedValue
   });
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: width * 2.8, height: height * 1.7 }, style]}>
-      <LinearGradient colors={bands} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient pointerEvents="none" colors={bands} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
     </Animated.View>
   );
 }
@@ -193,7 +193,7 @@ function TiltSheen({ tilt, width, height, strength }: { tilt: SharedValue<number
   }));
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: -height * 0.3, height: height * 1.6, width: band }, style]}>
-      <LinearGradient
+      <LinearGradient pointerEvents="none"
         colors={['rgba(255,255,255,0)', `rgba(255,255,255,${strength})`, 'rgba(255,255,255,0)']}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}

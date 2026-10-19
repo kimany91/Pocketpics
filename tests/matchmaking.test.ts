@@ -314,3 +314,25 @@ test('recherche : un salon qui a disparu ne bloque pas la recherche', async () =
   assert.ok(a.joined.includes('ZZZZZZZZZ'), 'on a essayé');
   assert.ok(a.gaveUp && !a.matched, 'puis le combat part quand même');
 });
+
+test('recherche : un relais qui ne répond jamais ne bloque pas le départ du combat', async () => {
+  const net = bus();
+  let gaveUp = false;
+  // openRoom ne rend jamais la main (relais muet) : le compte à rebours doit quand même tomber
+  const search = startSearch({
+    conns: [net.conn()],
+    id: 'aa11',
+    mmr: () => 400,
+    openRoom: () => new Promise(() => {}),
+    joinRoom: async () => false,
+    matched: () => false,
+    onMatch: () => {},
+    onGiveUp: () => (gaveUp = true),
+    announceMs: 30,
+    lookMs: 20,
+    searchMs: 300,
+  });
+  await wait(500);
+  assert.ok(gaveUp, 'le combat part quand même');
+  search.stop();
+});

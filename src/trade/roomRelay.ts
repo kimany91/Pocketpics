@@ -120,6 +120,13 @@ export function makeJoiner() {
 
 const randomId = () => Math.random().toString(36).slice(2, 10);
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Petite pause entre deux morceaux : le canal limite le nombre de messages. */
+const PACE_MS = 30;
+/** Un morceau refusé (débit dépassé) est réessayé : sinon le message n'arrive jamais. */
+const TRIES = 6;
+
 /**
  * Se connecte au canal « room » et rejoint le salon de chaque sujet.
  * Rejette vite si la page n'est pas dans le visualiseur ou si le canal est refusé.
@@ -191,19 +198,39 @@ export async function connectRoom(clientId: string, topic: string | string[], op
     return joined.get(t)?.room ?? null;
   };
 
+  // Les envois se suivent au lieu de partir tous ensemble : un gros message
+  // (les images des cartes) ne noie plus le canal, qui refuserait des morceaux.
+  let queue: Promise<void> = Promise.resolve();
+  const enqueue = (job: () => Promise<void>) => {
+    queue = queue.then(job).catch(() => {});
+  };
+
   return {
     publish(t, payload, retain) {
       if (closed) return;
-      void (async () => {
+      enqueue(async () => {
         const r = await roomFor(t);
-        if (!r) return;
+        if (!r || closed) return;
         if (retain) {
           // retenu : gardé dans la présence de ce salon (quelques centaines d'octets)
           await r.presence({ r: toBase64(payload) }).catch(() => {});
           return;
         }
-        for (const part of splitPayload(payload, randomId())) await r.emit(ROOM_TOPIC, part).catch(() => {});
-      })();
+        const parts = splitPayload(payload, randomId());
+        for (const part of parts) {
+          for (let k = 0; k < TRIES; k++) {
+            if (closed) return;
+            try {
+              await r.emit(ROOM_TOPIC, part);
+              break;
+            } catch {
+              // débit dépassé : on souffle un peu et on retente ce morceau
+              await sleep(150 * (k + 1));
+            }
+          }
+          if (parts.length > 1) await sleep(PACE_MS);
+        }
+      });
     },
     subscribe(topics) {
       for (const t of Array.isArray(topics) ? topics : [topics]) void subscribe(t).catch(() => {});

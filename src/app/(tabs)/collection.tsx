@@ -465,7 +465,7 @@ function Sheen({ width, height, rank, color, onDone }: { width: number; height: 
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: strong ? 'visible' : 'hidden' }]}>
       <View style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden' }]}>
         <Animated.View style={[{ position: 'absolute', top: -height * 0.25, height: height * 1.5, width: band }, bandStyle]}>
-          <LinearGradient
+          <LinearGradient pointerEvents="none"
             colors={['rgba(255,255,255,0)', `rgba(255,255,255,${a * 0.5})`, `rgba(255,255,255,${a})`, `rgba(255,255,255,${a * 0.5})`, 'rgba(255,255,255,0)']}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
@@ -699,7 +699,7 @@ function GhostCard({ k, t, enter }: { k: number; t: SharedValue<number>; enter: 
     <Animated.View style={[styles.ghost, k === 0 && styles.ghostFront, style]}>
       {k === 0 ? (
         <>
-          <LinearGradient colors={['rgba(247,201,72,0.16)', 'rgba(247,201,72,0.02)']} style={StyleSheet.absoluteFill} />
+          <LinearGradient pointerEvents="none" colors={['rgba(247,201,72,0.16)', 'rgba(247,201,72,0.02)']} style={StyleSheet.absoluteFill} />
           <View style={styles.ghostGem} />
           <Ionicons name="images-outline" size={26} color="rgba(247,201,72,0.75)" />
         </>

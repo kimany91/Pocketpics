@@ -158,17 +158,16 @@ export default function FightScreen() {
       .slice(0, 4);
     if (online) {
       if (!m.start || !m.controller || !m.opp) return null;
-      const thumbs = new Map((m.oppDeck ?? []).map((f) => [f.ref, f.thumb ? `data:image/jpeg;base64,${f.thumb}` : '']));
-      const firstThumb = [...thumbs.values()].find(Boolean);
-      // ses cartes : les miniatures reçues, ou leurs illustrations quand il n'en a pas envoyé
+      // ses images arrivent une par une pendant le combat (voir `oppArt`) : on lit
+      // la table au moment de l'affichage, pas une fois pour toutes
       const bot = m.bot;
       const foe: Foe = {
         name: m.opp.name,
         tint: ONLINE_TINT,
         mmr: m.opp.mmr,
         label: 'Combat classé',
-        art: firstThumb ? { uri: firstThumb } : bot && m.oppDeck?.[0] ? botArt(m.oppDeck[0].ref) : undefined,
-        image: (ref) => (bot ? { imageSource: botArt(ref) } : { imageUri: thumbs.get(ref) || undefined }),
+        art: bot && m.oppDeck?.[0] ? botArt(m.oppDeck[0].ref) : undefined,
+        image: (ref) => (bot ? { imageSource: botArt(ref) } : { imageUri: useMatch.getState().oppArt[ref] || undefined }),
       };
       return { deck, foe, battle: m.start, controller: m.controller };
     }
@@ -553,6 +552,11 @@ export default function FightScreen() {
     }
   };
 
+  // Ses images arrivent une par une pendant le combat : la première sert de décor.
+  const oppArt = useMatch((s) => s.oppArt);
+  const firstArt = Object.values(oppArt)[0];
+  const foeArt = foeInfo?.art ?? (firstArt ? { uri: firstArt } : undefined);
+
   // En ligne : l'adversaire part (victoire) ou ma connexion lâche (défaite).
   const oppGone = useMatch((s) => s.oppGone);
   const lostConnection = useMatch((s) => s.lostConnection);
@@ -765,7 +769,7 @@ export default function FightScreen() {
 
   return (
     <View style={styles.root}>
-      <ArenaBackdrop art={foeInfo.art} tint={foeInfo.tint} width={width} height={height} final={!!foeInfo.stage} />
+      <ArenaBackdrop art={foeArt} tint={foeInfo.tint} width={width} height={height} final={!!foeInfo.stage} />
       <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 12) }}>
         <View style={styles.header}>
           <Pressable onPress={() => setQuitting(true)} hitSlop={12} style={styles.round} accessibilityLabel="Abandonner le combat">
@@ -982,7 +986,7 @@ export default function FightScreen() {
       <Flash trigger={flash.n} color={flash.color} peak={flash.peak} />
       {koStamp.n > 0 && result === null ? <KoStamp key={koStamp.n} won={koStamp.won} /> : null}
       {intro ? (
-        <VsIntro arenaLabel={foeInfo.label} bot={foeInfo.name} tint={foeInfo.tint} width={width} myMmr={myMmr} foeMmr={foeInfo.mmr} stage={foeInfo.stage} art={foeInfo.art} onDone={endIntro} />
+        <VsIntro arenaLabel={foeInfo.label} bot={foeInfo.name} tint={foeInfo.tint} width={width} myMmr={myMmr} foeMmr={foeInfo.mmr} stage={foeInfo.stage} art={foeArt} onDone={endIntro} />
       ) : null}
 
       {inspect ? (
@@ -1462,7 +1466,7 @@ function ResultOverlay({
           entering={won ? ZoomIn.springify().damping(10) : FadeInDown.duration(700)}
           style={[styles.medal, { backgroundColor: won ? colors.gold : colors.surface2 }, won ? styles.medalWon : styles.medalLost, cosmic && styles.medalGalaxy]}
         >
-          {cosmic ? <LinearGradient colors={['#3B1C8C', '#B23CFF', '#3FD0FF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 48 }]} /> : null}
+          {cosmic ? <LinearGradient pointerEvents="none" colors={['#3B1C8C', '#B23CFF', '#3FD0FF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 48 }]} /> : null}
           <Ionicons name={cosmic ? 'planet' : won ? 'trophy' : 'refresh'} size={40} color={cosmic ? '#FFFFFF' : won ? '#141414' : colors.textDim} />
         </Animated.View>
       </View>

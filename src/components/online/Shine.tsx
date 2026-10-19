@@ -38,7 +38,7 @@ export function Shine({
     <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
       {w ? (
         <Animated.View style={[styles.band, { width: band }, style]}>
-          <LinearGradient
+          <LinearGradient pointerEvents="none"
             colors={['rgba(255,255,255,0)', `rgba(255,255,255,${strength})`, 'rgba(255,255,255,0)']}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}

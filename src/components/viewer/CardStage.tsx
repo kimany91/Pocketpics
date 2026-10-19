@@ -337,13 +337,13 @@ export function CardStage({
           {onFire ? (
             // Lueur de chaleur au-dessus de la ligne de feu
             <Animated.View pointerEvents="none" style={[styles.char, { height: height * 0.42, left: m, right: m }, heatStyle]}>
-              <LinearGradient colors={['rgba(255,140,40,0)', 'rgba(255,120,30,0.28)', 'rgba(255,80,10,0.55)']} style={StyleSheet.absoluteFill} />
+              <LinearGradient pointerEvents="none" colors={['rgba(255,140,40,0)', 'rgba(255,120,30,0.28)', 'rgba(255,80,10,0.55)']} style={StyleSheet.absoluteFill} />
             </Animated.View>
           ) : null}
           {onFire ? (
             // Bord carbonisé qui suit la ligne de feu
             <Animated.View pointerEvents="none" style={[styles.char, { height: height * 0.14, left: m, right: m }, charStyle]}>
-              <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(60,22,4,0.75)', 'rgba(14,6,2,0.98)']} style={StyleSheet.absoluteFill} />
+              <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0)', 'rgba(60,22,4,0.75)', 'rgba(14,6,2,0.98)']} style={StyleSheet.absoluteFill} />
             </Animated.View>
           ) : null}
         </Animated.View>
