@@ -127,7 +127,14 @@ export default function CropScreen() {
   return (
     <Screen edges={['top', 'bottom']}>
       <Header title="Recadrer la carte" />
-      <View style={styles.stage} onLayout={(e) => setStage({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
+      <View
+        style={styles.stage}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          // Même taille qu'avant : on ne refait pas le cadrage pour rien.
+          setStage((prev) => (prev && prev.width === width && prev.height === height ? prev : { width, height }));
+        }}
+      >
         {missing ? (
           <AppText variant="caption" style={styles.center}>
             {card ? 'La photo de cette carte est illisible.' : 'Cette carte n’est plus dans ta collection.'}
