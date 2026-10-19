@@ -79,6 +79,9 @@ interface GameStore {
   destroyCard(id: string): void;
   /** Démo navigateur uniquement : remet la réserve de tirages au maximum. */
   refillDrawsForDemo(): void;
+  /** Essai : le prochain paquet sort tout chromatique (voir le bloc d'essai plus haut). */
+  chromaticNext: boolean;
+  toggleChromaticNext(): void;
 }
 
 function persistState(save: SaveState) {
@@ -86,18 +89,11 @@ function persistState(save: SaveState) {
 }
 
 /* ------------------------- Essai : paquet chromatique -------------------------
- * Tout ce bloc (et le bouton « Prochain paquet chromatique (test) » de l'accueil)
- * ne sert qu'aux essais : il suffit de le supprimer pour que le jeu retrouve
- * son tirage normal. Rien d'autre n'en dépend.
+ * Ce réglage (et le bouton « Prochain paquet chromatique (test) » de l'accueil)
+ * ne sert qu'aux essais : il suffit de retirer `chromaticNext` du magasin, les
+ * deux lignes qui s'en servent dans `openPack`, et le bouton de l'accueil, pour
+ * que le jeu retrouve son tirage normal. Rien d'autre n'en dépend.
  */
-let chromaticTest = false;
-export const isChromaticTest = () => chromaticTest;
-/** Prochain paquet : toutes les cartes chromatiques. Rend le nouvel état. */
-export function toggleChromaticTest(): boolean {
-  chromaticTest = !chromaticTest;
-  return chromaticTest;
-}
-/* --------------------------- fin du bloc d'essai --------------------------- */
 
 export const useGame = create<GameStore>((set, get) => ({
   ready: false,
@@ -167,10 +163,10 @@ export const useGame = create<GameStore>((set, get) => ({
         luckAfter = plan.state;
         return plan.rarities;
       },
-      allChromatic: chromaticTest,
+      allChromatic: get().chromaticNext,
     });
     // l'essai ne vaut que pour un paquet
-    chromaticTest = false;
+    if (get().chromaticNext) set({ chromaticNext: false });
 
     // 1) les cartes d'abord (si l'app est tuée ici, le joueur garde ses cartes ET son tirage)
     const written: Card[] = [];
@@ -469,6 +465,12 @@ export const useGame = create<GameStore>((set, get) => ({
       set({ save: next });
     }
     set({ cards });
+  },
+
+  chromaticNext: false,
+
+  toggleChromaticNext() {
+    set({ chromaticNext: !get().chromaticNext });
   },
 
   refillDrawsForDemo() {
