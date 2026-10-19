@@ -5,7 +5,7 @@ import { ARENAS, arenaFighters } from '../src/battle/arenas';
 import { botAction, botReplacement, botTimings } from '../src/battle/bot';
 import { type Battle, type FighterInput, act, createBattle, qualityOf, replace, resolveAttack, tapMultiplier, timingMultiplier, catchUpMult, makeFighter } from '../src/battle/engine';
 import { type Attack, type BattleStats, MIRROR_MIN_RANK, SPECIAL, generateStats, minRankOf, normalizeStats } from '../src/battle/stats';
-import { RARITIES, VIDEO_MIN_RANK } from '../src/game/rarity';
+import { CHROMATIC_ODDS, RARITIES } from '../src/game/rarity';
 import { migrateCard, migrateState } from '../src/storage/model';
 
 const stats = (hp: number, special: Attack, uses = 3): BattleStats => ({ hp, attacks: [{ kind: 'basic', name: 'Coup', power: 10 }, special], uses });
@@ -388,18 +388,11 @@ test('triche cachée du solo : la carte trop dépassée frappe plus fort, le jou
   assert.equal(dmg(mk(0)), dmg(mk()));
 });
 
-test('cartes vidéo : seulement Épique ou mieux, et le film ne voyage pas', () => {
-  // une carte ancienne n'a pas ces champs : elle n'est pas vidéo
-  const old = migrateCard({ v: 1, id: 'a', rarity: 'epic', hash: 'h', createdAt: 1, obtainedAt: 1, origin: 'draw', width: 1, height: 1 });
-  assert.equal(old?.video, false);
-  assert.equal(old?.posterAt, 0);
-  // les champs sont conservés et nettoyés
-  const vid = migrateCard({ v: 1, id: 'b', rarity: 'mythic', hash: 'h', createdAt: 1, obtainedAt: 1, origin: 'draw', width: 1, height: 1, video: true, posterAt: 2.5 });
-  assert.equal(vid?.video, true);
-  assert.equal(vid?.posterAt, 2.5);
-  const weird = migrateCard({ v: 1, id: 'c', rarity: 'rare', hash: 'h', createdAt: 1, obtainedAt: 1, origin: 'draw', width: 1, height: 1, video: 'oui', posterAt: -4 });
-  assert.equal(weird?.video, false, 'un champ bizarre ne fait pas une carte vidéo');
-  assert.equal(weird?.posterAt, 0);
-  // le rang minimum d'une carte vidéo est bien l'Épique
-  assert.equal(RARITIES[VIDEO_MIN_RANK].id, 'epic');
+test('cartes chromatiques : le champ est conservé, et nettoyé s’il est bizarre', () => {
+  const base = { v: 1, id: 'a', rarity: 'rare', hash: 'h', createdAt: 1, obtainedAt: 1, origin: 'draw', width: 1, height: 1 };
+  assert.equal(migrateCard(base)?.chromatic, false, 'une carte d’avant n’est pas chromatique');
+  assert.equal(migrateCard({ ...base, chromatic: true })?.chromatic, true);
+  assert.equal(migrateCard({ ...base, chromatic: 'oui' })?.chromatic, false);
+  // toutes les raretés peuvent l'être, et ça reste rare
+  assert.ok(CHROMATIC_ODDS > 0 && CHROMATIC_ODDS <= 0.1, `${CHROMATIC_ODDS}`);
 });

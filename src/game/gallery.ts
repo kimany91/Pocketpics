@@ -10,7 +10,6 @@ import {
   requestPermissionsAsync,
 } from 'expo-media-library';
 import { Platform } from 'react-native';
-import { getThumbnailAsync } from 'expo-video-thumbnails';
 
 export type GalleryAccess = 'granted' | 'limited' | 'denied' | 'undetermined';
 /** Utilisé par la version navigateur (sélecteur de photos ou de dossier). */
@@ -28,9 +27,6 @@ export async function getGalleryAccess(): Promise<GalleryAccess> {
 export async function requestGalleryAccess(_source?: GallerySource): Promise<GalleryAccess> {
   return toAccess(await requestPermissionsAsync(false, ['photo']));
 }
-
-/** Propre à la version navigateur (une vidéo y est gardée comme fichier). */
-export type VideoBlob = { videoBlob?: Blob };
 
 /* Fonctions propres à la version navigateur : sans effet sur mobile. */
 export const chooseDemoPhotos = getGalleryAccess;
@@ -119,42 +115,36 @@ export async function processPhoto(
   return { assetId, hash, imageUri: image.uri, thumbUri: thumb.uri, width: image.width, height: image.height };
 }
 
-/** Sur mobile la galerie est lue directement : elle ne change pas sous l'app. */
-export const onGalleryChange = (_cb: () => void): (() => void) => () => {};
+/* -------------------------------- Recadrage -------------------------------- */
 
-/* --------------------------------- Vidéos --------------------------------- */
+/** Partie gardée d'une image, en parts de sa largeur et de sa hauteur (0 → 1). */
+export interface CropRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 /**
- * Une vidéo de la galerie, prête à devenir une carte vidéo : l'image fixe (le
- * « poster ») vient d'un moment de la vidéo, que le joueur pourra changer
- * ensuite depuis sa bibliothèque.
+ * Recadre l'image d'une carte et rend les deux tailles utilisées (la photo et
+ * sa miniature). `null` si l'image est illisible.
  */
-export interface ProcessedVideo extends ProcessedPhoto {
-  videoUri: string;
-  /** Durée en secondes (0 si inconnue). */
-  duration: number;
-  /** Moment de la vidéo d'où vient l'image fixe, en secondes. */
-  posterAt: number;
-}
-
-/** Au-delà, la vidéo est trop lourde pour une carte : la photo du moment suffit. */
-export const MAX_VIDEO_BYTES = 40 * 1024 * 1024;
-
-/** Identifiants de toutes les vidéos de la galerie. */
-export async function listVideoIds(): Promise<string[]> {
+export async function cropImage(uri: string, rect: CropRect): Promise<{ imageUri: string; thumbUri: string } | null> {
   try {
-    const metas = await new Query().eq(AssetField.MEDIA_TYPE, MediaType.VIDEO).exeForMetadata();
-    return metas.map((m) => m.id);
-  } catch {
-    return [];
-  }
-}
-
-/** Image fixe d'une vidéo à un moment donné, aux deux tailles des cartes. */
-export async function frameOfVideo(videoUri: string, atSeconds: number): Promise<{ imageUri: string; thumbUri: string } | null> {
-  try {
-    const shot = await getThumbnailAsync(videoUri, { time: Math.max(0, Math.round(atSeconds * 1000)), quality: 0.9 });
-    const image = await resizeTo(shot.uri, shot.width, shot.height, IMAGE_SHORT_SIDE, 0.86);
+    const ctx = ImageManipulator.manipulate(uri);
+    const ref0 = await ctx.renderAsync();
+    const w = ref0.width;
+    const h = ref0.height;
+    if (!w || !h) return null;
+    const crop = {
+      originX: Math.max(0, Math.round(rect.x * w)),
+      originY: Math.max(0, Math.round(rect.y * h)),
+      width: Math.max(16, Math.round(rect.w * w)),
+      height: Math.max(16, Math.round(rect.h * h)),
+    };
+    const cut = await ImageManipulator.manipulate(uri).crop(crop).renderAsync();
+    const saved = await cut.saveAsync({ format: SaveFormat.JPEG, compress: 0.9 });
+    const image = await resizeTo(saved.uri, saved.width, saved.height, IMAGE_SHORT_SIDE, 0.86);
     const thumb = await resizeTo(image.uri, image.width, image.height, THUMB_SHORT_SIDE, 0.72);
     return { imageUri: image.uri, thumbUri: thumb.uri };
   } catch {
@@ -162,48 +152,5 @@ export async function frameOfVideo(videoUri: string, atSeconds: number): Promise
   }
 }
 
-/**
- * Prépare une vidéo de la galerie pour devenir une carte vidéo. Même règles que
- * pour une photo (doublons, disponibilité hors ligne), plus la taille du film.
- */
-export async function processVideo(assetId: string, isKnownHash: PhotoCheck): Promise<ProcessedVideo | { duplicate: true } | null> {
-  const asset = new Asset(assetId);
-  if (Platform.OS === 'ios') {
-    try {
-      if (await asset.getIsInCloud()) return null;
-    } catch {}
-  }
-  const uri = await asset.getUri();
-  const file = new File(uri);
-  let hash: string | null = null;
-  let size = 0;
-  try {
-    const info = file.info({ md5: true });
-    hash = info.md5 ?? null;
-    size = info.size ?? 0;
-  } catch {}
-  if (hash && isKnownHash(hash)) return { duplicate: true };
-  if (size > MAX_VIDEO_BYTES) return null;
-
-  let duration = 0;
-  try {
-    duration = (await asset.getDuration()) ?? 0;
-  } catch {}
-  // première image parlante : un peu après le début, jamais après la fin
-  const posterAt = duration > 1.2 ? Math.min(duration - 0.3, 0.8) : 0;
-  const frame = await frameOfVideo(uri, posterAt);
-  if (!frame) return null;
-  if (!hash) {
-    hash = md5Of(frame.imageUri);
-    if (!hash) return null;
-    if (isKnownHash(hash)) return { duplicate: true };
-  }
-  let w = 0;
-  let h = 0;
-  try {
-    const shape = await asset.getShape();
-    w = shape?.width ?? 0;
-    h = shape?.height ?? 0;
-  } catch {}
-  return { assetId, hash, imageUri: frame.imageUri, thumbUri: frame.thumbUri, videoUri: uri, width: w, height: h, duration, posterAt };
-}
+/** Sur mobile la galerie est lue directement : elle ne change pas sous l'app. */
+export const onGalleryChange = (_cb: () => void): (() => void) => () => {};

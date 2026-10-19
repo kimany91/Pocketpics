@@ -29,7 +29,7 @@ import { DRAW_INTERVAL_MS, MAX_STORED_DRAWS, formatCountdown } from '../../game/
 import { DRAW_PRICE } from '../../game/economy';
 import { galleryPhotoCount, isDesktopBrowser, openLimitedPicker } from '../../game/gallery';
 import { RARITIES, getRarity } from '../../game/rarity';
-import { useGame } from '../../state/game';
+import { isChromaticTest, toggleChromaticTest, useGame } from '../../state/game';
 import { useDrawStatus } from '../../state/useDrawStatus';
 import { useGalleryAccess } from '../../state/useGalleryAccess';
 import { colors, fonts } from '../../theme';
@@ -40,6 +40,8 @@ export default function DrawScreen() {
   const { width, height } = useWindowDimensions();
   const cards = useGame((s) => s.cards);
   const refillDrawsForDemo = useGame((s) => s.refillDrawsForDemo);
+  /** Essai : le prochain paquet sort tout chromatique (voir src/state/game.ts). */
+  const [chromaticNext, setChromaticNext] = useState(isChromaticTest());
   const soundVolume = useGame((s) => s.save?.soundVolume ?? DEFAULT_SOUND_VOLUME);
   const coins = useGame((s) => s.save?.coins ?? 0);
   const buyDraw = useGame((s) => s.buyDraw);
@@ -105,6 +107,11 @@ export default function DrawScreen() {
     haptic.medium();
     router.push('/open');
   };
+
+  // l'essai ne vaut que pour un paquet : au retour, le bouton se remet à jour
+  useEffect(() => {
+    setChromaticNext(isChromaticTest());
+  }, [visit]);
 
   const cycle = nextAt ? 1 - (nextAt - now) / DRAW_INTERVAL_MS : 1;
 
@@ -207,6 +214,21 @@ export default function DrawScreen() {
                 <Pressable onPress={refillDrawsForDemo} hitSlop={8}>
                   <AppText variant="caption" style={{ color: colors.text }}>
                     Recharger les tirages (test)
+                  </AppText>
+                </Pressable>
+                <AppText variant="caption">{'   ·   '}</AppText>
+                {/* Essai : à retirer en même temps que le bloc d'essai de src/state/game.ts */}
+                <Pressable
+                  onPress={() => {
+                    haptic.light();
+                    setChromaticNext(toggleChromaticTest());
+                  }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Rendre chromatiques toutes les cartes du prochain paquet"
+                >
+                  <AppText variant="caption" style={{ color: chromaticNext ? colors.gold : colors.text }}>
+                    {chromaticNext ? 'Prochain paquet : chromatique ✓' : 'Prochain paquet chromatique (test)'}
                   </AppText>
                 </Pressable>
               </View>

@@ -31,8 +31,11 @@ export interface Rarity {
   hype: number;
 }
 
-/** Rang minimum d'une carte vidéo : Épique. Une carte vidéo n'est jamais en dessous. */
-export const VIDEO_MIN_RANK = 3;
+/**
+ * Chance qu'une carte tirée soit chromatique, quelle que soit sa rareté
+ * (environ une carte tous les quatre paquets).
+ */
+export const CHROMATIC_ODDS = 0.05;
 
 export const RARITIES: readonly Rarity[] = [
   {

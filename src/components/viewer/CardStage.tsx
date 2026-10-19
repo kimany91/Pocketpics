@@ -65,10 +65,6 @@ interface Props {
   entrance?: 'spin' | 'none';
   /** `false` : carte voisine affichée en retrait, immobile et sans geste. */
   active?: boolean;
-  /** Carte vidéo : prévenu quand on reste appuyé (le film se joue tant qu'on tient). */
-  onHold?(down: boolean): void;
-  /** Carte vidéo : le film est en train de jouer. */
-  playVideo?: boolean;
 }
 
 const MAX_ZOOM = 4;
@@ -94,8 +90,6 @@ export function CardStage({
   onZoomChange,
   entrance = 'spin',
   active = true,
-  onHold,
-  playVideo = false,
 }: Props) {
   const r = getRarity(card.rarity);
   const height = width * CARD_RATIO;
@@ -242,15 +236,6 @@ export function CardStage({
       rotY.value = withSpring(Math.round(rotY.value / 180) * 180 + 180, FLIP_SPRING);
     });
 
-  /** Carte vidéo : on reste appuyé, le film joue ; on relâche, l'image revient. */
-  const hold = Gesture.LongPress()
-    .enabled(!!onHold && !burning && active)
-    .minDuration(320)
-    .maxDistance(18)
-    .shouldCancelWhenOutside(false)
-    .onStart(() => onHold && scheduleOnRN(onHold, true))
-    .onFinalize(() => onHold && scheduleOnRN(onHold, false));
-
   const zoomStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: offX.value }, { translateY: offY.value }, { scale: zoom.value }],
   }));
@@ -316,7 +301,7 @@ export function CardStage({
     <View style={{ width, height }}>
       {/* La zone tactile fait exactement la taille de la carte : la marge de découpe
           (ornements, combustion) ne doit pas recouvrir le nom ni les boutons voisins. */}
-      <GestureDetector gesture={Gesture.Simultaneous(pinch, Gesture.Race(pan, doubleTap, hold))}>
+      <GestureDetector gesture={Gesture.Simultaneous(pinch, Gesture.Race(pan, doubleTap))}>
         <View style={{ width, height }}>
         <Animated.View
           pointerEvents="none"
@@ -327,7 +312,7 @@ export function CardStage({
         >
           <Animated.View style={[{ position: 'absolute', left: m, top: m, width, height }, zoomStyle]}>
             <Animated.View style={[StyleSheet.absoluteFill, styles.face, frontStyle]}>
-              <CardFace card={card} width={width} tilt={tilt} imageSource={imageSource} imageUri={imageUri} animated={active} playVideo={playVideo} />
+              <CardFace card={card} width={width} tilt={tilt} imageSource={imageSource} imageUri={imageUri} animated={active} />
             </Animated.View>
             <Animated.View style={[StyleSheet.absoluteFill, styles.face, backStyle]}>
               <CardBack width={width}>

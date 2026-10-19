@@ -9,7 +9,6 @@
  *     cards/<id>/card.json  ← SOURCE DE VÉRITÉ d'une carte
  *     cards/<id>/image.jpg
  *     cards/<id>/thumb.jpg
- *     cards/<id>/video.mp4   ← seulement pour une carte vidéo
  *
  * Chaque carte est autonome : même si index.json ou state.json étaient
  * corrompus, la collection est reconstruite à partir des dossiers `cards/`.
@@ -34,7 +33,6 @@ const cardFileUri = (id: string, name: string) => {
 };
 export const cardImageUri = (id: string) => cardFileUri(id, 'image.jpg');
 export const cardThumbUri = (id: string) => cardFileUri(id, 'thumb.jpg');
-export const cardVideoUri = (id: string) => cardFileUri(id, 'video.mp4');
 
 function ensureDir(dir: Directory) {
   if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
@@ -160,8 +158,6 @@ export interface CardFiles {
   /** URI d'une image déjà sur disque (copiée), ou contenu base64. */
   image: { uri: string } | { base64: string };
   thumb: { uri: string } | { base64: string };
-  /** Carte vidéo : le film, copié à côté de l'image (la version navigateur accepte un Blob). */
-  video?: { uri: string } | { base64: string } | { blob: unknown };
 }
 
 function putFile(target: File, src: CardFiles['image']) {
@@ -180,14 +176,13 @@ export function writeNewCard(card: Card, files: CardFiles) {
   staging.create({ intermediates: true });
   putFile(new File(staging, 'image.jpg'), files.image);
   putFile(new File(staging, 'thumb.jpg'), files.thumb);
-  if (files.video && !('blob' in files.video)) putFile(new File(staging, 'video.mp4'), files.video);
   new File(staging, 'card.json').write(JSON.stringify(card));
   if (cardDir(card.id).exists) throw new Error(`La carte ${card.id} existe déjà`);
   staging.rename(card.id);
 }
 
-/** Remplace l'image et la miniature d'une carte (nouvelle image choisie dans sa vidéo). */
-export function writeCardPoster(id: string, files: { image: CardFiles['image']; thumb: CardFiles['thumb'] }) {
+/** Remplace la photo et la miniature d'une carte (recadrage). */
+export function writeCardImage(id: string, files: { image: CardFiles['image']; thumb: CardFiles['thumb'] }) {
   const dir = cardDir(id);
   if (!dir.exists) return;
   putFile(new File(dir, 'image.jpg'), files.image);

@@ -8,8 +8,7 @@ import { DRAW_PRICE, type SoloReward, soloReward } from '../game/economy';
 import { DIVINE_GATE, TOTAL_LEVELS, needsDivine } from '../battle/levels';
 import { planPack, rollLucky } from '../game/luck';
 import { cancelMatch, finishMatch, settleAbandoned, startMatch } from '../game/rank';
-import { frameOfVideo } from '../game/gallery';
-import type { ProcessedPhoto, ProcessedVideo } from '../game/gallery';
+import { type CropRect, cropImage } from '../game/gallery';
 import { generatePack } from '../game/pack';
 import * as disk from '../storage/disk';
 import { MAX_PINNED } from '../storage/model';
@@ -55,15 +54,15 @@ interface GameStore {
   removeFriend(code: string): void;
   toggleFavorite(id: string): void;
   /**
+   * Recadre la photo d'une carte : `rect` est la partie gardée, en parts de la
+   * largeur et de la hauteur (0 → 1). Rend `false` si ça n'a pas marché.
+   */
+  cropCard(id: string, rect: CropRect): Promise<boolean>;
+  /**
    * Épingle (ou retire) une carte du profil. Au-delà de `MAX_PINNED`, rien ne
    * se passe : l'écran le dit. Rend ce qui s'est passé.
    */
   togglePin(id: string): 'pinned' | 'unpinned' | 'full';
-  /**
-   * Carte vidéo : choisit l'image fixe (la miniature) à ce moment du film.
-   * Rend `false` si l'image n'a pas pu être prise.
-   */
-  setCardPoster(id: string, atSeconds: number): Promise<boolean>;
   setPlayerName(name: string): void;
   /** `persist: false` pendant qu'on fait glisser le réglage, `true` au relâchement. */
   setSoundVolume(volume: number, persist?: boolean): void;
@@ -86,15 +85,19 @@ function persistState(save: SaveState) {
   disk.saveState(save);
 }
 
-/**
- * Le film d'une carte vidéo, tel que le stockage l'attend : un fichier sur
- * mobile, un Blob dans le navigateur. `undefined` pour une carte normale.
+/* ------------------------- Essai : paquet chromatique -------------------------
+ * Tout ce bloc (et le bouton « Prochain paquet chromatique (test) » de l'accueil)
+ * ne sert qu'aux essais : il suffit de le supprimer pour que le jeu retrouve
+ * son tirage normal. Rien d'autre n'en dépend.
  */
-function videoSource(photo: ProcessedPhoto | ProcessedVideo): disk.CardFiles['video'] {
-  const v = photo as Partial<ProcessedVideo> & { videoBlob?: unknown };
-  if (!v.videoUri) return undefined;
-  return v.videoBlob ? { blob: v.videoBlob } : { uri: v.videoUri };
+let chromaticTest = false;
+export const isChromaticTest = () => chromaticTest;
+/** Prochain paquet : toutes les cartes chromatiques. Rend le nouvel état. */
+export function toggleChromaticTest(): boolean {
+  chromaticTest = !chromaticTest;
+  return chromaticTest;
 }
+/* --------------------------- fin du bloc d'essai --------------------------- */
 
 export const useGame = create<GameStore>((set, get) => ({
   ready: false,
@@ -164,12 +167,15 @@ export const useGame = create<GameStore>((set, get) => ({
         luckAfter = plan.state;
         return plan.rarities;
       },
+      allChromatic: chromaticTest,
     });
+    // l'essai ne vaut que pour un paquet
+    chromaticTest = false;
 
     // 1) les cartes d'abord (si l'app est tuée ici, le joueur garde ses cartes ET son tirage)
     const written: Card[] = [];
     for (const { card, photo } of pack.cards) {
-      disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri }, video: videoSource(photo) });
+      disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri } });
       written.push(card);
     }
     const cards = [...get().cards, ...written];
@@ -256,7 +262,7 @@ export const useGame = create<GameStore>((set, get) => ({
       rarities: () => ['galaxy'],
     });
     const { card, photo } = pack.cards[0];
-    disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri }, video: videoSource(photo) });
+    disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri } });
     const cards = [...get().cards, card];
     disk.saveIndex(cards);
     const latest = get().save ?? save;
@@ -379,20 +385,6 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ cards });
   },
 
-  async setCardPoster(id, atSeconds) {
-    const card = get().cards.find((c) => c.id === id);
-    if (!card?.video) return false;
-    const frame = await frameOfVideo(disk.cardVideoUri(id), atSeconds);
-    if (!frame) return false;
-    disk.writeCardPoster(id, { image: { uri: frame.imageUri }, thumb: { uri: frame.thumbUri } });
-    const next: Card = { ...card, posterAt: Math.max(0, atSeconds) };
-    disk.updateCardSidecar(next);
-    const cards = get().cards.map((c) => (c.id === id ? next : c));
-    disk.saveIndex(cards);
-    set({ cards });
-    return true;
-  },
-
   togglePin(id) {
     const save = get().save;
     if (!save) return 'full';
@@ -403,6 +395,17 @@ export const useGame = create<GameStore>((set, get) => ({
     persistState(next);
     set({ save: next });
     return has ? 'unpinned' : 'pinned';
+  },
+
+  async cropCard(id, rect) {
+    const card = get().cards.find((c) => c.id === id);
+    if (!card) return false;
+    const out = await cropImage(disk.cardImageUri(id), rect);
+    if (!out) return false;
+    disk.writeCardImage(id, { image: { uri: out.imageUri }, thumb: { uri: out.thumbUri } });
+    // l'écran doit redessiner la carte : on change son objet (l'adresse, elle, ne bouge pas)
+    set({ cards: get().cards.map((c) => (c.id === id ? { ...c } : c)) });
+    return true;
   },
 
   setPlayerName(rawName) {

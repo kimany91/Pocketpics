@@ -9,13 +9,9 @@ interface StoredCard {
   card: Card;
   image: string;
   thumb: string;
-  /** Carte vidéo : le film, gardé tel quel. */
-  video?: Blob;
 }
 
 const images = new Map<string, { image: string; thumb: string }>();
-/** Films des cartes vidéo : le Blob (rangé dans IndexedDB) et son adresse locale. */
-const videos = new Map<string, { blob: Blob; uri: string }>();
 const sidecars = new Map<string, Card>();
 let storedState: unknown;
 
@@ -31,13 +27,11 @@ export async function prepare() {
     if (!card || typeof v.image !== 'string') continue;
     sidecars.set(id, card);
     images.set(id, { image: v.image, thumb: v.thumb || v.image });
-    if (v.video instanceof Blob) videos.set(id, { blob: v.video, uri: URL.createObjectURL(v.video) });
   }
 }
 
 export const cardImageUri = (id: string) => images.get(id)?.image ?? '';
 export const cardThumbUri = (id: string) => images.get(id)?.thumb ?? '';
-export const cardVideoUri = (id: string) => videos.get(id)?.uri ?? '';
 
 export function loadState(): { state: SaveState; recovered: boolean } {
   return { state: migrateState(storedState), recovered: false };
@@ -54,20 +48,16 @@ export function saveIndex(_cards: Card[]) {}
 export interface CardFiles {
   image: { uri: string } | { base64: string };
   thumb: { uri: string } | { base64: string };
-  /** Carte vidéo : le film (un Blob dans le navigateur). */
-  video?: { blob: Blob } | { uri: string } | { base64: string };
 }
 
 function persist(id: string) {
   const card = sidecars.get(id);
   const files = images.get(id);
-  const video = videos.get(id)?.blob;
-  if (card && files) void idbPut('cards', id, { card, ...files, ...(video ? { video } : {}) } satisfies StoredCard);
+  if (card && files) void idbPut('cards', id, { card, ...files } satisfies StoredCard);
 }
 
 export function writeNewCard(card: Card, files: CardFiles) {
   images.set(card.id, { image: toUri(files.image), thumb: toUri(files.thumb) });
-  if (files.video && 'blob' in files.video) videos.set(card.id, { blob: files.video.blob, uri: URL.createObjectURL(files.video.blob) });
   sidecars.set(card.id, card);
   persist(card.id);
 }
@@ -77,8 +67,8 @@ export function updateCardSidecar(card: Card) {
   persist(card.id);
 }
 
-/** Remplace l'image et la miniature d'une carte (nouvelle image choisie dans sa vidéo). */
-export function writeCardPoster(id: string, files: { image: CardFiles['image']; thumb: CardFiles['thumb'] }) {
+/** Remplace la photo et la miniature d'une carte (recadrage). */
+export function writeCardImage(id: string, files: { image: CardFiles['image']; thumb: CardFiles['thumb'] }) {
   if (!images.has(id)) return;
   images.set(id, { image: toUri(files.image), thumb: toUri(files.thumb) });
   persist(id);
@@ -86,11 +76,6 @@ export function writeCardPoster(id: string, files: { image: CardFiles['image']; 
 
 export function deleteCard(id: string) {
   images.delete(id);
-  const v = videos.get(id);
-  if (v) {
-    URL.revokeObjectURL(v.uri);
-    videos.delete(id);
-  }
   sidecars.delete(id);
   void idbDelete('cards', id);
 }

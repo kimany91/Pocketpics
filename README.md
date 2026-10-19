@@ -217,18 +217,6 @@ Six rangs, chacun en trois divisions : **Papier**, **Bronze**, **Argent**, **Tit
 
 **Limites d'un jeu sans serveur** : un défi n'arrive que si l'app de l'ami est ouverte (pas de notification quand elle est fermée), et chaque téléphone tient son propre rang (un joueur qui modifie sa sauvegarde peut tricher sur son rang affiché). Les relais publics gratuits n'offrent aucune garantie : **pour une version publiée, remplace-les par ton propre relais MQTT** (Mosquitto, EMQX, HiveMQ Cloud…). Rien d'autre à changer.
 
-## Cartes vidéo
-
-Une carte peut être une **carte vidéo** : son film se joue dans la carte quand on reste appuyé dessus, comme les cartes immersives des autres jeux de cartes.
-
-- **Au tirage** (`src/game/pack.ts`) : seules les cartes **Épique et au-dessus** peuvent l'être. Le jeu tire d'abord les raretés du paquet, compte les places Épique+, et ne va chercher une vidéo de la galerie que s'il y en a une à prendre — la photo qu'elle remplace retourne dans la pioche, donc rien n'est gâché. `VIDEO_MIN_RANK` est dans `src/game/rarity.ts`.
-- **Lecture de la galerie** : sur mobile (`src/game/gallery.ts`), les vidéos sont listées avec `expo-media-library` et l'image fixe est prise avec `expo-video-thumbnails` ; dans le navigateur (`src/game/gallery.web.ts`), la vidéo importée est lue dans un `<video>` hors écran et l'image est dessinée sur un canvas. Au-delà de 40 Mo, la vidéo est refusée.
-- **Rangement** : le film est rangé à côté de l'image, dans `cards/<id>/video.mp4` (un Blob dans IndexedDB côté navigateur), et `cardVideoUri(id)` donne son adresse.
-- **Affichage** (`src/components/card/CardFace.tsx`, `CardVideo.tsx`) : un petit logo caméra en haut à gauche de la photo. Sur la fiche d'une carte, un appui long de 320 ms lance le film en boucle et sans son dans le cadre de la carte (`expo-video`) ; on relâche, l'image fixe revient. Le lecteur n'existe que pendant la lecture.
-- **Changer la miniature** (`src/app/card/poster.tsx`) : depuis la fiche de la carte ou le menu d'appui long de la bibliothèque, on fait défiler le film et on choisit le moment qui servira d'image. `setCardPoster` reprend l'image à cette seconde, remplace la photo et la miniature de la carte, et retient le moment choisi (`posterAt`).
-- **Échange** : le film ne voyage pas (bien trop lourd pour un relais public) — la carte arrive chez l'autre joueur avec son image fixe, comme une carte normale.
-- **Démo** : trois clips sont fournis (`assets/demo/clip-*.mp4` et leur version WebM pour les navigateurs sans décodeur H.264), de quoi voir des cartes vidéo sans rien importer.
-
 ## Chance (`src/game/luck.ts`)
 
 La table des raretés ci-dessous donne les chances **de base** de chaque carte. Trois mécaniques s'y ajoutent, avec un état rangé dans la sauvegarde (`luck`).
@@ -248,6 +236,16 @@ Réglé par simulation (3 000 joueurs × 300 paquets) :
 | Pire attente d'une Légendaire | ~190 paquets | ~60 paquets |
 
 Ces coups de pouce restent invisibles pour le joueur : pas de compteur affiché, la surprise reste entière (seules les chances de base sont montrées dans « Taux d'obtention »).
+
+## Cartes chromatiques
+
+Une carte tirée sur vingt (`CHROMATIC_ODDS` dans `src/game/rarity.ts`), **à n'importe quelle rareté**, est **chromatique** : sa photo est traversée d'un voile arc-en-ciel qui se déplace quand on tourne la carte au doigt (ou qu'on bouge le téléphone). C'est un champ de la carte (`chromatic` dans `src/storage/model.ts`), décidé au tirage et conservé par les échanges. L'effet est dessiné par `src/components/card/Chromatic.tsx`, dans le même esprit que les reflets des cartes rares (`Foil.tsx`).
+
+**Bouton d'essai** (à retirer quand il n'aura plus d'utilité) : sur l'accueil de la version navigateur, « Prochain paquet chromatique (test) » rend chromatiques toutes les cartes du paquet suivant. Tout tient dans un bloc marqué « Essai » de `src/state/game.ts` et le bouton correspondant dans `src/app/(tabs)/index.tsx` : supprimer les deux suffit.
+
+## Recadrer une carte
+
+Le format d'une carte rogne souvent la photo au mauvais endroit. Depuis le menu d'appui long de la bibliothèque, « Recadrer la carte » ouvre un écran (`src/app/card/crop.tsx`) où l'on déplace la photo au doigt et où on l'agrandit à deux doigts, dans une fenêtre au format de la carte. En validant, `cropCard(id, rect)` (dans `src/state/game.ts`) recoupe la photo et la miniature et les réécrit à la place des anciennes (`cropImage` dans `src/game/gallery.ts`, et la version canvas dans `gallery.web.ts`). Le recadrage est définitif : la carte garde la partie choisie.
 
 ## Raretés
 
