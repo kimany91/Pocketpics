@@ -22,11 +22,14 @@ import { Foil } from './Foil';
 import { DivineHalo } from './DivineHalo';
 import { DivineOrnaments } from './Ornaments';
 import { ChromaticPhoto, GALAXY_COLORS, GalaxyGem, GalaxyHalo, GalaxyOrnaments, GalaxyTwinkles, GalaxyWindowGlow } from './Galaxy';
+import { ChromaticRim, ChromaticVeil } from './Chromatic';
 
 export interface CardLike {
   id: string;
   rarity: string;
   name: string | null;
+  /** Variante chromatique (une carte sur vingt, toutes raretés confondues). */
+  chromatic?: boolean;
 }
 
 interface Props {
@@ -97,6 +100,11 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
   const large = quality === 'full' && width >= 140;
   // Divine : halo et ornements à toutes les tailles, pour la reconnaître partout (même en miniature).
   const divine = rarity.frameStyle === 'divine';
+  // Variante chromatique : voile arc-en-ciel sur la photo + liseré irisé autour d'elle.
+  // La Galaxy a déjà sa propre pellicule chromatique : on ne la double pas.
+  const chromatic = card.chromatic === true && !galaxy;
+  // Plus léger en miniature, et sur les cartes qui ont déjà un foil irisé (Ultra Légendaire, Divine).
+  const veilIntensity = (quality === 'thumb' ? 0.55 : 1) * (fx === 'chromatic' || fx === 'divine' ? 0.6 : 1);
 
   return (
     <View style={{ width, height }}>
@@ -105,6 +113,9 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
     <View style={[styles.card, { width, height, borderRadius: radius }]}>
       <Frame rarity={rarity} width={width} height={height} animated={animated} />
       {galaxy ? <GalaxyWindowGlow top={border} left={border} width={width - border * 2} height={height - border * 2} radius={innerRadius} border={border} /> : null}
+      {chromatic ? (
+        <ChromaticRim top={border} left={border} width={width - border * 2} height={height - border * 2} radius={innerRadius} border={border} animated={animated} />
+      ) : null}
       <View
         pointerEvents="none"
         style={[styles.window, { top: border, left: border, right: border, bottom: border, borderRadius: innerRadius }]}
@@ -115,6 +126,9 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
           <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={card.id} transition={quality === 'thumb' ? 120 : 0} />
         ) : null}
         {galaxy ? <ChromaticPhoto width={width - border * 2} height={height - border * 2} /> : null}
+        {chromatic ? (
+          <ChromaticVeil width={width - border * 2} height={height - border * 2} tilt={tilt} animated={animated} intensity={veilIntensity} />
+        ) : null}
         {rarity.frameStyle === 'chromatic' && !tilt ? <Holo colors={CHROMA_HOLO} opacity={0.18} animated={animated} width={width} height={height} /> : null}
         {rarity.frameStyle === 'divine' && !tilt ? <Holo colors={DIVINE_HOLO} opacity={0.42} animated={animated} width={width} height={height} duration={1800} /> : null}
         {fx === 'mythic' && tilt ? <HoloFoil tilt={tilt} width={width} height={height} {...FOILS[fx]} /> : null}

@@ -34,6 +34,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { playRaritySound, playSfx } from '../../audio/sfx';
 import { AppText } from '../../components/AppText';
+import { ChromaticTag } from '../../components/card/Chromatic';
 import { ViewerEnvironment, hasEnvironment } from '../../components/card/ViewerEnvironment';
 import { Burst, Glow, Shockwave } from '../../components/fx';
 import { CardStage } from '../../components/viewer/CardStage';
@@ -494,9 +495,12 @@ export default function CardScreen() {
                 }}
               />
             )}
-            <AppText variant="label" style={{ color: r.color, marginTop: 4 }}>
-              {r.label}
-            </AppText>
+            <View style={styles.rarityRow}>
+              <AppText variant="label" style={{ color: r.color }}>
+                {r.label}
+              </AppText>
+              {card.chromatic ? <ChromaticTag /> : null}
+            </View>
             <Pressable
               onPress={openStats}
               disabled={burning}
@@ -810,6 +814,7 @@ function ActionToast({ toast, top }: { toast: Toast | null; top: number }) {
 
 const styles = StyleSheet.create({
   topRight: { flexDirection: 'row', gap: 10 },
+  rarityRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   statsPill: {
     flexDirection: 'row',
     alignItems: 'center',

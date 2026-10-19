@@ -1,12 +1,13 @@
 /**
  * Menu d'une carte de la bibliothèque, ouvert par un appui long sur sa
- * miniature : épingler la carte sur son profil (6 au plus) et la mettre en
- * favori. Un appui à côté referme le menu.
+ * miniature : épingler la carte sur son profil (6 au plus), la mettre en
+ * favori et recadrer sa photo. Un appui à côté referme le menu.
  *
  * Épinglé et favori sont deux choses différentes : l'étoile filtre la
  * collection, l'épingle choisit ce que les amis voient sur le profil.
  */
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -104,6 +105,18 @@ export function CardActions({ cardId, onClose }: { cardId: string; onClose(): vo
             haptic.tick();
             toggleFavorite(card.id);
             onClose();
+          }}
+        />
+
+        <Row
+          icon="crop"
+          color={colors.text}
+          label="Recadrer la carte"
+          caption="Choisis la partie de la photo à garder."
+          onPress={() => {
+            haptic.tick();
+            onClose();
+            router.push({ pathname: '/card/crop', params: { id: card.id } });
           }}
         />
 

@@ -26,6 +26,7 @@ import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { CardBack } from '../components/card/CardBack';
 import { CardFace } from '../components/card/CardFace';
+import { ChromaticTag } from '../components/card/Chromatic';
 import { GalaxySpace } from '../components/card/ViewerEnvironment';
 import { Burst, Embers, Flash, Glow, Shockwave } from '../components/fx';
 import { CardFanOut } from '../components/open/CardFanOut';
@@ -45,6 +46,8 @@ import { haptic } from '../utils/haptics';
 type Phase = 'pack' | 'fan' | 'waiting' | 'reveal' | 'summary';
 
 const AMBIENT = ['#B99CFF', '#FFFFFF', '#7CCBFF', '#FFD9A0'];
+/** Éclat des cartes chromatiques (le même spectre que les révélations). */
+const CHROMA_FX = ['#FF7EB3', '#FFD36E', '#8CFFB4', '#6EC8FF', '#B48CFF'];
 
 export default function OpenScreen() {
   const { galaxy } = useLocalSearchParams<{ galaxy?: string }>();
@@ -253,9 +256,12 @@ function Summary({ cards, onClose, onNext }: { cards: Card[]; onClose(): void; o
   );
 }
 
-/** Carte du récapitulatif : elle se retourne à son tour ; la meilleure brille. */
+/** Carte du récapitulatif : elle se retourne à son tour ; la meilleure (et la chromatique) brille. */
 function SummaryCard({ card, width, delay, best }: { card: Card; width: number; delay: number; best: boolean }) {
   const r = getRarity(card.rarity);
+  // Chromatique : même mise en avant que la meilleure carte, mais en arc-en-ciel.
+  const chromatic = card.chromatic === true;
+  const aura = best || chromatic;
   const flip = useSharedValue(0);
   const glow = useSharedValue(0);
   const [burst, setBurst] = useState(0);
@@ -263,11 +269,11 @@ function SummaryCard({ card, width, delay, best }: { card: Card; width: number; 
     flip.value = withDelay(delay, withSpring(1, { damping: 14, stiffness: 120 }));
     const t = setTimeout(() => {
       haptic.tick();
-      if (best) setBurst(1);
+      if (aura) setBurst(1);
     }, delay + 200);
-    if (best) glow.value = withDelay(delay + 200, withRepeat(withSequence(withTiming(0.85, { duration: 900 }), withTiming(0.45, { duration: 900 })), -1, true));
+    if (aura) glow.value = withDelay(delay + 200, withRepeat(withSequence(withTiming(0.85, { duration: 900 }), withTiming(0.45, { duration: 900 })), -1, true));
     return () => clearTimeout(t);
-  }, [flip, glow, delay, best]);
+  }, [flip, glow, delay, aura]);
   const back = useAnimatedStyle(() => ({ opacity: flip.value < 0.5 ? 1 : 0, transform: [{ perspective: 900 }, { rotateY: `${flip.value * 180}deg` }] }));
   const front = useAnimatedStyle(() => ({
     opacity: flip.value >= 0.5 ? 1 : 0,
@@ -276,8 +282,9 @@ function SummaryCard({ card, width, delay, best }: { card: Card; width: number; 
   return (
     <Pressable onPress={() => router.push(`/card/${card.id}`)} style={{ alignItems: 'center' }}>
       <View style={{ width, height: width * CARD_RATIO, alignItems: 'center', justifyContent: 'center' }}>
-        {best ? <Glow color={r.color} size={width * 2.2} opacity={glow} /> : null}
-        {best ? <Burst trigger={burst} colors={[r.color, '#FFFFFF']} count={18} radius={width * 0.9} /> : null}
+        {aura ? <Glow color={chromatic ? '#FF8AD0' : r.color} size={width * 2.2} opacity={glow} /> : null}
+        {chromatic ? <Glow color="#7FD8FF" size={width * 1.8} opacity={glow} /> : null}
+        {aura ? <Burst trigger={burst} colors={chromatic ? CHROMA_FX : [r.color, '#FFFFFF']} count={chromatic ? 22 : 18} radius={width * 0.9} /> : null}
         <Animated.View style={[StyleSheet.absoluteFill, styles.face, back]}>
           <CardBack width={width} />
         </Animated.View>
@@ -288,6 +295,11 @@ function SummaryCard({ card, width, delay, best }: { card: Card; width: number; 
       <AppText variant="caption" style={{ textAlign: 'center', marginTop: 8, color: r.color }}>
         {best ? `★ ${r.label}` : r.label}
       </AppText>
+      {chromatic ? (
+        <Animated.View entering={FadeIn.delay(delay + 300)} style={{ marginTop: 5 }}>
+          <ChromaticTag compact />
+        </Animated.View>
+      ) : null}
     </Pressable>
   );
 }
