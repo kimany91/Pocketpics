@@ -59,12 +59,12 @@ test('la Galerie : 4 Divines, puis une carte de plus qui monte d’un rang à ch
   for (let n = 1; n <= 129; n++) assert.ok(levelFighters(getLevel(n)!).every((f) => f.rarity !== 'galaxy'), `niveau ${n}`);
 });
 
-test('sanctuaire de la Divine : après le Volcan, la suite demande la Divine', () => {
-  assert.equal(ARENAS[worldOf(DIVINE_GATE) - 1].place, 'Le Volcan');
+test('sanctuaire de la Divine : après la Tempête, la suite demande la Divine', () => {
+  assert.equal(ARENAS[worldOf(DIVINE_GATE) - 1].place, 'La Tempête');
   assert.equal(DIVINE_GATE, lastLevel(worldOf(DIVINE_GATE)));
   assert.ok(!needsDivine(DIVINE_GATE));
   assert.ok(needsDivine(DIVINE_GATE + 1));
-  assert.equal(getLevel(DIVINE_GATE + 1)!.world.place, 'La Tempête');
+  assert.equal(getLevel(DIVINE_GATE + 1)!.world.place, 'L’Archipel'.replace('’', "'"));
 });
 
 test('difficulté cachée : rien avec des cartes normales, l’adversaire s’adapte à des cartes bien plus fortes', () => {

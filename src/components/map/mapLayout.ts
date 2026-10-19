@@ -4,7 +4,7 @@
  * de chaque monde, et placement des décors à l'écart de la route.
  *
  * Les mondes n'ont pas tous la même taille (`worldSize`) : le dernier, la
- * Galerie, a 30 niveaux alignés sur une route toute droite. Entre le Volcan
+ * Galerie, a 30 niveaux alignés sur une route toute droite. Après la Tempête
  * et la Tempête, la route traverse le sanctuaire de la Divine : une bande de
  * vide, franchie par un pont, avec la carte Divine au milieu.
  *
@@ -20,15 +20,15 @@ const BOTTOM = 290;
 export const ROAD_W = 40;
 /** Écart entre deux niveaux de la Galerie (route droite). */
 export const GALLERY_STEP = 108;
-/** Hauteur du sanctuaire de la Divine (bande de vide entre le Volcan et la Tempête). */
+/** Hauteur du sanctuaire de la Divine (bande de vide juste après la Tempête). */
 export const SANCTUARY_H = 620;
-/** Monde (place) juste sous le sanctuaire : le Volcan, dont le dernier niveau est DIVINE_GATE. */
+/** Monde (place) juste sous le sanctuaire : celui dont le dernier niveau est DIVINE_GATE. */
 export const GATE_WORLD = worldOf(DIVINE_GATE);
 /** Place au-dessus du dernier niveau d'un monde, jusqu'à son bord haut. */
 const PAD = STEP * 0.42;
 /** Monde au ciel noir (la Lune) : de la place pour le ciel au-dessus de son dernier niveau. */
 const SKY_PAD = 380;
-/** Le Volcan : un peu plus de place en haut pour que la route rejoigne le pont. */
+/** Le monde sous le sanctuaire : un peu plus de place en haut pour que la route rejoigne le pont. */
 const GATE_PAD = 160;
 /** Tout en haut, au-dessus du Grand Portrait. */
 const FINAL_PAD = 600;

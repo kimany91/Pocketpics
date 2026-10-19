@@ -8,6 +8,8 @@ import { DRAW_PRICE, type SoloReward, soloReward } from '../game/economy';
 import { DIVINE_GATE, TOTAL_LEVELS, needsDivine } from '../battle/levels';
 import { planPack, rollLucky } from '../game/luck';
 import { cancelMatch, finishMatch, settleAbandoned, startMatch } from '../game/rank';
+import { frameOfVideo } from '../game/gallery';
+import type { ProcessedPhoto, ProcessedVideo } from '../game/gallery';
 import { generatePack } from '../game/pack';
 import * as disk from '../storage/disk';
 import { MAX_PINNED } from '../storage/model';
@@ -57,6 +59,11 @@ interface GameStore {
    * se passe : l'écran le dit. Rend ce qui s'est passé.
    */
   togglePin(id: string): 'pinned' | 'unpinned' | 'full';
+  /**
+   * Carte vidéo : choisit l'image fixe (la miniature) à ce moment du film.
+   * Rend `false` si l'image n'a pas pu être prise.
+   */
+  setCardPoster(id: string, atSeconds: number): Promise<boolean>;
   setPlayerName(name: string): void;
   /** `persist: false` pendant qu'on fait glisser le réglage, `true` au relâchement. */
   setSoundVolume(volume: number, persist?: boolean): void;
@@ -77,6 +84,16 @@ interface GameStore {
 
 function persistState(save: SaveState) {
   disk.saveState(save);
+}
+
+/**
+ * Le film d'une carte vidéo, tel que le stockage l'attend : un fichier sur
+ * mobile, un Blob dans le navigateur. `undefined` pour une carte normale.
+ */
+function videoSource(photo: ProcessedPhoto | ProcessedVideo): disk.CardFiles['video'] {
+  const v = photo as Partial<ProcessedVideo> & { videoBlob?: unknown };
+  if (!v.videoUri) return undefined;
+  return v.videoBlob ? { blob: v.videoBlob } : { uri: v.videoUri };
 }
 
 export const useGame = create<GameStore>((set, get) => ({
@@ -152,7 +169,7 @@ export const useGame = create<GameStore>((set, get) => ({
     // 1) les cartes d'abord (si l'app est tuée ici, le joueur garde ses cartes ET son tirage)
     const written: Card[] = [];
     for (const { card, photo } of pack.cards) {
-      disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri } });
+      disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri }, video: videoSource(photo) });
       written.push(card);
     }
     const cards = [...get().cards, ...written];
@@ -239,7 +256,7 @@ export const useGame = create<GameStore>((set, get) => ({
       rarities: () => ['galaxy'],
     });
     const { card, photo } = pack.cards[0];
-    disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri } });
+    disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri }, video: videoSource(photo) });
     const cards = [...get().cards, card];
     disk.saveIndex(cards);
     const latest = get().save ?? save;
@@ -360,6 +377,20 @@ export const useGame = create<GameStore>((set, get) => ({
     disk.updateCardSidecar(card);
     disk.saveIndex(cards);
     set({ cards });
+  },
+
+  async setCardPoster(id, atSeconds) {
+    const card = get().cards.find((c) => c.id === id);
+    if (!card?.video) return false;
+    const frame = await frameOfVideo(disk.cardVideoUri(id), atSeconds);
+    if (!frame) return false;
+    disk.writeCardPoster(id, { image: { uri: frame.imageUri }, thumb: { uri: frame.thumbUri } });
+    const next: Card = { ...card, posterAt: Math.max(0, atSeconds) };
+    disk.updateCardSidecar(next);
+    const cards = get().cards.map((c) => (c.id === id ? next : c));
+    disk.saveIndex(cards);
+    set({ cards });
+    return true;
   },
 
   togglePin(id) {

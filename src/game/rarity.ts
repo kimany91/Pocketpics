@@ -31,6 +31,9 @@ export interface Rarity {
   hype: number;
 }
 
+/** Rang minimum d'une carte vidéo : Épique. Une carte vidéo n'est jamais en dessous. */
+export const VIDEO_MIN_RANK = 3;
+
 export const RARITIES: readonly Rarity[] = [
   {
     id: 'common',

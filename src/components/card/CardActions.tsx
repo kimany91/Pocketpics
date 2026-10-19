@@ -7,6 +7,7 @@
  * collection, l'épingle choisit ce que les amis voient sur le profil.
  */
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -78,6 +79,20 @@ export function CardActions({ cardId, onClose }: { cardId: string; onClose(): vo
             </AppText>
           </View>
         </View>
+
+        {card.video ? (
+          <Row
+            icon="film-outline"
+            color={colors.text}
+            label="Choisir la miniature"
+            caption="L’image de la carte, prise dans sa vidéo"
+            onPress={() => {
+              haptic.light();
+              onClose();
+              router.push({ pathname: '/card/poster', params: { id: card.id } });
+            }}
+          />
+        ) : null}
 
         <Row
           icon={isPinned ? 'pin' : 'pin-outline'}

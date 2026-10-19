@@ -46,10 +46,10 @@ export function worldOf(n: number): number {
 }
 
 /**
- * Sanctuaire de la Divine, entre le Volcan et la Tempête : il faut y débloquer
- * la Divine (une seule fois) pour jouer les niveaux suivants.
+ * Sanctuaire de la Divine, juste après la Tempête : il faut y débloquer la
+ * Divine (une seule fois) pour jouer les niveaux suivants.
  */
-export const DIVINE_GATE = lastLevel(ARENAS.findIndex((a) => a.id === 7) + 1);
+export const DIVINE_GATE = lastLevel(ARENAS.findIndex((a) => a.id === 8) + 1);
 export const needsDivine = (n: number) => n > DIVINE_GATE;
 
 export interface Level {

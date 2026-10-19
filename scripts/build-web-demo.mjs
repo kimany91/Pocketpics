@@ -26,7 +26,7 @@ const entry = html.match(/<script src="([^"]+entry-[^"]+\.js)"/)?.[1];
 if (!entry) throw new Error('Bundle introuvable dans index.html');
 let js = readFileSync(join(exportDir, entry), 'utf8');
 
-const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.mp3': 'audio/mpeg', '.ttf': 'font/ttf', '.otf': 'font/otf', '.xml': 'image/svg+xml', '.wav': 'audio/wav', '.m4a': 'audio/mp4' };
+const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.mp3': 'audio/mpeg', '.ttf': 'font/ttf', '.otf': 'font/otf', '.xml': 'image/svg+xml', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.mp4': 'video/mp4', '.webm': 'video/webm' };
 // Polices d'icônes jamais affichées : on ne les embarque pas.
 const keepFont = (p) => !p.includes('react-native-vector-icons/Fonts/') || p.includes('/Ionicons.');
 let inlined = 0;
@@ -36,9 +36,10 @@ js = js.replace(/"(\/assets\/[^"]+)"/g, (m, path) => {
   const file = join(exportDir, path);
   if (!existsSync(file)) return m;
   if (!keepFont(path)) return '"data:,"';
-  if (extname(path) === '.m4a') {
-    // musique : fichier à côté de la page (world-3.<empreinte>.m4a → music/world-3.mp4 ; même
-    // conteneur MP4, mais l'extension .mp4 est servie par tous les hébergeurs)
+  if (extname(path) === '.m4a' || extname(path) === '.mp4') {
+    // musiques et clips de démonstration : fichiers à côté de la page
+    // (world-3.<empreinte>.m4a → music/world-3.mp4 ; même conteneur MP4, mais
+    // l'extension .mp4 est servie par tous les hébergeurs)
     const name = `${basename(path).split('.')[0]}.mp4`;
     copyFileSync(file, join(outDir, 'music', name));
     music.push(name);

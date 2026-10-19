@@ -2,7 +2,7 @@
  * La carte de l'aventure solo : une longue route qui serpente vers le haut à
  * travers les 21 mondes, du Parc jusqu'à la Galerie. Chaque monde a son sol,
  * ses décors, son grand décor, son panneau, et son adversaire qui attend à
- * côté de son boss. Entre le Volcan et la Tempête, le sanctuaire de la Divine
+ * côté de son boss. Juste après la Tempête, le sanctuaire de la Divine
  * barre la route tant que la Divine n'est pas débloquée ; tout en haut, la
  * route file droit jusqu'au Grand Portrait.
  *
@@ -306,7 +306,7 @@ export function SagaMap({
   stars: number[];
   playerInitial: string;
   onPick(n: number): void;
-  /** La Divine a été débloquée au sanctuaire (sinon les niveaux après le Volcan restent fermés). */
+  /** La Divine a été débloquée au sanctuaire (sinon les niveaux suivants restent fermés). */
   divineUnlocked: boolean;
   /** La carte Divine touchée quand le sanctuaire est atteint : sa place à l'écran. */
   onSanctuary(from: Rect4): void;
@@ -318,7 +318,7 @@ export function SagaMap({
   const layout = mapLayout(width);
   const scroll = useRef<ScrollView>(null);
   const current = Math.min(TOTAL_LEVELS, cleared + 1);
-  /** Le Volcan est battu mais la Divine pas encore débloquée : le joueur attend au sanctuaire. */
+  /** La Tempête est battue mais la Divine pas encore débloquée : le joueur attend au sanctuaire. */
   const gated = cleared >= DIVINE_GATE && !divineUnlocked;
   const sanctuaryState: SanctuaryState = cleared < DIVINE_GATE ? 'far' : divineUnlocked ? 'open' : 'ready';
   const focusY = (gated ? layout.sanctuary.y : layout.nodes[current - 1].y) - height * 0.55;
@@ -383,7 +383,7 @@ export function SagaMap({
         const boss = !!getLevel(n)?.boss;
         const size = boss ? 68 : 54;
         const won = (stars[i] ?? 0) > 0;
-        // après le Volcan, rien ne se joue tant que la Divine n'est pas débloquée (les niveaux gagnés gardent leurs étoiles)
+        // après le sanctuaire, rien ne se joue tant que la Divine n'est pas débloquée (les niveaux gagnés gardent leurs étoiles)
         const barred = needsDivine(n) && !divineUnlocked;
         const state: NodeState = won ? 'done' : barred ? 'locked' : n <= cleared ? 'open' : n === current && cleared < TOTAL_LEVELS ? 'current' : 'locked';
         return (

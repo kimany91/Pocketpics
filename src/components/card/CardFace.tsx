@@ -1,4 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { memo, useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -17,6 +18,7 @@ import { getRarity } from '../../game/rarity';
 import { cardImageUri, cardThumbUri } from '../../storage/disk';
 import { CARD_RATIO, fonts } from '../../theme';
 import { Twinkles } from '../fx';
+import { CardVideo } from './CardVideo';
 import { Frame, Sweep } from './Frame';
 import { Foil } from './Foil';
 import { DivineHalo } from './DivineHalo';
@@ -27,6 +29,8 @@ export interface CardLike {
   id: string;
   rarity: string;
   name: string | null;
+  /** Carte vidéo : petit logo en haut à gauche, et le film se joue sur demande. */
+  video?: boolean;
 }
 
 interface Props {
@@ -41,6 +45,20 @@ interface Props {
   imageUri?: string;
   /** Image intégrée à l'app (cartes des adversaires du mode solo). */
   imageSource?: number;
+  /** Carte vidéo : joue le film dans la fenêtre de la carte. */
+  playVideo?: boolean;
+}
+
+/** Petit logo d'une carte vidéo, en haut à gauche de la photo. */
+function VideoBadge({ size, inset }: { size: number; inset: number }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={[styles.videoBadge, { width: size, height: size, borderRadius: size / 2, left: inset, top: inset }]}
+    >
+      <Ionicons name="videocam" size={size * 0.62} color="#FFFFFF" />
+    </View>
+  );
 }
 
 /** Reflets holographiques qui suivent l'inclinaison, par rareté (Mythique et au-dessus). */
@@ -83,7 +101,7 @@ function effectKey(rarity: ReturnType<typeof getRarity>) {
   return rarity.id === 'mythic' ? 'mythic' : null;
 }
 
-export const CardFace = memo(function CardFace({ card, width, quality = 'full', animated = true, tilt, imageUri, imageSource }: Props) {
+export const CardFace = memo(function CardFace({ card, width, quality = 'full', animated = true, tilt, imageUri, imageSource, playVideo = false }: Props) {
   const rarity = getRarity(card.rarity);
   const height = width * CARD_RATIO;
   // Galaxy : un cadre plus large, pour qu'on voie bien l'espace autour de la photo.
@@ -114,6 +132,7 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
         ) : uri ? (
           <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={card.id} transition={quality === 'thumb' ? 120 : 0} />
         ) : null}
+        {card.video ? <CardVideo cardId={card.id} playing={playVideo} radius={innerRadius} /> : null}
         {galaxy ? <ChromaticPhoto width={width - border * 2} height={height - border * 2} /> : null}
         {rarity.frameStyle === 'chromatic' && !tilt ? <Holo colors={CHROMA_HOLO} opacity={0.18} animated={animated} width={width} height={height} /> : null}
         {rarity.frameStyle === 'divine' && !tilt ? <Holo colors={DIVINE_HOLO} opacity={0.42} animated={animated} width={width} height={height} duration={1800} /> : null}
@@ -132,6 +151,7 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
             </Text>
           </LinearGradient>
         ) : null}
+        {card.video ? <VideoBadge size={Math.max(13, width * 0.13)} inset={Math.max(4, width * 0.045)} /> : null}
         <View style={[StyleSheet.absoluteFill, styles.innerStroke, { borderRadius: innerRadius }]} pointerEvents="none" />
       </View>
       {galaxy ? <GalaxyTwinkles width={width} height={height} /> : null}
@@ -218,6 +238,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     overflow: 'hidden',
     backgroundColor: '#101013',
+  },
+  videoBadge: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(10,10,14,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
   },
   innerStroke: {
     borderWidth: StyleSheet.hairlineWidth * 2,

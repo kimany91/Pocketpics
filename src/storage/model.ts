@@ -53,6 +53,14 @@ export interface Card {
   /** Carte mise en favori par le joueur (ajouté après : `false` si absent). */
   favorite: boolean;
   /**
+   * Carte vidéo : un fichier `video.mp4` est rangé à côté de l'image, et un
+   * appui long la fait jouer. Seules les cartes Épique et au-dessus peuvent
+   * l'être (ajouté après : `false` si absent).
+   */
+  video: boolean;
+  /** Seconde de la vidéo choisie comme miniature (ajouté après : 0 si absent). */
+  posterAt: number;
+  /**
    * PV et attaques pour les combats (ajouté après : générés à partir de l'id si
    * absents, donc identiques à chaque chargement). Les noms d'attaque sont modifiables.
    */
@@ -159,6 +167,8 @@ export function migrateCard(input: unknown, now = Date.now()): Card | null {
     height: num(c.height, 0),
     sourceId: typeof c.sourceId === 'string' ? c.sourceId : null,
     favorite: c.favorite === true,
+    video: c.video === true,
+    posterAt: Math.max(0, num(c.posterAt, 0)),
     battle: normalizeStats(c.battle, c.id as string, getRarity(rarity).rank),
   };
 }

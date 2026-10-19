@@ -85,6 +85,8 @@ export default function CardScreen() {
   const [burning, setBurning] = useState(false);
   const [spin, setSpin] = useState(0);
   const [zoomed, setZoomed] = useState(false);
+  /** Carte vidéo : le film joue tant qu'on reste appuyé dessus. */
+  const [holding, setHolding] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [renamed, setRenamed] = useState(0);
@@ -455,6 +457,15 @@ export default function CardScreen() {
                     onZoomChange={setZoomed}
                     entrance="none"
                     active={isCur && !closing}
+                    onHold={
+                      isCur && c.video
+                        ? (down) => {
+                            if (down) haptic.light();
+                            setHolding(down);
+                          }
+                        : undefined
+                    }
+                    playVideo={isCur && holding}
                   />
                 </Slot>
               );
@@ -497,6 +508,22 @@ export default function CardScreen() {
             <AppText variant="label" style={{ color: r.color, marginTop: 4 }}>
               {r.label}
             </AppText>
+            {card.video && !holding ? (
+              <Animated.View entering={FadeIn.duration(260)} style={styles.videoHint}>
+                <Ionicons name="videocam" size={13} color={colors.textDim} />
+                <AppText variant="caption">Reste appuyé pour voir la vidéo</AppText>
+                <Pressable
+                  onPress={() => router.push({ pathname: '/card/poster', params: { id: card.id } })}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Choisir la miniature dans la vidéo"
+                >
+                  <AppText variant="caption" style={{ color: colors.gold }}>
+                    · Choisir la miniature
+                  </AppText>
+                </Pressable>
+              </Animated.View>
+            ) : null}
             <Pressable
               onPress={openStats}
               disabled={burning}
@@ -810,6 +837,7 @@ function ActionToast({ toast, top }: { toast: Toast | null; top: number }) {
 
 const styles = StyleSheet.create({
   topRight: { flexDirection: 'row', gap: 10 },
+  videoHint: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   statsPill: {
     flexDirection: 'row',
     alignItems: 'center',

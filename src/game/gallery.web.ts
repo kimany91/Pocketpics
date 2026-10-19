@@ -5,10 +5,20 @@
  * navigateur (IndexedDB) et forment sa « galerie de jeu ».
  * L'app mobile, elle, lit directement la galerie (gallery.ts).
  */
+import { Asset } from 'expo-asset';
+
 import { idbEntries, idbPut } from '../storage/webdb';
 
 export type GalleryAccess = 'granted' | 'limited' | 'denied' | 'undetermined';
 export type GallerySource = 'photos' | 'folder';
+
+export interface ProcessedVideo extends ProcessedPhoto {
+  videoUri: string;
+  /** Le film lui-même, rangé tel quel avec la carte. */
+  videoBlob: Blob;
+  duration: number;
+  posterAt: number;
+}
 
 export interface ProcessedPhoto {
   assetId: string;
@@ -54,11 +64,14 @@ export async function getGalleryAccess(): Promise<GalleryAccess> {
 }
 
 const isImage = (f: File) => f.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i.test(f.name);
+const isVideo = (f: File) => f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(f.name);
+/** Au-delà, la vidéo est trop lourde pour une carte. */
+export const MAX_VIDEO_BYTES = 40 * 1024 * 1024;
 
 function addFiles(files: File[]): number {
   let added = 0;
   for (const f of files) {
-    if (!isImage(f)) continue;
+    if (!isImage(f) && !(isVideo(f) && f.size <= MAX_VIDEO_BYTES)) continue;
     const id = `${f.name}-${f.size}-${f.lastModified}`;
     if (picked.has(id)) continue;
     picked.set(id, f);
@@ -136,7 +149,7 @@ function pickFiles(source: GallerySource): Promise<File[]> {
     input.multiple = true;
     input.style.display = 'none';
     if (source === 'folder') input.setAttribute('webkitdirectory', '');
-    else input.accept = 'image/*';
+    else input.accept = 'image/*,video/*';
     let done = false;
     const finish = () => {
       if (done) return;
@@ -194,9 +207,22 @@ export async function openLimitedPicker() {
 }
 
 const DEMO_COUNT = 400;
+const videoFile = (id: string) => {
+  const f = picked.get(id);
+  return f instanceof File && isVideo(f) ? f : null;
+};
+
 export async function listPhotoIds() {
   await ensureLoaded();
-  return picked.size > 0 ? [...picked.keys()] : Array.from({ length: DEMO_COUNT }, (_, i) => `demo-${i}`);
+  if (picked.size === 0) return Array.from({ length: DEMO_COUNT }, (_, i) => `demo-${i}`);
+  return [...picked.keys()].filter((id) => !videoFile(id));
+}
+
+/** Les vidéos importées (une carte vidéo ne peut sortir que d'une vidéo). */
+export async function listVideoIds() {
+  await ensureLoaded();
+  if (picked.size === 0) return demoVideos().map((_, i) => `demo-video-${i}`);
+  return [...picked.keys()].filter((id) => videoFile(id));
 }
 
 const PALETTES = [
@@ -277,6 +303,152 @@ async function blobHash(id: string, blob: Blob): Promise<string> {
     return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
   } catch {
     return `${id}-${blob.size}`;
+  }
+}
+
+/* --------------------------------- Vidéos --------------------------------- */
+
+/**
+ * Clips fournis avec la démo : de quoi voir les cartes vidéo sans rien importer.
+ * Deux formats, car tous les navigateurs ne lisent pas les mêmes : le MP4
+ * (H.264) partout sur téléphone, le WebM (VP9) pour les navigateurs libres qui
+ * n'ont pas de décodeur H.264.
+ */
+const DEMO_MP4: unknown[] = [
+  require('../../assets/demo/clip-1.mp4'),
+  require('../../assets/demo/clip-2.mp4'),
+  require('../../assets/demo/clip-3.mp4'),
+];
+const DEMO_WEBM: unknown[] = [
+  require('../../assets/demo/clip-1.webm'),
+  require('../../assets/demo/clip-2.webm'),
+  require('../../assets/demo/clip-3.webm'),
+];
+
+/** Ce navigateur sait-il lire une vidéo, et dans quel format ? */
+function canPlay(kind: 'mp4' | 'webm'): boolean {
+  try {
+    const v = document.createElement('video');
+    return v.canPlayType(kind === 'mp4' ? 'video/mp4; codecs="avc1.42E01E"' : 'video/webm; codecs="vp9"') !== '';
+  } catch {
+    return false;
+  }
+}
+
+/** Les clips de démonstration, dans un format que ce navigateur sait lire. */
+const demoVideos = (): unknown[] => (canPlay('mp4') ? DEMO_MP4 : canPlay('webm') ? DEMO_WEBM : []);
+
+/**
+ * Adresse d'une ressource empaquetée : selon le bundler, `require` rend une
+ * chaîne, un objet qui porte l'adresse, ou un simple numéro (le registre
+ * d'Expo sait alors la retrouver).
+ */
+function moduleUri(mod: unknown): string {
+  if (typeof mod === 'string') return mod;
+  const direct = (mod as { uri?: string } | null)?.uri;
+  if (typeof direct === 'string' && direct) return direct;
+  try {
+    return Asset.fromModule(mod as number).uri ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** Charge une vidéo (hors écran) et attend qu'on puisse y prendre des images. */
+function loadVideo(src: string): Promise<HTMLVideoElement> {
+  return new Promise((resolve, reject) => {
+    const v = document.createElement('video');
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = 'auto';
+    v.crossOrigin = 'anonymous';
+    v.onloadeddata = () => resolve(v);
+    v.onerror = () => reject(new Error('Vidéo illisible'));
+    v.src = src;
+  });
+}
+
+/** Image de la vidéo au moment demandé, redimensionnée comme une photo de carte. */
+async function grabFrame(v: HTMLVideoElement, at: number): Promise<{ image: ReturnType<typeof resized>; thumb: ReturnType<typeof resized> } | null> {
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      v.removeEventListener('seeked', done);
+      resolve();
+    };
+    v.addEventListener('seeked', done);
+    v.currentTime = Math.max(0, Math.min(at, Math.max(0, (v.duration || 0) - 0.05)));
+    // vidéo sans durée connue (flux) : on n'attend pas indéfiniment
+    setTimeout(done, 1500);
+  });
+  const w = v.videoWidth;
+  const h = v.videoHeight;
+  if (!w || !h) return null;
+  const draw = (shortSide: number, quality: number) => {
+    const k = Math.min(1, shortSide / Math.min(w, h));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(w * k);
+    canvas.height = Math.round(h * k);
+    canvas.getContext('2d')!.drawImage(v, 0, 0, canvas.width, canvas.height);
+    return { uri: canvas.toDataURL('image/jpeg', quality), width: canvas.width, height: canvas.height };
+  };
+  return { image: draw(1080, 0.86), thumb: draw(360, 0.72) };
+}
+
+/** Nouvelle image fixe pour une carte vidéo (le joueur a choisi un autre moment). */
+export async function frameOfVideo(videoUri: string, atSeconds: number): Promise<{ imageUri: string; thumbUri: string } | null> {
+  try {
+    const v = await loadVideo(videoUri);
+    const f = await grabFrame(v, atSeconds);
+    v.src = '';
+    return f ? { imageUri: f.image.uri, thumbUri: f.thumb.uri } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Prépare une vidéo pour devenir une carte vidéo (image fixe + film gardé tel quel). */
+export async function processVideo(assetId: string, isKnownHash: PhotoCheck): Promise<ProcessedVideo | { duplicate: true } | null> {
+  let blob: Blob | null = videoFile(assetId);
+  let hash: string;
+  if (!blob) {
+    // clip de démonstration
+    const i = Number(assetId.split('-')[2] ?? -1);
+    const src = moduleUri(demoVideos()[i]);
+    if (!src) return null;
+    if (isKnownHash(assetId)) return { duplicate: true };
+    try {
+      blob = await (await fetch(src)).blob();
+    } catch {
+      return null;
+    }
+    hash = assetId;
+  } else {
+    hash = await blobHash(assetId, blob);
+    if (isKnownHash(hash)) return { duplicate: true };
+  }
+  const uri = URL.createObjectURL(blob);
+  try {
+    const v = await loadVideo(uri);
+    const duration = Number.isFinite(v.duration) ? v.duration : 0;
+    const posterAt = duration > 1.2 ? Math.min(duration - 0.3, 0.8) : 0;
+    const f = await grabFrame(v, posterAt);
+    v.src = '';
+    if (!f) return null;
+    return {
+      assetId,
+      hash,
+      imageUri: f.image.uri,
+      thumbUri: f.thumb.uri,
+      width: f.image.width,
+      height: f.image.height,
+      videoUri: uri,
+      videoBlob: blob,
+      duration,
+      posterAt,
+    };
+  } catch {
+    URL.revokeObjectURL(uri);
+    return null;
   }
 }
 
