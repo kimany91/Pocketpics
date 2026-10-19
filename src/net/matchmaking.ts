@@ -21,7 +21,7 @@ import type { MqttConnection } from '../trade/mqtt';
 import { connectRelay, deps } from '../trade/online';
 import { newOnlineCode } from '../trade/relayCore';
 import { pickBotOpponent } from './botMatch';
-import { type Search, lobbyTopic, startSearch } from './lobbyCore';
+import { SEARCH_MS, type Search, lobbyTopic, startSearch } from './lobbyCore';
 import { useMatch } from './match';
 
 export type SearchPhase = 'idle' | 'searching' | 'found';
@@ -81,6 +81,9 @@ export const useMatchmaking = create<MatchmakingStore>((set, get) => ({
     search = startSearch({
       conns: ok,
       id: hex(8),
+      // jamais exactement le même temps d'attente : une recherche qui s'arrête
+      // toujours à la même seconde se repère tout de suite
+      searchMs: SEARCH_MS - 1000 + Math.random() * 2000,
       mmr: myMmr,
       async openRoom() {
         const code = newOnlineCode(getRandomBytes);
@@ -101,7 +104,7 @@ export const useMatchmaking = create<MatchmakingStore>((set, get) => ({
       onGiveUp: () => {
         if (gen !== generation) return;
         stopSearch();
-        useMatch.getState().startBotMatch(pickBotOpponent(myMmr()));
+        useMatch.getState().startBotMatch(pickBotOpponent(myMmr(), useGame.getState().save?.rank.streak ?? 0));
         set({ phase: 'found' });
       },
     });

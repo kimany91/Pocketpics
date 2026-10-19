@@ -3,9 +3,10 @@ import { test } from 'node:test';
 
 import { type Battle, act, createBattle, replace } from '../src/battle/engine';
 import { botAction, botReplacement } from '../src/battle/bot';
-import { deckForMmr, expectedPower, levelForMmr } from '../src/battle/levels';
+import { deckForMmr, deckLike, expectedPower, levelForMmr } from '../src/battle/levels';
 import { MAX_MMR } from '../src/game/rank';
-import { BOT_MMR, BotPeer, botNetFighters, pickBotMmr, pickBotName, pickBotOpponent } from '../src/net/botMatch';
+import { getRarity } from '../src/game/rarity';
+import { BOT_MMR, BotPeer, STREAK, botFighters, botNetFighters, onlineBotLevel, pickBotMmr, pickBotName, pickBotOpponent, streakTier } from '../src/net/botMatch';
 import { BOT_NAMES } from '../src/net/botNames';
 import { ANNOUNCE_TTL_MS, type LobbyConn, type Search, type Seeker, lobbyTopic, openLobby, pickOpponent, sealLobby, startSearch } from '../src/net/lobbyCore';
 
@@ -89,44 +90,84 @@ test('adversaire : un pseudo de joueur, jamais deux fois de suite le même', () 
   assert.equal(new Set(names.slice(-12)).size, 12);
 });
 
-test('adversaire : 4 cartes, à la hauteur du rang annoncé', () => {
+test('adversaire : ses cartes ont les mêmes raretés que celles du joueur', () => {
   const power = (f: { battle: { hp: number; attacks: { power: number }[] } }) => f.battle.hp * f.battle.attacks[0].power;
-  let last = 0;
-  for (const mmr of [0, 200, 500, 800, 1100, 1400, MAX_MMR]) {
-    const opp = pickBotOpponent(mmr, () => 0.5); // tirage neutre : rang = le mien
-    assert.equal(opp.mmr, mmr);
-    assert.equal(opp.fighters.length, 4);
-    assert.equal(new Set(opp.fighters.map((f) => f.ref)).size, 4);
-    assert.ok(opp.botLevel >= 1 && opp.botLevel <= 10);
-    // sa puissance est celle qu'a normalement un joueur arrivé à ce rang
-    const total = opp.fighters.reduce((s, f) => s + power(f), 0);
-    const want = expectedPower(levelForMmr(mmr).n);
-    assert.ok(Math.abs(total / want - 1) < 0.03, `${mmr} : ${Math.round(total)} au lieu de ${Math.round(want)}`);
-    assert.ok(total > last * 0.98, `la puissance ne baisse pas (${mmr})`);
-    last = Math.max(last, total);
-    // ses cartes sont présentables comme celles d'un joueur
-    const net = botNetFighters(opp);
-    assert.equal(net.length, 4);
+  for (const mine of [
+    ['common', 'common', 'common', 'rare'],
+    ['epic', 'superRare', 'superRare', 'rare'],
+    ['divine', 'ultraLegendary', 'legendary', 'mythic'],
+  ]) {
+    const opp = pickBotOpponent(600, 0, () => 0.5);
+    const theirs = botFighters(mine, opp);
+    assert.deepEqual(theirs.map((f) => f.rarity), mine, 'mêmes raretés');
+    assert.equal(new Set(theirs.map((f) => f.ref)).size, 4, 'quatre cartes différentes');
+    // à raretés égales, la puissance est la même qu'une équipe normale de ces raretés
+    const mirror = deckLike(theirs.map((f) => getRarity(f.rarity).rank));
+    const a = theirs.reduce((s, f) => s + power(f), 0);
+    const b = mirror.reduce((s, f) => s + power(f), 0);
+    assert.ok(Math.abs(a / b - 1) < 0.2, `${a} vs ${b}`);
+    const net = botNetFighters(theirs);
     assert.ok(net.every((f) => f.name && f.rarity && f.thumb === ''));
   }
-  // du premier au dernier rang, l'équipe est bien plus forte
-  const low = pickBotOpponent(0, () => 0.5).fighters.reduce((s, f) => s + power(f), 0);
-  assert.ok(last > low * 3, `${low} → ${last}`);
   // un rang hors bornes ne casse rien
   assert.ok(levelForMmr(-50).n >= 1);
   assert.ok(levelForMmr(99_999).n >= 1);
+  assert.equal(deckForMmr(600).fighters.length, 4);
+});
+
+test('adversaire en ligne : il joue comme un bon joueur, de mieux en mieux avec le rang', () => {
+  assert.ok(onlineBotLevel(0) >= 7, 'déjà bon au premier rang');
+  assert.ok(onlineBotLevel(MAX_MMR) <= 10);
+  assert.ok(onlineBotLevel(MAX_MMR) > onlineBotLevel(0));
+  for (const mmr of [0, 500, 1200, MAX_MMR]) {
+    const opp = pickBotOpponent(mmr, 0, () => 0.5);
+    assert.ok(opp.botLevel >= 7 && opp.botLevel <= 10, `${mmr} : ${opp.botLevel}`);
+  }
+});
+
+test('série cachée : plus on gagne, plus c’est dur ; après trois défaites, ça s’allège', () => {
+  assert.equal(streakTier(0).mult, 1);
+  assert.equal(streakTier(1).mult, 1, 'une seule victoire ne change rien');
+  assert.ok(streakTier(2).mult > 1);
+  assert.ok(streakTier(3).mult > streakTier(2).mult);
+  assert.ok(streakTier(4).mult > streakTier(3).mult, 'quatre victoires : hors d’atteinte');
+  assert.ok(streakTier(9).mult === streakTier(4).mult);
+  assert.equal(streakTier(4).reset, true, 'puis la série repart');
+  assert.ok(streakTier(-3).mult < 1 && streakTier(-3).reset);
+  assert.equal(streakTier(-2).mult, 1, 'deux défaites ne changent rien');
+  // les cartes de l'adversaire suivent la série, sans changer de rareté
+  const mine = ['epic', 'superRare', 'superRare', 'rare'];
+  const power = (fs: { battle: { hp: number; attacks: { power: number }[] } }[]) => fs.reduce((s, f) => s + f.battle.hp * f.battle.attacks[0].power, 0);
+  const at = (streak: number) => {
+    const opp = pickBotOpponent(600, streak, () => 0.5);
+    const fs = botFighters(mine, opp);
+    assert.deepEqual(fs.map((f) => f.rarity), mine, 'les raretés ne bougent pas');
+    return { opp, power: power(fs) };
+  };
+  const normal = at(0);
+  const two = at(2);
+  const four = at(4);
+  const lost = at(-3);
+  assert.ok(two.power > normal.power * 1.2, 'deux victoires : plus de PV et de dégâts');
+  assert.ok(four.power > two.power * 1.5, 'quatre victoires : énorme');
+  assert.ok(lost.power < normal.power * 0.5, 'trois défaites : bien plus facile');
+  assert.ok(four.opp.edge === 1 && four.opp.botLevel === 10);
+  assert.ok(lost.opp.botLevel <= 3 && lost.opp.edge === 0);
+  assert.ok(four.opp.mmr > normal.opp.mmr && lost.opp.mmr < normal.opp.mmr, 'son rang affiché suit');
+  assert.equal(STREAK.normal.reset, false);
 });
 
 /* ---------------------------- Un combat entier ---------------------------- */
 
 const nowait = () => Promise.resolve();
 
-/** Un combat complet : le joueur (camp 0) joue comme un bon joueur, l'adversaire joue tout seul. */
-async function playOut(mmr: number, mySkill: number): Promise<0 | 1 | null> {
-  const mine = deckForMmr(mmr).fighters;
-  const opp = pickBotOpponent(mmr, () => 0.5);
-  const peer = new BotPeer(opp.botLevel, Math.random, nowait);
-  let b: Battle = { ...createBattle(mine, opp.fighters), turn: Math.random() < 0.5 ? 0 : 1 };
+/** Un combat complet : le joueur (camp 0) a les mêmes raretés que l'adversaire, qui joue tout seul. */
+async function playOut(mmr: number, mySkill: number, streak = 0): Promise<0 | 1 | null> {
+  const rarities = ['epic', 'superRare', 'superRare', 'rare'];
+  const mine = deckLike(rarities.map((r) => getRarity(r).rank)).map((f, i) => ({ ...f, ref: `moi${i}` }));
+  const opp = pickBotOpponent(mmr, streak, () => 0.5);
+  const peer = new BotPeer(opp.botLevel, opp.edge, Math.random, nowait);
+  let b: Battle = { ...createBattle(mine, botFighters(rarities, opp)), turn: Math.random() < 0.5 ? 0 : 1 };
   for (let guard = 0; guard < 3000 && b.winner === null; guard++) {
     const side = b.mustReplace ?? b.turn;
     if (side === 1) {
@@ -139,26 +180,29 @@ async function playOut(mmr: number, mySkill: number): Promise<0 | 1 | null> {
   return b.winner;
 }
 
-test('adversaire : à rang égal, le combat est serré et se termine toujours', async () => {
+const rate = async (games: number, skill: number, streak = 0) => {
   let wins = 0;
-  const games = 60;
-  for (let i = 0; i < games; i++) {
-    const winner = await playOut(600, 8);
-    assert.notEqual(winner, null, 'le combat se termine');
-    if (winner === 0) wins++;
-  }
-  // deux adversaires de force comparable : ni massacre ni victoire automatique
-  assert.ok(wins > games * 0.2 && wins < games * 0.8, `${wins}/${games}`);
+  for (let i = 0; i < games; i++) if ((await playOut(600, skill, streak)) === 0) wins++;
+  return wins / games;
+};
+
+test('adversaire : à armes égales, le combat est serré et se termine toujours', async () => {
+  const won = await rate(60, 9);
+  assert.ok(won > 0.25 && won < 0.75, `${won}`);
 });
 
-test('adversaire : un joueur qui joue mal perd contre un adversaire de son rang', async () => {
-  let wins = 0;
-  const games = 40;
-  for (let i = 0; i < games; i++) if ((await playOut(600, 1)) === 0) wins++;
-  assert.ok(wins < games * 0.45, `${wins}/${games}`);
+test('adversaire : un joueur qui joue mal perd', async () => {
+  assert.ok((await rate(40, 1)) < 0.4);
 });
 
-/* ---------------------------- Deux joueurs qui cherchent ---------------------------- */
+test('série cachée : après 4 victoires l’adversaire est hors d’atteinte, après 3 défaites il est très abordable', async () => {
+  const hard = await rate(40, 9, 4);
+  const easy = await rate(40, 9, -3);
+  assert.ok(hard <= 0.1, `quatre victoires d’affilée : ${hard}`);
+  assert.ok(easy >= 0.9, `trois défaites d’affilée : ${easy}`);
+});
+
+/* ---------------------------- /* ---------------------------- Deux joueurs qui cherchent ---------------------------- */
 
 /** Un faux relais : tout le monde reçoit ce que les autres publient (et ses propres messages). */
 function bus() {

@@ -167,7 +167,7 @@ export default function FightScreen() {
         tint: ONLINE_TINT,
         mmr: m.opp.mmr,
         label: 'Combat classé',
-        art: firstThumb ? { uri: firstThumb } : bot ? botArt(bot.fighters[0].ref) : undefined,
+        art: firstThumb ? { uri: firstThumb } : bot && m.oppDeck?.[0] ? botArt(m.oppDeck[0].ref) : undefined,
         image: (ref) => (bot ? { imageSource: botArt(ref) } : { imageUri: thumbs.get(ref) || undefined }),
       };
       return { deck, foe, battle: m.start, controller: m.controller };

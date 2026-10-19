@@ -11,7 +11,6 @@ import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { Header } from '../../components/Header';
-import { CountdownRing } from '../../components/online/CountdownRing';
 import { FOUND_MS, MatchFound } from '../../components/online/MatchFound';
 import { Radar } from '../../components/online/Radar';
 import { StatusPill } from '../../components/online/StatusPill';
@@ -19,7 +18,6 @@ import { RankEmblem } from '../../components/rank/RankEmblem';
 import { Screen } from '../../components/Screen';
 import { rankOf, shownMmr } from '../../game/rank';
 import { useMatch } from '../../net/match';
-import { SEARCH_MS } from '../../net/lobbyCore';
 import { useMatchmaking } from '../../net/matchmaking';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
@@ -27,8 +25,9 @@ import { colors, fonts } from '../../theme';
 /** Ce qui s'affiche au fil de la recherche (le joueur ne sait pas ce qui se passe dessous). */
 const STEPS = [
   { at: 0, text: 'Recherche d’un adversaire' },
-  { at: 6000, text: 'On élargit la recherche' },
-  { at: 13_000, text: 'Dernières vérifications' },
+  { at: 5000, text: 'On élargit la recherche' },
+  { at: 11_000, text: 'Des joueurs sont en combat…' },
+  { at: 16_000, text: 'Presque' },
 ];
 
 export default function RandomBattleScreen() {
@@ -39,7 +38,8 @@ export default function RandomBattleScreen() {
   const myName = useGame((s) => s.save?.playerName ?? 'Toi');
   const myMmr = useGame((s) => (s.save ? shownMmr(s.save.rank) : 0));
   const [found, setFound] = useState(false);
-  const [left, setLeft] = useState(Math.ceil(SEARCH_MS / 1000));
+  /** Avance de la recherche, pour changer la phrase affichée (aucun décompte). */
+  const [elapsed, setElapsed] = useState(0);
   const active = useIsFocused() && !found;
 
   // Ouvert depuis le menu : on lance la recherche.
@@ -57,12 +57,12 @@ export default function RandomBattleScreen() {
     return () => clearTimeout(t);
   }, [matchPhase]);
 
-  // Compte à rebours de la recherche.
+  // Avance de la recherche : juste de quoi faire changer la phrase affichée.
   useEffect(() => {
     if (phase !== 'searching' || !startedAt) return;
-    const tick = () => setLeft(Math.max(0, Math.ceil((startedAt + SEARCH_MS - Date.now()) / 1000)));
+    const tick = () => setElapsed(Date.now() - startedAt);
     tick();
-    const t = setInterval(tick, 250);
+    const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, [phase, startedAt]);
 
@@ -78,7 +78,6 @@ export default function RandomBattleScreen() {
     return () => sub.remove();
   });
 
-  const elapsed = startedAt ? Date.now() - startedAt : 0;
   const step = [...STEPS].reverse().find((s) => elapsed >= s.at) ?? STEPS[0];
 
   return (
@@ -88,11 +87,6 @@ export default function RandomBattleScreen() {
         <Animated.View entering={FadeIn} style={styles.search}>
           <Radar size={240} color={colors.gold} active={active} speed={2200}>
             <View style={styles.center}>
-              {startedAt ? (
-                <View style={StyleSheet.absoluteFill}>
-                  <CountdownRing size={112} stroke={4} endsAt={startedAt + SEARCH_MS} total={SEARCH_MS} color={colors.gold} />
-                </View>
-              ) : null}
               <Animated.View entering={ZoomIn.springify().damping(12)}>
                 <RankEmblem rank={rankOf(myMmr)} size={62} still />
               </Animated.View>
@@ -105,7 +99,7 @@ export default function RandomBattleScreen() {
             </AppText>
           </Animated.View>
           <Animated.View key={step.text} entering={FadeInDown.duration(260)}>
-            <StatusPill tone="waiting" text={left > 0 ? `${step.text} · ${left} s` : step.text} active={active} />
+            <StatusPill tone="waiting" text={step.text} active={active} />
           </Animated.View>
           <Animated.View entering={FadeIn.delay(400)}>
             <AppText variant="caption" style={styles.hint}>

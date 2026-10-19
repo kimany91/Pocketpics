@@ -240,6 +240,43 @@ export function levelForMmr(mmr: number): Level {
 }
 
 /**
+ * Monde dont les cartes collent le mieux à ces raretés : de quoi donner à
+ * l'adversaire d'un combat classé des illustrations cohérentes avec ses cartes.
+ */
+function worldForRanks(ranks: number[]): Arena {
+  const avg = ranks.reduce((a, b) => a + b, 0) / Math.max(1, ranks.length);
+  let best = ARENAS[0];
+  let gap = Infinity;
+  for (const w of ARENAS) {
+    const mine = w.cards.map((c) => getRarity(c.rarity).rank);
+    const d = Math.abs(mine.reduce((a, b) => a + b, 0) / mine.length - avg);
+    if (d < gap) {
+      gap = d;
+      best = w;
+    }
+  }
+  return best;
+}
+
+/**
+ * Équipe calquée sur des raretés données : mêmes raretés, donc la même
+ * puissance moyenne, avec les illustrations du monde qui leur correspond.
+ * `mult` renforce (ou allège) ses cartes sans changer leurs raretés.
+ * Sert aux adversaires des combats classés (voir `src/net/botMatch.ts`).
+ */
+export function deckLike(ranks: number[], mult = 1): FighterInput[] {
+  const want = ranks.length ? ranks : [1, 1, 1, 1];
+  const w = worldForRanks(want);
+  return want.slice(0, 4).map((raw, i) => {
+    const rank = Math.max(0, Math.min(GALAXY_RANK, Math.round(raw)));
+    // au-delà de la Divine, les rangs en trop deviennent un bonus de stats
+    const over = RANK_STEP ** Math.max(0, rank - DIVINE_RANK);
+    const j = i % w.cards.length;
+    return fighter(w, j, w.cards[j].name, Math.min(DIVINE_RANK, rank), mult * over);
+  });
+}
+
+/**
  * Équipe de 4 cartes à la hauteur d'un joueur de ce rang : les illustrations du
  * monde correspondant, ramenées à la puissance qu'a normalement un joueur
  * arrivé là (`expectedPower`). Sert aux adversaires des combats classés

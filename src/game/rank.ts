@@ -82,9 +82,15 @@ export interface RankState {
   losses: number;
   /** Combat en cours : la défaite est déjà retirée, rendue en cas de victoire. */
   pending: { win: number; loss: number; opp: string; base: number } | null;
+  /**
+   * Série en cours : positif = victoires d'affilée, négatif = défaites
+   * d'affilée. Sert à la difficulté cachée du combat aléatoire (voir
+   * `src/net/botMatch.ts`) et n'est jamais montré dans le jeu.
+   */
+  streak: number;
 }
 
-export const initialRank = (): RankState => ({ mmr: 0, wins: 0, losses: 0, pending: null });
+export const initialRank = (): RankState => ({ mmr: 0, wins: 0, losses: 0, pending: null, streak: 0 });
 
 /** Points affichés : pendant un combat, on montre le rang d'avant le combat. */
 export const shownMmr = (r: RankState) => (r.pending ? r.pending.base : r.mmr);
@@ -102,7 +108,13 @@ export function finishMatch(r: RankState, won: boolean): { state: RankState; bef
   if (!r.pending) return { state: r, before, after: r.mmr };
   const after = won ? before + r.pending.win : Math.max(0, before - r.pending.loss);
   return {
-    state: { mmr: after, wins: r.wins + (won ? 1 : 0), losses: r.losses + (won ? 0 : 1), pending: null },
+    state: {
+      mmr: after,
+      wins: r.wins + (won ? 1 : 0),
+      losses: r.losses + (won ? 0 : 1),
+      pending: null,
+      streak: won ? Math.max(0, r.streak) + 1 : Math.min(0, r.streak) - 1,
+    },
     before,
     after,
   };
@@ -124,5 +136,6 @@ export function migrateRank(raw: unknown): RankState {
     p && typeof p === 'object' && typeof p.win === 'number' && typeof p.loss === 'number'
       ? { win: n(p.win), loss: n(p.loss), opp: typeof p.opp === 'string' ? p.opp : '', base: typeof p.base === 'number' ? n(p.base) : n(r.mmr) + n(p.loss) }
       : null;
-  return { mmr: n(r.mmr), wins: n(r.wins), losses: n(r.losses), pending };
+  const streak = typeof r.streak === 'number' && Number.isFinite(r.streak) ? Math.max(-20, Math.min(20, Math.trunc(r.streak))) : 0;
+  return { mmr: n(r.mmr), wins: n(r.wins), losses: n(r.losses), pending, streak };
 }

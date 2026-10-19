@@ -41,6 +41,8 @@ interface GameStore {
   startRanked(oppMmr: number, opp: string): void;
   /** Fin d'un combat en ligne classé. */
   finishRanked(won: boolean): { before: number; after: number } | null;
+  /** Remet à zéro la série de victoires / défaites en ligne (difficulté cachée). */
+  resetStreak(): void;
   /** Donne un code ami au joueur s'il n'en a pas encore. */
   ensureFriendCode(make: () => string): string;
   /** Ajoute ou met à jour un ami. */
@@ -269,6 +271,14 @@ export const useGame = create<GameStore>((set, get) => ({
     persistState(next);
     set({ save: next });
     return { before: r.before, after: r.after };
+  },
+
+  resetStreak() {
+    const save = get().save;
+    if (!save || save.rank.streak === 0) return;
+    const next: SaveState = { ...save, rank: { ...save.rank, streak: 0 } };
+    persistState(next);
+    set({ save: next });
   },
 
   ensureFriendCode(make) {

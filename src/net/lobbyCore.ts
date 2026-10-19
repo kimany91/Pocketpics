@@ -28,7 +28,10 @@ const lobbyKey = () => roomKey(LOBBY_CODE, LOBBY_NS);
 export const ANNOUNCE_TTL_MS = 6000;
 /** Rythme des annonces. */
 export const ANNOUNCE_MS = 1100;
-/** Temps de recherche avant de lancer le combat sans attendre davantage. */
+/**
+ * Temps de recherche avant de lancer le combat sans attendre davantage. Le jeu
+ * tire en fait une durée entre 19 et 21 s, pour que ça ne tombe jamais pile.
+ */
 export const SEARCH_MS = 20_000;
 
 export type LobbyMsg =

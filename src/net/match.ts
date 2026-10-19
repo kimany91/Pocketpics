@@ -30,7 +30,7 @@ import {
   sanitizeDeck,
   startBattle,
 } from './battleNet';
-import { type BotOpponent, BotPeer, botNetFighters } from './botMatch';
+import { type BotOpponent, BotPeer, botFighters, botNetFighters } from './botMatch';
 import { Reliable, type Wire } from './reliable';
 
 export type MatchPhase = 'idle' | 'waiting' | 'joining' | 'lobby' | 'fighting' | 'over';
@@ -134,16 +134,21 @@ export const useMatch = create<MatchStore>((set, get) => {
     started(battle, controller);
   };
 
-  /** L'adversaire du jeu « choisit ses cartes », puis le combat part. */
+  /**
+   * L'adversaire du jeu « choisit ses cartes » : les mêmes raretés que celles
+   * du joueur (il choisit après les avoir vues, mais ça ne se voit pas), puis
+   * le combat part.
+   */
   const beginBot = (opp: BotOpponent) => {
     const mine = sanitizeDeck(myNet);
     if (!mine) return;
-    const theirs = botNetFighters(opp);
+    const theirs = botNetFighters(botFighters(mine.map((f) => f.rarity), opp));
     const base = startBattle(mine, theirs);
     // la triche cachée du solo s'applique aussi à lui (voir catchUpMult)
     const battle: Battle = { ...base, catchUp: 1 };
     set({ oppDeck: theirs, oppReady: true });
-    started(battle, new BotPeer(opp.botLevel));
+    if (opp.resetStreak) useGame.getState().resetStreak();
+    started(battle, new BotPeer(opp.botLevel, opp.edge));
   };
 
   const started = (battle: Battle, controller: BattleController) => {
