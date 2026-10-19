@@ -547,9 +547,23 @@ export default function CardScreen() {
       {/* Rendu en dernier : rien ne peut recouvrir ces boutons. */}
       {!burning ? (
         <Animated.View style={[styles.top, { paddingTop: insets.top + 8 }, chromeStyle]} pointerEvents="box-none">
-          <Pressable onPress={() => setConfirming(true)} hitSlop={12} style={styles.round} accessibilityLabel="Brûler la carte" accessibilityRole="button">
-            <Ionicons name="trash-outline" size={19} color={colors.text} />
-          </Pressable>
+          <View style={styles.topLeft}>
+            <Pressable onPress={() => setConfirming(true)} hitSlop={12} style={styles.round} accessibilityLabel="Brûler la carte" accessibilityRole="button">
+              <Ionicons name="trash-outline" size={19} color={colors.text} />
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                haptic.light();
+                router.push({ pathname: '/card/crop', params: { id: card.id } });
+              }}
+              hitSlop={12}
+              style={styles.round}
+              accessibilityLabel="Recadrer la carte"
+              accessibilityRole="button"
+            >
+              <Ionicons name="crop" size={19} color={colors.text} />
+            </Pressable>
+          </View>
           {list.length > 1 ? <AppText variant="caption" style={styles.position}>{`${index + 1} / ${list.length}`}</AppText> : null}
           <View style={styles.topRight}>
             <PinButton
@@ -813,6 +827,7 @@ function ActionToast({ toast, top }: { toast: Toast | null; top: number }) {
 }
 
 const styles = StyleSheet.create({
+  topLeft: { flexDirection: 'row', gap: 10 },
   topRight: { flexDirection: 'row', gap: 10 },
   rarityRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   statsPill: {

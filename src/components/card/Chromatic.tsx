@@ -42,7 +42,7 @@ function fade(hex: string, alpha: number) {
  * Les bandes du voile : chaque couleur monte puis retombe à zéro avant la suivante.
  * Entre deux bandes la photo n'est pas touchée du tout — c'est ce qui la garde lisible.
  */
-const BANDS = SPECTRUM.flatMap((c) => [fade(c, 0), fade(c, 0.78), fade(c, 0), fade(c, 0)]);
+const BANDS = SPECTRUM.flatMap((c) => [fade(c, 0), fade(c, 0.8), fade(c, 0)]);
 /** Version plus claire, pour le liseré et la pastille (le même esprit que le cadre Ultra Légendaire). */
 const PASTEL = ['#FF6FA8', '#FFB86B', '#FFE66B', '#7CFFB2', '#6ED8FF', '#8C8CFF', '#D58CFF', '#FF6FA8'];
 /** Reflet prismatique qui croise les bandes : il s'allume quand on penche la carte. */
@@ -105,14 +105,14 @@ export function ChromaticVeil({
   intensity?: number;
 }) {
   const drive = useDrive(tilt, animated, 7000, 0.5);
-  const bands = [...BANDS, ...BANDS] as [string, string, ...string[]];
+  const bands = [...BANDS, ...BANDS, ...BANDS] as [string, string, ...string[]];
 
   const veil = useAnimatedStyle(() => {
     const t = Math.max(-1.4, Math.min(1.4, drive.value));
     return {
       // Visible sans noyer la photo : on doit toujours reconnaître l'image en
       // dessous. Un peu plus vif quand on penche la carte.
-      opacity: intensity * (0.52 + Math.min(1, Math.abs(t)) * 0.28),
+      opacity: intensity * (0.42 + Math.min(1, Math.abs(t)) * 0.3),
       transform: [{ translateX: -width + t * width * 0.5 }, { translateY: -height * 0.4 }, { rotate: '-26deg' }],
     };
   });
