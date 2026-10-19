@@ -31,8 +31,18 @@ import Animated, {
 import { fonts } from '../../theme';
 import { AppText } from '../AppText';
 
-/** Spectre de la maison (le même que `Foil` et `Galaxy`), répété pour des bandes fines. */
+/** Spectre de la maison (le même que `Foil` et `Galaxy`). */
 const SPECTRUM = ['#FF3B6B', '#FF9F2E', '#FFF04A', '#4BFF8A', '#2EE6FF', '#3D7BFF', '#B04BFF', '#FF3B6B'];
+
+function fade(hex: string, alpha: number) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+/**
+ * Les bandes du voile : chaque couleur monte puis retombe à zéro avant la suivante.
+ * Entre deux bandes la photo n'est pas touchée du tout — c'est ce qui la garde lisible.
+ */
+const BANDS = SPECTRUM.flatMap((c) => [fade(c, 0), fade(c, 0.85), fade(c, 0)]);
 /** Version plus claire, pour le liseré et la pastille (le même esprit que le cadre Ultra Légendaire). */
 const PASTEL = ['#FF6FA8', '#FFB86B', '#FFE66B', '#7CFFB2', '#6ED8FF', '#8C8CFF', '#D58CFF', '#FF6FA8'];
 /** Reflet prismatique qui croise les bandes : il s'allume quand on penche la carte. */
@@ -95,20 +105,21 @@ export function ChromaticVeil({
   intensity?: number;
 }) {
   const drive = useDrive(tilt, animated, 7000, 0.5);
-  const bands = [...SPECTRUM, ...SPECTRUM, ...SPECTRUM] as [string, string, ...string[]];
+  const bands = [...BANDS, ...BANDS] as [string, string, ...string[]];
 
   const veil = useAnimatedStyle(() => {
     const t = Math.max(-1.4, Math.min(1.4, drive.value));
     return {
-      // Bien visible de face (c'est la signature de la carte), un peu plus vif quand on la penche.
-      opacity: intensity * (0.62 + Math.min(1, Math.abs(t)) * 0.3),
+      // Visible sans noyer la photo : on doit toujours reconnaître l'image en
+      // dessous. Un peu plus vif quand on penche la carte.
+      opacity: intensity * (0.52 + Math.min(1, Math.abs(t)) * 0.28),
       transform: [{ translateX: -width + t * width * 0.5 }, { translateY: -height * 0.4 }, { rotate: '-26deg' }],
     };
   });
   const prism = useAnimatedStyle(() => {
     const t = Math.max(-1.3, Math.min(1.3, drive.value));
     return {
-      opacity: intensity * (0.08 + Math.min(1, Math.abs(t)) * 0.3),
+      opacity: intensity * (0.05 + Math.min(1, Math.abs(t)) * 0.17),
       transform: [{ translateX: -width * 0.45 - t * width * 0.45 }, { translateY: -height * 0.3 }, { rotate: '34deg' }],
     };
   });
