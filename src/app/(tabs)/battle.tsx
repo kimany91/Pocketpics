@@ -30,6 +30,7 @@ import { DecorSprite, Earth, Road, Texture } from '../../components/map/decor';
 import { railPaths, smoothPath } from '../../components/map/mapLayout';
 import { SANCTUARY_CARD, sanctuaryArt } from '../../components/map/Sanctuary';
 import { OUTLINE, SANCTUARY_VOID, WORLD_LOOKS } from '../../components/map/worlds';
+import { QuestPanel } from '../../components/QuestEntry';
 import { RankEmblem } from '../../components/rank/RankEmblem';
 import { Rise } from '../../components/Rise';
 import { RollingNumber } from '../../components/RollingNumber';
@@ -132,7 +133,12 @@ export default function BattleTab() {
           </Panel>
         </Rise>
 
-        <Rise visit={visit} index={3}>
+        {/* Quêtes et défi du jour */}
+        <Rise visit={visit} index={3} dy={30}>
+          <QuestPanel focused={focused} />
+        </Rise>
+
+        <Rise visit={visit} index={4}>
           <AppText variant="caption" style={{ marginTop: 4 }}>
             L’aventure rapporte des pièces pour acheter des tirages. Les combats en ligne font monter ton rang.
           </AppText>

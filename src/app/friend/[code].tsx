@@ -43,6 +43,12 @@ export default function FriendProfileScreen() {
   const [open, setOpen] = useState<PinnedCard | null>(null);
   const online = !!code && isOnline(code);
 
+  // Quête « Regarde le profil d'un ami ».
+  const known = !!friend;
+  useEffect(() => {
+    if (known) useGame.getState().noteQuest('friendProfile');
+  }, [known]);
+
   // On demande ses cartes en arrivant. On ne relance que si rien n'est arrivé :
   // chaque réponse, ce sont six images, inutile de les redemander sans cesse.
   useEffect(() => {

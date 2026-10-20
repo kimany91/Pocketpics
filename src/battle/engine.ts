@@ -47,6 +47,8 @@ export interface Fighter {
   chain: number;
   /** Numéro du tour où elle a perdu des PV pour la dernière fois (pour Représailles). */
   hurtAt: number;
+  /** PV retirés à l'adversaire par ses attaques (pour la carte MVP de fin de combat). */
+  dealt: number;
 }
 
 export interface Side {
@@ -139,6 +141,7 @@ export function makeFighter(c: FighterInput): Fighter {
     poisonDmg: 0,
     chain: 0,
     hurtAt: -10,
+    dealt: 0,
   };
 }
 
@@ -448,7 +451,9 @@ export function act(input: Battle, action: Action, rng: Rng = Math.random): { ba
       landed = true;
       target.hurtAt = b.turnCount;
     }
+    const before = target.hp;
     target.hp = Math.max(0, target.hp - damage);
+    f.dealt = (f.dealt ?? 0) + (before - target.hp);
     events.push({ t: 'hit', side: foeSide, damage, quality, hp: target.hp, maxHp: target.maxHp, hitIndex: i, kind, ...flags });
   }
 

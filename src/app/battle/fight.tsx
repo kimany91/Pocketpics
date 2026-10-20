@@ -66,6 +66,8 @@ import { type BattleController, type Move, type Step, applyMove } from '../../ne
 import { useMatch } from '../../net/match';
 import { useSocial } from '../../net/social';
 import { CoinIcon } from '../../components/Coin';
+import { MvpBadge } from '../../components/battle/MvpBadge';
+import { CHALLENGE_REWARD } from '../../game/quests';
 import { RankEmblem } from '../../components/rank/RankEmblem';
 import type { SoloReward } from '../../game/economy';
 import { DIVISION_POINTS, rankOf, shownMmr } from '../../game/rank';
@@ -138,7 +140,7 @@ const ONLINE_TINT = '#7C9CFF';
 const TURN_SECONDS = 40;
 
 export default function FightScreen() {
-  const params = useLocalSearchParams<{ level?: string; deck?: string; online?: string }>();
+  const params = useLocalSearchParams<{ level?: string; deck?: string; online?: string; challenge?: string }>();
   const online = params.online === '1';
   const level: Level | undefined = online ? undefined : (getLevel(Number(params.level)) ?? undefined);
   const allCards = useGame((s) => s.cards);
@@ -201,6 +203,10 @@ export default function FightScreen() {
   const [starsWon, setStarsWon] = useState(0);
   /** Victoire contre le Grand Portrait alors que la carte Galaxy n'est pas encore gagnée. */
   const [galaxyWin, setGalaxyWin] = useState(false);
+  /** Carte du joueur qui a fait le plus de dégâts. */
+  const [mvp, setMvp] = useState<{ card: Card; dealt: number } | null>(null);
+  /** Défi du jour réussi pendant ce combat (prime versée). */
+  const [challengeWon, setChallengeWon] = useState(false);
   const [rankChange, setRankChange] = useState<{ before: number; after: number } | null>(null);
   const [endReason, setEndReason] = useState<'gone' | 'lost' | null>(null);
   /** L'adversaire est parti : le combat ne compte pour personne. */
@@ -554,12 +560,19 @@ export default function FightScreen() {
     setEndReason(reason);
     setMode('idle');
     stopBattleMusic(music.current, 600);
+    // MVP : la carte qui a retiré le plus de PV à l'adversaire
+    if (battle) {
+      const best = [...battle.sides[0].fighters].sort((a, b) => (b.dealt ?? 0) - (a.dealt ?? 0))[0];
+      const card = best && (best.dealt ?? 0) > 0 ? deck.find((c) => c.id === best.ref) : undefined;
+      setMvp(card ? { card, dealt: best.dealt } : null);
+    }
     if (online) setRankChange(finishRanked(winner === 0));
     else if (winner === 0 && level && battle) {
       // étoiles : 3 sans perdre de carte, 2 en en perdant une, 1 sinon
       const stars = starsFor(battle.sides[0].fighters.filter((f) => f.hp <= 0).length);
       setStarsWon(stars);
       setReward(winLevel(level.n, stars));
+      if (params.challenge === '1') setChallengeWon(useGame.getState().completeChallenge(level.n, deck.map((c) => c.id)));
       if (level.world.final && level.boss && !useGame.getState().save?.galaxyClaimed) setGalaxyWin(true);
     }
     if (winner === 0) {
@@ -1015,9 +1028,19 @@ export default function FightScreen() {
 
       {result !== null ? (
         online ? (
-          <OnlineResult outcome={cancelled ? 'cancel' : result === 0 ? 'win' : 'loss'} change={rankChange} opp={foeInfo.name} reason={endReason} />
+          <OnlineResult outcome={cancelled ? 'cancel' : result === 0 ? 'win' : 'loss'} change={rankChange} opp={foeInfo.name} reason={endReason} mvp={cancelled ? null : mvp} />
         ) : level ? (
-          <ResultOverlay won={result === 0} levelN={level.n} deck={deck.map((c) => c.id).join(',')} reward={reward} stars={starsWon} galaxy={galaxyWin} />
+          <ResultOverlay
+            won={result === 0}
+            levelN={level.n}
+            deck={deck.map((c) => c.id).join(',')}
+            reward={reward}
+            stars={starsWon}
+            galaxy={galaxyWin}
+            mvp={mvp}
+            challenge={params.challenge === '1'}
+            challengeWon={challengeWon}
+          />
         ) : null
       ) : null}
       {quitting ? (
@@ -1432,12 +1455,19 @@ function ResultOverlay({
   reward,
   stars,
   galaxy = false,
+  mvp,
+  challenge = false,
+  challengeWon = false,
 }: {
   won: boolean;
   levelN: number;
   deck: string;
   reward: SoloReward | null;
   stars: number;
+  mvp: { card: Card; dealt: number } | null;
+  /** Combat lancé depuis le défi du jour, et s'il est réussi. */
+  challenge?: boolean;
+  challengeWon?: boolean;
   /** Victoire contre le Grand Portrait, carte Galaxy pas encore gagnée : célébration cosmique et bouton de révélation. */
   galaxy?: boolean;
 }) {
@@ -1536,12 +1566,32 @@ function ResultOverlay({
           </Animated.View>
         )
       ) : null}
-      <Animated.View entering={FadeInDown.delay(won ? 900 : 650).springify().damping(16)} style={{ alignSelf: 'stretch', gap: 10, marginTop: 30, paddingHorizontal: 32 }}>
+      {challengeWon ? (
+        <Animated.View entering={ZoomIn.delay(coinsAt + 450).springify().damping(10)} style={styles.challengeWon}>
+          <Ionicons name="flame" size={18} color="#FF9A3C" />
+          <AppText style={styles.challengeWonText}>Défi du jour réussi</AppText>
+          <CoinIcon size={18} />
+          <AppText style={styles.challengeWonPrize}>{`+${CHALLENGE_REWARD}`}</AppText>
+        </Animated.View>
+      ) : null}
+      {mvp ? (
+        <View style={{ marginTop: 16, alignSelf: 'stretch' }}>
+          <MvpBadge card={mvp.card} dealt={mvp.dealt} delay={won ? coinsAt + 600 : 500} />
+        </View>
+      ) : null}
+      <Animated.View entering={FadeInDown.delay(won ? 900 : 650).springify().damping(16)} style={{ alignSelf: 'stretch', gap: 10, marginTop: mvp ? 20 : 30, paddingHorizontal: 32 }}>
         {canReveal ? <RevealGalaxyButton /> : null}
         {won && next ? (
           <Button label={`Niveau ${next.n}`} size="lg" icon="arrow-forward" onPress={() => router.replace({ pathname: '/battle/deck', params: { level: String(next.n) } })} />
         ) : null}
-        {!won ? <Button label="Réessayer" size="lg" icon="refresh" onPress={() => router.replace({ pathname: '/battle/fight', params: { level: String(levelN), deck } })} /> : null}
+        {!won ? (
+          <Button
+            label={challenge ? 'Retenter le défi' : 'Réessayer'}
+            size="lg"
+            icon="refresh"
+            onPress={() => router.replace({ pathname: '/battle/fight', params: { level: String(levelN), deck, ...(challenge ? { challenge: '1' } : null) } })}
+          />
+        ) : null}
         <Button label="Retour à la carte" kind="secondary" onPress={() => router.back()} />
       </Animated.View>
     </Animated.View>
@@ -1576,11 +1626,13 @@ function OnlineResult({
   change,
   opp,
   reason,
+  mvp,
 }: {
   outcome: 'win' | 'loss' | 'cancel';
   change: { before: number; after: number } | null;
   opp: string;
   reason: 'gone' | 'lost' | null;
+  mvp: { card: Card; dealt: number } | null;
 }) {
   const won = outcome === 'win';
   const cancelled = outcome === 'cancel';
@@ -1656,6 +1708,11 @@ function OnlineResult({
         </AppText>
         {change ? <AppText variant="caption">{`${ra.points}/${DIVISION_POINTS} dans ${ra.label}`}</AppText> : null}
       </Animated.View>
+      {mvp ? (
+        <View style={{ marginTop: 18, alignSelf: 'stretch' }}>
+          <MvpBadge card={mvp.card} dealt={mvp.dealt} delay={900} />
+        </View>
+      ) : null}
       <Animated.View entering={FadeInDown.delay(350)} style={{ alignSelf: 'stretch', gap: 10, marginTop: 28, paddingHorizontal: 32 }}>
         <Button
           label="Retour"
@@ -1675,6 +1732,20 @@ const styles = StyleSheet.create({
   resultStars: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginTop: 18, height: 62 },
   coinsWon: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 18, height: 52, borderRadius: 26, backgroundColor: 'rgba(247,201,72,0.14)', borderWidth: 1.5, borderColor: 'rgba(247,201,72,0.5)' },
   coinsText: { fontFamily: fonts.black, fontSize: 28, color: colors.gold },
+  challengeWon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,122,44,0.16)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,122,44,0.55)',
+  },
+  challengeWonText: { fontFamily: fonts.bold, fontSize: 14, color: colors.text },
+  challengeWonPrize: { fontFamily: fonts.black, fontSize: 16, color: colors.gold },
   promo: { paddingHorizontal: 14, height: 34, borderRadius: 8, justifyContent: 'center', transform: [{ skewX: '-10deg' }] },
   promoText: { fontFamily: fonts.black, fontSize: 16, letterSpacing: 0.3 },
   rankLabel: { fontFamily: fonts.black, fontSize: 22 },

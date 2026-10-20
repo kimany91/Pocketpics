@@ -3,11 +3,17 @@
  * En ligne (`online=1`), c'est aussi le salon : on voit l'adversaire et son
  * rang, chacun valide ses cartes, et le combat part quand les deux sont prêts.
  *
+ * En solo, on peut partir avec moins de 4 cartes : le jeu demande d'abord
+ * confirmation. Avec `challenge=1` (défi du jour), seules les cartes permises
+ * par le défi sont proposées, au nombre qu'il fixe, et les meilleures sont
+ * déjà choisies.
+ *
  * Une carte choisie bondit (avec quelques étincelles) et vient se poser dans
  * les emplacements de l'équipe, en bas ; quand l'équipe est complète, le bouton
  * « Combattre » s'illumine.
  */
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, FlatList, Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
@@ -36,9 +42,11 @@ import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
 import { Header } from '../../components/Header';
 import { CardFace } from '../../components/card/CardFace';
+import { CoinIcon } from '../../components/Coin';
 import { Burst, Glow } from '../../components/fx';
 import { Message } from '../../components/online/Message';
 import { RankEmblem } from '../../components/rank/RankEmblem';
+import { CHALLENGE_REWARD, challengeRule, dayKey } from '../../game/quests';
 import { rankOf } from '../../game/rank';
 import { useMatch } from '../../net/match';
 import { getRarity } from '../../game/rarity';
@@ -56,9 +64,15 @@ let lastDeck: string[] = [];
 const strength = (c: Card) => c.battle.hp * (c.battle.attacks[0].power + c.battle.attacks[1].power * 0.5);
 
 export default function DeckScreen() {
-  const { level: levelParam, online: onlineParam } = useLocalSearchParams<{ level?: string; online?: string }>();
+  const { level: levelParam, online: onlineParam, challenge: challengeParam } = useLocalSearchParams<{ level?: string; online?: string; challenge?: string }>();
   const online = onlineParam === '1';
   const level = online ? undefined : (getLevel(Number(levelParam)) ?? undefined);
+  // Défi du jour : seulement s'il porte bien sur ce niveau et qu'il reste à faire.
+  const savedChallenge = useGame((s) => s.save?.quests.challenge ?? null);
+  const challenge =
+    challengeParam === '1' && level && savedChallenge && !savedChallenge.done && savedChallenge.level === level.n && savedChallenge.day === dayKey(Date.now())
+      ? savedChallenge
+      : null;
   const foes = useMemo(() => (level ? levelFighters(level) : []), [level]);
   const foeGroups = useMemo(() => {
     const groups: { rarity: string; count: number }[] = [];
@@ -74,9 +88,16 @@ export default function DeckScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  const sorted = useMemo(() => [...cards].sort((a, b) => getRarity(b.rarity).rank - getRarity(a.rarity).rank || strength(b) - strength(a)), [cards]);
-  const need = Math.min(DECK_SIZE, cards.length);
-  const [picked, setPicked] = useState<string[]>(() => lastDeck.filter((id) => cards.some((c) => c.id === id)).slice(0, DECK_SIZE));
+  // En défi, seules les cartes permises sont proposées.
+  const allowed = useMemo(() => (challenge ? cards.filter((c) => getRarity(c.rarity).rank <= challenge.cap) : cards), [cards, challenge]);
+  const sorted = useMemo(() => [...allowed].sort((a, b) => getRarity(b.rarity).rank - getRarity(a.rarity).rank || strength(b) - strength(a)), [allowed]);
+  const maxPicks = challenge ? challenge.count : DECK_SIZE;
+  const need = Math.min(maxPicks, allowed.length);
+  const [picked, setPicked] = useState<string[]>(() =>
+    challenge
+      ? [...allowed].sort((a, b) => strength(b) - strength(a)).slice(0, challenge.count).map((c) => c.id)
+      : lastDeck.filter((id) => cards.some((c) => c.id === id)).slice(0, DECK_SIZE),
+  );
 
   const cols = 3;
   const gap = 12;
@@ -124,20 +145,33 @@ export default function DeckScreen() {
   const toggle = (id: string) => {
     if (online && match.myReady) return;
     haptic.tick();
-    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length >= DECK_SIZE ? p : [...p, id]));
+    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length >= maxPicks ? p : [...p, id]));
   };
   const auto = () => {
     haptic.light();
-    setPicked([...cards].sort((a, b) => strength(b) - strength(a)).slice(0, DECK_SIZE).map((c) => c.id));
+    setPicked([...allowed].sort((a, b) => strength(b) - strength(a)).slice(0, maxPicks).map((c) => c.id));
   };
-  const fight = () => {
-    lastDeck = picked;
+  const launch = () => {
+    if (!challenge) lastDeck = picked;
     if (online) {
       haptic.medium();
       match.setDeck(picked.map((id) => cards.find((c) => c.id === id)).filter((c): c is Card => !!c));
       return;
     }
-    if (level) router.replace({ pathname: '/battle/fight', params: { level: String(level.n), deck: picked.join(',') } });
+    if (level) router.replace({ pathname: '/battle/fight', params: { level: String(level.n), deck: picked.join(','), ...(challenge ? { challenge: '1' } : null) } });
+  };
+  // Solo : on peut partir avec moins de cartes que prévu, après confirmation.
+  const short = !online && picked.length > 0 && picked.length < need;
+  const fight = () => {
+    if (!short) return launch();
+    haptic.light();
+    const n = picked.length;
+    confirmAction(
+      n === 1 ? 'Combattre avec une seule carte ?' : `Combattre avec ${n} cartes ?`,
+      `Tu n’auras ${n === 1 ? 'qu’une carte' : `que ${n} cartes`} contre ${foes.length} pour l’adversaire. Tu es sûr ?`,
+      'Combattre',
+      launch,
+    );
   };
   const opp = match.opp;
   const oppRank = rankOf(opp?.mmr ?? 0);
@@ -185,9 +219,26 @@ export default function DeckScreen() {
       </View>
       ) : null}
 
+      {challenge ? (
+        <View style={styles.challenge}>
+          <LinearGradient pointerEvents="none" colors={['rgba(255,122,44,0.28)', 'rgba(247,201,72,0.10)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          <View style={styles.challengeIcon}>
+            <Ionicons name="flame" size={20} color="#141414" />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <AppText style={styles.challengeKicker}>Défi du jour</AppText>
+            <AppText variant="body" style={{ fontFamily: fonts.bold }}>{`Gagne avec ${challengeRule(challenge)}`}</AppText>
+          </View>
+          <View style={styles.challengePrize}>
+            <CoinIcon size={16} />
+            <AppText style={styles.challengePrizeText}>{`+${CHALLENGE_REWARD}`}</AppText>
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.titleRow}>
         <View style={{ flex: 1 }}>
-          <AppText variant="heading">{`Choisis ${need} carte${need > 1 ? 's' : ''}`}</AppText>
+          <AppText variant="heading">{online || challenge ? `Choisis ${need} carte${need > 1 ? 's' : ''}` : `Choisis jusqu’à ${need} carte${need > 1 ? 's' : ''}`}</AppText>
           <AppText variant="caption">La première choisie commence le combat.</AppText>
         </View>
         {cards.length > 0 ? <Button label="Auto" icon="flash-outline" kind="secondary" onPress={auto} /> : null}
@@ -220,8 +271,18 @@ export default function DeckScreen() {
           </View>
         ) : (
           <FightButton
-            label={picked.length >= need && need > 0 ? (online ? 'Prêt !' : 'Combattre') : `${picked.length}/${need} cartes`}
-            disabled={need === 0 || picked.length < need || (online && match.phase !== 'lobby')}
+            label={
+              picked.length >= need && need > 0
+                ? online
+                  ? 'Prêt !'
+                  : challenge
+                    ? 'Relever le défi'
+                    : 'Combattre'
+                : short
+                  ? `Combattre avec ${picked.length} carte${picked.length > 1 ? 's' : ''}`
+                  : `${picked.length}/${need} cartes`
+            }
+            disabled={need === 0 || (picked.length < need && !short) || (online && match.phase !== 'lobby')}
             onPress={fight}
           />
         )}
@@ -366,5 +427,21 @@ const styles = StyleSheet.create({
   slot: { borderRadius: 7, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
   slotFull: { borderStyle: 'solid', borderColor: colors.gold, backgroundColor: 'rgba(247,201,72,0.1)' },
   slotNum: { fontFamily: fonts.bold, fontSize: 13, color: colors.textFaint },
+  challenge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,122,44,0.55)',
+    overflow: 'hidden',
+  },
+  challengeIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#FF9A3C', alignItems: 'center', justifyContent: 'center' },
+  challengeKicker: { fontFamily: fonts.black, fontSize: 10, letterSpacing: 1.2, color: '#FFB067', textTransform: 'uppercase' },
+  challengePrize: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.35)' },
+  challengePrizeText: { fontFamily: fonts.black, fontSize: 13, color: colors.gold },
   fightGlow: { position: 'absolute', left: 0, right: 0, top: -16, bottom: -16, alignItems: 'center', justifyContent: 'center' },
 });

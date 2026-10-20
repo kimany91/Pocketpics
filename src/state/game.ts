@@ -7,7 +7,23 @@ import { ATTACK_NAME_MAX } from '../battle/stats';
 import { DRAW_PRICE, type SoloReward, soloReward } from '../game/economy';
 import { DIVINE_GATE, TOTAL_LEVELS, needsDivine } from '../battle/levels';
 import { planPack, rollLucky } from '../game/luck';
-import { cancelMatch, finishMatch, settleAbandoned, startMatch } from '../game/rank';
+import {
+  CHALLENGE_REWARD,
+  type DailyChallenge,
+  type QuestContext,
+  type QuestEvent,
+  type Reward,
+  bump,
+  claim,
+  dayKey,
+  finishOnline,
+  fitsChallenge,
+  pickChallenge,
+  rollQuests,
+  startOnline,
+} from '../game/quests';
+import { cancelMatch, finishMatch, rankOf, settleAbandoned, shownMmr, startMatch } from '../game/rank';
+import { getRarity } from '../game/rarity';
 import { type CropRect, cropImage } from '../game/gallery';
 import { generatePack } from '../game/pack';
 import * as disk from '../storage/disk';
@@ -77,6 +93,17 @@ interface GameStore {
    * tirable : elle sort du registre anti-doublon.
    */
   destroyCard(id: string): void;
+  /** Compte un évènement pour les quêtes (ex. regarder le profil d'un ami). */
+  noteQuest(ev: QuestEvent): void;
+  /** Récupère une quête finie : verse sa récompense. `null` si elle n'est pas prête. */
+  claimQuest(id: string): Reward | null;
+  /** Défi du jour : le choisit au premier passage de la journée, puis le garde. */
+  ensureChallenge(): DailyChallenge | null;
+  /**
+   * Défi du jour gagné avec cette équipe à ce niveau : verse la prime. Rend
+   * `false` si ce n'était pas le défi (autre niveau, équipe hors règles, déjà fait).
+   */
+  completeChallenge(level: number, deckIds: string[]): boolean;
   /** Démo navigateur uniquement : remet la réserve de tirages au maximum. */
   refillDrawsForDemo(): void;
   /** Essai : le prochain paquet sort tout chromatique (voir le bloc d'essai plus haut). */
@@ -86,6 +113,23 @@ interface GameStore {
 
 function persistState(save: SaveState) {
   disk.saveState(save);
+}
+
+/** La sauvegarde avec un évènement de quête en plus. */
+const withQuest = (save: SaveState, ev: QuestEvent): SaveState => ({ ...save, quests: bump(save.quests, ev, Date.now()) });
+
+/** Ce que les quêtes lisent pour mesurer l'avancement. */
+export function questContext(save: SaveState, cards: Card[]): QuestContext {
+  return {
+    q: rollQuests(save.quests, Date.now()),
+    soloLevel: save.soloLevel,
+    soloStars: save.soloStars,
+    totalPacksOpened: save.totalPacksOpened,
+    pinned: save.pinned.length,
+    friends: save.friends.length,
+    favorites: cards.filter((c) => c.favorite).length,
+    traded: cards.filter((c) => c.origin === 'trade').length,
+  };
 }
 
 /* ------------------------- Essai : paquet chromatique -------------------------
@@ -122,7 +166,10 @@ export const useGame = create<GameStore>((set, get) => ({
       }
       const base = changed ? { ...state, drawnHashes: [...hashes] } : state;
       // Un combat en ligne resté en cours (app fermée) compte comme une défaite.
-      const save = base.rank.pending ? { ...base, rank: settleAbandoned(base.rank) } : base;
+      const settled = base.rank.pending ? { ...base, rank: settleAbandoned(base.rank) } : base;
+      // quêtes : nouveau jour / nouvelle semaine, et le rang déjà atteint compte
+      const quests = rollQuests(settled.quests, Date.now());
+      const save: SaveState = { ...settled, quests: { ...quests, bestTier: Math.max(quests.bestTier, rankOf(shownMmr(settled.rank)).tierIndex) } };
       persistState(save);
       setSfxVolume(save.soundVolume);
       setMusicVolume(save.musicVolume);
@@ -188,6 +235,7 @@ export const useGame = create<GameStore>((set, get) => ({
       drawnHashes: [...new Set([...latest.drawnHashes, ...written.map((c) => c.hash)])],
       totalPacksOpened: latest.totalPacksOpened + 1,
       luck: luckAfter,
+      quests: bump(latest.quests, 'pack', Date.now()),
     };
     persistState(next);
     set({ cards, save: next, pendingPack: written });
@@ -233,7 +281,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const soloStars = [...save.soloStars];
     while (soloStars.length < n) soloStars.push(0);
     soloStars[n - 1] = Math.max(soloStars[n - 1], Math.max(1, Math.min(3, stars)));
-    const next: SaveState = { ...save, soloLevel: Math.max(save.soloLevel, n), soloStars, coins: save.coins + reward.coins };
+    const next: SaveState = { ...withQuest(save, 'soloWin'), soloLevel: Math.max(save.soloLevel, n), soloStars, coins: save.coins + reward.coins };
     persistState(next);
     set({ save: next });
     return reward;
@@ -285,7 +333,8 @@ export const useGame = create<GameStore>((set, get) => ({
   startRanked(oppMmr, opp) {
     const save = get().save;
     if (!save) return;
-    const next: SaveState = { ...save, rank: startMatch(save.rank, oppMmr, opp) };
+    const quests = startOnline(save.quests, rankOf(shownMmr(save.rank)).tierIndex, rankOf(oppMmr).tierIndex);
+    const next: SaveState = { ...save, rank: startMatch(save.rank, oppMmr, opp), quests };
     persistState(next);
     set({ save: next });
   },
@@ -294,7 +343,8 @@ export const useGame = create<GameStore>((set, get) => ({
     const save = get().save;
     if (!save || !save.rank.pending) return null;
     const r = finishMatch(save.rank, won);
-    const next: SaveState = { ...save, rank: r.state };
+    const quests = finishOnline(save.quests, won, rankOf(r.after).tierIndex, Date.now());
+    const next: SaveState = { ...save, rank: r.state, quests };
     persistState(next);
     set({ save: next });
     return { before: r.before, after: r.after };
@@ -311,7 +361,7 @@ export const useGame = create<GameStore>((set, get) => ({
   cancelRanked() {
     const save = get().save;
     if (!save || !save.rank.pending) return;
-    const next: SaveState = { ...save, rank: cancelMatch(save.rank) };
+    const next: SaveState = { ...save, rank: cancelMatch(save.rank), quests: { ...save.quests, pendingHigher: false } };
     persistState(next);
     set({ save: next });
   },
@@ -340,7 +390,7 @@ export const useGame = create<GameStore>((set, get) => ({
     };
     if (old && old.name === merged.name && old.mmr === merged.mmr && old.mutual === merged.mutual) return;
     const friends = old ? save.friends.map((x) => (x.code === f.code ? merged : x)) : [...save.friends, merged];
-    const next: SaveState = { ...save, friends };
+    const next: SaveState = { ...(old ? save : withQuest(save, 'friendAdd')), friends };
     persistState(next);
     set({ save: next });
   },
@@ -379,6 +429,7 @@ export const useGame = create<GameStore>((set, get) => ({
     disk.updateCardSidecar(card);
     disk.saveIndex(cards);
     set({ cards });
+    if (card.favorite) get().noteQuest('favorite');
   },
 
   togglePin(id) {
@@ -387,7 +438,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const has = save.pinned.includes(id);
     if (!has && save.pinned.length >= MAX_PINNED) return 'full';
     const pinned = has ? save.pinned.filter((x) => x !== id) : [...save.pinned, id];
-    const next: SaveState = { ...save, pinned };
+    const next: SaveState = { ...(has ? save : withQuest(save, 'pin')), pinned };
     persistState(next);
     set({ save: next });
     return has ? 'unpinned' : 'pinned';
@@ -401,6 +452,7 @@ export const useGame = create<GameStore>((set, get) => ({
     disk.writeCardImage(id, { image: { uri: out.imageUri }, thumb: { uri: out.thumbUri } });
     // l'écran doit redessiner la carte : on change son objet (l'adresse, elle, ne bouge pas)
     set({ cards: get().cards.map((c) => (c.id === id ? { ...c } : c)) });
+    get().noteQuest('crop');
     return true;
   },
 
@@ -419,8 +471,9 @@ export const useGame = create<GameStore>((set, get) => ({
     disk.saveIndex(cards);
     const save = get().save;
     if (save) {
+      // les cartes ajoutées ici arrivent toujours d'un échange
       const next = {
-        ...save,
+        ...withQuest(save, 'trade'),
         drawnHashes: [...new Set([...save.drawnHashes, ...newCards.map((c) => c.hash).filter(Boolean)])],
       };
       persistState(next);
@@ -465,6 +518,63 @@ export const useGame = create<GameStore>((set, get) => ({
       set({ save: next });
     }
     set({ cards });
+  },
+
+  noteQuest(ev) {
+    const save = get().save;
+    if (!save) return;
+    const next = withQuest(save, ev);
+    persistState(next);
+    set({ save: next });
+  },
+
+  claimQuest(id) {
+    const save = get().save;
+    if (!save) return null;
+    const out = claim(questContext(save, get().cards), id);
+    if (!out) return null;
+    const next: SaveState = {
+      ...save,
+      quests: out.q,
+      coins: save.coins + (out.reward.coins ?? 0),
+      bonusDraws: save.bonusDraws + (out.reward.draws ?? 0),
+    };
+    persistState(next);
+    set({ save: next });
+    return out.reward;
+  },
+
+  ensureChallenge() {
+    const save = get().save;
+    if (!save) return null;
+    const day = dayKey(Date.now());
+    const current = save.quests.challenge;
+    if (current && current.day === day) return current;
+    const challenge = pickChallenge({
+      day,
+      seed: String(save.createdAt),
+      soloLevel: save.soloLevel,
+      divineUnlocked: save.divineUnlocked,
+      ranks: get().cards.map((c) => getRarity(c.rarity).rank),
+    });
+    // sans cartes, pas de défi : on réessaiera plus tard dans la journée
+    if (!challenge) return null;
+    const next: SaveState = { ...save, quests: { ...rollQuests(save.quests, Date.now()), challenge } };
+    persistState(next);
+    set({ save: next });
+    return challenge;
+  },
+
+  completeChallenge(level, deckIds) {
+    const save = get().save;
+    const c = save?.quests.challenge;
+    if (!save || !c || c.done || c.day !== dayKey(Date.now()) || c.level !== level) return false;
+    const deck = deckIds.map((id) => get().cards.find((x) => x.id === id)).filter((x): x is Card => !!x);
+    if (deck.length !== deckIds.length || !fitsChallenge(c, deck)) return false;
+    const next: SaveState = { ...save, coins: save.coins + CHALLENGE_REWARD, quests: { ...save.quests, challenge: { ...c, done: true } } };
+    persistState(next);
+    set({ save: next });
+    return true;
   },
 
   chromaticNext: false,

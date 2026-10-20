@@ -24,6 +24,7 @@ import { DEFAULT_SOUND_VOLUME } from '../../storage/model';
 import { Glow, Twinkles } from '../../components/fx';
 import { Rise } from '../../components/Rise';
 import { PACK_RATIO, PackArt } from '../../components/PackArt';
+import { QuestButton } from '../../components/QuestEntry';
 import { Screen } from '../../components/Screen';
 import { DRAW_INTERVAL_MS, MAX_STORED_DRAWS, formatCountdown } from '../../game/draws';
 import { DRAW_PRICE } from '../../game/economy';
@@ -113,9 +114,12 @@ export default function DrawScreen() {
 
   return (
     <Screen>
-      <Rise visit={visit} index={0} style={styles.header}>
-        <View>
-          <AppText variant="display">PocketPics</AppText>
+      {/* Sur un écran étroit, le titre rétrécit un peu pour laisser la place aux boutons. */}
+      <Rise visit={visit} index={0} style={[styles.header, width < 390 && { paddingHorizontal: 16 }]}>
+        <View style={{ flexShrink: 1 }}>
+          <AppText variant="display" numberOfLines={1} style={width < 420 ? { fontSize: 28 } : undefined}>
+            PocketPics
+          </AppText>
           <AppText variant="caption" style={{ marginTop: 2 }}>
             {cards.length === 0
               ? 'Ta galerie est un jeu de cartes.'
@@ -124,6 +128,7 @@ export default function DrawScreen() {
         </View>
         <View style={styles.headerBtns}>
           <CoinChip amount={coins} style={{ marginTop: 4 }} />
+          <QuestButton />
           <IconButton icon={volumeIcon(soundVolume)} label="Régler le son" onPress={() => setSoundOpen(true)} />
           <IconButton icon="stats-chart" label="Taux d'obtention" onPress={() => router.push('/rates')} />
         </View>
@@ -344,11 +349,11 @@ function Permission({ text, action, onPress }: { text: string; action: string; o
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 12 },
-  headerBtns: { flexDirection: 'row', gap: 8 },
+  headerBtns: { flexDirection: 'row', gap: 6 },
   iconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,

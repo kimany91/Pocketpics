@@ -12,6 +12,7 @@ import type { DrawState } from '../game/draws';
 import { initialDrawState } from '../game/draws';
 import { type SoloDay } from '../game/economy';
 import { type LuckState, initialLuck } from '../game/luck';
+import { type QuestState, initialQuests, migrateQuests } from '../game/quests';
 import { type RankState, initialRank, migrateRank } from '../game/rank';
 import { getRarity } from '../game/rarity';
 
@@ -113,6 +114,8 @@ export interface SaveState {
   friends: Friend[];
   /** Cartes épinglées sur le profil, dans l'ordre choisi (6 au plus). */
   pinned: string[];
+  /** Quêtes et défi du jour (ajouté après : tout à zéro si absent). */
+  quests: QuestState;
   [extra: string]: unknown;
 }
 
@@ -201,6 +204,7 @@ export function createInitialState(now = Date.now()): SaveState {
     friendCode: null,
     friends: [],
     pinned: [],
+    quests: initialQuests(now),
   };
 }
 
@@ -297,5 +301,6 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     friendCode: typeof s.friendCode === 'string' && FRIEND_CODE.test(s.friendCode) ? s.friendCode : null,
     friends: migrateFriends(s.friends),
     pinned: Array.isArray(s.pinned) ? s.pinned.filter((x): x is string => typeof x === 'string').slice(0, MAX_PINNED) : [],
+    quests: migrateQuests(s.quests, now),
   };
 }
