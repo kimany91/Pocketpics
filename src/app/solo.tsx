@@ -4,7 +4,7 @@
  * le Volcan, on débloque d'abord la Divine au sanctuaire (cérémonie).
  */
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -26,7 +26,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { portraitRef } from '../battle/arenas';
 import { botArt } from '../battle/botArt';
 import { type FighterInput, makeFighter } from '../battle/engine';
-import { DIVINE_GATE, type Level, TOTAL_LEVELS, getLevel, levelFighters, levelMmr, needsDivine } from '../battle/levels';
+import { DIVINE_GATE, type Level, TOTAL_LEVELS, WORLDS, firstLevel, getLevel, lastLevel, levelFighters, levelMmr, needsDivine } from '../battle/levels';
 import { AppText } from '../components/AppText';
 import { InspectFighter } from '../components/battle/InspectFighter';
 import { Button, Glint } from '../components/Button';
@@ -48,12 +48,20 @@ import { haptic } from '../utils/haptics';
 
 export default function SoloScreen() {
   const insets = useSafeAreaInsets();
+  // Ouverte depuis une quête (« Termine le 5e monde ») : la carte s'ouvre sur ce monde.
+  const { world: worldParam } = useLocalSearchParams<{ world?: string }>();
   const cleared = useGame((s) => s.save?.soloLevel ?? 0);
   const stars = useGame((s) => s.save?.soloStars ?? []);
   const coins = useGame((s) => s.save?.coins ?? 0);
   const name = useGame((s) => s.save?.playerName ?? '?');
   const divineUnlocked = useGame((s) => s.save?.divineUnlocked ?? false);
-  const [open, setOpen] = useState<Level | null>(null);
+  const focusLevel = useMemo(() => {
+    const w = Number(worldParam);
+    if (!Number.isInteger(w) || w < 1 || w > WORLDS) return undefined;
+    // le niveau à jouer s'il est dans ce monde, sinon son boss
+    return Math.max(firstLevel(w), Math.min(lastLevel(w), Math.min(TOTAL_LEVELS, cleared + 1)));
+  }, [worldParam, cleared]);
+  const [open, setOpen] = useState<Level | null>(() => (focusLevel ? getLevel(focusLevel) : null));
   // cérémonie du sanctuaire : d'où part la carte (null : pas de cérémonie)
   const [ceremony, setCeremony] = useState<{ from: Rect4 | null } | null>(null);
   const [focusKey, setFocusKey] = useState(0);
@@ -79,6 +87,7 @@ export default function SoloScreen() {
         onSanctuary={(from) => setCeremony({ from })}
         focusKey={focusKey}
         topInset={insets.top}
+        focusLevel={focusLevel}
       />
 
       {/* en-tête fixe */}

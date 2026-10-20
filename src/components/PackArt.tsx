@@ -58,7 +58,7 @@ export function PackArt({ width, shimmer = true, lucky = false }: { width: numbe
           </View>
         </View>
         <Text style={[styles.brand, { fontSize: width * 0.105, marginTop: width * 0.09 }, lucky && styles.luckyText]}>PocketPics</Text>
-        <Text style={[styles.sub, { fontSize: Math.max(9, width * 0.042), letterSpacing: width * 0.012 }, lucky && styles.luckySub]}>
+        <Text numberOfLines={1} style={[styles.sub, { fontSize: Math.max(7, width * 0.042), letterSpacing: width * 0.012 }, lucky && styles.luckySub]}>
           {lucky ? 'PAQUET BRILLANT' : `BOOSTER · ${CARDS_PER_PACK} CARTES`}
         </Text>
       </View>

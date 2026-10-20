@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useIsFocused } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { Share, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
@@ -13,6 +13,8 @@ import { GlowQR } from '../../components/online/GlowQR';
 import { Message } from '../../components/online/Message';
 import { Radar } from '../../components/online/Radar';
 import { StatusPill } from '../../components/online/StatusPill';
+import { useSocial } from '../../net/social';
+import { useGame } from '../../state/game';
 import { useGoToRoomWhenConnected } from '../../state/useTradeNavigation';
 import { tradeQrValue } from '../../trade/code';
 import { type TradeMode, useTrade } from '../../trade/session';
@@ -26,10 +28,28 @@ export default function HostScreen() {
   const [mode, setMode] = useState<TradeMode>('online');
   const active = useIsFocused();
   useGoToRoomWhenConnected();
+  // Ouvert depuis le profil d'un ami (« Échanger ») : il reçoit l'invitation dès que le code est prêt.
+  const { friend } = useLocalSearchParams<{ friend?: string }>();
+  const friendName = useGame((s) => s.save?.friends.find((f) => f.code === friend)?.name ?? null);
+  const outgoing = useSocial((s) => s.outgoing);
+  const invited = useRef<string | null>(null);
 
   useEffect(() => {
     void host(mode);
   }, [host, mode]);
+  useEffect(() => {
+    if (!friend || !friendName || !code || mode !== 'online' || invited.current === code) return;
+    invited.current = code;
+    useSocial.getState().inviteTrade(friend, code);
+  }, [friend, friendName, code, mode]);
+  // En quittant l'écran, l'invitation en attente est retirée.
+  useEffect(
+    () => () => {
+      if (friend && useSocial.getState().outgoing?.kind === 'trade') useSocial.getState().cancelChallenge();
+    },
+    [friend],
+  );
+  const declined = !!friend && outgoing?.kind === 'trade' && outgoing.to === friend && outgoing.state === 'declined';
   const other: TradeMode = mode === 'online' ? 'lan' : 'online';
   const connecting = phase === 'connecting';
 
@@ -65,8 +85,17 @@ export default function HostScreen() {
               />
             </Animated.View>
             <Animated.View entering={FadeInDown.delay(300).duration(350)} style={{ marginTop: 20 }}>
-              <StatusPill tone={connecting ? 'found' : 'waiting'} text={connecting ? 'Connexion du joueur' : 'En attente d’un joueur'} active={active} />
+              <StatusPill
+                tone={connecting ? 'found' : 'waiting'}
+                text={connecting ? 'Connexion du joueur' : friendName && mode === 'online' ? `Invitation envoyée à ${friendName}` : 'En attente d’un joueur'}
+                active={active}
+              />
             </Animated.View>
+            {declined ? (
+              <Animated.View entering={FadeInDown.springify().damping(14)} style={{ marginTop: 10 }}>
+                <AppText variant="caption" style={{ color: colors.danger, textAlign: 'center' }}>{`${friendName} a refusé l’échange.`}</AppText>
+              </Animated.View>
+            ) : null}
             <Animated.View entering={FadeIn.delay(500)} style={{ alignItems: 'center' }}>
               <AppText variant="caption" style={styles.hint}>
                 {mode === 'online'

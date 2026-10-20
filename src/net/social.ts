@@ -15,6 +15,7 @@ import { readThumbBase64Sync } from '../storage/disk';
 import { type MqttConnection } from '../trade/mqtt';
 import { connectRelay, deps } from '../trade/online';
 import { newOnlineCode } from '../trade/relayCore';
+import { useTrade } from '../trade/session';
 import { useMatch } from './match';
 import { sanitizeFighter } from './battleNet';
 import { CHALLENGE_TTL_MS, type PinnedCard, type SocialMsg, inboxTopic, isOnline, newFriendCode, openFor, presenceTopic, sealFor } from './socialCore';
@@ -27,6 +28,8 @@ export interface Presence {
 }
 
 export interface Challenge {
+  /** Un combat, ou un échange de cartes (`room` est alors le code de l'échange). */
+  kind: 'fight' | 'trade';
   from: string;
   name: string;
   mmr: number;
@@ -42,7 +45,7 @@ interface SocialStore {
   /** Défi reçu, en attente de réponse. */
   challenge: Challenge | null;
   /** Défi envoyé. */
-  outgoing: { to: string; name: string; room: string; at: number; state: 'waiting' | 'declined' } | null;
+  outgoing: { kind: 'fight' | 'trade'; to: string; name: string; room: string; at: number; state: 'waiting' | 'declined' } | null;
   /**
    * Cartes épinglées des amis, telles qu'ils nous les ont envoyées. `cards` est
    * incomplet tant que `n` cartes ne sont pas arrivées.
@@ -57,6 +60,8 @@ interface SocialStore {
   acceptRequest(from: string): void;
   ignoreRequest(from: string): void;
   challengeFriend(code: string): Promise<void>;
+  /** Invite un ami à l'échange que j'héberge (code d'échange en ligne). */
+  inviteTrade(code: string, tradeCode: string): void;
   cancelChallenge(): void;
   acceptChallenge(): Challenge | null;
   declineChallenge(): void;
@@ -147,11 +152,14 @@ export const useSocial = create<SocialStore>((set, get) => {
         case 'challenge': {
           // seulement les amis, et seulement un défi récent
           if (!friend || now() - m.at > CHALLENGE_TTL_MS || get().challenge?.room === m.room) return;
-          if (useMatch.getState().phase !== 'idle') {
+          const kind = m.kind === 'trade' ? 'trade' : 'fight';
+          // déjà en combat (ou déjà en échange) : on refuse tout de suite
+          const busy = kind === 'trade' ? useTrade.getState().phase !== 'idle' : useMatch.getState().phase !== 'idle';
+          if (busy) {
             sendTo(m.from, { k: 'decline', from: mine, room: m.room, at: now() });
             return;
           }
-          set({ challenge: { from: m.from, name: friend.name || m.name, mmr: m.mmr, room: m.room, at: now() } });
+          set({ challenge: { kind, from: m.from, name: friend.name || m.name, mmr: m.mmr, room: m.room, at: now() } });
           return;
         }
         case 'decline': {
@@ -285,9 +293,16 @@ export const useSocial = create<SocialStore>((set, get) => {
       const friend = save()?.friends.find((f) => f.code === code);
       if (!friend) return;
       const room = newOnlineCode(getRandomBytes);
-      set({ outgoing: { to: code, name: friend.name, room, at: now(), state: 'waiting' } });
+      set({ outgoing: { kind: 'fight', to: code, name: friend.name, room, at: now(), state: 'waiting' } });
       await useMatch.getState().host({ code: room, friend: { code, name: friend.name } });
       sendTo(code, { k: 'challenge', from: myCode(), ...profile(), room, at: now() });
+    },
+
+    inviteTrade(code, tradeCode) {
+      const friend = save()?.friends.find((f) => f.code === code);
+      if (!friend) return;
+      set({ outgoing: { kind: 'trade', to: code, name: friend.name, room: tradeCode, at: now(), state: 'waiting' } });
+      sendTo(code, { k: 'challenge', kind: 'trade', from: myCode(), ...profile(), room: tradeCode, at: now() });
     },
 
     cancelChallenge() {
@@ -300,7 +315,8 @@ export const useSocial = create<SocialStore>((set, get) => {
       const c = get().challenge;
       set({ challenge: null });
       if (!c || now() - c.at > CHALLENGE_TTL_MS) return null;
-      void useMatch.getState().join(c.room, { friend: { code: c.from, name: c.name } });
+      if (c.kind === 'trade') void useTrade.getState().join({ kind: 'online', code: c.room });
+      else void useMatch.getState().join(c.room, { friend: { code: c.from, name: c.name } });
       return c;
     },
 

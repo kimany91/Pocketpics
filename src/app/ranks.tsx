@@ -6,7 +6,7 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useIsFocused } from 'expo-router';
+import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
@@ -76,13 +76,18 @@ export default function RanksScreen() {
   const haloStyle = useAnimatedStyle(() => ({ opacity: halo.value }));
 
   const centerOnMe = (animated: boolean) => scroll.current?.scrollTo({ y: Math.max(0, myY - height * 0.55), animated });
+  // Ouvert depuis une quête (« Atteins le rang Argent ») : l'écran s'ouvre sur ce rang.
+  const { tier: tierParam } = useLocalSearchParams<{ tier?: string }>();
+  const tier = Number(tierParam);
+  const targetY = Number.isInteger(tier) && tier >= 0 && tier < TIERS.length ? yOf((tier * DIVISIONS + 1) * DIVISION_POINTS) : null;
+  const centerFirst = () => (targetY === null ? centerOnMe(false) : scroll.current?.scrollTo({ y: Math.max(0, targetY - height * 0.5), animated: false }));
 
   // Côté du repère : à l'opposé de l'emblème de ma division.
   const markerRight = me.index % 2 === 0;
 
   return (
     <View style={styles.root}>
-      <ScrollView ref={scroll} onContentSizeChange={() => centerOnMe(false)} showsVerticalScrollIndicator={false} contentContainerStyle={{ height: contentH }}>
+      <ScrollView ref={scroll} onContentSizeChange={centerFirst} showsVerticalScrollIndicator={false} contentContainerStyle={{ height: contentH }}>
         {/* bandes des six rangs, de la couleur du rang */}
         {TIERS.map((tier, t) => {
           const top = yOf((t + 1) * DIVISIONS * DIVISION_POINTS);

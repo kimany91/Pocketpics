@@ -5,7 +5,7 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useIsFocused } from 'expo-router';
+import { type Href, router, useIsFocused } from 'expo-router';
 import { type ComponentProps, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
@@ -45,6 +45,7 @@ import {
   nextDay,
   nextWeek,
 } from '../game/quests';
+import { TIERS } from '../game/rank';
 import { useGame } from '../state/game';
 import { useQuests } from '../state/useQuests';
 import { colors, fonts } from '../theme';
@@ -292,6 +293,43 @@ function RewardChip({ reward, dim }: { reward: Reward; dim?: boolean }) {
   );
 }
 
+/**
+ * Où mène une quête quand on la touche : l'écran où on la fait (le monde 5
+ * pour « Termine le 5e monde », le rang Argent pour « Atteins le rang Argent »…).
+ */
+function questLink(def: QuestDef): Href | null {
+  const world = /^o-world(\d+)$/.exec(def.id);
+  if (world) return { pathname: '/solo', params: { world: world[1] } };
+  const rank = /^o-rank-(\w+)$/.exec(def.id);
+  if (rank) return { pathname: '/ranks', params: { tier: String(TIERS.findIndex((t) => t.id === rank[1])) } };
+  switch (def.id) {
+    case 'd-packs':
+    case 'o-packs':
+      return '/';
+    case 'd-solo':
+    case 'o-solo':
+      return '/solo';
+    case 'w-wins':
+      return '/battle';
+    case 'd-online':
+    case 'w-online':
+    case 'o-row4':
+    case 'o-higher':
+      return '/multi';
+    case 'o-favorite':
+    case 'o-pin':
+    case 'o-crop':
+      return '/collection';
+    case 'o-profile':
+    case 'o-friend':
+      return '/profile';
+    case 'o-trade':
+      return '/trade';
+    default:
+      return null;
+  }
+}
+
 /** Une quête : icône, titre, barre d'avancement, et la récompense (à récupérer quand elle est finie). */
 function QuestRow({ status, index }: { status: QuestStatus; index: number }) {
   const { def, value, done, claimed } = status;
@@ -309,7 +347,9 @@ function QuestRow({ status, index }: { status: QuestStatus; index: number }) {
     pulse.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }), -1, true);
     return () => cancelAnimation(pulse);
   }, [ready, pulse]);
-  const rowStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pop.value * 0.03 }] }));
+  const press = useSharedValue(0);
+  const rowStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pop.value * 0.03 - press.value * 0.02 }] }));
+  const link = questLink(def);
   const btnStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pulse.value * 0.05 }] }));
   const fill = Math.min(1, value / def.goal);
 
@@ -323,6 +363,18 @@ function QuestRow({ status, index }: { status: QuestStatus; index: number }) {
   };
 
   return (
+    <Pressable
+      disabled={!link}
+      onPressIn={() => (press.value = withSpring(1, springs.press))}
+      onPressOut={() => (press.value = withSpring(0, springs.release))}
+      onPress={() => {
+        if (!link) return;
+        haptic.tick();
+        router.navigate(link);
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${def.title} : y aller`}
+    >
     <Animated.View entering={FadeInDown.delay(60 + index * 40)} style={[styles.row, ready && styles.rowReady, claimed && styles.rowClaimed, rowStyle]}>
       <View style={[styles.icon, { backgroundColor: claimed ? colors.surface2 : `${def.color ?? (ready ? colors.gold : '#FFFFFF')}1F` }]}>
         <Ionicons name={(claimed ? 'checkmark' : def.icon) as IconName} size={18} color={claimed ? colors.success : accent} />
@@ -360,7 +412,9 @@ function QuestRow({ status, index }: { status: QuestStatus; index: number }) {
           <Burst trigger={sparks} colors={[colors.gold, '#FFF3C2', '#FFFFFF']} count={12} radius={60} />
         </View>
       </View>
+      {link ? <Ionicons name="chevron-forward" size={16} color={colors.textFaint} style={{ marginLeft: -4 }} /> : null}
     </Animated.View>
+    </Pressable>
   );
 }
 

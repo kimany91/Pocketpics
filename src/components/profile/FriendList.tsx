@@ -73,6 +73,10 @@ export function FriendList({ fresh, active }: { fresh: string[]; active: boolean
               await challengeFriend(f.code);
               router.push('/online/host');
             }}
+            onTrade={() => {
+              haptic.medium();
+              router.push({ pathname: '/trade/host', params: { friend: f.code } });
+            }}
             onOpen={() => {
               haptic.light();
               router.push({ pathname: '/friend/[code]', params: { code: f.code } });
@@ -97,6 +101,7 @@ function FriendRow({
   devices,
   onOpen,
   onChallenge,
+  onTrade,
   onRemove,
 }: {
   friend: Friend;
@@ -110,6 +115,8 @@ function FriendRow({
   /** Ouvre son profil (ses cartes épinglées). */
   onOpen(): void;
   onChallenge(): void;
+  /** Lui propose un échange (il reçoit une invitation). */
+  onTrade(): void;
   onRemove(): void;
 }) {
   const rank = rankOf(mmr);
@@ -165,6 +172,17 @@ function FriendRow({
         </View>
       </Pressable>
       <Button label="Défier" icon="flash" kind={online ? 'primary' : 'secondary'} disabled={!online} onPress={onChallenge} />
+      {/* Échanger : un bouton rond, pour laisser la place au nom */}
+      <Pressable
+        onPress={onTrade}
+        disabled={!online}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel={`Échanger avec ${friend.name}`}
+        style={({ pressed }) => [styles.tradeBtn, !online && { opacity: 0.4 }, pressed && { transform: [{ scale: 0.92 }] }]}
+      >
+        <Ionicons name="swap-horizontal" size={20} color={online ? colors.gold : colors.textDim} />
+      </Pressable>
     </Animated.View>
   );
 }
@@ -183,6 +201,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   rowOnline: { borderColor: 'rgba(79,224,168,0.3)' },
+  tradeBtn: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface2, borderWidth: 1, borderColor: 'rgba(247,201,72,0.35)' },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   lit: { backgroundColor: 'rgba(79,224,168,0.14)', borderRadius: 18, borderWidth: 1.5, borderColor: colors.success },

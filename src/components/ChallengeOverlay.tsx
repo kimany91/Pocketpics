@@ -1,8 +1,9 @@
 /**
- * Défi reçu d'un ami : une carte qui tombe du haut de l'écran, où qu'on soit
- * dans l'app, avec son rang. Elle se pose, tremble, et sa bordure s'allume ;
- * un anneau autour de l'emblème montre le temps restant. Accepter rejoint son
- * combat ; sans réponse, le défi s'efface au bout d'une minute.
+ * Défi (ou invitation à échanger) reçu d'un ami : une carte qui tombe du haut
+ * de l'écran, où qu'on soit dans l'app, avec son rang. Elle se pose, tremble,
+ * et sa bordure s'allume ; un anneau autour de l'emblème montre le temps
+ * restant. Accepter rejoint son combat (ou son échange) ; sans réponse,
+ * l'invitation s'efface au bout d'une minute.
  */
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -94,6 +95,7 @@ export function ChallengeOverlay() {
 
   if (!challenge) return null;
   const rank = rankOf(challenge.mmr);
+  const trade = challenge.kind === 'trade';
   const urgent = left <= 10;
   return (
     <Animated.View exiting={FadeOutUp.duration(200)} style={[styles.wrap, { top: insets.top + 8 }]}>
@@ -114,11 +116,11 @@ export function ChallengeOverlay() {
             <View style={{ flex: 1 }}>
               <View style={styles.kickerRow}>
                 <Animated.View style={boltStyle}>
-                  <Ionicons name="flash" size={13} color={colors.gold} />
+                  <Ionicons name={trade ? 'swap-horizontal' : 'flash'} size={13} color={colors.gold} />
                 </Animated.View>
-                <AppText style={styles.kicker}>Défi</AppText>
+                <AppText style={styles.kicker}>{trade ? 'Échange' : 'Défi'}</AppText>
               </View>
-              <AppText variant="heading" numberOfLines={1}>{`${challenge.name} te défie !`}</AppText>
+              <AppText variant="heading" numberOfLines={1}>{trade ? `${challenge.name} veut échanger !` : `${challenge.name} te défie !`}</AppText>
               <AppText variant="caption" numberOfLines={1}>
                 <AppText variant="caption" style={{ color: rank.tier.color }}>
                   {rank.label}
@@ -132,10 +134,11 @@ export function ChallengeOverlay() {
             <Button label="Refuser" kind="secondary" style={{ flex: 1 }} onPress={decline} />
             <Button
               label="Accepter"
-              icon="flash"
+              icon={trade ? 'swap-horizontal' : 'flash'}
               style={{ flex: 1.3 }}
               onPress={() => {
-                if (accept()) router.push('/online/join');
+                const c = accept();
+                if (c) router.push(c.kind === 'trade' ? '/trade/join' : '/online/join');
               }}
             />
           </View>

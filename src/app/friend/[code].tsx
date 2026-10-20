@@ -108,11 +108,12 @@ export default function FriendProfileScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(100)} style={{ marginTop: 18 }}>
+        <Animated.View entering={FadeInDown.delay(100)} style={styles.actions}>
           <Button
             label="Défier"
             icon="flash"
             size="lg"
+            style={{ flex: 1 }}
             disabled={!online}
             onPress={async () => {
               haptic.medium();
@@ -120,7 +121,24 @@ export default function FriendProfileScreen() {
               router.push('/online/host');
             }}
           />
+          <Button
+            label="Échanger"
+            icon="swap-horizontal"
+            size="lg"
+            kind="secondary"
+            style={{ flex: 1 }}
+            disabled={!online}
+            onPress={() => {
+              haptic.medium();
+              router.push({ pathname: '/trade/host', params: { friend: friend.code } });
+            }}
+          />
         </Animated.View>
+        {!online ? (
+          <AppText variant="caption" style={{ textAlign: 'center', marginTop: 8 }}>
+            Défi et échange possibles quand il a le jeu ouvert.
+          </AppText>
+        ) : null}
 
         <Animated.View entering={FadeInDown.delay(160)} style={{ marginTop: 26, gap: 10 }}>
           <AppText variant="heading">Ses cartes épinglées</AppText>
@@ -182,6 +200,7 @@ export default function FriendProfileScreen() {
 
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 40 },
+  actions: { flexDirection: 'row', gap: 10, marginTop: 18 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   card: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 20, borderWidth: 1.5, backgroundColor: colors.surface, overflow: 'hidden' },
   rankLabel: { fontFamily: fonts.bold, fontSize: 13 },

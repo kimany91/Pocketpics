@@ -300,6 +300,7 @@ export function SagaMap({
   onSanctuary,
   focusKey = 0,
   topInset = 0,
+  focusLevel,
 }: {
   /** Niveaux terminés (le suivant est à jouer). */
   cleared: number;
@@ -313,6 +314,8 @@ export function SagaMap({
   /** Changer cette valeur fait défiler la carte jusqu'au niveau à jouer. */
   focusKey?: number;
   topInset?: number;
+  /** Niveau sur lequel s'ouvrir (ex. une quête « Termine le 5e monde ») ; sinon le niveau à jouer. */
+  focusLevel?: number;
 }) {
   const { width, height } = useWindowDimensions();
   const layout = mapLayout(width);
@@ -321,7 +324,8 @@ export function SagaMap({
   /** La Tempête est battue mais la Divine pas encore débloquée : le joueur attend au sanctuaire. */
   const gated = cleared >= DIVINE_GATE && !divineUnlocked;
   const sanctuaryState: SanctuaryState = cleared < DIVINE_GATE ? 'far' : divineUnlocked ? 'open' : 'ready';
-  const focusY = (gated ? layout.sanctuary.y : layout.nodes[current - 1].y) - height * 0.55;
+  const target = focusLevel && layout.nodes[focusLevel - 1] ? layout.nodes[focusLevel - 1].y : gated ? layout.sanctuary.y : layout.nodes[current - 1].y;
+  const focusY = target - height * 0.55;
   const startY = Math.max(0, Math.min(layout.height - height, focusY));
 
   // Mondes animés : ceux qui touchent l'écran (avec une marge), recalculés au défilement ; « s » : le sanctuaire.
