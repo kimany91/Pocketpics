@@ -138,7 +138,7 @@ export function ChallengeOverlay() {
             <View style={styles.drawNote}>
               <Ionicons name="images-outline" size={14} color={colors.textDim} />
               <AppText variant="caption" style={{ flex: 1 }}>
-                5 photos de ta galerie, tirées au hasard, deviendront ses cartes. Tu les vois et tu peux en changer avant d’envoyer. Toi, tu ne perds rien.
+                {`5 photos de ta galerie, tirées au hasard, deviendront ses cartes. Toi, tu ne perds rien. ${challenge.name} a déjà payé : si tu refuses, il n’est pas remboursé.`}
               </AppText>
             </View>
           ) : null}

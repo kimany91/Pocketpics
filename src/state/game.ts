@@ -28,7 +28,7 @@ import {
 import { cancelMatch, finishMatch, rankOf, settleAbandoned, shownMmr, startMatch } from '../game/rank';
 import { getRarity } from '../game/rarity';
 import { type CropRect, cropImage } from '../game/gallery';
-import { type FriendPhoto, payFriendDraw } from '../game/friendDraw';
+import { type FriendDrawPayment, type FriendPhoto, payFriendDraw, refundFriendDraw } from '../game/friendDraw';
 import { generatePack, makeCard } from '../game/pack';
 import * as disk from '../storage/disk';
 import { MAX_PINNED } from '../storage/model';
@@ -48,10 +48,13 @@ interface GameStore {
   drawStatus(now?: number): DrawStatus;
   openPack(): Promise<Card[]>;
   clearPendingPack(): void;
+  /** Pioche amicale : paie la demande (tirage, ou pièces s'il n'en reste plus). `null` si impossible. */
+  payFriendDraw(): FriendDrawPayment | null;
+  /** Pioche amicale échouée sans refus de l'ami : rend ce qui a été payé. */
+  refundFriendDraw(paid: FriendDrawPayment): void;
   /**
-   * Pioche amicale : les photos envoyées par un ami deviennent un paquet, avec
-   * la chance habituelle du joueur. Paie (tirage, ou pièces s'il n'en reste
-   * plus) et prépare l'écran d'ouverture. `null` si le joueur ne peut plus payer.
+   * Pioche amicale (déjà payée) : les photos envoyées par l'ami deviennent un
+   * paquet, avec la chance habituelle du joueur, et l'écran d'ouverture est prêt.
    */
   openFriendPack(photos: FriendPhoto[], giver: string): Card[] | null;
   /** La page d'explication de la Pioche amicale a été lue. */
@@ -272,12 +275,28 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ pendingPack: [] });
   },
 
-  openFriendPack(photos, giver) {
+  payFriendDraw() {
     const save = get().save;
-    if (!save || photos.length === 0) return null;
+    const res = save ? payFriendDraw(save, Date.now()) : null;
+    if (!res) return null;
+    persistState(res.save);
+    set({ save: res.save });
+    return res.paid;
+  },
+
+  refundFriendDraw(paid) {
+    const save = get().save;
+    if (!save) return;
+    const next = refundFriendDraw(save, paid);
+    persistState(next);
+    set({ save: next });
+  },
+
+  openFriendPack(photos, giver) {
+    const paid = get().save;
+    if (!paid || photos.length === 0) return null;
     const now = Date.now();
-    const paid = payFriendDraw(save, now);
-    if (!paid) return null;
+    const save = paid;
     const packIndex = save.totalPacksOpened;
     const lucky = rollLucky(save.luck, packIndex);
     const plan = planPack({ state: save.luck, cards: photos.length, packIndex, lucky, divine: save.divineUnlocked });

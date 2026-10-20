@@ -4,13 +4,17 @@
  * reste plus, de 200 pièces.
  *
  * Déroulé (les deux téléphones sont reliés par le relais chiffré, comme pour un échange) :
- *  1. Celui qui pioche ouvre un salon et invite son ami (il doit être en ligne).
- *  2. L'ami accepte : son téléphone prépare quelques photos au hasard dans sa
- *     galerie et n'envoie d'abord que leurs empreintes (`hashes`).
- *  3. Celui qui pioche répond avec celles qu'il n'a pas déjà en carte (`want`).
- *  4. L'ami voit les photos choisies, peut en changer, puis les envoie (`photo`, une par message).
- *  5. Celui qui pioche crée les cartes avec SA chance habituelle, paie, et
- *     confirme (`done`). Rien n'est payé si les photos n'arrivent pas.
+ *  1. Celui qui pioche paie en envoyant sa demande, ouvre un salon et invite
+ *     son ami (il doit être en ligne).
+ *  2. L'ami accepte ou refuse, c'est tout. S'il refuse, la demande n'est PAS
+ *     remboursée (c'est dit avant d'envoyer, et redit au refus). Elle ne l'est
+ *     que si la pioche échoue sans que l'ami ait refusé (pas de réponse,
+ *     connexion perdue, aucune photo utilisable).
+ *  3. S'il accepte, son téléphone prépare des photos au hasard dans sa galerie
+ *     et n'envoie d'abord que leurs empreintes (`hashes`).
+ *  4. Celui qui pioche répond avec celles qu'il n'a pas déjà en carte (`want`).
+ *  5. L'ami envoie les 5 premières (`photo`, une par message), sans choisir.
+ *  6. Celui qui pioche crée les cartes avec SA chance habituelle et confirme (`done`).
  *
  * Pur (testable sous Node).
  */
@@ -44,16 +48,25 @@ export function friendDrawPayment(save: SaveState | null, now: number): FriendDr
 /** Ce que coûte la pioche, en clair. */
 export const paymentLabel = (p: FriendDrawPayment) => (p === 'coins' ? `${FRIEND_DRAW_PRICE} pièces` : '1 tirage');
 
-/** La sauvegarde après paiement, ou `null` si le joueur ne peut plus payer. */
-export function payFriendDraw(save: SaveState, now: number): SaveState | null {
+/** La sauvegarde après paiement (et ce qui a été payé), ou `null` si le joueur ne peut pas payer. */
+export function payFriendDraw(save: SaveState, now: number): { save: SaveState; paid: FriendDrawPayment } | null {
   const p = friendDrawPayment(save, now);
   if (p === 'draw') {
     const draws = consumeDraw(save.draws, now);
-    return draws ? { ...save, draws } : null;
+    return draws ? { save: { ...save, draws }, paid: p } : null;
   }
-  if (p === 'bonus') return { ...save, bonusDraws: save.bonusDraws - 1 };
-  if (p === 'coins') return { ...save, coins: save.coins - FRIEND_DRAW_PRICE };
+  if (p === 'bonus') return { save: { ...save, bonusDraws: save.bonusDraws - 1 }, paid: p };
+  if (p === 'coins') return { save: { ...save, coins: save.coins - FRIEND_DRAW_PRICE }, paid: p };
   return null;
+}
+
+/**
+ * Rend ce qui a été payé (pioche échouée sans refus de l'ami). Un tirage
+ * gratuit revient en tirage de réserve : il ne se perd pas même si la jauge
+ * s'est remplie entre-temps.
+ */
+export function refundFriendDraw(save: SaveState, paid: FriendDrawPayment): SaveState {
+  return paid === 'coins' ? { ...save, coins: save.coins + FRIEND_DRAW_PRICE } : { ...save, bonusDraws: save.bonusDraws + 1 };
 }
 
 /** Une photo envoyée par l'ami. */

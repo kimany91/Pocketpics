@@ -2,18 +2,20 @@
  * Pioche amicale, côté réseau (voir src/game/friendDraw.ts pour le déroulé).
  *
  * Deux rôles :
- *  - `asker` : celui qui pioche. Il ouvre un salon sur le relais (l'écran
- *    envoie ensuite l'invitation à son ami), reçoit les photos, crée les
- *    cartes et paie.
- *  - `giver` : l'ami. Il rejoint le salon après avoir accepté, prépare des
- *    photos de sa galerie, peut en changer, puis les envoie. Il ne perd rien :
- *    ses photos restent tirables pour lui.
+ *  - `asker` : celui qui pioche. Il paie, ouvre un salon sur le relais (l'écran
+ *    envoie ensuite l'invitation à son ami), reçoit les photos et crée les cartes.
+ *    Refus de l'ami : pas de remboursement. Échec sans refus : remboursé.
+ *  - `giver` : l'ami. Il accepte ou refuse, rien d'autre. S'il accepte, son
+ *    téléphone prépare des photos de sa galerie et les envoie aussitôt. Il ne
+ *    perd rien : ses photos restent tirables pour lui.
  */
 import { create } from 'zustand';
 
 import {
   FRIEND_DRAW_CANDIDATES,
   FRIEND_DRAW_CARDS,
+  FRIEND_DRAW_PRICE,
+  type FriendDrawPayment,
   type FriendPhoto,
   PIOCHE_NS,
   PIOCHE_VERSION,
@@ -37,8 +39,6 @@ export type PiochePhase =
   | 'connecting'
   /** giver : préparation des photos ; asker : l'ami les prépare. */
   | 'preparing'
-  /** giver : il regarde les photos choisies ; asker : on attend qu'il les envoie. */
-  | 'choosing'
   /** Les photos voyagent. */
   | 'sending'
   /** Fini : asker → cartes prêtes à ouvrir ; giver → photos bien reçues. */
@@ -55,23 +55,25 @@ interface PiocheStore {
   room: string | null;
   /** Photos reçues ou envoyées sur le total. */
   progress: { done: number; total: number };
-  /** giver : les photos qui partiront (miniatures affichées). */
+  /** giver : les photos envoyées (montrées à la fin). */
   picks: ProcessedPhoto[];
-  /** giver : photos de rechange, pour en changer une. */
-  spares: number;
+  /** asker : ce qui a été payé, tant que la pioche n'a pas abouti (rendu si elle échoue sans refus). */
+  paid: FriendDrawPayment | null;
+  /** asker : l'ami a refusé (rien n'est rendu). */
+  refused: boolean;
+  /** asker : le paiement a été rendu après un échec. */
+  refunded: boolean;
   /** asker : cartes créées. */
   cards: Card[];
 
-  /** Ouvre le salon d'une pioche chez cet ami. Rend le code du salon, ou `null`. */
+  /** Paie et ouvre le salon d'une pioche chez cet ami. Rend le code du salon, ou `null`. */
   ask(friend: { code: string; name: string }): Promise<string | null>;
-  /** L'ami a refusé l'invitation. */
+  /** L'ami a refusé l'invitation : rien n'est rendu. */
   declined(): void;
+  /** L'ami n'a pas répondu à temps : la demande est rendue. */
+  expired(): void;
   /** giver : rejoint la pioche de son ami après avoir accepté. */
   give(room: string, friend: { code: string; name: string }): Promise<void>;
-  /** giver : remplace une des photos par une autre. */
-  swap(index: number): void;
-  /** giver : envoie les photos. */
-  send(): Promise<void>;
   leave(): void;
 }
 
@@ -83,15 +85,15 @@ const initial = {
   room: null,
   progress: { done: 0, total: 0 },
   picks: [] as ProcessedPhoto[],
-  spares: 0,
+  paid: null as FriendDrawPayment | null,
+  refused: false,
+  refunded: false,
   cards: [] as Card[],
 };
 
 let link: TradeLink<PiocheMsg> | null = null;
 let hostHandle: HostHandle | null = null;
 let generation = 0;
-/** giver : photos préparées acceptées par l'autre, hors celles déjà choisies. */
-let spareList: ProcessedPhoto[] = [];
 /** asker : empreintes acceptées et photos reçues. */
 let wanted = new Set<string>();
 let received: FriendPhoto[] = [];
@@ -104,7 +106,6 @@ function teardown() {
   link = null;
   hostHandle?.stop();
   hostHandle = null;
-  spareList = [];
   wanted = new Set();
   received = [];
 }
@@ -141,9 +142,15 @@ export const usePioche = create<PiocheStore>((set, get) => {
   const send = (m: PiocheMsg) => link?.send(m);
   /** giver : photos préparées, dans l'ordre du hasard. */
   let preparedList: ProcessedPhoto[] = [];
+  /**
+   * Fin sans cartes. Pour celui qui pioche, ce qui a été payé est rendu, sauf
+   * quand l'ami a refusé (voir `declined`).
+   */
   const end = (error: string) => {
     if (get().phase === 'done') return;
-    set({ phase: 'ended', error });
+    const paid = get().paid;
+    if (paid) useGame.getState().refundFriendDraw(paid);
+    set({ phase: 'ended', error: paid ? `${error} Ton paiement t’a été rendu.` : error, paid: null, refunded: !!paid });
     teardown();
   };
 
@@ -161,35 +168,35 @@ export const usePioche = create<PiocheStore>((set, get) => {
         const ok = wantedHashes(m.hashes, owned);
         if (ok.length === 0) {
           send({ t: 'bye', reason: 'Toutes les photos proposées sont déjà dans sa collection.' });
-          return end(`Les photos de ${s.friend?.name ?? 'ton ami'} sont déjà toutes dans ta collection. Rien n’a été payé.`);
+          return end(`Les photos de ${s.friend?.name ?? 'ton ami'} sont déjà toutes dans ta collection.`);
         }
         wanted = new Set(ok);
         send({ t: 'want', hashes: ok });
-        set({ phase: 'choosing' });
+        set({ phase: 'sending', progress: { done: 0, total: Math.min(ok.length, FRIEND_DRAW_CARDS) } });
         return;
       }
       case 'photo': {
-        if (s.phase !== 'choosing' && s.phase !== 'sending') return;
+        if (s.phase !== 'sending') return;
         const p = sanitizePhoto(m, wanted);
         if (!p || received.some((r) => r.hash === p.hash)) return;
         received.push({ hash: p.hash, image: p.image, thumb: p.thumb, width: p.width, height: p.height });
         wanted.delete(p.hash);
         set({ phase: 'sending', progress: { done: received.length, total: p.n } });
         if (received.length < p.n) return;
-        // tout est là : on crée les cartes et on paie
+        // tout est là : les cartes (déjà payées) sont créées
         const cards = useGame.getState().openFriendPack(received, s.friend?.name ?? 'Ami');
         if (!cards) {
-          send({ t: 'bye', reason: 'Il n’a plus de tirage ni assez de pièces.' });
-          return end('Tu n’as plus de tirage ni assez de pièces : la pioche est annulée.');
+          send({ t: 'bye', reason: 'les cartes n’ont pas pu être créées.' });
+          return end('Les cartes n’ont pas pu être créées.');
         }
         send({ t: 'done', count: cards.length });
-        set({ phase: 'done', cards });
+        set({ phase: 'done', cards, paid: null });
         const gen = generation;
         setTimeout(() => gen === generation && teardown(), 800);
         return;
       }
       case 'bye':
-        return end(m.reason ? `${s.friend?.name ?? 'Ton ami'} a arrêté la pioche : ${m.reason}` : `${s.friend?.name ?? 'Ton ami'} a arrêté la pioche. Rien n’a été payé.`);
+        return end(m.reason ? `${s.friend?.name ?? 'Ton ami'} a arrêté la pioche : ${m.reason}` : `${s.friend?.name ?? 'Ton ami'} a arrêté la pioche.`);
       default:
         return;
     }
@@ -210,9 +217,9 @@ export const usePioche = create<PiocheStore>((set, get) => {
         const ok = new Set(Array.isArray(m.hashes) ? m.hashes : []);
         const usable = preparedList.filter((p) => ok.has(p.hash));
         if (usable.length === 0) return end('Ton ami a déjà toutes ces photos en carte.');
-        const picks = usable.slice(0, FRIEND_DRAW_CARDS);
-        spareList = usable.slice(FRIEND_DRAW_CARDS);
-        set({ phase: 'choosing', picks, spares: spareList.length });
+        // pas de choix : les premières photos tirées au hasard partent telles quelles
+        set({ picks: usable.slice(0, FRIEND_DRAW_CARDS) });
+        void sendPhotos();
         return;
       }
       case 'done':
@@ -228,6 +235,28 @@ export const usePioche = create<PiocheStore>((set, get) => {
         return;
     }
   };
+  /** giver : envoie les photos, une par message. */
+  const sendPhotos = async () => {
+    const s = get();
+    if (s.role !== 'giver' || s.phase !== 'preparing') return;
+    const gen = generation;
+    const n = s.picks.length;
+    set({ phase: 'sending', progress: { done: 0, total: n } });
+    try {
+      for (let i = 0; i < n; i++) {
+        const p = s.picks[i];
+        const [image, thumb] = await Promise.all([readUriBase64(p.imageUri), readUriBase64(p.thumbUri)]);
+        if (gen !== generation) return;
+        send({ t: 'photo', i, n, hash: p.hash, image, thumb, width: p.width, height: p.height });
+        set({ progress: { done: i + 1, total: n } });
+      }
+    } catch (e) {
+      if (gen !== generation) return;
+      send({ t: 'bye', reason: 'une photo n’a pas pu être lue.' });
+      end(`Envoi impossible : ${e instanceof Error ? e.message : e}`);
+    }
+  };
+
   const attach = (l: TradeLink<PiocheMsg>, role: 'asker' | 'giver') => {
     link = l;
     const gen = generation;
@@ -238,7 +267,7 @@ export const usePioche = create<PiocheStore>((set, get) => {
     });
     l.onClose(() => {
       if (gen !== generation || get().phase === 'done') return;
-      end(get().phase === 'sending' ? 'Connexion perdue pendant l’envoi des photos. Rien n’a été payé.' : 'La connexion avec ton ami a été perdue.');
+      end(get().phase === 'sending' ? 'Connexion perdue pendant l’envoi des photos.' : 'La connexion avec ton ami a été perdue.');
     });
     l.send({ t: 'hello', v: PIOCHE_VERSION, name: myName() });
   };
@@ -248,11 +277,13 @@ export const usePioche = create<PiocheStore>((set, get) => {
 
     async ask(friend) {
       teardown();
-      if (!friendDrawPayment(useGame.getState().save, Date.now())) {
+      // payé dès la demande : un refus de l'ami ne sera pas remboursé
+      const paid = friendDrawPayment(useGame.getState().save, Date.now()) ? useGame.getState().payFriendDraw() : null;
+      if (!paid) {
         set({ ...initial, role: 'asker', phase: 'ended', friend, error: 'Il te faut un tirage disponible ou 200 pièces pour piocher.' });
         return null;
       }
-      set({ ...initial, role: 'asker', phase: 'waiting', friend });
+      set({ ...initial, role: 'asker', phase: 'waiting', friend, paid });
       const gen = generation;
       try {
         const h = await hostRoom<PiocheMsg>(
@@ -271,15 +302,24 @@ export const usePioche = create<PiocheStore>((set, get) => {
         set({ room: h.code });
         return h.code;
       } catch (e) {
-        if (gen === generation) set({ phase: 'ended', error: e instanceof Error ? e.message : String(e) });
+        if (gen === generation) end(e instanceof Error ? e.message : String(e));
         return null;
       }
     },
 
     declined() {
-      if (get().role !== 'asker' || get().phase !== 'waiting') return;
-      set({ phase: 'ended', error: `${get().friend?.name ?? 'Ton ami'} a refusé la pioche. Rien n’a été payé.` });
+      const s = get();
+      if (s.role !== 'asker' || s.phase !== 'waiting') return;
+      // refus : ce qui a été payé n'est pas rendu
+      const lost = s.paid === 'coins' ? `Tes ${FRIEND_DRAW_PRICE} pièces ne sont pas remboursées.` : 'Ton tirage n’est pas remboursé.';
+      set({ phase: 'ended', refused: true, error: `${s.friend?.name ?? 'Ton ami'} a refusé ta Pioche amicale. ${lost}`, paid: null });
       teardown();
+    },
+
+    expired() {
+      const s = get();
+      if (s.role !== 'asker' || s.phase !== 'waiting') return;
+      end(`${s.friend?.name ?? 'Ton ami'} n’a pas répondu à temps.`);
     },
 
     async give(room, friend) {
@@ -303,38 +343,11 @@ export const usePioche = create<PiocheStore>((set, get) => {
       }
     },
 
-    swap(index) {
-      const s = get();
-      if (s.role !== 'giver' || s.phase !== 'choosing' || spareList.length === 0 || !s.picks[index]) return;
-      const next = spareList.shift() as ProcessedPhoto;
-      // la photo retirée ne revient pas : on ne la proposera plus
-      const picks = s.picks.map((p, i) => (i === index ? next : p));
-      set({ picks, spares: spareList.length });
-    },
-
-    async send() {
-      const s = get();
-      if (s.role !== 'giver' || s.phase !== 'choosing') return;
-      const gen = generation;
-      const n = s.picks.length;
-      set({ phase: 'sending', progress: { done: 0, total: n } });
-      try {
-        for (let i = 0; i < n; i++) {
-          const p = s.picks[i];
-          const [image, thumb] = await Promise.all([readUriBase64(p.imageUri), readUriBase64(p.thumbUri)]);
-          if (gen !== generation) return;
-          send({ t: 'photo', i, n, hash: p.hash, image, thumb, width: p.width, height: p.height });
-          set({ progress: { done: i + 1, total: n } });
-        }
-      } catch (e) {
-        if (gen !== generation) return;
-        send({ t: 'bye', reason: 'une photo n’a pas pu être lue.' });
-        end(`Envoi impossible : ${e instanceof Error ? e.message : e}`);
-      }
-    },
-
     leave() {
       if (link && get().phase !== 'done' && get().phase !== 'ended') send({ t: 'bye' });
+      // celui qui pioche abandonne avant d'avoir ses cartes (sans refus de l'ami) : remboursé
+      const paid = get().paid;
+      if (paid) useGame.getState().refundFriendDraw(paid);
       teardown();
       preparedList = [];
       set({ ...initial });

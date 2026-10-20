@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { computeDraws } from '../src/game/draws';
-import { FRIEND_DRAW_PRICE, friendDrawPayment, payFriendDraw, sanitizePhoto, wantedHashes } from '../src/game/friendDraw';
+import { FRIEND_DRAW_PRICE, friendDrawPayment, payFriendDraw, refundFriendDraw, sanitizePhoto, wantedHashes } from '../src/game/friendDraw';
 import { createInitialState, migrateCard, migrateState } from '../src/storage/model';
 
 const T = new Date(2026, 9, 20, 12).getTime();
@@ -12,17 +12,18 @@ test('pioche amicale : un tirage d’abord, puis un tirage acheté, puis 200 pi�
   assert.ok(computeDraws(s.draws, T).charges > 0);
   assert.equal(friendDrawPayment(s, T), 'draw');
   const paid = payFriendDraw(s, T)!;
-  assert.equal(computeDraws(paid.draws, T).charges, computeDraws(s.draws, T).charges - 1);
-  assert.equal(paid.coins, s.coins);
+  assert.equal(paid.paid, 'draw');
+  assert.equal(computeDraws(paid.save.draws, T).charges, computeDraws(s.draws, T).charges - 1);
+  assert.equal(paid.save.coins, s.coins);
 
   const empty = { ...s, draws: { charges: 0, anchor: T } };
   assert.equal(friendDrawPayment(empty, T), null, 'ni tirage ni pièces : pas de pioche');
   assert.equal(payFriendDraw(empty, T), null);
   assert.equal(friendDrawPayment({ ...empty, bonusDraws: 1 }, T), 'bonus');
-  assert.equal(payFriendDraw({ ...empty, bonusDraws: 1 }, T)!.bonusDraws, 0);
+  assert.equal(payFriendDraw({ ...empty, bonusDraws: 1 }, T)!.save.bonusDraws, 0);
   const rich = { ...empty, coins: FRIEND_DRAW_PRICE + 5 };
   assert.equal(friendDrawPayment(rich, T), 'coins');
-  assert.equal(payFriendDraw(rich, T)!.coins, 5);
+  assert.equal(payFriendDraw(rich, T)!.save.coins, 5);
   assert.equal(friendDrawPayment({ ...empty, coins: FRIEND_DRAW_PRICE - 1 }, T), null, '199 pièces ne suffisent pas');
 });
 
@@ -49,4 +50,11 @@ test('pioche amicale : l’origine et le nom de l’ami sont gardés, la page d�
   assert.equal(migrateCard({ id: 'x', giver: 4 })!.giver, undefined);
   assert.equal(migrateState({}, T).friendDrawIntro, false);
   assert.equal(migrateState({ friendDrawIntro: true }, T).friendDrawIntro, true);
+});
+
+test('pioche amicale : remboursée seulement si elle échoue sans refus (pièces rendues, tirage rendu en réserve)', () => {
+  const s = { ...createInitialState(T), coins: 50, bonusDraws: 0 };
+  assert.equal(refundFriendDraw(s, 'coins').coins, 50 + FRIEND_DRAW_PRICE);
+  assert.equal(refundFriendDraw(s, 'draw').bonusDraws, 1);
+  assert.equal(refundFriendDraw(s, 'bonus').bonusDraws, 1);
 });

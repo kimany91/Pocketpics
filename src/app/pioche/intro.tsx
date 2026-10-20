@@ -22,13 +22,13 @@ import { colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
 
 const STEPS: { icon: keyof typeof Ionicons.glyphMap; title: string; text: string }[] = [
-  { icon: 'people', title: 'Demande à un ami en ligne', text: 'Il doit avoir le jeu ouvert. Il reçoit ta demande et choisit de l’accepter ou non.' },
-  { icon: 'images', title: 'Ses photos, tes cartes', text: '5 photos de SA galerie, tirées au hasard, deviennent tes cartes. Il les voit et peut en changer avant de les envoyer.' },
+  { icon: 'people', title: 'Demande à un ami en ligne', text: 'Il doit avoir le jeu ouvert. Il reçoit ta demande et l’accepte ou la refuse, c’est tout.' },
   {
     icon: 'wallet',
-    title: 'Le prix d’un paquet',
-    text: `Ça utilise un de tes tirages. S’il ne t’en reste plus, ça coûte ${FRIEND_DRAW_PRICE} pièces. Rien n’est payé si la pioche n’aboutit pas.`,
+    title: 'Le prix d’un paquet, payé à la demande',
+    text: `Ça utilise un de tes tirages, ou ${FRIEND_DRAW_PRICE} pièces s’il ne t’en reste plus. Attention : s’il refuse, tu n’es pas remboursé.`,
   },
+  { icon: 'images', title: 'Ses photos, tes cartes', text: 'S’il accepte, 5 photos de SA galerie, tirées au hasard, deviennent tes cartes.' },
   { icon: 'sparkles', title: 'Tu ouvres le paquet', text: 'Comme un paquet normal, avec ta chance habituelle. Ton ami, lui, ne perd rien.' },
 ];
 
