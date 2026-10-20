@@ -22,7 +22,7 @@ import { Foil } from './Foil';
 import { DivineHalo } from './DivineHalo';
 import { DivineOrnaments } from './Ornaments';
 import { ChromaticPhoto, GALAXY_COLORS, GalaxyGem, GalaxyHalo, GalaxyOrnaments, GalaxyTwinkles, GalaxyWindowGlow } from './Galaxy';
-import { ChromaticRim, ChromaticVeil } from './Chromatic';
+import { ChromaticImage, ChromaticRim, ChromaticVeil } from './Chromatic';
 
 export interface CardLike {
   id: string;
@@ -120,7 +120,16 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
         pointerEvents="none"
         style={[styles.window, { top: border, left: border, right: border, bottom: border, borderRadius: innerRadius }]}
       >
-        {imageSource !== undefined ? (
+        {/* Chromatique : la photo passe dans un filtre qui pousse ses couleurs et son
+            contraste — ce sont bien les couleurs de l'image qui changent. */}
+        {chromatic && (imageSource !== undefined || uri) ? (
+          <ChromaticImage
+            id={card.id}
+            source={imageSource !== undefined ? imageSource : { uri: uri as string }}
+            width={width - border * 2}
+            height={height - border * 2}
+          />
+        ) : imageSource !== undefined ? (
           <Image source={imageSource} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={card.id} />
         ) : uri ? (
           <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={card.id} transition={quality === 'thumb' ? 120 : 0} />

@@ -1,15 +1,16 @@
 /**
  * Cartes chromatiques : une carte sur vingt, toutes raretés confondues.
  *
- * Ce n'est pas une rareté, c'est une « variante » : la photo est traversée par un
- * voile arc-en-ciel, et la fenêtre de la photo est cerclée d'un liseré irisé qui
- * la fait reconnaître d'un coup d'œil, même en miniature.
+ * Ce n'est pas une rareté, c'est une « variante » : les couleurs de la photo
+ * elles-mêmes passent dans un filtre métallique arc-en-ciel, et la fenêtre de la
+ * photo est cerclée d'un liseré irisé qui la fait reconnaître d'un coup d'œil.
  *
- *  - `ChromaticVeil` : les bandes de couleurs sur la photo. Fusionnées en
- *    « soft-light » : elles teintent l'image sans en écraser les détails (on doit
- *    toujours bien voir la photo). Avec `tilt`, elles glissent et changent de
- *    teinte quand on tourne la carte ; sans lui, elles dérivent lentement ;
- *    et rien ne bouge si `animated` est faux.
+ *  - `ChromaticVeil` : le filtre. Une nappe de teintes fondues l'une dans l'autre
+ *    repeint les couleurs de l'image (fusion « color » : la lumière et les détails
+ *    de la photo sont gardés tels quels, seules les teintes changent), et un
+ *    reflet métallique large passe par-dessus. Avec `tilt`, tout glisse quand on
+ *    tourne la carte ; sans lui, ça dérive lentement ; rien ne bouge si
+ *    `animated` est faux.
  *  - `ChromaticRim` : le liseré irisé autour de la photo (le repère).
  *  - `ChromaticTag` : la mention « ✦ Chromatique », à poser à côté de la rareté.
  *
@@ -17,7 +18,8 @@
  */
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, type ImageSourcePropType } from 'react-native';
+import Svg, { Defs, FeColorMatrix, FeComponentTransfer, FeFuncB, FeFuncG, FeFuncR, Filter, Image as SvgImage, type FilterProps } from 'react-native-svg';
 import Animated, {
   Easing,
   type SharedValue,
@@ -34,26 +36,32 @@ import { AppText } from '../AppText';
 /** Spectre de la maison (le même que `Foil` et `Galaxy`). */
 const SPECTRUM = ['#FF3B6B', '#FF9F2E', '#FFF04A', '#4BFF8A', '#2EE6FF', '#3D7BFF', '#B04BFF', '#FF3B6B'];
 
-function fade(hex: string, alpha: number) {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
-}
-/**
- * Les bandes du voile : chaque couleur monte puis retombe à zéro avant la suivante.
- * Entre deux bandes la photo n'est pas touchée du tout — c'est ce qui la garde lisible.
- */
-const BANDS = SPECTRUM.flatMap((c) => [fade(c, 0), fade(c, 0.8), fade(c, 0)]);
 /** Version plus claire, pour le liseré et la pastille (le même esprit que le cadre Ultra Légendaire). */
 const PASTEL = ['#FF6FA8', '#FFB86B', '#FFE66B', '#7CFFB2', '#6ED8FF', '#8C8CFF', '#D58CFF', '#FF6FA8'];
-/** Reflet prismatique qui croise les bandes : il s'allume quand on penche la carte. */
-const PRISM = [
-  'rgba(255,255,255,0)',
-  'rgba(127,230,255,0.85)',
-  'rgba(255,255,255,0.95)',
-  'rgba(255,255,255,0)',
-  'rgba(255,140,220,0.85)',
-  'rgba(255,245,180,0.9)',
-  'rgba(255,255,255,0)',
+/**
+ * Le glacis irisé : les teintes du spectre, très transparentes. Posées sur une
+ * photo dont les couleurs ont déjà été poussées, elles la font virer au métal
+ * irisé sans jamais cacher ce qu'il y a dessous.
+ */
+const GLAZE = [
+  'rgba(255,59,107,0.42)',
+  'rgba(255,159,46,0.36)',
+  'rgba(255,240,74,0.32)',
+  'rgba(75,255,138,0.36)',
+  'rgba(46,230,255,0.42)',
+  'rgba(61,123,255,0.42)',
+  'rgba(176,75,255,0.42)',
+  'rgba(255,59,107,0.42)',
+];
+/** Le reflet : une large bande de lumière, fondue aux deux bouts. */
+const SHEEN = [
+  'rgba(255,255,255,0.00)',
+  'rgba(255,255,255,0.16)',
+  'rgba(255,255,255,0.00)',
+  'rgba(255,255,255,0.30)',
+  'rgba(255,255,255,0.00)',
+  'rgba(255,255,255,0.18)',
+  'rgba(255,255,255,0.00)',
 ];
 
 /**
@@ -84,11 +92,68 @@ function useSpin(duration: number, animated: boolean) {
   return p;
 }
 
+/**
+ * Sans ça le filtre travaille en lumière linéaire et assombrit les demi-teintes.
+ * La propriété existe bien dans react-native-svg, mais pas dans ses types.
+ */
+const SRGB = { colorInterpolationFilters: 'sRGB' } as unknown as FilterProps;
+
+/* ---------------------------------- Photo --------------------------------- */
+
+/**
+ * La photo d'une carte chromatique : la même image, mais passée dans un filtre
+ * qui pousse ses couleurs et son contraste (comme un tirage métallique). C'est un
+ * vrai filtre sur les pixels — les couleurs de la photo changent pour de bon, ce
+ * n'est pas un calque posé devant.
+ */
+export function ChromaticImage({
+  id,
+  source,
+  width,
+  height,
+}: {
+  id: string;
+  source: ImageSourcePropType;
+  width: number;
+  height: number;
+}) {
+  // Un identifiant de filtre par carte, et des caractères sûrs seulement.
+  const fid = `chroma-${id.replace(/[^A-Za-z0-9_-]/g, '')}`;
+  return (
+    <Svg pointerEvents="none" width={width} height={height} style={StyleSheet.absoluteFill}>
+      <Defs>
+        <Filter id={fid} x="0" y="0" width="100%" height="100%" {...SRGB}>
+          {/* Saturation poussée : les teintes de la photo deviennent franches. */}
+          <FeColorMatrix type="saturate" values="2.1" result="sat" />
+          {/* Puis du contraste, pour le côté métal poli. */}
+          <FeComponentTransfer in="sat">
+            <FeFuncR type="linear" slope="1.16" intercept="-0.07" />
+            <FeFuncG type="linear" slope="1.16" intercept="-0.07" />
+            <FeFuncB type="linear" slope="1.2" intercept="-0.08" />
+          </FeComponentTransfer>
+        </Filter>
+      </Defs>
+      <SvgImage
+        href={source}
+        x="0"
+        y="0"
+        width={width}
+        height={height}
+        preserveAspectRatio="xMidYMid slice"
+        filter={`url(#${fid})`}
+      />
+    </Svg>
+  );
+}
+
 /* ---------------------------------- Voile --------------------------------- */
 
 /**
- * Voile arc-en-ciel posé sur la photo : des bandes de couleurs la traversent en
- * biais, plus un reflet prismatique qui les croise en sens inverse.
+ * Le glacis irisé posé sur la photo déjà filtrée (voir `ChromaticImage`).
+ *
+ * Deux nappes très transparentes, aucune bande franche : les teintes du spectre
+ * de bout en bout, et un large reflet de métal poli qui glisse quand on tourne
+ * la carte. La photo reste lisible, elle est juste devenue irisée.
  */
 export function ChromaticVeil({
   width,
@@ -105,34 +170,35 @@ export function ChromaticVeil({
   intensity?: number;
 }) {
   const drive = useDrive(tilt, animated, 7000, 0.5);
-  const bands = [...BANDS, ...BANDS, ...BANDS] as [string, string, ...string[]];
+  // Deux tours de spectre fondus l'un dans l'autre : toute la carte est irisée,
+  // sans bande franche nulle part.
+  const hues = [...GLAZE, ...GLAZE.slice(1)] as [string, string, ...string[]];
+  const sheen = [...SHEEN, ...SHEEN.slice(1)] as [string, string, ...string[]];
 
-  const veil = useAnimatedStyle(() => {
+  const tint = useAnimatedStyle(() => {
     const t = Math.max(-1.4, Math.min(1.4, drive.value));
     return {
-      // Visible sans noyer la photo : on doit toujours reconnaître l'image en
-      // dessous. Un peu plus vif quand on penche la carte.
-      opacity: intensity * (0.42 + Math.min(1, Math.abs(t)) * 0.3),
-      transform: [{ translateX: -width + t * width * 0.5 }, { translateY: -height * 0.4 }, { rotate: '-26deg' }],
+      opacity: intensity * (0.85 + Math.min(1, Math.abs(t)) * 0.15),
+      transform: [{ translateX: -width * 0.7 + t * width * 0.4 }, { translateY: -height * 0.3 }, { rotate: '-22deg' }],
     };
   });
-  const prism = useAnimatedStyle(() => {
+  const shine = useAnimatedStyle(() => {
     const t = Math.max(-1.3, Math.min(1.3, drive.value));
     return {
-      opacity: intensity * (0.05 + Math.min(1, Math.abs(t)) * 0.17),
-      transform: [{ translateX: -width * 0.45 - t * width * 0.45 }, { translateY: -height * 0.3 }, { rotate: '34deg' }],
+      opacity: intensity * (0.55 + Math.min(1, Math.abs(t)) * 0.45),
+      transform: [{ translateX: -width * 0.6 - t * width * 0.55 }, { translateY: -height * 0.3 }, { rotate: '28deg' }],
     };
   });
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {/* Les bandes : « soft-light » garde la lumière de la photo et n'en change que les teintes. */}
-      <Animated.View style={[styles.layer, { width: width * 3, height: height * 1.8, mixBlendMode: 'soft-light' }, veil]}>
-        <LinearGradient pointerEvents="none" colors={bands} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+      {/* Le glacis irisé : des teintes très transparentes, fondues, sur toute la carte. */}
+      <Animated.View style={[styles.layer, { width: width * 2.4, height: height * 1.7 }, tint]}>
+        <LinearGradient pointerEvents="none" colors={hues} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
       </Animated.View>
-      {/* Le reflet prismatique, qui éclaircit comme une vraie pellicule irisée. */}
-      <Animated.View style={[styles.layer, { width: width * 1.9, height: height * 1.7, mixBlendMode: 'color-dodge' }, prism]}>
-        <LinearGradient pointerEvents="none" colors={PRISM as [string, string, ...string[]]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
+      {/* Le reflet du métal poli, qui glisse quand on tourne la carte. */}
+      <Animated.View style={[styles.layer, { width: width * 2.2, height: height * 1.7 }, shine]}>
+        <LinearGradient pointerEvents="none" colors={sheen} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
       </Animated.View>
     </View>
   );

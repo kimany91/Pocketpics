@@ -13,6 +13,7 @@ const SOURCES = {
   legendary: require('../../assets/sfx/legendary.wav'),
   ultra: require('../../assets/sfx/ultra.wav'),
   riser: require('../../assets/sfx/riser.wav'),
+  chromatic: require('../../assets/sfx/chromatic.wav'),
   up1: require('../../assets/sfx/up1.wav'),
   up2: require('../../assets/sfx/up2.wav'),
   up3: require('../../assets/sfx/up3.wav'),

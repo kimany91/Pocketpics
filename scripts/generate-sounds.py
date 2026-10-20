@@ -503,6 +503,25 @@ def make_weaken():
     return reverb(biquad(s, "lp", 1600), 0.15, tail=0.2)
 
 
+# --- Carte chromatique : éclat de verre irisé, scintillement qui monte
+def make_chromatic():
+    dur = 2.4
+    buf = np.zeros(int(SR * dur))
+    # L'éclat : une cloche très brillante doublée d'un jumeau désaccordé (le « prisme »)
+    place(buf, bell(note(88), 1.9, 0.40, bright=1.5, decay=1.9), 0)
+    place(buf, bell(note(88) * 1.006, 1.9, 0.26, bright=1.5, decay=1.9), 0.014)
+    # La lumière qui balaie la carte : un arpège qui monte
+    for i, n in enumerate((76, 81, 85, 88, 93, 97, 100)):
+        place(buf, bell(note(n), 1.2, 0.30, bright=0.8), 0.06 + i * 0.085)
+    # Souffle irisé : une bande de bruit qui monte en tremblant
+    t = t_axis(1.5)
+    air = biquad(noise(1.5), "bp", 1800 + 5200 * (t / 1.5) ** 1.5, q=1.1)
+    air = air * (0.6 + 0.4 * np.sin(2 * math.pi * 11 * t)) * np.exp(-t * 1.8) * 0.45
+    place(buf, air, 0.04)
+    place(buf, sparkles(2.0, 34, 3200, 8000, 0.12), 0.1)
+    return reverb(buf, 0.34, size=1.1, tail=1.1)
+
+
 EFFECTS = (
     ("shield", make_shield),
     ("heal", make_heal),
@@ -522,6 +541,9 @@ if __name__ == "__main__":
         for name, fn in COMBAT:
             save(name, fn())
         sys.exit(0)
+    if sys.argv[1:] == ["chromatique"]:
+        save("chromatic", make_chromatic())
+        sys.exit(0)
     if sys.argv[1:] == ["effets"]:
         for name, fn in EFFECTS:
             save(name, fn())
@@ -539,6 +561,7 @@ if __name__ == "__main__":
         ("legendary", make_legendary),
         ("ultra", make_ultra),
         ("riser", make_riser),
+        ("chromatic", make_chromatic),
     ):
         save(name, fn())
     for name, fn in COMBAT:

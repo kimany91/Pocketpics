@@ -15,7 +15,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { playLevelUp, playReveal, playRiser } from '../../audio/sfx';
+import { playLevelUp, playReveal, playRiser, playSfx } from '../../audio/sfx';
 import { RARITIES, getRarity, type Rarity } from '../../game/rarity';
 import type { Card } from '../../storage/model';
 import { CARD_RATIO, colors, fonts } from '../../theme';
@@ -70,6 +70,8 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
   const [upFx, setUpFx] = useState(0);
   const lastUp = useRef(0);
   const cardRef = useRef<RevealCardHandle>(null);
+  const chromaTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(chromaTimer.current), []);
 
   // Carte qui débloque une rareté jamais obtenue : seulement sa première apparition dans le paquet.
   const firstIndexes = useMemo(() => {
@@ -140,6 +142,11 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
     setFx((n) => n + 1);
     setSeen((s) => [...s.slice(0, index), card.rarity]);
     playReveal(hype);
+    // Le carillon irisé passe juste après le son de rareté, pour qu'on l'entende bien.
+    if (card.chromatic) {
+      clearTimeout(chromaTimer.current);
+      chromaTimer.current = setTimeout(() => playSfx('chromatic', { volume: 0.95 }), 170);
+    }
     revealHaptics(hype);
     glow.value = withTiming(hype >= 5 ? 1 : 0.55 + hype * 0.08, { duration: 300 });
     tint.value = withSequence(withTiming(hype >= 3 ? 0.22 + hype * 0.03 : 0.08, { duration: 120 }), withTiming(hype >= 3 ? 0.12 : 0.04, { duration: 900 }));
