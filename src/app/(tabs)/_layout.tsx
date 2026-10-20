@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router/js-tabs';
 import type { BottomTabNavigationOptions } from 'expo-router/build/react-navigation/bottom-tabs';
 import { Easing } from 'react-native';
 
+import { useQuestBadge } from '../../components/QuestEntry';
 import { TabBar } from '../../components/TabBar';
 import { useSocial } from '../../net/social';
 import { useDrawStatus } from '../../state/useDrawStatus';
@@ -30,6 +31,8 @@ export default function TabsLayout() {
   const { available } = useDrawStatus(15000);
   /** Demandes d'ami reçues : en pastille sur l'onglet Profil. */
   const requests = useSocial((s) => s.requests.length);
+  /** Quêtes à récupérer (ou défi du jour à relever) : en pastille sur l'onglet Combat. */
+  const questBadge = useQuestBadge();
   return (
     <Tabs
       tabBar={(props) => <TabBar {...props} />}
@@ -37,7 +40,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ tabBarBadge: available > 0 ? available : undefined }} />
       <Tabs.Screen name="collection" />
-      <Tabs.Screen name="battle" />
+      <Tabs.Screen name="battle" options={{ tabBarBadge: questBadge }} />
       <Tabs.Screen name="trade" />
       <Tabs.Screen name="profile" options={{ tabBarBadge: requests > 0 ? requests : undefined }} />
     </Tabs>

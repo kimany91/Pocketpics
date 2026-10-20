@@ -1,6 +1,6 @@
-/** Recharge des tirages : +1 toutes les 12 h, 3 maximum en réserve. */
+/** Recharge des tirages : +1 toutes les 12 h, 2 maximum en réserve (les quêtes rapportent aussi des pièces). */
 export const DRAW_INTERVAL_MS = 12 * 60 * 60 * 1000;
-export const MAX_STORED_DRAWS = 3;
+export const MAX_STORED_DRAWS = 2;
 export const CARDS_PER_PACK = 5;
 
 export interface DrawState {

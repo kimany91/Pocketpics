@@ -18,10 +18,10 @@ test('rollRarity couvre les extrêmes', () => {
   assert.equal(rollRarity(() => 0.999999), 'divine');
 });
 
-test('recharge des tirages : +1 / 12 h, plafonné à 3', () => {
+test('recharge des tirages : +1 / 12 h, plafonné à 2', () => {
+  assert.equal(MAX_STORED_DRAWS, 2);
   const t0 = 1_000_000;
-  let s = consumeDraw({ charges: 3, anchor: t0 }, t0)!;
-  s = consumeDraw(s, t0)!;
+  let s = consumeDraw({ charges: 2, anchor: t0 }, t0)!;
   s = consumeDraw(s, t0)!;
   assert.equal(s.charges, 0);
   assert.equal(consumeDraw(s, t0 + 1000), null);
@@ -29,14 +29,16 @@ test('recharge des tirages : +1 / 12 h, plafonné à 3', () => {
   assert.equal(computeDraws(s, t0 + DRAW_INTERVAL_MS).charges, 1);
   assert.equal(computeDraws(s, t0 + DRAW_INTERVAL_MS * 1.5).nextAt, t0 + DRAW_INTERVAL_MS * 2);
   assert.equal(computeDraws(s, t0 + DRAW_INTERVAL_MS * 50).charges, MAX_STORED_DRAWS);
+  // une ancienne sauvegarde à 3 tirages en réserve redescend à 2
+  assert.equal(computeDraws({ charges: 3, anchor: t0 }, t0).charges, 2);
   // horloge reculée : pas de tirage gratuit, pas de crash
   assert.equal(computeDraws(s, t0 - 10_000).charges, 0);
 });
 
 test('consommer en réserve pleine relance le compte à rebours', () => {
   const t0 = 5_000;
-  const s = consumeDraw({ charges: 3, anchor: 0 }, t0)!;
-  assert.deepEqual(s, { charges: 2, anchor: t0 });
+  const s = consumeDraw({ charges: 2, anchor: 0 }, t0)!;
+  assert.deepEqual(s, { charges: 1, anchor: t0 });
   assert.equal(computeDraws(s, t0).nextAt, t0 + DRAW_INTERVAL_MS);
 });
 

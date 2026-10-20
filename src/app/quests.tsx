@@ -190,7 +190,7 @@ function ChallengeHero({ challenge, now, focused }: { challenge: DailyChallenge 
 
   const odds = challengeOdds(challenge.level, challenge.count, challenge.cap);
   // Difficulté affichée : 3 flammes pour les plus durs
-  const flames = odds <= 24 ? 3 : odds <= 40 ? 2 : 1;
+  const flames = odds <= 8 ? 3 : odds <= 12 ? 2 : 1;
   const tint = level.world.tint;
   return (
     <View style={[styles.hero, { borderColor: challenge.done ? 'rgba(79,224,168,0.5)' : 'rgba(255,138,60,0.6)' }]}>
@@ -223,7 +223,7 @@ function ChallengeHero({ challenge, now, focused }: { challenge: DailyChallenge 
           {[0, 1, 2].map((i) => (
             <Ionicons key={i} name="flame" size={14} color={i < flames ? '#FF7A2C' : 'rgba(255,255,255,0.15)'} />
           ))}
-          <AppText style={styles.metaText}>{flames === 3 ? 'Très dur' : flames === 2 ? 'Dur' : 'Corsé'}</AppText>
+          <AppText style={styles.metaText}>{flames === 3 ? 'Extrême' : flames === 2 ? 'Très dur' : 'Dur'}</AppText>
         </View>
         <View style={styles.prize}>
           <CoinIcon size={15} />

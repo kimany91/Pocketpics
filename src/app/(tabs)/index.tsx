@@ -24,7 +24,7 @@ import { DEFAULT_SOUND_VOLUME } from '../../storage/model';
 import { Glow, Twinkles } from '../../components/fx';
 import { Rise } from '../../components/Rise';
 import { PACK_RATIO, PackArt } from '../../components/PackArt';
-import { QuestButton } from '../../components/QuestEntry';
+import { QuestPill } from '../../components/QuestEntry';
 import { Screen } from '../../components/Screen';
 import { DRAW_INTERVAL_MS, MAX_STORED_DRAWS, formatCountdown } from '../../game/draws';
 import { DRAW_PRICE } from '../../game/economy';
@@ -128,10 +128,14 @@ export default function DrawScreen() {
         </View>
         <View style={styles.headerBtns}>
           <CoinChip amount={coins} style={{ marginTop: 4 }} />
-          <QuestButton />
           <IconButton icon={volumeIcon(soundVolume)} label="Régler le son" onPress={() => setSoundOpen(true)} />
           <IconButton icon="stats-chart" label="Taux d'obtention" onPress={() => router.push('/rates')} />
         </View>
+      </Rise>
+
+      {/* Les quêtes, bien en vue juste sous le titre */}
+      <Rise visit={visit} index={1} style={{ paddingHorizontal: width < 390 ? 16 : 20, marginTop: 14 }}>
+        <QuestPill focused={focused} />
       </Rise>
 
       <Rise visit={visit} index={1} dy={34} scale={0.9} style={styles.stage}>

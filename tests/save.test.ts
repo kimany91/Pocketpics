@@ -37,7 +37,7 @@ test('état joueur : valeurs par défaut sûres, registre anti-doublon gardé', 
   assert.deepEqual(s.draws, { charges: 1, anchor: 50 });
   assert.equal(s.futureField, 'ok');
   const fresh = migrateState(undefined, 100);
-  assert.equal(fresh.draws.charges, 3);
+  assert.equal(fresh.draws.charges, 2);
   assert.match(fresh.playerName, /^Joueur \d{4}$/);
 });
 

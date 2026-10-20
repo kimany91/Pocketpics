@@ -7,7 +7,7 @@
  *  - Défi du jour : rejouer le niveau où l'on en est dans l'aventure avec une
  *    équipe bridée (moins de cartes, rareté plafonnée). Il est choisi dans
  *    `CHALLENGE_TABLE` (combats simulés) pour être dur mais gagnable : un
- *    joueur qui vise bien le gagne entre 20 et 60 % du temps. Réussi, il
+ *    joueur qui vise bien le gagne entre 8 et 16 % du temps. Réussi, il
  *    rapporte 50 pièces en plus de ce que rapporte le combat.
  *
  * Les récompenses suivent l'économie (un tirage = 200 pièces) : presque rien
@@ -60,13 +60,13 @@ export type Reward = { coins: number; draws?: undefined } | { draws: number; coi
 /** Récompense du défi du jour. */
 export const CHALLENGE_REWARD = 50;
 /** Fenêtre de réussite d'un défi (en %, joueur qui vise bien). */
-export const CHALLENGE_WINDOW = { min: 20, max: 60 };
+export const CHALLENGE_WINDOW = { min: 8, max: 16 };
 /**
  * Tout en haut de l'aventure, même les meilleures cartes gagnent rarement :
  * plutôt que de renvoyer le joueur trente niveaux en arrière, on accepte alors
  * un défi plus dur près de là où il en est (voir `pickChallenge`).
  */
-const HARD_WINDOW = { min: 8, max: 60 };
+const HARD_WINDOW = { min: 4, max: 16 };
 /** Jusqu'où on redescend avant d'accepter un défi plus dur. */
 const NEAR = 10;
 
@@ -325,7 +325,8 @@ function seeded(seed: string) {
  *  - le joueur a assez de cartes de la rareté demandée pour la remplir ;
  *  - elle bride vraiment son équipe habituelle (moins de cartes, ou une
  *    rareté plus basse que sa meilleure) ;
- *  - un joueur qui vise bien la gagne entre 20 et 60 % du temps.
+ *  - un joueur qui vise bien la gagne entre 8 et 16 % du temps : il faudra
+ *    s'y reprendre à plusieurs fois.
  */
 export function pickChallenge(opts: { day: string; seed: string; soloLevel: number; divineUnlocked: boolean; ranks: number[] }): DailyChallenge | null {
   const { ranks } = opts;

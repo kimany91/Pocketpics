@@ -9,11 +9,13 @@ import { DIVINE_GATE, TOTAL_LEVELS, needsDivine } from '../battle/levels';
 import { planPack, rollLucky } from '../game/luck';
 import {
   CHALLENGE_REWARD,
+  CHALLENGE_WINDOW,
   type DailyChallenge,
   type QuestContext,
   type QuestEvent,
   type Reward,
   bump,
+  challengeOdds,
   claim,
   dayKey,
   finishOnline,
@@ -549,7 +551,9 @@ export const useGame = create<GameStore>((set, get) => ({
     if (!save) return null;
     const day = dayKey(Date.now());
     const current = save.quests.challenge;
-    if (current && current.day === day) return current;
+    // un défi du jour tiré avec d'anciennes règles, devenu trop facile, est retiré (s'il n'est pas déjà fait)
+    const stale = current && !current.done && challengeOdds(current.level, current.count, current.cap) > CHALLENGE_WINDOW.max;
+    if (current && current.day === day && !stale) return current;
     const challenge = pickChallenge({
       day,
       seed: String(save.createdAt),

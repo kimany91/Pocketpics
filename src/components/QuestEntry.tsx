@@ -1,7 +1,8 @@
 /**
  * Accès aux quêtes :
  *  - `QuestPanel` : le bandeau de l'onglet Combat (défi du jour + quêtes prêtes) ;
- *  - `QuestButton` : le bouton rond de l'accueil, avec sa pastille.
+ *  - `QuestPill` : le bandeau de l'accueil, juste sous le titre ;
+ *  - `useQuestBadge` : la pastille de l'onglet Combat.
  * La pastille compte les récompenses à récupérer ; une flamme signale le défi du
  * jour encore à relever.
  */
@@ -24,10 +25,12 @@ import { AppText } from './AppText';
 function useOpenChallenge() {
   const challenge = useGame((s) => s.save?.quests.challenge ?? null);
   const ready = useGame((s) => s.ready);
+  // sans carte, pas de défi : on réessaie dès que la collection change (premier paquet)
+  const owned = useGame((s) => s.cards.length);
   const today = dayKey(Date.now());
   useEffect(() => {
     if (ready) useGame.getState().ensureChallenge();
-  }, [ready, today]);
+  }, [ready, today, owned]);
   return challenge && challenge.day === today ? challenge : null;
 }
 
@@ -79,43 +82,81 @@ export function QuestPanel({ focused }: { focused: boolean }) {
   );
 }
 
-export function QuestButton() {
+/** Bandeau de l'accueil : bien visible, il respire quand quelque chose attend. */
+export function QuestPill({ focused }: { focused: boolean }) {
   const { ready } = useQuests();
   const challenge = useOpenChallenge();
+  const todo = !!challenge && !challenge.done;
+  const waiting = ready > 0 || todo;
   const press = useSharedValue(0);
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 - press.value * 0.1 }] }));
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    if (!focused || !waiting) {
+      cancelAnimation(pulse);
+      pulse.value = withTiming(0);
+      return;
+    }
+    pulse.value = withRepeat(withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(pulse);
+  }, [focused, waiting, pulse]);
+  const face = useAnimatedStyle(() => ({ transform: [{ translateY: press.value * 3 }, { scale: 1 - press.value * 0.015 + pulse.value * 0.012 }] }));
+  const glow = useAnimatedStyle(() => ({ opacity: 0.25 + pulse.value * 0.55 }));
+  const icon = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pulse.value * 0.14 }, { rotate: `${(pulse.value - 0.5) * 12}deg` }] }));
+  const sub =
+    ready > 0
+      ? `${ready} récompense${ready > 1 ? 's' : ''} à récupérer`
+      : todo && challenge
+        ? `Défi du jour : niveau ${challenge.level}`
+        : challenge?.done
+          ? 'Défi du jour réussi ✓'
+          : 'Quêtes du jour et succès';
   return (
     <Pressable
-      hitSlop={8}
       onPressIn={() => (press.value = withSpring(1, springs.press))}
       onPressOut={() => (press.value = withSpring(0, springs.release))}
       onPress={() => {
-        haptic.tick();
+        haptic.medium();
         router.push('/quests');
       }}
-      accessibilityLabel={ready > 0 ? `Quêtes : ${ready} récompense${ready > 1 ? 's' : ''} à récupérer` : 'Quêtes'}
       accessibilityRole="button"
+      accessibilityLabel={`Quêtes : ${sub}`}
     >
-      <Animated.View style={[styles.iconBtn, style]}>
-        <Ionicons name="ribbon" size={18} color={ready > 0 ? colors.gold : colors.textDim} />
+      <Animated.View pointerEvents="none" style={[styles.pillGlow, glow]} />
+      <Animated.View style={[styles.pill, face]}>
+        <LinearGradient pointerEvents="none" colors={['#FF7A2C', '#F7A93A', '#F7C948']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <Animated.View style={[styles.pillIcon, icon]}>
+          <Ionicons name={ready > 0 ? 'gift' : 'flame'} size={22} color="#FF7A2C" />
+        </Animated.View>
+        <View style={{ flex: 1 }}>
+          <AppText style={styles.pillTitle}>Quêtes</AppText>
+          <AppText style={styles.pillSub} numberOfLines={1}>
+            {sub}
+          </AppText>
+        </View>
         {ready > 0 ? (
-          <View style={styles.cornerBadge}>
-            <Badge n={ready} small />
+          <View style={styles.pillBadge}>
+            <AppText style={styles.pillBadgeText}>{ready}</AppText>
           </View>
-        ) : challenge && !challenge.done ? (
-          <View style={styles.cornerFlame}>
-            <Ionicons name="flame" size={11} color="#FF9A3C" />
-          </View>
-        ) : null}
+        ) : (
+          <Ionicons name="chevron-forward" size={22} color="#141414" />
+        )}
       </Animated.View>
     </Pressable>
   );
 }
 
-function Badge({ n, small = false }: { n: number; small?: boolean }) {
+/** Pastille de l'onglet Combat : les récompenses à récupérer, ou « ! » pour le défi du jour à relever. */
+export function useQuestBadge(): number | string | undefined {
+  const { ready } = useQuests();
+  const challenge = useOpenChallenge();
+  if (ready > 0) return ready;
+  return challenge && !challenge.done ? '!' : undefined;
+}
+
+function Badge({ n }: { n: number }) {
   return (
-    <Animated.View key={n} entering={ZoomIn.springify().damping(9)} style={[styles.badge, small && styles.badgeSmall]}>
-      <AppText style={[styles.badgeText, small && { fontSize: 10 }]}>{n}</AppText>
+    <Animated.View key={n} entering={ZoomIn.springify().damping(9)} style={styles.badge}>
+      <AppText style={styles.badgeText}>{n}</AppText>
     </Animated.View>
   );
 }
@@ -137,10 +178,22 @@ const styles = StyleSheet.create({
   title: { fontFamily: fonts.black, fontSize: 18, color: colors.text },
   sub: { fontFamily: fonts.semibold, fontSize: 12, color: colors.textDim },
   badge: { minWidth: 26, height: 26, borderRadius: 13, paddingHorizontal: 7, backgroundColor: colors.gold, alignItems: 'center', justifyContent: 'center' },
-  badgeSmall: { minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4 },
   badgeText: { fontFamily: fonts.black, fontSize: 13, color: '#141414' },
-  // même bouton que ceux de l'accueil, à côté duquel il se pose
-  iconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-  cornerBadge: { position: 'absolute', top: -4, right: -5 },
-  cornerFlame: { position: 'absolute', top: -3, right: -3, width: 16, height: 16, borderRadius: 8, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#FFE08A',
+  },
+  pillGlow: { position: 'absolute', left: 6, right: 6, top: 4, bottom: -4, borderRadius: 20, backgroundColor: '#FF8A3C' },
+  pillIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center' },
+  pillTitle: { fontFamily: fonts.black, fontSize: 18, color: '#141414', letterSpacing: -0.2 },
+  pillSub: { fontFamily: fonts.bold, fontSize: 12.5, color: 'rgba(20,20,20,0.78)' },
+  pillBadge: { minWidth: 30, height: 30, borderRadius: 15, paddingHorizontal: 8, backgroundColor: '#141414', alignItems: 'center', justifyContent: 'center' },
+  pillBadgeText: { fontFamily: fonts.black, fontSize: 15, color: colors.gold },
 });

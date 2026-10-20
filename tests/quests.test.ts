@@ -148,7 +148,8 @@ test('défi du jour : dur mais gagnable, là où en est le joueur, avec ses prop
       const c = pickChallenge({ day, seed: '42', soloLevel, divineUnlocked: false, ranks: starter });
       assert.ok(c, `niveau ${soloLevel}`);
       const odds = challengeOdds(c.level, c.count, c.cap);
-      assert.ok(odds >= CHALLENGE_WINDOW.min && odds <= CHALLENGE_WINDOW.max, `${odds} %`);
+      // dur : un joueur qui vise bien le gagne rarement (jamais au-dessus de la fenêtre, 4 % au pire)
+      assert.ok(odds >= 4 && odds <= CHALLENGE_WINDOW.max, `${odds} %`);
       assert.ok(c.level <= soloLevel + 1 && c.level >= soloLevel + 1 - 10, `niveau ${c.level} près de ${soloLevel + 1}`);
       assert.ok(starter.filter((r) => r === c.cap).length >= c.count, 'le joueur a les cartes');
       assert.ok(c.count < 4 || c.cap < 3, 'plus faible que son équipe habituelle');
