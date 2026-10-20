@@ -16,7 +16,8 @@ import { type MqttConnection } from '../trade/mqtt';
 import { connectRelay, deps } from '../trade/online';
 import { newOnlineCode } from '../trade/relayCore';
 import { useTrade } from '../trade/session';
-import { usePioche } from './pioche';
+import { inBusyScreen } from '../state/route';
+import { piocheBusy, usePioche } from './pioche';
 import { useMatch } from './match';
 import { sanitizeFighter } from './battleNet';
 import { CHALLENGE_TTL_MS, PRESENCE_MAX_SKEW_MS, type PinnedCard, type SocialMsg, inboxTopic, isOnline, newFriendCode, openFor, presenceTopic, sealFor } from './socialCore';
@@ -158,9 +159,17 @@ export const useSocial = create<SocialStore>((set, get) => {
           // on n'écarte que ceux d'une horloge vraiment fantaisiste)
           if (!friend || Math.abs(now() - m.at) > PRESENCE_MAX_SKEW_MS || get().challenge?.room === m.room) return;
           const kind = m.kind === 'trade' ? 'trade' : m.kind === 'draw' ? 'draw' : 'fight';
-          // déjà en combat (ou déjà en échange, ou déjà en pioche) : on refuse tout de suite
-          const busy =
-            kind === 'trade' ? useTrade.getState().phase !== 'idle' : kind === 'draw' ? !['idle', 'done', 'ended'].includes(usePioche.getState().phase) : useMatch.getState().phase !== 'idle';
+          if (kind === 'draw') {
+            // Pioche amicale : pas de oui/non au début, le téléphone rejoint tout seul
+            // (l'ami regarde l'ouverture en direct et ne décide qu'à la fin).
+            // Seulement s'il n'est pas en plein combat, échange ou ouverture.
+            const occupied = piocheBusy() || useTrade.getState().phase !== 'idle' || useMatch.getState().phase !== 'idle' || inBusyScreen();
+            if (occupied) sendTo(m.from, { k: 'decline', from: mine, room: m.room, at: now() });
+            else void usePioche.getState().give(m.room, { code: m.from, name: friend.name || m.name });
+            return;
+          }
+          // déjà en combat (ou déjà en échange) : on refuse tout de suite
+          const busy = kind === 'trade' ? useTrade.getState().phase !== 'idle' : useMatch.getState().phase !== 'idle';
           if (busy) {
             sendTo(m.from, { k: 'decline', from: mine, room: m.room, at: now() });
             return;
@@ -336,7 +345,6 @@ export const useSocial = create<SocialStore>((set, get) => {
       set({ challenge: null });
       if (!c || now() - c.at > CHALLENGE_TTL_MS) return null;
       if (c.kind === 'trade') void useTrade.getState().join({ kind: 'online', code: c.room });
-      else if (c.kind === 'draw') void usePioche.getState().give(c.room, { code: c.from, name: c.name });
       else void useMatch.getState().join(c.room, { friend: { code: c.from, name: c.name } });
       return c;
     },

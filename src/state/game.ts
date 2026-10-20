@@ -28,7 +28,7 @@ import {
 import { cancelMatch, finishMatch, rankOf, settleAbandoned, shownMmr, startMatch } from '../game/rank';
 import { getRarity } from '../game/rarity';
 import { type CropRect, cropImage } from '../game/gallery';
-import { type FriendDrawPayment, type FriendPhoto, payFriendDraw, refundFriendDraw } from '../game/friendDraw';
+import { type FriendDrawPayment, type FriendPhoto, payFriendDraw } from '../game/friendDraw';
 import { generatePack, makeCard } from '../game/pack';
 import * as disk from '../storage/disk';
 import { MAX_PINNED } from '../storage/model';
@@ -48,15 +48,16 @@ interface GameStore {
   drawStatus(now?: number): DrawStatus;
   openPack(): Promise<Card[]>;
   clearPendingPack(): void;
-  /** Pioche amicale : paie la demande (tirage, ou pièces s'il n'en reste plus). `null` si impossible. */
-  payFriendDraw(): FriendDrawPayment | null;
-  /** Pioche amicale échouée sans refus de l'ami : rend ce qui a été payé. */
-  refundFriendDraw(paid: FriendDrawPayment): void;
   /**
-   * Pioche amicale (déjà payée) : les photos envoyées par l'ami deviennent un
-   * paquet, avec la chance habituelle du joueur, et l'écran d'ouverture est prêt.
+   * Pioche amicale, quand le joueur commence à déchirer le paquet : paie
+   * (tirage, ou 200 pièces s'il n'en reste plus) et crée les cartes à partir
+   * des photos de l'ami, avec sa chance habituelle. `null` s'il ne peut plus payer.
    */
-  openFriendPack(photos: FriendPhoto[], giver: string): Card[] | null;
+  commitFriendPack(photos: FriendPhoto[], giver: string, lucky: boolean): { cards: Card[]; paid: FriendDrawPayment } | null;
+  /** Pioche amicale : le paquet sera-t-il brillant ? (décidé avant l'ouverture, pour montrer le sachet doré) */
+  rollFriendLucky(): boolean;
+  /** Pioche amicale refusée par l'ami à la fin : les cartes sont retirées (le paiement n'est pas rendu). */
+  revokeFriendPack(ids: string[]): void;
   /** La page d'explication de la Pioche amicale a été lue. */
   seeFriendDrawIntro(): void;
   renameCard(id: string, name: string): void;
@@ -275,30 +276,22 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ pendingPack: [] });
   },
 
-  payFriendDraw() {
+  rollFriendLucky() {
     const save = get().save;
-    const res = save ? payFriendDraw(save, Date.now()) : null;
-    if (!res) return null;
-    persistState(res.save);
-    set({ save: res.save });
-    return res.paid;
+    const lucky = save ? rollLucky(save.luck, save.totalPacksOpened) : false;
+    set({ openingLucky: lucky });
+    return lucky;
   },
 
-  refundFriendDraw(paid) {
-    const save = get().save;
-    if (!save) return;
-    const next = refundFriendDraw(save, paid);
-    persistState(next);
-    set({ save: next });
-  },
-
-  openFriendPack(photos, giver) {
-    const paid = get().save;
-    if (!paid || photos.length === 0) return null;
+  commitFriendPack(photos, giver, lucky) {
+    const before = get().save;
+    if (!before || photos.length === 0) return null;
     const now = Date.now();
-    const save = paid;
+    const pay = payFriendDraw(before, now);
+    if (!pay) return null;
+    const save = before;
+    const paid = pay.save;
     const packIndex = save.totalPacksOpened;
-    const lucky = rollLucky(save.luck, packIndex);
     const plan = planPack({ state: save.luck, cards: photos.length, packIndex, lucky, divine: save.divineUnlocked });
     const name = giver.slice(0, 24);
     const made = photos.map((p, i) => ({
@@ -323,7 +316,30 @@ export const useGame = create<GameStore>((set, get) => ({
     };
     persistState(next);
     set({ cards, save: next, pendingPack: written, openingLucky: lucky });
-    return written;
+    return { cards: written, paid: pay.paid };
+  },
+
+  revokeFriendPack(ids) {
+    const remove = new Set(ids);
+    const gone = get().cards.filter((c) => remove.has(c.id));
+    if (gone.length === 0) return;
+    for (const id of remove) disk.deleteCard(id);
+    const cards = get().cards.filter((c) => !remove.has(c.id));
+    disk.saveIndex(cards);
+    const save = get().save;
+    if (save) {
+      // ses photos redeviennent piochables (sauf si une autre carte vient de la même photo)
+      const kept = new Set(cards.map((c) => c.hash));
+      const lost = new Set(gone.map((c) => c.hash).filter((h) => !kept.has(h)));
+      const next: SaveState = {
+        ...save,
+        drawnHashes: save.drawnHashes.filter((h) => !lost.has(h)),
+        pinned: save.pinned.filter((id) => !remove.has(id)),
+      };
+      persistState(next);
+      set({ save: next });
+    }
+    set({ cards, pendingPack: get().pendingPack.filter((c) => !remove.has(c.id)) });
   },
 
   seeFriendDrawIntro() {

@@ -1,20 +1,19 @@
 /**
  * Pioche amicale : on ouvre un paquet dont les photos viennent de la galerie
- * d'un ami (avec son accord), au prix d'un de ses propres tirages ou, s'il n'en
- * reste plus, de 200 pièces.
+ * d'un ami, au prix d'un de ses propres tirages ou, s'il n'en reste plus, de
+ * 200 pièces.
  *
  * Déroulé (les deux téléphones sont reliés par le relais chiffré, comme pour un échange) :
- *  1. Celui qui pioche paie en envoyant sa demande, ouvre un salon et invite
- *     son ami (il doit être en ligne).
- *  2. L'ami accepte ou refuse, c'est tout. S'il refuse, la demande n'est PAS
- *     remboursée (c'est dit avant d'envoyer, et redit au refus). Elle ne l'est
- *     que si la pioche échoue sans que l'ami ait refusé (pas de réponse,
- *     connexion perdue, aucune photo utilisable).
- *  3. S'il accepte, son téléphone prépare des photos au hasard dans sa galerie
- *     et n'envoie d'abord que leurs empreintes (`hashes`).
- *  4. Celui qui pioche répond avec celles qu'il n'a pas déjà en carte (`want`).
- *  5. L'ami envoie les 5 premières (`photo`, une par message), sans choisir.
- *  6. Celui qui pioche crée les cartes avec SA chance habituelle et confirme (`done`).
+ *  1. Celui qui pioche ouvre un salon et envoie sa demande à un ami en ligne.
+ *     L'ami ne répond rien à ce moment-là : son téléphone rejoint la pioche,
+ *     prépare des photos au hasard et n'envoie d'abord que leurs empreintes (`hashes`).
+ *  2. Celui qui pioche répond avec celles qu'il n'a pas déjà en carte (`want`) ;
+ *     l'ami envoie les 5 premières (`photo`, une par message). Rien n'est encore payé.
+ *  3. Dès que celui qui pioche commence à déchirer le paquet, c'est payé et les
+ *     cartes sont créées avec SA chance (`opening`, avec leurs raretés).
+ *  4. L'ami voit en direct chaque carte retournée (`reveal`), puis la fin (`end`).
+ *  5. Seulement alors, il valide ou refuse (`verdict`). Refus : les cartes sont
+ *     retirées et le paiement n'est pas rendu. Sans réponse, elles sont gardées.
  *
  * Pur (testable sous Node).
  */
@@ -24,7 +23,9 @@ import type { SaveState } from '../storage/model';
 
 /** Espace de noms des salons de pioche sur le relais. */
 export const PIOCHE_NS = 'pioche/';
-export const PIOCHE_VERSION = 1;
+export const PIOCHE_VERSION = 2;
+/** Temps laissé à l'ami pour valider ou refuser, une fois le paquet ouvert. */
+export const VERDICT_TTL_MS = 60_000;
 /** Prix d'une pioche quand il ne reste aucun tirage : celui d'un paquet. */
 export const FRIEND_DRAW_PRICE = DRAW_PRICE;
 /** Photos du paquet. */
@@ -60,15 +61,6 @@ export function payFriendDraw(save: SaveState, now: number): { save: SaveState; 
   return null;
 }
 
-/**
- * Rend ce qui a été payé (pioche échouée sans refus de l'ami). Un tirage
- * gratuit revient en tirage de réserve : il ne se perd pas même si la jauge
- * s'est remplie entre-temps.
- */
-export function refundFriendDraw(save: SaveState, paid: FriendDrawPayment): SaveState {
-  return paid === 'coins' ? { ...save, coins: save.coins + FRIEND_DRAW_PRICE } : { ...save, bonusDraws: save.bonusDraws + 1 };
-}
-
 /** Une photo envoyée par l'ami. */
 export interface FriendPhoto {
   hash: string;
@@ -86,9 +78,38 @@ export type PiocheMsg =
   | { t: 'want'; hashes: string[] }
   /** L'ami → une photo du paquet (`i` sur `n`). */
   | ({ t: 'photo'; i: number; n: number } & FriendPhoto)
-  /** Celui qui pioche → cartes créées et payées. */
-  | { t: 'done'; count: number }
+  /** Celui qui pioche → toutes les photos sont là, il va ouvrir. */
+  | { t: 'ready' }
+  /** Celui qui pioche → il a commencé à déchirer : payé, cartes créées (dans l'ordre des révélations). */
+  | { t: 'opening'; cards: OpenedCard[] }
+  /** Celui qui pioche → la carte `i` vient d'être retournée. */
+  | { t: 'reveal'; i: number }
+  /** Celui qui pioche → toutes les cartes sont révélées. */
+  | { t: 'end' }
+  /** L'ami → validé ou refusé (seulement à la fin). */
+  | { t: 'verdict'; ok: boolean }
   | { t: 'bye'; reason?: string };
+
+/** Ce que l'ami voit d'une carte : sa photo (par l'empreinte), sa rareté, si elle est chromatique. */
+export interface OpenedCard {
+  hash: string;
+  rarity: string;
+  chromatic: boolean;
+}
+
+/** Les cartes annoncées à l'ouverture, vérifiées (des photos envoyées, 5 au plus). */
+export function sanitizeOpening(m: unknown, sent: ReadonlySet<string>): OpenedCard[] {
+  const list = m && typeof m === 'object' ? (m as { cards?: unknown }).cards : null;
+  if (!Array.isArray(list)) return [];
+  const out: OpenedCard[] = [];
+  for (const c of list.slice(0, FRIEND_DRAW_CARDS)) {
+    if (!c || typeof c !== 'object') continue;
+    const { hash, rarity, chromatic } = c as Record<string, unknown>;
+    if (typeof hash !== 'string' || !sent.has(hash) || typeof rarity !== 'string' || rarity.length > 32) continue;
+    out.push({ hash, rarity, chromatic: chromatic === true });
+  }
+  return out;
+}
 
 /** Les photos qui peuvent devenir des cartes : pas déjà possédées, sans doublon. */
 export function wantedHashes(offered: unknown, owned: ReadonlySet<string>): string[] {

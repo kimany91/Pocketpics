@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { computeDraws } from '../src/game/draws';
-import { FRIEND_DRAW_PRICE, friendDrawPayment, payFriendDraw, refundFriendDraw, sanitizePhoto, wantedHashes } from '../src/game/friendDraw';
+import { FRIEND_DRAW_PRICE, friendDrawPayment, payFriendDraw, sanitizeOpening, sanitizePhoto, wantedHashes } from '../src/game/friendDraw';
 import { createInitialState, migrateCard, migrateState } from '../src/storage/model';
 
 const T = new Date(2026, 9, 20, 12).getTime();
@@ -52,9 +52,12 @@ test('pioche amicale : l’origine et le nom de l’ami sont gardés, la page d�
   assert.equal(migrateState({ friendDrawIntro: true }, T).friendDrawIntro, true);
 });
 
-test('pioche amicale : remboursée seulement si elle échoue sans refus (pièces rendues, tirage rendu en réserve)', () => {
-  const s = { ...createInitialState(T), coins: 50, bonusDraws: 0 };
-  assert.equal(refundFriendDraw(s, 'coins').coins, 50 + FRIEND_DRAW_PRICE);
-  assert.equal(refundFriendDraw(s, 'draw').bonusDraws, 1);
-  assert.equal(refundFriendDraw(s, 'bonus').bonusDraws, 1);
+test('pioche amicale : l’ami ne voit que des cartes faites de ses propres photos', () => {
+  const sent = new Set(['h1', 'h2']);
+  const got = sanitizeOpening({ cards: [{ hash: 'h1', rarity: 'epic', chromatic: true }, { hash: 'zz', rarity: 'rare' }, { hash: 'h2', rarity: 'common', chromatic: 'oui' }] }, sent);
+  assert.deepEqual(got, [
+    { hash: 'h1', rarity: 'epic', chromatic: true },
+    { hash: 'h2', rarity: 'common', chromatic: false },
+  ]);
+  assert.deepEqual(sanitizeOpening({ cards: 'non' }, sent), []);
 });

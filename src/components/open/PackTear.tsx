@@ -5,7 +5,7 @@
  * montent en puissance), puis il éclate et laisse partir les cartes (`onTorn`).
  */
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -47,7 +47,7 @@ function tearNotch(step: number) {
   return haptic.medium();
 }
 
-export function PackTear({ width, onTorn, lucky = false }: { width: number; onTorn: () => void; lucky?: boolean }) {
+export function PackTear({ width, onTorn, onBegin, lucky = false }: { width: number; onTorn: () => void; /** Le joueur commence à déchirer (premier cran). */ onBegin?: () => void; lucky?: boolean }) {
   const height = width * PACK_RATIO;
   const tearY = height * TEAR_LINE;
 
@@ -69,6 +69,14 @@ export function PackTear({ width, onTorn, lucky = false }: { width: number; onTo
     hint.value = withDelay(600, withRepeat(withSequence(withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.cubic) }), withTiming(0, { duration: 0 })), -1, false));
   }, [enter, float, hint]);
 
+  const begun = useRef(false);
+  const notch = (step: number) => {
+    tearNotch(step);
+    if (!begun.current) {
+      begun.current = true;
+      onBegin?.();
+    }
+  };
   const [boom, setBoom] = useState(0);
   const [blast, setBlast] = useState(0);
   const [charging, setCharging] = useState(false);
@@ -115,7 +123,7 @@ export function PackTear({ width, onTorn, lucky = false }: { width: number; onTo
       const step = Math.floor(progress.value * NOTCHES);
       if (step > lastTick.value) {
         lastTick.value = step;
-        scheduleOnRN(tearNotch, step);
+        scheduleOnRN(notch, step);
       }
     })
     .onEnd(() => {

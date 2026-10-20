@@ -22,14 +22,14 @@ import { colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
 
 const STEPS: { icon: keyof typeof Ionicons.glyphMap; title: string; text: string }[] = [
-  { icon: 'people', title: 'Demande à un ami en ligne', text: 'Il doit avoir le jeu ouvert. Il reçoit ta demande et l’accepte ou la refuse, c’est tout.' },
+  { icon: 'people', title: 'Demande à un ami en ligne', text: 'Il doit avoir le jeu ouvert. Son téléphone tire 5 photos au hasard dans sa galerie : elles deviennent ton paquet.' },
   {
     icon: 'wallet',
-    title: 'Le prix d’un paquet, payé à la demande',
-    text: `Ça utilise un de tes tirages, ou ${FRIEND_DRAW_PRICE} pièces s’il ne t’en reste plus. Attention : s’il refuse, tu n’es pas remboursé.`,
+    title: 'Payé quand tu ouvres',
+    text: `Dès que tu commences à déchirer le paquet : 1 tirage, ou ${FRIEND_DRAW_PRICE} pièces s’il ne t’en reste plus.`,
   },
-  { icon: 'images', title: 'Ses photos, tes cartes', text: 'S’il accepte, 5 photos de SA galerie, tirées au hasard, deviennent tes cartes.' },
-  { icon: 'sparkles', title: 'Tu ouvres le paquet', text: 'Comme un paquet normal, avec ta chance habituelle. Ton ami, lui, ne perd rien.' },
+  { icon: 'eye', title: 'Il regarde en direct', text: 'Ton ami voit chaque carte que tu retournes, en direct sur son téléphone.' },
+  { icon: 'checkmark-done', title: 'Il valide ou refuse à la fin', text: 'S’il refuse, les cartes te sont retirées et tu n’es pas remboursé. Sans réponse, tu les gardes.' },
 ];
 
 export default function PiocheIntro() {
@@ -72,7 +72,7 @@ export default function PiocheIntro() {
         </View>
       </ScrollView>
       <Animated.View entering={FadeInDown.delay(700).duration(380)} style={styles.footer}>
-        <Button label="Compris, on pioche !" icon="sparkles" size="lg" shimmer onPress={go} />
+        <Button label="Compris, on pioche !" icon="sparkles" size="lg" shimmer onPress={go} />
       </Animated.View>
     </Screen>
   );

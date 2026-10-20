@@ -112,9 +112,10 @@ export default function DrawScreen() {
 
 
   const cycle = nextAt ? 1 - (nextAt - now) / DRAW_INTERVAL_MS : 1;
-  // Pioche amicale : un « ! » à côté du paquet quand un ami est en ligne et qu'on peut payer
+  // Pioche amicale : un « ! » à côté du paquet dès qu'un ami est en ligne (sans tirage ni
+  // pièces, la demande explique ce qui manque au lieu de cacher le « ! »)
   const friendDraw = useFriendDraw();
-  const showPioche = friendDraw.online.length > 0 && !!friendDraw.payment;
+  const showPioche = friendDraw.online.length > 0;
 
   return (
     <Screen>

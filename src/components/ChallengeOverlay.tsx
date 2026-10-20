@@ -134,14 +134,6 @@ export function ChallengeOverlay() {
               </AppText>
             </View>
           </View>
-          {draw ? (
-            <View style={styles.drawNote}>
-              <Ionicons name="images-outline" size={14} color={colors.textDim} />
-              <AppText variant="caption" style={{ flex: 1 }}>
-                {`5 photos de ta galerie, tirées au hasard, deviendront ses cartes. Toi, tu ne perds rien. ${challenge.name} a déjà payé : si tu refuses, il n’est pas remboursé.`}
-              </AppText>
-            </View>
-          ) : null}
           <View style={styles.buttons}>
             <Button label="Refuser" kind="secondary" style={{ flex: 1 }} onPress={decline} />
             <Button
@@ -170,5 +162,4 @@ const styles = StyleSheet.create({
   kickerRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   kicker: { fontFamily: fonts.black, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', color: colors.gold },
   buttons: { flexDirection: 'row', gap: 10 },
-  drawNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)' },
 });

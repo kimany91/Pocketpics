@@ -37,6 +37,8 @@ import { PACK_RATIO, TEAR_LINE } from '../components/PackArt';
 import { CARDS_PER_PACK } from '../game/draws';
 import { NoPhotosLeftError } from '../game/pack';
 import { getRarity } from '../game/rarity';
+import { FriendRefused, FriendVerdictBanner } from '../components/pioche/FriendVerdict';
+import { usePioche } from '../net/pioche';
 import { useGame } from '../state/game';
 import { useDrawStatus } from '../state/useDrawStatus';
 import type { Card } from '../storage/model';
@@ -54,7 +56,7 @@ export default function OpenScreen() {
   // Changer de clé relance une session complète : « Paquet suivant ».
   const [round, setRound] = useState(0);
   if (galaxy === '1') return <GalaxySession />;
-  // Pioche amicale : le paquet est déjà prêt (photos de l'ami), on l'ouvre seulement la première fois.
+  // Pioche amicale : les photos de l'ami sont là ; payé et créé au premier coup de déchirure.
   return <PackSession key={round} friend={friend === '1' && round === 0} onNext={() => setRound((r) => r + 1)} />;
 }
 
@@ -82,10 +84,8 @@ function PackSession({ onNext, friend = false }: { onNext(): void; friend?: bool
     if (started.current) return;
     started.current = true;
     if (friend) {
-      // déjà créé et payé par la Pioche amicale
-      const ready = useGame.getState().pendingPack;
-      if (ready.length) setCards(ready);
-      else setError('Le paquet de ton ami est introuvable.');
+      // Pioche amicale : rien n'est payé avant que le joueur commence à déchirer (voir `beginTear`)
+      if (usePioche.getState().phase !== 'ready') setError('La pioche chez ton ami est terminée.');
       setLuckKnown(true);
       return;
     }
@@ -115,6 +115,22 @@ function PackSession({ onNext, friend = false }: { onNext(): void; friend?: bool
   }, [phase, cards]);
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
+
+  // Pioche amicale : le premier coup de déchirure paie et crée les cartes ; l'ami voit tout en direct.
+  const beginTear = () => {
+    if (!friend || cards) return;
+    const made = usePioche.getState().open();
+    if (made) setCards(made);
+    else setError(usePioche.getState().error ?? 'La pioche n’a pas pu s’ouvrir.');
+  };
+  // Quitter l'écran avant d'avoir entamé le paquet annule la pioche (rien n'est payé).
+  useEffect(() => {
+    if (!friend) return;
+    return () => {
+      const s = usePioche.getState();
+      if (s.role === 'asker' && !['opening', 'judging'].includes(s.phase)) s.leave();
+    };
+  }, [friend]);
 
   if (error) {
     return (
@@ -152,7 +168,7 @@ function PackSession({ onNext, friend = false }: { onNext(): void; friend?: bool
               <Glow color="#FFC94D" size={packW * 2.4} />
             </View>
           ) : null}
-          <PackTear width={packW} onTorn={torn} lucky={lucky} />
+          <PackTear width={packW} onTorn={torn} onBegin={friend ? beginTear : undefined} lucky={lucky} />
         </View>
       ) : null}
       {phase === 'pack' && lucky ? (
@@ -164,11 +180,11 @@ function PackSession({ onNext, friend = false }: { onNext(): void; friend?: bool
         </Animated.View>
       ) : null}
 
-      {phase === 'pack' && friend && !lucky && cards?.[0]?.giver ? (
+      {phase === 'pack' && friend && !lucky ? (
         <Animated.View entering={ZoomIn.springify().damping(12)} pointerEvents="none" style={[styles.luckyBanner, { top: insets.top + 18 }]}>
           <AppText style={[styles.luckyTitle, { color: '#D9C8FF' }]}>Pioche amicale</AppText>
           <AppText variant="caption" style={{ color: '#D9C8FF', textAlign: 'center' }}>
-            {`Les photos de ${cards[0].giver}`}
+            {`Les photos de ${usePioche.getState().friend?.name ?? 'ton ami'} · il regarde en direct`}
           </AppText>
         </Animated.View>
       ) : null}
@@ -177,9 +193,20 @@ function PackSession({ onNext, friend = false }: { onNext(): void; friend?: bool
 
       {phase === 'waiting' ? <WaitingStack cardW={cardW} /> : null}
 
-      {phase === 'reveal' && cards ? <RevealStack cards={cards} firsts={firsts} onDone={() => setPhase('summary')} /> : null}
+      {phase === 'reveal' && cards ? (
+        <RevealStack
+          cards={cards}
+          firsts={firsts}
+          onReveal={friend ? (i) => usePioche.getState().reveal(i) : undefined}
+          onDone={() => {
+            if (friend) usePioche.getState().finish();
+            setPhase('summary');
+          }}
+        />
+      ) : null}
 
-      {phase === 'summary' && cards ? <Summary cards={cards} onClose={close} onNext={onNext} /> : null}
+      {phase === 'summary' && cards ? <Summary cards={cards} onClose={close} onNext={onNext} header={friend ? <FriendVerdictBanner /> : null} /> : null}
+      {phase === 'summary' && cards && friend ? <FriendRefused onClose={close} /> : null}
 
       {phase === 'reveal' ? (
         <Pressable style={[styles.skip, { top: insets.top + 6 }]} hitSlop={12} onPress={() => setPhase('summary')}>
@@ -230,7 +257,7 @@ function WaitingStack({ cardW }: { cardW: number }) {
   );
 }
 
-function Summary({ cards, onClose, onNext }: { cards: Card[]; onClose(): void; onNext(): void }) {
+function Summary({ cards, onClose, onNext, header }: { cards: Card[]; onClose(): void; onNext(): void; header?: React.ReactNode }) {
   const { width } = useWindowDimensions();
   const { available: charges } = useDrawStatus();
   const cols = cards.length <= 4 ? 2 : 3;
@@ -247,6 +274,7 @@ function Summary({ cards, onClose, onNext }: { cards: Card[]; onClose(): void; o
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.summary}>
+        {header}
         <Animated.View entering={FadeInUp.duration(400)} style={{ alignItems: 'center', marginBottom: 26 }}>
           <AppText variant="title">Nouvelles cartes</AppText>
           <AppText variant="caption" style={{ marginTop: 4 }}>

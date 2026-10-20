@@ -52,9 +52,11 @@ interface Props {
   /** Raretés que le joueur n'avait encore jamais eues avant ce paquet. */
   firsts: Set<string>;
   onDone(): void;
+  /** Une carte vient d'être retournée (Pioche amicale : l'ami la voit en direct). */
+  onReveal?(index: number): void;
 }
 
-export function RevealStack({ cards, firsts, onDone }: Props) {
+export function RevealStack({ cards, firsts, onDone, onReveal }: Props) {
   const { width: sw, height: sh } = useWindowDimensions();
   const cardW = revealCardWidth(sw, sh);
   const [index, setIndex] = useState(0);
@@ -139,6 +141,7 @@ export function RevealStack({ cards, firsts, onDone }: Props) {
 
   const onRevealed = () => {
     setRevealedAt(index);
+    onReveal?.(index);
     setFx((n) => n + 1);
     setSeen((s) => [...s.slice(0, index), card.rarity]);
     playReveal(hype);

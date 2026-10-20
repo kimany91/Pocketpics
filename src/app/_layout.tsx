@@ -16,6 +16,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initSfx } from '../audio/sfx';
 import { AppText } from '../components/AppText';
 import { ChallengeOverlay } from '../components/ChallengeOverlay';
+import { PiocheWatcher } from '../components/pioche/PiocheWatcher';
 import { useSocial } from '../net/social';
 import { useGame } from '../state/game';
 import { colors } from '../theme';
@@ -89,6 +90,7 @@ export default function RootLayout() {
         <Stack.Screen name="online/scan" options={UP} />
       </Stack>
       <ChallengeOverlay />
+      <PiocheWatcher />
     </GestureHandlerRootView>
   );
 }

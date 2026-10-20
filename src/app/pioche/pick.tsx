@@ -41,7 +41,7 @@ export default function PiochePick() {
           {payment === 'coins' ? <CoinIcon size={16} /> : <Ionicons name={payment ? 'sparkles' : 'alert-circle'} size={16} color={payment ? colors.gold : colors.danger} />}
           <AppText variant="caption" style={{ flex: 1, color: payment ? colors.text : colors.danger }}>
             {payment
-              ? `Coût : ${paymentLabel(payment)}, payé à l’envoi de la demande. S’il refuse, tu n’es pas remboursé.`
+              ? `Coût : ${paymentLabel(payment)}, payé quand tu commences à ouvrir. S’il refuse à la fin, tu perds les cartes, sans remboursement.`
               : `Il te faut un tirage disponible, ou ${FRIEND_DRAW_PRICE} pièces s’il ne t’en reste plus.`}
           </AppText>
         </Animated.View>
