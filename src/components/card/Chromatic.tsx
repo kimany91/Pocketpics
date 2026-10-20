@@ -44,24 +44,24 @@ const PASTEL = ['#FF6FA8', '#FFB86B', '#FFE66B', '#7CFFB2', '#6ED8FF', '#8C8CFF'
  * irisé sans jamais cacher ce qu'il y a dessous.
  */
 const GLAZE = [
-  'rgba(255,59,107,0.42)',
-  'rgba(255,159,46,0.36)',
-  'rgba(255,240,74,0.32)',
-  'rgba(75,255,138,0.36)',
-  'rgba(46,230,255,0.42)',
-  'rgba(61,123,255,0.42)',
-  'rgba(176,75,255,0.42)',
-  'rgba(255,59,107,0.42)',
+  'rgba(255,40,110,0.52)',
+  'rgba(255,150,30,0.50)',
+  'rgba(255,240,60,0.46)',
+  'rgba(60,255,120,0.48)',
+  'rgba(30,230,255,0.52)',
+  'rgba(50,110,255,0.52)',
+  'rgba(180,70,255,0.50)',
+  'rgba(255,40,110,0.52)',
 ];
 /** Le reflet : une large bande de lumière, fondue aux deux bouts. */
 const SHEEN = [
-  'rgba(255,255,255,0.00)',
-  'rgba(255,255,255,0.16)',
-  'rgba(255,255,255,0.00)',
-  'rgba(255,255,255,0.30)',
-  'rgba(255,255,255,0.00)',
-  'rgba(255,255,255,0.18)',
-  'rgba(255,255,255,0.00)',
+  'rgba(255,120,220,0.00)',
+  'rgba(255,230,120,0.34)',
+  'rgba(120,255,220,0.00)',
+  'rgba(140,200,255,0.36)',
+  'rgba(200,120,255,0.00)',
+  'rgba(255,140,120,0.32)',
+  'rgba(255,120,220,0.00)',
 ];
 
 /**
@@ -124,7 +124,7 @@ export function ChromaticImage({
       <Defs>
         <Filter id={fid} x="0" y="0" width="100%" height="100%" {...SRGB}>
           {/* Saturation poussée : les teintes de la photo deviennent franches. */}
-          <FeColorMatrix type="saturate" values="2.1" result="sat" />
+          <FeColorMatrix type="saturate" values="3" result="sat" />
           {/* Puis du contraste, pour le côté métal poli. */}
           <FeComponentTransfer in="sat">
             <FeFuncR type="linear" slope="1.16" intercept="-0.07" />
@@ -178,14 +178,14 @@ export function ChromaticVeil({
   const tint = useAnimatedStyle(() => {
     const t = Math.max(-1.4, Math.min(1.4, drive.value));
     return {
-      opacity: intensity * (0.85 + Math.min(1, Math.abs(t)) * 0.15),
+      opacity: intensity * (0.95 + Math.min(1, Math.abs(t)) * 0.05),
       transform: [{ translateX: -width * 0.7 + t * width * 0.4 }, { translateY: -height * 0.3 }, { rotate: '-22deg' }],
     };
   });
   const shine = useAnimatedStyle(() => {
     const t = Math.max(-1.3, Math.min(1.3, drive.value));
     return {
-      opacity: intensity * (0.55 + Math.min(1, Math.abs(t)) * 0.45),
+      opacity: intensity * (0.7 + Math.min(1, Math.abs(t)) * 0.3),
       transform: [{ translateX: -width * 0.6 - t * width * 0.55 }, { translateY: -height * 0.3 }, { rotate: '28deg' }],
     };
   });
