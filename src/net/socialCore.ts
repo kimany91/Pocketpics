@@ -24,6 +24,8 @@ export const FRIEND_QR_PREFIX = 'pocketpics://friend/';
 export const PRESENCE_STALE_MS = 180_000;
 /** Un défi expire au bout de ce délai. */
 export const CHALLENGE_TTL_MS = 60_000;
+/** Écart d'horloge toléré entre deux téléphones pour une présence (au-delà, c'est une vieille présence). */
+export const PRESENCE_MAX_SKEW_MS = 12 * 60 * 60 * 1000;
 
 export function newFriendCode(randomBytes: (n: number) => Uint8Array): string {
   return Array.from(randomBytes(FRIEND_CODE_LENGTH), (b) => ALPHABET[b & 31]).join('');

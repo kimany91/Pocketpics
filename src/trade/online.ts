@@ -14,10 +14,14 @@ nacl.setPRNG((x, n) => {
 });
 
 /**
- * Relais publics gratuits (MQTT sur WebSocket sécurisé), essayés dans l'ordre.
+ * Relais publics gratuits (MQTT sur WebSocket sécurisé). Le jeu se branche sur
+ * tous à la fois : deux joueurs se retrouvent dès qu'ils en joignent un en commun.
+ * Le premier écoute sur le port 443 (celui des sites web sécurisés), le seul que
+ * ni les opérateurs mobiles (4G/5G) ni les Wi-Fi publics ne bloquent ; les deux
+ * autres utilisent des ports moins courants, parfois filtrés.
  * Pour une version publiée, remplace-les par ton propre relais : rien d'autre à changer.
  */
-export const RELAYS = ['wss://broker.hivemq.com:8884/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
+export const RELAYS = ['wss://mqtt.eclipseprojects.io:443/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
 
 /**
  * Se connecte à un relais : le canal « room » de claude.ai pour `ROOM_RELAY`

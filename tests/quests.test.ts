@@ -63,20 +63,21 @@ test('quêtes : jour et semaine (la semaine commence le lundi)', () => {
 
 test('quêtes : les compteurs du jour repartent à zéro le lendemain, ceux de la semaine le lundi', () => {
   let q = initialQuests(T);
+  for (let i = 0; i < 3; i++) q = bump(q, 'pack', T);
+  assert.equal(claim(ctxOf(q), 'd-packs'), null, '3 paquets : pas encore (les 2 gratuits ne suffisent pas)');
   q = bump(q, 'pack', T);
-  q = bump(q, 'pack', T);
-  assert.equal(q.daily.pack, 2);
+  assert.equal(q.daily.pack, 4);
   const c = claim(ctxOf(q), 'd-packs');
   assert.ok(c);
-  assert.deepEqual(c.reward, { coins: 20 });
+  assert.deepEqual(c.reward, { coins: 30 });
   assert.equal(claim(ctxOf(c.q), 'd-packs'), null, 'pas deux fois');
   q = c.q;
   // le lendemain
   const next = rollQuests(q, T + DAY);
   assert.equal(next.daily.pack, undefined);
   assert.deepEqual(next.claimedDaily, []);
-  assert.equal(next.weekly.pack, 2, 'la semaine continue');
-  assert.equal(next.ever.pack, 2);
+  assert.equal(next.weekly.pack, 4, 'la semaine continue');
+  assert.equal(next.ever.pack, 4);
   // lundi suivant
   const monday = rollQuests(q, new Date(2026, 9, 26, 9).getTime());
   assert.deepEqual(monday.weekly, {});
@@ -260,39 +261,34 @@ test('quêtes qui changent : brûler une carte d’une rareté qu’on possède,
   assert.ok(BURN_REWARD.every((c) => c <= DRAW_PRICE));
 });
 
-test('quêtes qui changent : épingler 6 cartes, du jour si on les a, de la semaine sinon', () => {
-  const rich = { common: 20, rare: 20, superRare: 20, epic: 20, mythic: 20 };
-  const poor = { common: 6 };
-  for (let i = 0; i < 20; i++) {
-    const now = new Date(2026, 9, 1 + i, 12).getTime();
-    // le joueur a tout : épingler est une quête du jour, petite récompense
-    const r = rollRotation(initialQuests(now), { now, seed: 's', owned: rich });
-    assert.ok(r.rotation!.pin);
-    assert.equal(r.weeklyPin, null);
-    const daily = rotatingQuests(r).find((d) => d.id.startsWith('d-pin-'))!;
-    assert.equal(daily.reward.coins, PIN_REWARD.daily);
-    assert.equal(daily.goal, 6);
-    // il lui manque la plupart des cartes : la quête passe à la semaine, plus grosse récompense
-    const p = rollRotation(initialQuests(now), { now, seed: 's', owned: poor });
-    if (p.weeklyPin) {
-      assert.ok((poor as Record<string, number>)[p.weeklyPin.rarity] === undefined || (poor as Record<string, number>)[p.weeklyPin.rarity] < PIN_MOSTLY);
-      const weekly = rotatingQuests(p).find((d) => d.id.startsWith('w-pin-'))!;
-      assert.equal(weekly.period, 'weekly');
-      assert.equal(weekly.reward.coins, PIN_REWARD.weekly);
-    }
-    // jamais de quête du jour impossible : seulement une rareté qu'il a en nombre
-    if (p.rotation!.pin) assert.ok(((poor as Record<string, number>)[p.rotation!.pin] ?? 0) >= PIN_MOSTLY);
+test('quêtes qui changent : épingler 6 cartes, chaque semaine, une rareté qui manque au joueur', () => {
+  const owned = { common: 30, rare: 12, superRare: 2, epic: 1 };
+  const weeks = Array.from({ length: 12 }, (_, i) => new Date(2026, 8, 7 + i * 7, 12).getTime());
+  const seen = new Set<string>();
+  for (const now of weeks) {
+    const q = rollRotation(initialQuests(now), { now, seed: 's', owned });
+    const pin = q.weeklyPin!;
+    assert.ok(pin, 'une quête d’épingle par semaine');
+    assert.ok(((owned as Record<string, number>)[pin.rarity] ?? 0) < PIN_MOSTLY, `${pin.rarity} : il lui en manque`);
+    seen.add(pin.rarity);
+    const defs = rotatingQuests(q);
+    assert.ok(!defs.some((d) => d.id.startsWith('d-pin-')), 'jamais par jour');
+    const weekly = defs.find((d) => d.id === `w-pin-${pin.rarity}`)!;
+    assert.equal(weekly.period, 'weekly');
+    assert.equal(weekly.reward.coins, PIN_REWARD);
+    assert.equal(weekly.goal, 6);
+    // l'avancement suit les cartes épinglées de cette rareté
+    const ctx = (n: number) => ({ ...ctxOf(q), pinnedByRarity: { [pin.rarity]: n } });
+    assert.equal(questStatus(weekly, ctx(4)).value, 4);
+    assert.ok(questStatus(weekly, ctx(6)).done);
   }
-  // l'avancement suit les cartes épinglées de cette rareté
-  const r = rollRotation(initialQuests(T), { now: T, seed: 's', owned: rich });
-  const def = rotatingQuests(r).find((d) => d.id.startsWith('d-pin-'))!;
-  const rarity = r.rotation!.pin!;
-  const ctx = (n: number) => ({ ...ctxOf(r), pinnedByRarity: { [rarity]: n } });
-  assert.equal(questStatus(def, ctx(4)).value, 4);
-  assert.ok(questStatus(def, ctx(6)).done);
-  // la quête de la semaine reste la même toute la semaine
+  assert.ok(seen.size >= 2, 'la rareté change d’une semaine à l’autre');
+  // il a beaucoup de tout : la rareté dont il a le moins
+  const rich = rollRotation(initialQuests(T), { now: T, seed: 's', owned: { common: 20, rare: 20, superRare: 20, epic: 9, mythic: 20 } });
+  assert.equal(rich.weeklyPin!.rarity, 'epic');
+  // la même toute la semaine, même si la collection change
   const p = rollRotation(initialQuests(T), { now: T, seed: 'x', owned: { common: 1 } });
-  const later = rollRotation(p, { now: T + 2 * DAY, seed: 'x', owned: { common: 1 } });
+  const later = rollRotation(p, { now: T + 2 * DAY, seed: 'x', owned: { common: 50, rare: 50 } });
   assert.deepEqual(later.weeklyPin, p.weeklyPin);
 });
 

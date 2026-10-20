@@ -18,7 +18,7 @@ import { newOnlineCode } from '../trade/relayCore';
 import { useTrade } from '../trade/session';
 import { useMatch } from './match';
 import { sanitizeFighter } from './battleNet';
-import { CHALLENGE_TTL_MS, type PinnedCard, type SocialMsg, inboxTopic, isOnline, newFriendCode, openFor, presenceTopic, sealFor } from './socialCore';
+import { CHALLENGE_TTL_MS, PRESENCE_MAX_SKEW_MS, type PinnedCard, type SocialMsg, inboxTopic, isOnline, newFriendCode, openFor, presenceTopic, sealFor } from './socialCore';
 
 export interface Presence {
   name: string;
@@ -151,7 +151,9 @@ export const useSocial = create<SocialStore>((set, get) => {
           return;
         case 'challenge': {
           // seulement les amis, et seulement un défi récent
-          if (!friend || now() - m.at > CHALLENGE_TTL_MS || get().challenge?.room === m.room) return;
+          // (les messages d'invitation ne sont pas gardés par le relais : ils arrivent en direct ;
+          // on n'écarte que ceux d'une horloge vraiment fantaisiste)
+          if (!friend || Math.abs(now() - m.at) > PRESENCE_MAX_SKEW_MS || get().challenge?.room === m.room) return;
           const kind = m.kind === 'trade' ? 'trade' : 'fight';
           // déjà en combat (ou déjà en échange) : on refuse tout de suite
           const busy = kind === 'trade' ? useTrade.getState().phase !== 'idle' : useMatch.getState().phase !== 'idle';
@@ -197,7 +199,11 @@ export const useSocial = create<SocialStore>((set, get) => {
     if (!code) return;
     const m = openFor(code, payload);
     if (!m || m.k !== 'presence' || m.from !== code) return;
-    set({ presence: { ...get().presence, [code]: { name: m.name, mmr: m.mmr, online: m.online, at: m.at } } });
+    // L'heure de réception, pas celle de son téléphone : deux horloges qui ne sont pas
+    // à la même heure ne doivent pas faire croire qu'un ami en ligne est parti. On
+    // écarte seulement une présence vraiment ancienne (gardée par le relais).
+    const recent = Math.abs(now() - m.at) < PRESENCE_MAX_SKEW_MS;
+    set({ presence: { ...get().presence, [code]: { name: m.name, mmr: m.mmr, online: m.online && recent, at: now() } } });
     const friend = save()?.friends.find((f) => f.code === code);
     if (friend) useGame.getState().upsertFriend({ code, name: m.name || friend.name, mmr: m.mmr });
     // il ne nous a pas encore ajouté : on lui renvoie la demande quand il est là

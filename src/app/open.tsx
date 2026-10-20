@@ -33,7 +33,7 @@ import { CardFanOut } from '../components/open/CardFanOut';
 import { REVEAL_CAPTION_H, revealCardWidth } from '../components/open/layout';
 import { PackTear } from '../components/open/PackTear';
 import { RevealStack } from '../components/open/RevealStack';
-import { PACK_RATIO } from '../components/PackArt';
+import { PACK_RATIO, TEAR_LINE } from '../components/PackArt';
 import { CARDS_PER_PACK } from '../game/draws';
 import { NoPhotosLeftError } from '../game/pack';
 import { getRarity } from '../game/rarity';
@@ -122,17 +122,22 @@ function PackSession({ onNext }: { onNext(): void }) {
     );
   }
 
+  // Le sachet a fini de se charger et éclate (voir PackTear) : les cartes jaillissent tout de suite.
   const torn = () => {
     setBoom((b) => b + 1);
-    setTimeout(() => setPhase('fan'), 420);
+    setPhase('fan');
   };
+  // Ouverture du sachet par rapport au centre de la pile de cartes (là d'où elles jaillissent).
+  const packH = packW * PACK_RATIO;
+  const fromY = REVEAL_CAPTION_H / 2 + 21 - packH / 2 + packH * TEAR_LINE + cardW * CARD_RATIO * 0.12;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Ambient width={width} height={height} />
 
-      {phase === 'pack' ? (
-        <View style={styles.centered}>
+      {/* le sachet reste là pendant que les cartes en sortent, puis tombe */}
+      {phase === 'pack' || phase === 'fan' ? (
+        <View style={styles.centered} pointerEvents={phase === 'pack' ? 'auto' : 'none'}>
           {lucky ? (
             <View pointerEvents="none" style={{ position: 'absolute', width: packW * 2.4, height: packW * 2.4, left: (width - packW * 2.4) / 2, top: (height - insets.top - insets.bottom - packW * 2.4) / 2 }}>
               <Glow color="#FFC94D" size={packW * 2.4} />
@@ -150,7 +155,7 @@ function PackSession({ onNext }: { onNext(): void }) {
         </Animated.View>
       ) : null}
 
-      {phase === 'fan' ? <CardFanOut count={cards?.length ?? CARDS_PER_PACK} cardW={cardW} fromY={height * 0.25} onDone={() => setPhase(cards ? 'reveal' : 'waiting')} /> : null}
+      {phase === 'fan' ? <CardFanOut count={cards?.length ?? CARDS_PER_PACK} cardW={cardW} fromY={fromY} lucky={lucky} onDone={() => setPhase(cards ? 'reveal' : 'waiting')} /> : null}
 
       {phase === 'waiting' ? <WaitingStack cardW={cardW} /> : null}
 

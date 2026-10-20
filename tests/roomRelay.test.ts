@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import nacl from 'tweetnacl';
 import type { MqttConnection } from '../src/trade/mqtt';
-import { type RelayDeps, hostOnline, joinOnline } from '../src/trade/relayCore';
+import { type RelayDeps, connectAll, hostOnline, joinOnline } from '../src/trade/relayCore';
 import { ROOM_RELAY, connectRoom, makeJoiner, roomName, splitPayload } from '../src/trade/roomRelay';
 
 /* ----------- Faux canal « room » de claude.ai : chaque use() est une page ----------- */
@@ -152,32 +153,53 @@ test('room : un combat se crée et se rejoint de bout en bout par le canal room'
   }
 });
 
-test('relais : on garde toujours le premier de la liste qui répond, même s’il répond plus lentement', async () => {
-  const used: string[] = [];
-  const closed: string[] = [];
-  const fake = (url: string): MqttConnection => ({
-    publish: () => used.push(url),
-    onMessage: () => {},
-    onClose: () => {},
-    close: () => closed.push(url),
+test('relais : on se branche sur tous, et deux joueurs qui n’ont qu’un relais en commun se retrouvent', async () => {
+  // Petits relais en mémoire : chaque adresse a ses abonnés.
+  const brokers = new Map<string, Map<string, ((t: string, p: Uint8Array) => void)[]>>();
+  const fakeConnect = (reachable: string[]) => (url: string, _id: string, topic: string | string[]) =>
+    new Promise<MqttConnection>((res, rej) => {
+      if (!reachable.includes(url)) return setTimeout(() => rej(new Error('bloqué')), 1);
+      const subs = brokers.get(url) ?? new Map();
+      brokers.set(url, subs);
+      const mine: ((t: string, p: Uint8Array) => void)[] = [];
+      for (const t of Array.isArray(topic) ? topic : [topic]) subs.set(t, [...(subs.get(t) ?? []), (tt, pp) => mine.forEach((cb) => cb(tt, pp))]);
+      setTimeout(
+        () =>
+          res({
+            publish: (t, payload) => (subs.get(t) ?? []).forEach((h) => setTimeout(() => h(t, payload), 1)),
+            onMessage: (cb) => void mine.push(cb),
+            onClose: () => {},
+            close: () => {},
+          }),
+        3,
+      );
+    });
+  const deps = (reachable: string[]): RelayDeps => ({ connect: fakeConnect(reachable), urls: ['a', 'b', 'c'], randomBytes: (k) => nacl.randomBytes(k) });
+  // l'hôte est en Wi-Fi (a et b), l'invité en 5G (seulement b et c)
+  let guestSeen = false;
+  const host = await hostOnline(deps(['a', 'b']), (link) => {
+    guestSeen = true;
+    link.close();
   });
-  const deps = (delays: Record<string, number | 'fail'>): RelayDeps => ({
-    connect: (url) =>
-      new Promise((res, rej) => setTimeout(() => (delays[url] === 'fail' ? rej(new Error('x')) : res(fake(url))), delays[url] === 'fail' ? 1 : (delays[url] as number))),
-    urls: ['a', 'b'],
-    randomBytes: (k) => new Uint8Array(k).fill(3),
-  });
-  // « a » répond après « b » : on attend « a » quand même (l'autre joueur l'utilisera aussi)
-  const h1 = await hostOnline(deps({ a: 40, b: 5 }), () => {});
-  await wait(60);
-  assert.ok(closed.includes('b') && !closed.includes('a'), `relais gardé : a (fermés : ${closed})`);
-  h1.stop();
-  // « a » en panne : on prend « b »
-  closed.length = 0;
-  const h2 = await hostOnline(deps({ a: 'fail', b: 5 }), () => {});
+  const link = await joinOnline(deps(['b', 'c']), host.code);
   await wait(20);
-  assert.ok(!closed.includes('b'));
-  h2.stop();
+  assert.ok(guestSeen, 'l’hôte a vu l’invité');
+  link.close();
+  host.stop();
   // tous en panne : message clair
-  await assert.rejects(hostOnline(deps({ a: 'fail', b: 'fail' }), () => {}), /serveurs de jeu/);
+  await assert.rejects(hostOnline(deps([]), () => {}), /serveurs de jeu/);
+});
+
+test('relais : un message arrivé par deux relais n’est traité qu’une fois', async () => {
+  const handlers: ((t: string, p: Uint8Array) => void)[] = [];
+  const fake = (): MqttConnection => ({ publish: () => {}, onMessage: (cb) => void handlers.push(cb), onClose: () => {}, close: () => {} });
+  const all = await connectAll({ connect: async () => fake(), urls: ['a', 'b'], randomBytes: (k) => new Uint8Array(k) }, 'id', 't');
+  await wait(5);
+  const got: Uint8Array[] = [];
+  all.onMessage((_t, p) => got.push(p));
+  const msg = nacl.randomBytes(40);
+  handlers.forEach((h) => h('t', msg)); // le même message, par les deux relais
+  const other = nacl.randomBytes(40);
+  handlers.forEach((h) => h('t', other)); // un autre message, lui aussi par les deux relais
+  assert.equal(got.length, 2);
 });

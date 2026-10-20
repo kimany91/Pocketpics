@@ -161,7 +161,7 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
       {galaxy ? (
         <GalaxyGem size={Math.max(7, width * 0.07)} right={border + width * 0.035} top={border + width * 0.035} />
       ) : (
-        <Gem color={rarity.color} size={Math.max(7, width * 0.07)} right={border + width * 0.035} top={border + width * 0.035} />
+        <Gem color={rarity.color} rank={rarity.rank} size={Math.max(7, width * 0.07)} right={border + width * 0.035} top={border + width * 0.035} />
       )}
     </View>
     {divine ? <DivineOrnaments width={width} height={height} /> : null}
@@ -226,9 +226,38 @@ function TiltSheen({ tilt, width, height, strength }: { tilt: SharedValue<number
   );
 }
 
-function Gem({ color, size, right, top }: { color: string; size: number; right: number; top: number }) {
+/**
+ * Le losange de rareté. À partir des Épiques, il devient une pierre taillée
+ * (un peu plus grande, un reflet et une facette au centre) : la carte a monté
+ * de niveau. À partir des Légendaires, son liseré passe à l'or et il brille.
+ */
+function Gem({ color, rank, size, right, top }: { color: string; rank: number; size: number; right: number; top: number }) {
+  const cut = rank >= 3;
+  const golden = rank >= 5;
+  const s = cut ? size * 1.18 : size;
+  const shift = (s - size) / 2;
   return (
-    <View style={[styles.gem, { width: size, height: size, right, top, backgroundColor: color, borderWidth: Math.max(1, size * 0.14) }]} />
+    <View
+      pointerEvents="none"
+      style={[
+        styles.gem,
+        { width: s, height: s, right: right - shift, top: top - shift, backgroundColor: color, borderWidth: Math.max(1, s * (cut ? 0.12 : 0.14)) },
+        golden && styles.gemGolden,
+      ]}
+    >
+      {cut ? (
+        <>
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(255,255,255,0.6)', 'rgba(255,255,255,0)', 'rgba(0,0,0,0.28)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[styles.facet, { width: s * 0.36, height: s * 0.36 }]} />
+        </>
+      ) : null}
+    </View>
   );
 }
 
@@ -250,6 +279,8 @@ const styles = StyleSheet.create({
   name: { fontFamily: fonts.bold, color: '#FFFFFF', letterSpacing: -0.2 },
   gem: {
     position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
     transform: [{ rotate: '45deg' }],
     borderColor: 'rgba(255,255,255,0.9)',
     borderRadius: 2,
@@ -258,4 +289,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
   },
+  /** Facette claire au centre de la pierre taillée. */
+  facet: { borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.7)' },
+  gemGolden: { borderColor: '#FFE08A', shadowColor: '#FFC94D', shadowOpacity: 0.9, shadowRadius: 4, shadowOffset: { width: 0, height: 0 } },
 });

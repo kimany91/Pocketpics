@@ -185,43 +185,72 @@ class RelayLink<M = TradeMessage> implements TradeLink<M> {
 /* ------------------------------ Hôte / invité ------------------------------ */
 
 /**
- * Se connecte au relais préféré qui répond. Tous sont essayés en même temps (un
- * relais muet ne fait pas attendre les suivants), mais on garde toujours le
- * premier de la liste qui répond : l'hôte et l'invité, qui ont la même liste,
- * se retrouvent ainsi sur le même relais.
+ * Se connecte à tous les relais à la fois et les réunit en une seule connexion :
+ * on envoie sur tous, on reçoit de tous, et le même message arrivé par deux
+ * relais n'est traité qu'une fois. Deux joueurs sur des réseaux différents
+ * (Wi-Fi d'un côté, 4G/5G de l'autre) qui ne joignent pas les mêmes relais se
+ * retrouvent ainsi dès qu'ils en ont un en commun. Rend la main dès le premier
+ * relais connecté ; les autres s'ajoutent au fur et à mesure.
  */
-async function connectAny(deps: RelayDeps, clientId: string, topic: string): Promise<MqttConnection> {
+export function connectAll(deps: RelayDeps, clientId: string, topic: string): Promise<MqttConnection> {
   const total = deps.urls.length;
-  if (total === 0) throw new Error(OFFLINE);
+  if (total === 0) return Promise.reject(new Error(OFFLINE));
+  const conns: MqttConnection[] = [];
+  const onMessage: ((topic: string, payload: Uint8Array) => void)[] = [];
+  const onClose: ((reason: string) => void)[] = [];
+  let pending = total;
+  let closed = false;
+  // messages déjà vus : chacun commence par un nonce tiré au hasard (voir `seal`)
+  const seen = new Set<string>();
+  const order: string[] = [];
+  const fresh = (payload: Uint8Array) => {
+    const id = `${payload.length}:${hex(payload.subarray(0, 24))}`;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    order.push(id);
+    if (order.length > 1000) seen.delete(order.shift()!);
+    return true;
+  };
+  const lost = (reason: string) => {
+    if (closed || conns.length > 0 || pending > 0) return;
+    closed = true;
+    onClose.forEach((cb) => cb(reason));
+  };
+  const all: MqttConnection = {
+    publish: (t, payload, retain) => conns.forEach((c) => c.publish(t, payload, retain)),
+    subscribe: (topics) => conns.forEach((c) => c.subscribe?.(topics)),
+    onMessage: (cb) => void onMessage.push(cb),
+    onClose: (cb) => void onClose.push(cb),
+    close: () => {
+      closed = true;
+      conns.splice(0).forEach((c) => c.close());
+    },
+  };
   return new Promise<MqttConnection>((resolve, reject) => {
-    const results: ({ ok: MqttConnection } | { err: true } | undefined)[] = new Array(total);
-    let done = false;
-    const settle = () => {
-      if (done) return;
-      for (let i = 0; i < total; i++) {
-        const r = results[i];
-        if (r === undefined) return; // un relais préféré n'a pas encore répondu : on l'attend
-        if ('ok' in r) {
-          done = true;
-          resolve(r.ok);
-          // les relais moins prioritaires déjà connectés sont fermés
-          results.forEach((x, j) => j !== i && x && 'ok' in x && x.ok.close());
-          return;
-        }
-      }
-      done = true;
-      reject(new Error(OFFLINE));
-    };
-    deps.urls.forEach((url, i) => {
+    let resolved = false;
+    deps.urls.forEach((url) => {
       deps.connect(url, clientId, topic).then(
         (conn) => {
-          if (done) return conn.close();
-          results[i] = { ok: conn };
-          settle();
+          pending--;
+          if (closed) return conn.close();
+          conns.push(conn);
+          conn.onMessage((t, payload) => {
+            if (fresh(payload)) onMessage.forEach((cb) => cb(t, payload));
+          });
+          conn.onClose((reason) => {
+            const i = conns.indexOf(conn);
+            if (i >= 0) conns.splice(i, 1);
+            lost(reason);
+          });
+          if (!resolved) {
+            resolved = true;
+            resolve(all);
+          }
         },
         () => {
-          results[i] = { err: true };
-          settle();
+          pending--;
+          if (!resolved && pending === 0) reject(new Error(OFFLINE));
+          else lost('relais injoignable');
         },
       );
     });
@@ -239,7 +268,7 @@ export async function hostOnline<M = TradeMessage>(deps: RelayDeps, onGuest: (li
   const key = roomKey(code, opts.ns);
   const topic = roomTopic(code, opts.ns);
   const me = newId(deps);
-  const conn = await connectAny(deps, `pp-${me}`, topic);
+  const conn = await connectAll(deps, `pp-${me}`, topic);
   let link: RelayLink<M> | null = null;
   const post = (env: Envelope) => conn.publish(topic, seal(env, key));
 
@@ -276,7 +305,7 @@ export async function joinOnline<M = TradeMessage>(deps: RelayDeps, rawCode: str
   const key = roomKey(code, opts.ns);
   const topic = roomTopic(code, opts.ns);
   const me = newId(deps);
-  const conn = await connectAny(deps, `pp-${me}`, topic);
+  const conn = await connectAll(deps, `pp-${me}`, topic);
   return new Promise((resolve, reject) => {
     let link: RelayLink<M> | null = null;
     const knock = () => conn.publish(topic, seal({ f: me, k: 'knock' }, key));

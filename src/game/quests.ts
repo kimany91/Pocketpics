@@ -50,16 +50,14 @@ export interface DailyChallenge {
 }
 
 /**
- * Quêtes qui changent : chaque jour une rareté à brûler et une rareté à
- * épingler ; si le joueur n'a pas la plupart des cartes à épingler, cette
- * quête devient celle de la semaine (plus de temps, plus grosse récompense).
+ * Quêtes qui changent : chaque jour une rareté à brûler ; chaque semaine une
+ * rareté à épingler, choisie parmi celles dont le joueur a peu de cartes (il a
+ * la semaine pour les obtenir).
  */
 export interface Rotation {
   day: string;
   /** Rareté à brûler aujourd'hui (`null` : le joueur n'a aucune carte qui convient). */
   burn: string | null;
-  /** Rareté dont il faut épingler 6 cartes aujourd'hui. */
-  pin: string | null;
 }
 
 export interface QuestState {
@@ -170,7 +168,7 @@ const rarityId = (v: unknown) => (typeof v === 'string' && RARITIES.some((r) => 
 function rotationOf(v: unknown): Rotation | null {
   if (!v || typeof v !== 'object') return null;
   const r = v as Raw;
-  return typeof r.day === 'string' ? { day: r.day, burn: rarityId(r.burn), pin: rarityId(r.pin) } : null;
+  return typeof r.day === 'string' ? { day: r.day, burn: rarityId(r.burn) } : null;
 }
 function weeklyPinOf(v: unknown): QuestState['weeklyPin'] {
   if (!v || typeof v !== 'object') return null;
@@ -260,7 +258,8 @@ const world = (w: number) => getLevel(lastLevel(w))!.world.place;
 
 export const QUESTS: readonly QuestDef[] = [
   // Quotidiennes
-  { id: 'd-packs', period: 'daily', title: 'Ouvre 2 paquets', goal: 2, reward: { coins: 20 }, icon: 'gift', value: (c) => c.q.daily.pack ?? 0 },
+  // 2 tirages gratuits par jour : il faut en ouvrir plus (acheter des tirages) pour la finir
+  { id: 'd-packs', period: 'daily', title: 'Ouvre 4 paquets', goal: 4, reward: { coins: 30 }, icon: 'gift', value: (c) => c.q.daily.pack ?? 0 },
   { id: 'd-solo', period: 'daily', title: 'Gagne 2 combats solo', goal: 2, reward: { coins: 20 }, icon: 'map', value: (c) => c.q.daily.soloWin ?? 0 },
   { id: 'd-online', period: 'daily', title: 'Gagne un combat en ligne', goal: 1, reward: { coins: 30 }, icon: 'globe', value: (c) => c.q.daily.onlineWin ?? 0 },
   // Hebdomadaires
@@ -309,9 +308,9 @@ export interface QuestStatus {
 
 /** Brûler une carte : la récompense suit la rareté sacrifiée (de Commune à Légendaire). */
 export const BURN_REWARD = [20, 25, 30, 50, 80, 120];
-/** Épingler 6 cartes d'une même rareté : petite récompense ; plus grosse quand c'est la quête de la semaine. */
-export const PIN_REWARD = { daily: 20, weekly: 80 };
-/** Moins de cartes que ça de la rareté demandée : « Épingle 6 cartes … » devient la quête de la semaine. */
+/** Épingler 6 cartes d'une même rareté (quête de la semaine). */
+export const PIN_REWARD = 80;
+/** « Épingle 6 cartes … » vise une rareté dont le joueur a moins que ça (il lui manque la plupart des cartes). */
 export const PIN_MOSTLY = 4;
 /** Raretés possibles : à brûler, de Commune à Légendaire ; à épingler, de Commune à Mythique. */
 const BURN_MAX_RANK = 5;
@@ -335,47 +334,51 @@ export function rotatingQuests(q: QuestState): QuestDef[] {
       value: (c) => c.q.daily[`burn:${id}`] ?? 0,
     });
   }
-  const pinQuest = (rarity: string, period: 'daily' | 'weekly'): QuestDef => {
-    const pin = getRarity(rarity);
-    return {
-      id: `${period === 'daily' ? 'd' : 'w'}-pin-${pin.id}`,
-      period,
+  if (q.weeklyPin && q.weeklyPin.week === q.week) {
+    const pin = getRarity(q.weeklyPin.rarity);
+    out.push({
+      id: `w-pin-${pin.id}`,
+      period: 'weekly',
       title: `Épingle 6 cartes ${plural(pin.label)}`,
       goal: 6,
-      reward: { coins: PIN_REWARD[period] },
+      reward: { coins: PIN_REWARD },
       icon: 'pin',
       color: pin.color,
       value: (c) => c.pinnedByRarity[pin.id] ?? 0,
-    };
-  };
-  if (r && r.day === q.day && r.pin) out.push(pinQuest(r.pin, 'daily'));
-  if (q.weeklyPin && q.weeklyPin.week === q.week) out.push(pinQuest(q.weeklyPin.rarity, 'weekly'));
+    });
+  }
   return out;
 }
 
 /**
- * Tire les quêtes du jour qui changent (une fois par jour, toujours les mêmes
- * ce jour-là). « Brûle » ne demande qu'une rareté que le joueur possède.
- * « Épingle 6 cartes » : si le joueur a la plupart des cartes, c'est une quête
- * du jour ; sinon elle devient la quête de la semaine (une seule par semaine),
- * et le jour reçoit une rareté qu'il peut épingler.
+ * Tire les quêtes qui changent, toujours les mêmes pour la journée (brûler) ou
+ * la semaine (épingler). « Brûle » ne demande qu'une rareté que le joueur
+ * possède. « Épingle 6 cartes » vise une rareté dont il a peu de cartes (moins
+ * de `PIN_MOSTLY`) : il a la semaine pour les obtenir. S'il en a beaucoup de
+ * chaque rareté, c'est celle dont il a le moins.
  */
 export function rollRotation(q: QuestState, opts: { now: number; seed: string; owned: Record<string, number> }): QuestState {
   const r = rollQuests(q, opts.now);
-  if (r.rotation && r.rotation.day === r.day) return r;
+  const haveWeekly = r.weeklyPin !== null && r.weeklyPin.week === r.week;
+  if (r.rotation && r.rotation.day === r.day && haveWeekly) return r;
   // sans aucune carte (tout début de partie), rien à brûler ni à épingler : on tirera plus tard
   if (!Object.values(opts.owned).some((n) => n > 0)) return r;
-  const rng = seeded(`${r.day}|${opts.seed}|rotation`);
-  const pick = (list: string[]) => (list.length > 0 ? list[Math.floor(rng() * list.length)] : null);
   const have = (id: string) => opts.owned[id] ?? 0;
-  const burn = pick(RARITIES.filter((x) => x.rank <= BURN_MAX_RANK && have(x.id) > 0).map((x) => x.id));
-  const pinnable = RARITIES.filter((x) => x.rank <= PIN_MAX_RANK).map((x) => x.id);
-  const rolled = pick(pinnable);
-  let weeklyPin = r.weeklyPin && r.weeklyPin.week === r.week ? r.weeklyPin : null;
-  if (rolled && have(rolled) < PIN_MOSTLY && !weeklyPin) weeklyPin = { week: r.week, rarity: rolled };
-  const doable = (id: string) => have(id) >= PIN_MOSTLY && id !== weeklyPin?.rarity;
-  const pin = rolled && doable(rolled) ? rolled : pick(pinnable.filter(doable));
-  return { ...r, rotation: { day: r.day, burn, pin }, weeklyPin };
+  const pickWith = (rng: () => number, list: string[]) => (list.length > 0 ? list[Math.floor(rng() * list.length)] : null);
+  let rotation = r.rotation && r.rotation.day === r.day ? r.rotation : null;
+  if (!rotation) {
+    const rng = seeded(`${r.day}|${opts.seed}|burn`);
+    rotation = { day: r.day, burn: pickWith(rng, RARITIES.filter((x) => x.rank <= BURN_MAX_RANK && have(x.id) > 0).map((x) => x.id)) };
+  }
+  let weeklyPin = haveWeekly ? r.weeklyPin : null;
+  if (!weeklyPin) {
+    const rng = seeded(`${r.week}|${opts.seed}|pin`);
+    const pinnable = RARITIES.filter((x) => x.rank <= PIN_MAX_RANK);
+    const lacking = pinnable.filter((x) => have(x.id) < PIN_MOSTLY).map((x) => x.id);
+    const fewest = [...pinnable].sort((a, b) => have(a.id) - have(b.id))[0].id;
+    weeklyPin = { week: r.week, rarity: pickWith(rng, lacking) ?? fewest };
+  }
+  return { ...r, rotation, weeklyPin };
 }
 
 /** Toutes les quêtes du moment : les fixes et celles qui changent. */
