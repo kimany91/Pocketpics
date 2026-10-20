@@ -87,6 +87,18 @@ export async function readCardImagesBase64(id: string) {
   return { image: toB64(f?.image ?? ''), thumb: toB64(f?.thumb ?? '') };
 }
 
+/** Contenu base64 d'une image temporaire (photo préparée pour la Pioche amicale). */
+export async function readUriBase64(uri: string): Promise<string> {
+  if (uri.startsWith('data:')) return toB64(uri);
+  const blob = await (await fetch(uri)).blob();
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(toB64(String(r.result)));
+    r.onerror = () => reject(new Error('Image illisible'));
+    r.readAsDataURL(blob);
+  });
+}
+
 export const readThumbBase64Sync = (id: string) => toB64(images.get(id)?.thumb ?? '');
 export function cleanupStaging() {}
 

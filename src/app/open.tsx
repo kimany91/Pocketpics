@@ -50,14 +50,15 @@ const AMBIENT = ['#B99CFF', '#FFFFFF', '#7CCBFF', '#FFD9A0'];
 const CHROMA_FX = ['#FF7EB3', '#FFD36E', '#8CFFB4', '#6EC8FF', '#B48CFF'];
 
 export default function OpenScreen() {
-  const { galaxy } = useLocalSearchParams<{ galaxy?: string }>();
+  const { galaxy, friend } = useLocalSearchParams<{ galaxy?: string; friend?: string }>();
   // Changer de clé relance une session complète : « Paquet suivant ».
   const [round, setRound] = useState(0);
   if (galaxy === '1') return <GalaxySession />;
-  return <PackSession key={round} onNext={() => setRound((r) => r + 1)} />;
+  // Pioche amicale : le paquet est déjà prêt (photos de l'ami), on l'ouvre seulement la première fois.
+  return <PackSession key={round} friend={friend === '1' && round === 0} onNext={() => setRound((r) => r + 1)} />;
 }
 
-function PackSession({ onNext }: { onNext(): void }) {
+function PackSession({ onNext, friend = false }: { onNext(): void; friend?: boolean }) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const openPack = useGame((s) => s.openPack);
@@ -80,6 +81,14 @@ function PackSession({ onNext }: { onNext(): void }) {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+    if (friend) {
+      // déjà créé et payé par la Pioche amicale
+      const ready = useGame.getState().pendingPack;
+      if (ready.length) setCards(ready);
+      else setError('Le paquet de ton ami est introuvable.');
+      setLuckKnown(true);
+      return;
+    }
     openPack()
       .then(setCards)
       .catch((e) =>
@@ -92,7 +101,7 @@ function PackSession({ onNext }: { onNext(): void }) {
         ),
       );
     setLuckKnown(true);
-  }, [openPack]);
+  }, [openPack, friend]);
 
   // Paquet brillant : le sachet devient doré, avec son et vibration.
   useEffect(() => {
@@ -151,6 +160,15 @@ function PackSession({ onNext }: { onNext(): void }) {
           <AppText style={styles.luckyTitle}>✦ Paquet brillant ✦</AppText>
           <AppText variant="caption" style={{ color: '#F5DFA0', textAlign: 'center' }}>
             Une carte Super Rare ou mieux t'attend
+          </AppText>
+        </Animated.View>
+      ) : null}
+
+      {phase === 'pack' && friend && !lucky && cards?.[0]?.giver ? (
+        <Animated.View entering={ZoomIn.springify().damping(12)} pointerEvents="none" style={[styles.luckyBanner, { top: insets.top + 18 }]}>
+          <AppText style={[styles.luckyTitle, { color: '#D9C8FF' }]}>Pioche amicale</AppText>
+          <AppText variant="caption" style={{ color: '#D9C8FF', textAlign: 'center' }}>
+            {`Les photos de ${cards[0].giver}`}
           </AppText>
         </Animated.View>
       ) : null}

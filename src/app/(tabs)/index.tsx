@@ -25,6 +25,7 @@ import { Glow, Twinkles } from '../../components/fx';
 import { Rise } from '../../components/Rise';
 import { PACK_RATIO, PackArt } from '../../components/PackArt';
 import { QuestPill } from '../../components/QuestEntry';
+import { PIOCHE_COLOR, startFriendDraw, useFriendDraw } from '../../components/pioche/entry';
 import { Screen } from '../../components/Screen';
 import { DRAW_INTERVAL_MS, MAX_STORED_DRAWS, formatCountdown } from '../../game/draws';
 import { DRAW_PRICE } from '../../game/economy';
@@ -111,6 +112,9 @@ export default function DrawScreen() {
 
 
   const cycle = nextAt ? 1 - (nextAt - now) / DRAW_INTERVAL_MS : 1;
+  // Pioche amicale : un « ! » à côté du paquet quand un ami est en ligne et qu'on peut payer
+  const friendDraw = useFriendDraw();
+  const showPioche = friendDraw.online.length > 0 && !!friendDraw.payment;
 
   return (
     <Screen>
@@ -146,8 +150,10 @@ export default function DrawScreen() {
           onPressOut={() => (press.value = withSpring(0, springs.release))}
           disabled={!canOpen}
         >
-          <Animated.View style={[packStyle, !canOpen && { opacity: 0.45 }]}>
-            <PackArt width={packW} shimmer={focused} />
+          <Animated.View style={packStyle}>
+            <View style={!canOpen && { opacity: 0.45 }}>
+              <PackArt width={packW} shimmer={focused} />
+            </View>
             {canOpen && focused ? (
               <View pointerEvents="none" style={[StyleSheet.absoluteFill, { margin: -packW * 0.18 }]}>
                 <Twinkles width={packW * 1.36} height={packW * PACK_RATIO * 1.36} count={5} size={0.09} colors={['#FFF6D8', '#D9C8FF']} />
@@ -155,6 +161,14 @@ export default function DrawScreen() {
             ) : null}
           </Animated.View>
         </Pressable>
+        {showPioche ? (
+          <PiocheBadge
+            active={focused}
+            count={friendDraw.online.length}
+            style={{ transform: [{ translateX: packW * 0.5 - 4 }, { translateY: -packW * PACK_RATIO * 0.5 + 4 }] }}
+            onPress={() => startFriendDraw(friendDraw.online.length === 1 ? friendDraw.online[0].code : undefined)}
+          />
+        ) : null}
       </Rise>
 
       <Rise visit={visit} index={2} style={styles.bottom}>
@@ -262,6 +276,49 @@ export default function DrawScreen() {
   );
 }
 
+/**
+ * Le « ! » de la Pioche amicale, accroché au coin du paquet : des amis sont en
+ * ligne, on peut piocher dans leur galerie. Il rebondit de temps en temps et
+ * une onde violette en part.
+ */
+function PiocheBadge({ active, count, style, onPress }: { active: boolean; count: number; style: object; onPress(): void }) {
+  const hop = useSharedValue(0);
+  const ring = useSharedValue(0);
+  useEffect(() => {
+    if (!active) {
+      cancelAnimation(hop);
+      cancelAnimation(ring);
+      return;
+    }
+    hop.value = withRepeat(withSequence(withDelay(1800, withTiming(1, { duration: 160 })), withSpring(0, springs.pop)), -1, false);
+    ring.value = withRepeat(withTiming(1, { duration: 1600, easing: Easing.out(Easing.quad) }), -1, false);
+    return () => {
+      cancelAnimation(hop);
+      cancelAnimation(ring);
+    };
+  }, [active, hop, ring]);
+  const hopStyle = useAnimatedStyle(() => ({ transform: [{ translateY: -hop.value * 7 }, { scale: 1 + hop.value * 0.12 }, { rotate: `${hop.value * 10}deg` }] }));
+  const ringStyle = useAnimatedStyle(() => ({ opacity: 0.7 * (1 - ring.value), transform: [{ scale: 1 + ring.value * 0.9 }] }));
+  return (
+    <View style={[styles.piocheWrap, style]}>
+      <Animated.View pointerEvents="none" style={[styles.piocheRing, ringStyle]} />
+      <Pressable
+        onPress={() => {
+          haptic.medium();
+          onPress();
+        }}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel={`Pioche amicale : ${count} ami${count > 1 ? 's' : ''} en ligne`}
+      >
+        <Animated.View style={[styles.piocheBadge, hopStyle]}>
+          <AppText style={styles.piocheMark}>!</AppText>
+        </Animated.View>
+      </Pressable>
+    </View>
+  );
+}
+
 /** Plus de tirage : on peut en acheter un avec les pièces gagnées en solo. */
 function BuyDraw({ coins, onBuy }: { coins: number; onBuy(): void }) {
   const missing = DRAW_PRICE - coins;
@@ -366,6 +423,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   stage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  piocheWrap: { position: 'absolute', width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  piocheRing: { position: 'absolute', width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: PIOCHE_COLOR },
+  piocheBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: PIOCHE_COLOR,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: colors.bg,
+    boxShadow: '0px 0px 14px rgba(185,156,255,0.7)',
+  },
+  piocheMark: { fontFamily: fonts.black, fontSize: 20, lineHeight: 24, color: '#141414' },
   bottom: { paddingHorizontal: 20, paddingBottom: 18, gap: 6 },
   charges: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 12 },
   pip: { width: 44, height: 6, borderRadius: 3, backgroundColor: colors.surface2, overflow: 'hidden' },

@@ -26,6 +26,8 @@ import { makeFighter } from '../../battle/engine';
 import { rankOf } from '../../game/rank';
 import { useSocial } from '../../net/social';
 import type { PinnedCard } from '../../net/socialCore';
+import { PIOCHE_COLOR, startFriendDraw, useFriendDraw } from '../../components/pioche/entry';
+import { FRIEND_DRAW_PRICE } from '../../game/friendDraw';
 import { useGame } from '../../state/game';
 import { MAX_PINNED } from '../../storage/model';
 import { CARD_RATIO, colors, fonts } from '../../theme';
@@ -42,6 +44,7 @@ export default function FriendProfileScreen() {
   const { width } = useWindowDimensions();
   const [open, setOpen] = useState<PinnedCard | null>(null);
   const online = !!code && isOnline(code);
+  const { payment } = useFriendDraw();
 
   // Quête « Regarde le profil d'un ami ».
   const known = !!friend;
@@ -134,9 +137,16 @@ export default function FriendProfileScreen() {
             }}
           />
         </Animated.View>
+        <Animated.View entering={FadeInDown.delay(130)}>
+          <PiocheButton online={online} payment={!!payment} onPress={() => startFriendDraw(friend.code)} />
+        </Animated.View>
         {!online ? (
           <AppText variant="caption" style={{ textAlign: 'center', marginTop: 8 }}>
-            Défi et échange possibles quand il a le jeu ouvert.
+            Défi, échange et pioche possibles quand il a le jeu ouvert.
+          </AppText>
+        ) : !payment ? (
+          <AppText variant="caption" style={{ textAlign: 'center', marginTop: 8 }}>
+            {`Pioche amicale : il te faut un tirage ou ${FRIEND_DRAW_PRICE} pièces.`}
           </AppText>
         ) : null}
 
@@ -198,7 +208,38 @@ export default function FriendProfileScreen() {
   );
 }
 
+/** « Pioche amicale » : sous Défier et Échanger, en violet comme le paquet. */
+function PiocheButton({ online, payment, onPress }: { online: boolean; payment: boolean; onPress(): void }) {
+  const disabled = !online || !payment;
+  return (
+    <Pressable
+      onPress={() => {
+        haptic.medium();
+        onPress();
+      }}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel="Pioche amicale"
+      style={({ pressed }) => [styles.pioche, disabled && { opacity: 0.45 }, pressed && { transform: [{ scale: 0.98 }] }]}
+    >
+      <LinearGradient pointerEvents="none" colors={[`${PIOCHE_COLOR}33`, `${PIOCHE_COLOR}10`]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <View style={styles.piocheIcon}>
+        <Ionicons name="sparkles" size={18} color="#141414" />
+      </View>
+      <View style={{ flex: 1 }}>
+        <AppText variant="heading" style={{ fontSize: 16 }}>
+          Pioche amicale
+        </AppText>
+        <AppText variant="caption">Ouvre un paquet avec les photos de sa galerie</AppText>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={PIOCHE_COLOR} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  pioche: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10, padding: 12, borderRadius: 18, borderWidth: 1.5, borderColor: `${PIOCHE_COLOR}66`, overflow: 'hidden' },
+  piocheIcon: { width: 38, height: 38, borderRadius: 13, backgroundColor: PIOCHE_COLOR, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 16, paddingBottom: 40 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 18 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },

@@ -96,6 +96,8 @@ export function ChallengeOverlay() {
   if (!challenge) return null;
   const rank = rankOf(challenge.mmr);
   const trade = challenge.kind === 'trade';
+  const draw = challenge.kind === 'draw';
+  const icon = draw ? 'sparkles' : trade ? 'swap-horizontal' : 'flash';
   const urgent = left <= 10;
   return (
     <Animated.View exiting={FadeOutUp.duration(200)} style={[styles.wrap, { top: insets.top + 8 }]}>
@@ -116,11 +118,13 @@ export function ChallengeOverlay() {
             <View style={{ flex: 1 }}>
               <View style={styles.kickerRow}>
                 <Animated.View style={boltStyle}>
-                  <Ionicons name={trade ? 'swap-horizontal' : 'flash'} size={13} color={colors.gold} />
+                  <Ionicons name={icon} size={13} color={colors.gold} />
                 </Animated.View>
-                <AppText style={styles.kicker}>{trade ? 'Échange' : 'Défi'}</AppText>
+                <AppText style={styles.kicker}>{draw ? 'Pioche amicale' : trade ? 'Échange' : 'Défi'}</AppText>
               </View>
-              <AppText variant="heading" numberOfLines={1}>{trade ? `${challenge.name} veut échanger !` : `${challenge.name} te défie !`}</AppText>
+              <AppText variant="heading" numberOfLines={draw ? 2 : 1}>
+                {draw ? `${challenge.name} veut piocher chez toi !` : trade ? `${challenge.name} veut échanger !` : `${challenge.name} te défie !`}
+              </AppText>
               <AppText variant="caption" numberOfLines={1}>
                 <AppText variant="caption" style={{ color: rank.tier.color }}>
                   {rank.label}
@@ -130,15 +134,23 @@ export function ChallengeOverlay() {
               </AppText>
             </View>
           </View>
+          {draw ? (
+            <View style={styles.drawNote}>
+              <Ionicons name="images-outline" size={14} color={colors.textDim} />
+              <AppText variant="caption" style={{ flex: 1 }}>
+                5 photos de ta galerie, tirées au hasard, deviendront ses cartes. Tu les vois et tu peux en changer avant d’envoyer. Toi, tu ne perds rien.
+              </AppText>
+            </View>
+          ) : null}
           <View style={styles.buttons}>
             <Button label="Refuser" kind="secondary" style={{ flex: 1 }} onPress={decline} />
             <Button
               label="Accepter"
-              icon={trade ? 'swap-horizontal' : 'flash'}
+              icon={icon}
               style={{ flex: 1.3 }}
               onPress={() => {
                 const c = accept();
-                if (c) router.push(c.kind === 'trade' ? '/trade/join' : '/online/join');
+                if (c) router.push(c.kind === 'trade' ? '/trade/join' : c.kind === 'draw' ? '/pioche/give' : '/online/join');
               }}
             />
           </View>
@@ -158,4 +170,5 @@ const styles = StyleSheet.create({
   kickerRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   kicker: { fontFamily: fonts.black, fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', color: colors.gold },
   buttons: { flexDirection: 'row', gap: 10 },
+  drawNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)' },
 });

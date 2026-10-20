@@ -28,7 +28,8 @@ import {
 import { cancelMatch, finishMatch, rankOf, settleAbandoned, shownMmr, startMatch } from '../game/rank';
 import { getRarity } from '../game/rarity';
 import { type CropRect, cropImage } from '../game/gallery';
-import { generatePack } from '../game/pack';
+import { type FriendPhoto, payFriendDraw } from '../game/friendDraw';
+import { generatePack, makeCard } from '../game/pack';
 import * as disk from '../storage/disk';
 import { MAX_PINNED } from '../storage/model';
 import type { Card, Friend, SaveState } from '../storage/model';
@@ -47,6 +48,14 @@ interface GameStore {
   drawStatus(now?: number): DrawStatus;
   openPack(): Promise<Card[]>;
   clearPendingPack(): void;
+  /**
+   * Pioche amicale : les photos envoyées par un ami deviennent un paquet, avec
+   * la chance habituelle du joueur. Paie (tirage, ou pièces s'il n'en reste
+   * plus) et prépare l'écran d'ouverture. `null` si le joueur ne peut plus payer.
+   */
+  openFriendPack(photos: FriendPhoto[], giver: string): Card[] | null;
+  /** La page d'explication de la Pioche amicale a été lue. */
+  seeFriendDrawIntro(): void;
   renameCard(id: string, name: string): void;
   /** Renomme l'attaque classique (0) ou spéciale (1) d'une carte. Un nom vide est ignoré. */
   renameAttack(id: string, slot: 0 | 1, name: string): void;
@@ -261,6 +270,49 @@ export const useGame = create<GameStore>((set, get) => ({
 
   clearPendingPack() {
     set({ pendingPack: [] });
+  },
+
+  openFriendPack(photos, giver) {
+    const save = get().save;
+    if (!save || photos.length === 0) return null;
+    const now = Date.now();
+    const paid = payFriendDraw(save, now);
+    if (!paid) return null;
+    const packIndex = save.totalPacksOpened;
+    const lucky = rollLucky(save.luck, packIndex);
+    const plan = planPack({ state: save.luck, cards: photos.length, packIndex, lucky, divine: save.divineUnlocked });
+    const name = giver.slice(0, 24);
+    const made = photos.map((p, i) => ({
+      p,
+      card: makeCard({ hash: p.hash, width: p.width, height: p.height, sourceId: null }, plan.rarities[i], now, { origin: 'friend', giver: name }),
+    }));
+    // la plus rare en dernier, comme un paquet normal
+    made.sort((a, b) => getRarity(a.card.rarity).rank - getRarity(b.card.rarity).rank);
+    const written: Card[] = [];
+    for (const { p, card } of made) {
+      disk.writeNewCard(card, { image: { base64: p.image }, thumb: { base64: p.thumb } });
+      written.push(card);
+    }
+    const cards = [...get().cards, ...written];
+    disk.saveIndex(cards);
+    const next: SaveState = {
+      ...paid,
+      drawnHashes: [...new Set([...paid.drawnHashes, ...written.map((c) => c.hash)])],
+      totalPacksOpened: paid.totalPacksOpened + 1,
+      luck: plan.state,
+      quests: bump(paid.quests, 'pack', now),
+    };
+    persistState(next);
+    set({ cards, save: next, pendingPack: written, openingLucky: lucky });
+    return written;
+  },
+
+  seeFriendDrawIntro() {
+    const save = get().save;
+    if (!save || save.friendDrawIntro) return;
+    const next = { ...save, friendDrawIntro: true };
+    persistState(next);
+    set({ save: next });
   },
 
   renameCard(id, rawName) {

@@ -57,8 +57,11 @@ export type SocialMsg =
   | { k: 'req'; from: string; name: string; mmr: number; at: number }
   /** Réponse : « moi aussi, je t'ai ajouté ». */
   | { k: 'ok'; from: string; name: string; mmr: number; at: number }
-  /** Défi, ou invitation à échanger (`kind: 'trade'` : `room` est alors le code de l'échange). */
-  | { k: 'challenge'; from: string; name: string; mmr: number; room: string; at: number; kind?: 'trade' }
+  /**
+   * Défi, invitation à échanger (`kind: 'trade'` : `room` est le code de l'échange)
+   * ou demande de Pioche amicale (`kind: 'draw'` : `room` est le salon de la pioche).
+   */
+  | { k: 'challenge'; from: string; name: string; mmr: number; room: string; at: number; kind?: 'trade' | 'draw' }
   | { k: 'decline'; from: string; room: string; at: number }
   | { k: 'cancel'; from: string; room: string; at: number }
   /** « Montre-moi les cartes épinglées sur ton profil. » */

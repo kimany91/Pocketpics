@@ -16,6 +16,7 @@ import { type MqttConnection } from '../trade/mqtt';
 import { connectRelay, deps } from '../trade/online';
 import { newOnlineCode } from '../trade/relayCore';
 import { useTrade } from '../trade/session';
+import { usePioche } from './pioche';
 import { useMatch } from './match';
 import { sanitizeFighter } from './battleNet';
 import { CHALLENGE_TTL_MS, PRESENCE_MAX_SKEW_MS, type PinnedCard, type SocialMsg, inboxTopic, isOnline, newFriendCode, openFor, presenceTopic, sealFor } from './socialCore';
@@ -28,8 +29,8 @@ export interface Presence {
 }
 
 export interface Challenge {
-  /** Un combat, ou un échange de cartes (`room` est alors le code de l'échange). */
-  kind: 'fight' | 'trade';
+  /** Un combat, un échange de cartes (`room` est le code de l'échange) ou une Pioche amicale (`room` : son salon). */
+  kind: 'fight' | 'trade' | 'draw';
   from: string;
   name: string;
   mmr: number;
@@ -45,7 +46,7 @@ interface SocialStore {
   /** Défi reçu, en attente de réponse. */
   challenge: Challenge | null;
   /** Défi envoyé. */
-  outgoing: { kind: 'fight' | 'trade'; to: string; name: string; room: string; at: number; state: 'waiting' | 'declined' } | null;
+  outgoing: { kind: 'fight' | 'trade' | 'draw'; to: string; name: string; room: string; at: number; state: 'waiting' | 'declined' } | null;
   /**
    * Cartes épinglées des amis, telles qu'ils nous les ont envoyées. `cards` est
    * incomplet tant que `n` cartes ne sont pas arrivées.
@@ -62,6 +63,8 @@ interface SocialStore {
   challengeFriend(code: string): Promise<void>;
   /** Invite un ami à l'échange que j'héberge (code d'échange en ligne). */
   inviteTrade(code: string, tradeCode: string): void;
+  /** Demande à un ami de piocher dans sa galerie (salon de pioche déjà ouvert). */
+  inviteDraw(code: string, room: string): void;
   cancelChallenge(): void;
   acceptChallenge(): Challenge | null;
   declineChallenge(): void;
@@ -154,9 +157,10 @@ export const useSocial = create<SocialStore>((set, get) => {
           // (les messages d'invitation ne sont pas gardés par le relais : ils arrivent en direct ;
           // on n'écarte que ceux d'une horloge vraiment fantaisiste)
           if (!friend || Math.abs(now() - m.at) > PRESENCE_MAX_SKEW_MS || get().challenge?.room === m.room) return;
-          const kind = m.kind === 'trade' ? 'trade' : 'fight';
-          // déjà en combat (ou déjà en échange) : on refuse tout de suite
-          const busy = kind === 'trade' ? useTrade.getState().phase !== 'idle' : useMatch.getState().phase !== 'idle';
+          const kind = m.kind === 'trade' ? 'trade' : m.kind === 'draw' ? 'draw' : 'fight';
+          // déjà en combat (ou déjà en échange, ou déjà en pioche) : on refuse tout de suite
+          const busy =
+            kind === 'trade' ? useTrade.getState().phase !== 'idle' : kind === 'draw' ? !['idle', 'done', 'ended'].includes(usePioche.getState().phase) : useMatch.getState().phase !== 'idle';
           if (busy) {
             sendTo(m.from, { k: 'decline', from: mine, room: m.room, at: now() });
             return;
@@ -166,7 +170,10 @@ export const useSocial = create<SocialStore>((set, get) => {
         }
         case 'decline': {
           const out = get().outgoing;
-          if (out && out.room === m.room && out.to === m.from) set({ outgoing: { ...out, state: 'declined' } });
+          if (out && out.room === m.room && out.to === m.from) {
+            set({ outgoing: { ...out, state: 'declined' } });
+            if (out.kind === 'draw') usePioche.getState().declined();
+          }
           return;
         }
         case 'cancel':
@@ -311,6 +318,13 @@ export const useSocial = create<SocialStore>((set, get) => {
       sendTo(code, { k: 'challenge', kind: 'trade', from: myCode(), ...profile(), room: tradeCode, at: now() });
     },
 
+    inviteDraw(code, room) {
+      const friend = save()?.friends.find((f) => f.code === code);
+      if (!friend) return;
+      set({ outgoing: { kind: 'draw', to: code, name: friend.name, room, at: now(), state: 'waiting' } });
+      sendTo(code, { k: 'challenge', kind: 'draw', from: myCode(), ...profile(), room, at: now() });
+    },
+
     cancelChallenge() {
       const out = get().outgoing;
       if (out) sendTo(out.to, { k: 'cancel', from: myCode(), room: out.room, at: now() });
@@ -322,6 +336,7 @@ export const useSocial = create<SocialStore>((set, get) => {
       set({ challenge: null });
       if (!c || now() - c.at > CHALLENGE_TTL_MS) return null;
       if (c.kind === 'trade') void useTrade.getState().join({ kind: 'online', code: c.room });
+      else if (c.kind === 'draw') void usePioche.getState().give(c.room, { code: c.from, name: c.name });
       else void useMatch.getState().join(c.room, { friend: { code: c.from, name: c.name } });
       return c;
     },

@@ -76,6 +76,10 @@ export default function RootLayout() {
         <Stack.Screen name="trade/join" />
         <Stack.Screen name="trade/scan" options={UP} />
         <Stack.Screen name="trade/room" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="pioche/intro" options={UP} />
+        <Stack.Screen name="pioche/pick" />
+        <Stack.Screen name="pioche/ask" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="pioche/give" options={{ gestureEnabled: false }} />
         <Stack.Screen name="friends" />
         <Stack.Screen name="solo" options={{ animation: 'fade_from_bottom', animationDuration: 300 }} />
         <Stack.Screen name="multi" />

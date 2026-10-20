@@ -210,6 +210,11 @@ export async function readCardImagesBase64(id: string) {
   return { image, thumb };
 }
 
+/** Contenu base64 d'une image temporaire (photo préparée pour la Pioche amicale). */
+export function readUriBase64(uri: string): Promise<string> {
+  return new File(uri).base64();
+}
+
 export function readThumbBase64Sync(id: string) {
   return new File(cardDir(id), 'thumb.jpg').base64Sync();
 }

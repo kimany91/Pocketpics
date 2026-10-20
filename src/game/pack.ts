@@ -74,31 +74,44 @@ export async function generatePack(opts: {
   if (photos.length === 0) throw new NoPhotosLeftError();
 
   const rarities = opts.rarities ? opts.rarities(photos.length) : photos.map(() => rollRarity());
-  const cards: GeneratedCard[] = photos.map((photo, i) => {
-    const id = randomUUID();
-    const rarity = rarities[i] ?? rollRarity();
-    return {
-      photo,
-      card: {
-        v: CARD_SCHEMA_VERSION,
-        id,
-        rarity,
-        name: null,
-        hash: photo.hash,
-        createdAt: now,
-        obtainedAt: now,
-        origin: 'draw',
-        width: photo.width,
-        height: photo.height,
-        sourceId: photo.assetId,
-        favorite: false,
-        chromatic: opts.allChromatic === true || Math.random() < CHROMATIC_ODDS,
-        locked: false,
-        battle: generateStats(id, getRarity(rarity).rank),
-      },
-    };
-  });
+  const cards: GeneratedCard[] = photos.map((photo, i) => ({
+    photo,
+    card: makeCard({ hash: photo.hash, width: photo.width, height: photo.height, sourceId: photo.assetId }, rarities[i] ?? rollRarity(), now, {
+      chromatic: opts.allChromatic === true || undefined,
+    }),
+  }));
   // La plus rare est révélée en dernier : le suspense monte.
   cards.sort((a, b) => getRarity(a.card.rarity).rank - getRarity(b.card.rarity).rank);
   return { cards, consumedAssetIds: consumed };
+}
+
+/**
+ * Une nouvelle carte à partir d'une photo prête : identifiant, stats de combat
+ * et chance d'être chromatique. Sert au tirage normal et à la Pioche amicale.
+ */
+export function makeCard(
+  photo: { hash: string; width: number; height: number; sourceId: string | null },
+  rarity: RarityId,
+  now: number,
+  opts: { origin?: Card['origin']; giver?: string; chromatic?: boolean } = {},
+): Card {
+  const id = randomUUID();
+  return {
+    v: CARD_SCHEMA_VERSION,
+    id,
+    rarity,
+    name: null,
+    hash: photo.hash,
+    createdAt: now,
+    obtainedAt: now,
+    origin: opts.origin ?? 'draw',
+    width: photo.width,
+    height: photo.height,
+    sourceId: photo.sourceId,
+    favorite: false,
+    chromatic: opts.chromatic ?? Math.random() < CHROMATIC_ODDS,
+    locked: false,
+    ...(opts.giver ? { giver: opts.giver } : {}),
+    battle: generateStats(id, getRarity(rarity).rank),
+  };
 }

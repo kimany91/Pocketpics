@@ -29,7 +29,8 @@ const SOLO_LEVELS = 130;
 /** Version de la carte solo (2 = 20 mondes). */
 const SOLO_MAP = 2;
 
-export type CardOrigin = 'draw' | 'trade';
+/** `friend` : piochée dans la galerie d'un ami (Pioche amicale). */
+export type CardOrigin = 'draw' | 'trade' | 'friend';
 
 export interface Card {
   v: number;
@@ -65,6 +66,8 @@ export interface Card {
    * est échangée de nouveau (ajouté après : `false` si absent).
    */
   locked: boolean;
+  /** Pioche amicale : pseudo de l'ami dans la galerie duquel la carte a été piochée. */
+  giver?: string;
   /**
    * PV et attaques pour les combats (ajouté après : générés à partir de l'id si
    * absents, donc identiques à chaque chargement). Les noms d'attaque sont modifiables.
@@ -122,6 +125,8 @@ export interface SaveState {
   pinned: string[];
   /** Quêtes et défi du jour (ajouté après : tout à zéro si absent). */
   quests: QuestState;
+  /** La page qui explique la Pioche amicale a été lue (elle ne s'affiche qu'une fois). */
+  friendDrawIntro: boolean;
   [extra: string]: unknown;
 }
 
@@ -169,13 +174,14 @@ export function migrateCard(input: unknown, now = Date.now()): Card | null {
     hash: str(c.hash, ''),
     createdAt: num(c.createdAt, now),
     obtainedAt: num(c.obtainedAt, num(c.createdAt, now)),
-    origin: c.origin === 'trade' ? 'trade' : 'draw',
+    origin: c.origin === 'trade' || c.origin === 'friend' ? c.origin : 'draw',
     width: num(c.width, 0),
     height: num(c.height, 0),
     sourceId: typeof c.sourceId === 'string' ? c.sourceId : null,
     favorite: c.favorite === true,
     chromatic: c.chromatic === true,
     locked: c.locked === true,
+    giver: typeof c.giver === 'string' && c.giver ? c.giver.slice(0, 24) : undefined,
     battle: normalizeStats(c.battle, c.id as string, getRarity(rarity).rank),
   };
 }
@@ -212,6 +218,7 @@ export function createInitialState(now = Date.now()): SaveState {
     friends: [],
     pinned: [],
     quests: initialQuests(now),
+    friendDrawIntro: false,
   };
 }
 
@@ -309,5 +316,6 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     friends: migrateFriends(s.friends),
     pinned: Array.isArray(s.pinned) ? s.pinned.filter((x): x is string => typeof x === 'string').slice(0, MAX_PINNED) : [],
     quests: migrateQuests(s.quests, now),
+    friendDrawIntro: s.friendDrawIntro === true,
   };
 }

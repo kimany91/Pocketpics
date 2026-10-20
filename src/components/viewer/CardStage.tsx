@@ -39,7 +39,7 @@ const BURN_MS = 2400;
 const LIGHTER_MS = 750;
 
 /** Une carte de la collection, ou une carte d'adversaire (sans date ni origine). */
-export type StageCard = CardLike & Partial<Pick<Card, 'origin' | 'obtainedAt' | 'createdAt'>>;
+export type StageCard = CardLike & Partial<Pick<Card, 'origin' | 'obtainedAt' | 'createdAt' | 'giver'>>;
 
 interface Props {
   card: StageCard;
@@ -326,7 +326,7 @@ export function CardStage({
                   {backNote || card.obtainedAt === undefined ? (
                     <AppText variant="caption">{backNote ?? ''}</AppText>
                   ) : (
-                    <AppText variant="caption">{`${card.origin === 'trade' ? 'Reçue par échange' : 'Tirée'} le ${formatDate(card.obtainedAt)}`}</AppText>
+                    <AppText variant="caption">{`${card.origin === 'trade' ? 'Reçue par échange' : card.origin === 'friend' ? `Piochée chez ${card.giver ?? 'un ami'}` : 'Tirée'} le ${formatDate(card.obtainedAt)}`}</AppText>
                   )}
                   {card.origin === 'trade' && card.createdAt !== undefined ? <AppText variant="caption">{`Créée le ${formatDate(card.createdAt)}`}</AppText> : null}
                   <AppText style={styles.serial}>{cardSerial(card.id)}</AppText>
