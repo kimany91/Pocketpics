@@ -35,6 +35,7 @@ import { RankEmblem } from '../../components/rank/RankEmblem';
 import { Rise } from '../../components/Rise';
 import { RollingNumber } from '../../components/RollingNumber';
 import { Screen } from '../../components/Screen';
+import { TabHeader } from '../../components/TabHeader';
 import { rankOf, shownMmr } from '../../game/rank';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
@@ -60,9 +61,8 @@ export default function BattleTab() {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
-        <Rise visit={visit} index={0} style={styles.titleRow}>
-          <AppText variant="title">Combat</AppText>
-          <CoinChip amount={coins} />
+        <Rise visit={visit} index={0}>
+          <TabHeader title="Combat" subtitle="Aventure, classé et quêtes" icon="flash" right={<CoinChip amount={coins} />} />
         </Rise>
 
         {/* Solo */}
@@ -431,7 +431,6 @@ function SanctuaryScene({ width }: { width: number }) {
 
 const styles = StyleSheet.create({
   content: { padding: 16, paddingTop: 12, paddingBottom: 40, gap: 14 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
   panel: { borderRadius: 24, borderWidth: 3, backgroundColor: colors.surface },
   lip: { position: 'absolute', left: 0, right: 0, bottom: 0, borderRadius: 24, backgroundColor: OUTLINE },
   panelRim: { borderRadius: 21, borderWidth: 2, opacity: 0.6 },

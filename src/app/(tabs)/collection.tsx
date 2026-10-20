@@ -34,6 +34,7 @@ import { AppText } from '../../components/AppText';
 import { CardActions } from '../../components/card/CardActions';
 import { CardFace } from '../../components/card/CardFace';
 import { Screen } from '../../components/Screen';
+import { TabHeader } from '../../components/TabHeader';
 import { RARITIES, getRarity } from '../../game/rarity';
 import { type ThumbRect, registerThumb, useCollectionView } from '../../state/collectionView';
 import { useGame } from '../../state/game';
@@ -259,11 +260,14 @@ export default function CollectionScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <View style={{ flexShrink: 1 }}>
-          <AppText variant="title">Collection</AppText>
-          <CountLine total={cards.length} />
+        <View style={{ flex: 1 }}>
+          <TabHeader
+            title="Collection"
+            subtitle={<CountLine total={cards.length} />}
+            icon="albums"
+            right={cards.length > 0 ? <SortSwitch value={sort} onChange={(s) => reorder(() => setSort(s))} /> : undefined}
+          />
         </View>
-        {cards.length > 0 ? <SortSwitch value={sort} onChange={(s) => reorder(() => setSort(s))} /> : null}
       </View>
       {cards.length > 0 ? <RarityBar counts={counts} total={cards.length} /> : null}
 

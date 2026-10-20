@@ -17,7 +17,7 @@ import { AppText } from '../AppText';
 import { OnlineDot } from '../online/Pulse';
 import { Shine } from '../online/Shine';
 
-const QR_SIZE = 100;
+const QR_SIZE = 92;
 
 export function FriendCodeCard({ active }: { active: boolean }) {
   const code = useGame((s) => s.save?.friendCode ?? '');
@@ -86,7 +86,8 @@ const styles = StyleSheet.create({
   },
   qr: { padding: 8, borderRadius: 14, backgroundColor: '#F5F3EE' },
   kicker: { fontFamily: fonts.black, fontSize: 10, letterSpacing: 2, color: colors.gold, textTransform: 'uppercase' },
-  code: { fontFamily: fonts.black, fontSize: 21, letterSpacing: 1, color: colors.text },
+  // le code tient en entier sur une ligne, même sur un petit téléphone
+  code: { fontFamily: fonts.black, fontSize: 18, letterSpacing: 0.4, color: colors.text },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   share: {
     flexDirection: 'row',

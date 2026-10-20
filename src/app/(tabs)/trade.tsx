@@ -1,112 +1,213 @@
+/**
+ * Onglet Échange : un grand panneau illustré (deux cartes qui changent de main
+ * en boucle) avec les deux façons d'ouvrir un échange, puis les amis en ligne à
+ * qui proposer un échange d'un toucher, les quêtes d'échange, et une note sur
+ * la sécurité. Le pseudo se change dans l'onglet Profil.
+ */
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, withDelay } from 'react-native-reanimated';
 
 import { AppText } from '../../components/AppText';
-import { Rise } from '../../components/Rise';
+import { Button } from '../../components/Button';
+import { CardBack } from '../../components/card/CardBack';
+import { CoinChip } from '../../components/Coin';
+import { OnlineDot } from '../../components/online/Pulse';
+import { useSocialScreen } from '../../components/profile/social';
 import { TabQuests } from '../../components/quests/TabQuests';
+import { RankEmblem } from '../../components/rank/RankEmblem';
+import { Rise } from '../../components/Rise';
 import { Screen } from '../../components/Screen';
-import { Tile } from '../../components/Tile';
+import { TabHeader } from '../../components/TabHeader';
+import { rankOf } from '../../game/rank';
+import { groupFriends } from '../../net/friends';
+import { useSocial } from '../../net/social';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
 import { useEntrance } from '../../theme/motion';
+import { haptic } from '../../utils/haptics';
 
 export default function TradeTab() {
-  const save = useGame((s) => s.save);
-  const setPlayerName = useGame((s) => s.setPlayerName);
+  const coins = useGame((s) => s.save?.coins ?? 0);
   const cardsCount = useGame((s) => s.cards.length);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
   const { visit, focused } = useEntrance();
+  // les amis en ligne s'affichent en direct
+  useSocialScreen(focused);
 
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Rise visit={visit} index={0}>
-          <AppText variant="title">Échange</AppText>
-          <AppText variant="caption" style={{ marginTop: 4, marginBottom: 24 }}>
-            Échange des cartes avec un ami, où qu'il soit. Les noms que tu as donnés voyagent avec la carte.
-          </AppText>
+          <TabHeader title="Échange" subtitle="Avec un ami, où qu’il soit" icon="swap-horizontal" right={<CoinChip amount={coins} />} />
         </Rise>
 
-        <Rise visit={visit} index={1} style={styles.profile}>
-          <View style={styles.avatar}>
-            <AppText style={styles.avatarText}>{(save?.playerName ?? '?').slice(0, 1).toUpperCase()}</AppText>
+        <Rise visit={visit} index={1} dy={30} scale={0.96} style={{ marginTop: 18 }}>
+          <View style={styles.hero}>
+            <LinearGradient pointerEvents="none" colors={['#2A2050', '#1B2350', '#120F24']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+            <SwapArt active={focused} />
+            <AppText style={styles.heroTitle}>Échange tes cartes</AppText>
+            <AppText style={styles.heroSub}>
+              {cardsCount === 0 ? 'Tu n’as pas encore de carte, mais tu peux en recevoir.' : 'Les noms que tu as donnés voyagent avec la carte.'}
+            </AppText>
+            <View style={styles.actions}>
+              <Button label="Héberger" icon="radio-outline" style={{ flex: 1 }} onPress={() => router.push('/trade/host')} />
+              <Button label="Rejoindre" icon="scan-outline" kind="secondary" style={{ flex: 1 }} onPress={() => router.push('/trade/join')} />
+            </View>
           </View>
-          {editing ? (
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              autoFocus
-              maxLength={24}
-              style={styles.input}
-              returnKeyType="done"
-              selectionColor={colors.gold}
-              onBlur={() => {
-                setPlayerName(draft);
-                setEditing(false);
-              }}
-            />
-          ) : (
-            <Pressable
-              style={{ flex: 1 }}
-              onPress={() => {
-                setDraft(save?.playerName ?? '');
-                setEditing(true);
-              }}
-            >
-              <AppText variant="caption">Ton pseudo</AppText>
-              <AppText variant="heading">{save?.playerName}</AppText>
-            </Pressable>
-          )}
-          <Ionicons name="pencil" size={16} color={colors.textDim} />
         </Rise>
 
-        <View style={{ gap: 12, marginTop: 20 }}>
-          <Rise visit={visit} index={2}>
-            <Tile icon="radio-outline" title="Héberger un échange" subtitle="Crée l'échange et montre ton code" onPress={() => router.push('/trade/host')} />
-          </Rise>
-          <Rise visit={visit} index={3}>
-            <Tile icon="scan-outline" title="Rejoindre un échange" subtitle="Scanne le QR code ou entre le code" onPress={() => router.push('/trade/join')} />
-          </Rise>
-        </View>
-
-        <Rise visit={visit} index={4} style={styles.note}>
-          <Ionicons name="lock-closed-outline" size={16} color={colors.textDim} />
-          <AppText variant="caption" style={{ flex: 1 }}>
-            L'échange passe par Internet, chiffré de bout en bout : pas besoin d'être sur le même Wi-Fi. Sans Internet, l'hôte peut choisir l'échange en Wi-Fi local.
-          </AppText>
+        <Rise visit={visit} index={2} style={{ marginTop: 26 }}>
+          <FriendsToTrade active={focused} />
         </Rise>
-        {cardsCount === 0 ? (
-          <AppText variant="caption" style={{ marginTop: 12, textAlign: 'center' }}>
-            Tu n'as pas encore de carte, mais tu peux en recevoir.
-          </AppText>
-        ) : null}
 
         {/* Quêtes d'échange, s'il en reste */}
-        <Rise visit={visit} index={5} style={{ marginTop: 22 }}>
+        <Rise visit={visit} index={3} style={{ marginTop: 26 }}>
           <TabQuests tab="trade" focused={focused} />
+        </Rise>
+
+        <Rise visit={visit} index={4} style={styles.note}>
+          <Ionicons name="lock-closed" size={14} color={colors.textDim} />
+          <AppText variant="caption" style={{ flex: 1 }}>
+            Chiffré de bout en bout, par Internet (Wi-Fi ou 4G/5G). Sans Internet, l’hôte peut choisir le Wi-Fi local.
+          </AppText>
         </Rise>
       </ScrollView>
     </Screen>
   );
 }
 
+/** Deux cartes qui changent de main, en boucle : l'une passe devant l'autre. */
+function SwapArt({ active }: { active: boolean }) {
+  const t = useSharedValue(0);
+  useEffect(() => {
+    if (!active) {
+      cancelAnimation(t);
+      return;
+    }
+    t.value = withRepeat(
+      withSequence(
+        withDelay(900, withTiming(1, { duration: 900, easing: Easing.inOut(Easing.cubic) })),
+        withDelay(900, withTiming(0, { duration: 900, easing: Easing.inOut(Easing.cubic) })),
+      ),
+      -1,
+      false,
+    );
+    return () => cancelAnimation(t);
+  }, [active, t]);
+  const W = 64;
+  const a = useAnimatedStyle(() => swapPose(t.value, 1));
+  const b = useAnimatedStyle(() => swapPose(t.value, -1));
+  const arrows = useAnimatedStyle(() => ({ opacity: 0.35 + Math.sin(t.value * Math.PI) * 0.65, transform: [{ scaleX: t.value < 0.5 ? 1 : -1 }] }));
+  return (
+    <View style={styles.art}>
+      <Animated.View style={[styles.artCard, a]}>
+        <CardBack width={W} />
+      </Animated.View>
+      <Animated.View style={[styles.artCard, b]}>
+        <CardBack width={W} />
+      </Animated.View>
+      <Animated.View style={[styles.arrows, arrows]}>
+        <Ionicons name="swap-horizontal" size={22} color={colors.gold} />
+      </Animated.View>
+    </View>
+  );
+}
+
+/** Place d'une des deux cartes : de gauche à droite (ou l'inverse) en passant par un arc, légèrement penchée. */
+function swapPose(t: number, side: 1 | -1) {
+  'worklet';
+  const p = side === 1 ? t : 1 - t;
+  return {
+    transform: [
+      { translateX: (p - 0.5) * 2 * 46 },
+      { translateY: -Math.sin(p * Math.PI) * 14 * side },
+      { rotate: `${(p - 0.5) * 2 * 10}deg` },
+      { scale: 1 + Math.sin(p * Math.PI) * 0.06 * side },
+    ],
+    // celle qui passe par le haut de l'arc passe devant
+    zIndex: side === 1 ? 2 : 1,
+  };
+}
+
+/** Les amis en ligne : un toucher leur envoie une invitation à échanger. */
+function FriendsToTrade({ active }: { active: boolean }) {
+  const friends = useGame((s) => s.save?.friends ?? []);
+  const presence = useSocial((s) => s.presence);
+  const isOnline = useSocial((s) => s.isOnline);
+  const people = groupFriends(friends, isOnline);
+  const online = people.filter((p) => p.online);
+
+  return (
+    <View style={{ gap: 10 }}>
+      <View style={styles.sectionHead}>
+        <Ionicons name="people" size={17} color={colors.gold} />
+        <AppText variant="heading" style={{ flex: 1 }}>
+          Échanger avec un ami
+        </AppText>
+        {friends.length > 0 ? <AppText variant="caption">{`${online.length} en ligne`}</AppText> : null}
+      </View>
+      {online.length === 0 ? (
+        <Pressable
+          onPress={() => router.navigate('/profile')}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.empty, pressed && { opacity: 0.8 }]}
+        >
+          <Ionicons name={friends.length === 0 ? 'person-add-outline' : 'moon-outline'} size={20} color={colors.textDim} />
+          <AppText variant="caption" style={{ flex: 1 }}>
+            {friends.length === 0
+              ? 'Ajoute des amis dans ton profil pour leur proposer un échange d’un toucher.'
+              : 'Aucun ami en ligne pour le moment. Dès qu’un ami ouvre le jeu, il apparaît ici.'}
+          </AppText>
+          <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
+        </Pressable>
+      ) : (
+        online.map(({ friend }) => {
+          const rank = rankOf(presence[friend.code]?.mmr ?? friend.mmr);
+          return (
+            <View key={friend.code} style={styles.friend}>
+              <RankEmblem rank={rank} size={34} still />
+              <View style={{ flex: 1, gap: 2 }}>
+                <AppText variant="heading" numberOfLines={1}>
+                  {friend.name}
+                </AppText>
+                <View style={styles.statusRow}>
+                  <OnlineDot online active={active} />
+                  <AppText variant="caption" style={{ color: colors.success }}>
+                    en ligne
+                  </AppText>
+                </View>
+              </View>
+              <Button
+                label="Échanger"
+                icon="swap-horizontal"
+                onPress={() => {
+                  haptic.medium();
+                  router.push({ pathname: '/trade/host', params: { friend: friend.code } });
+                }}
+              />
+            </View>
+          );
+        })
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  content: { padding: 20, paddingTop: 12 },
-  profile: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    padding: 14,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.gold, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontFamily: fonts.black, fontSize: 18, color: '#141414' },
-  input: { flex: 1, color: colors.text, fontFamily: fonts.semibold, fontSize: 17, paddingVertical: 6 },
-  note: { flexDirection: 'row', gap: 10, marginTop: 24, padding: 14, borderRadius: 16, backgroundColor: colors.bgElevated },
+  content: { padding: 16, paddingTop: 12, paddingBottom: 40 },
+  hero: { borderRadius: 24, padding: 18, paddingTop: 10, overflow: 'hidden', borderWidth: 1.5, borderColor: 'rgba(247,201,72,0.35)', alignItems: 'center' },
+  art: { height: 120, width: '100%', alignItems: 'center', justifyContent: 'center' },
+  artCard: { position: 'absolute' },
+  arrows: { position: 'absolute', bottom: 0 },
+  heroTitle: { fontFamily: fonts.black, fontSize: 22, color: colors.text, marginTop: 8, letterSpacing: -0.3 },
+  heroSub: { fontFamily: fonts.semibold, fontSize: 13, color: 'rgba(255,255,255,0.65)', textAlign: 'center', marginTop: 4 },
+  actions: { flexDirection: 'row', gap: 10, alignSelf: 'stretch', marginTop: 16 },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  empty: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.borderStrong },
+  friend: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: 'rgba(79,224,168,0.3)' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  note: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 24, paddingHorizontal: 4 },
 });

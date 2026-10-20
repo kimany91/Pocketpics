@@ -21,6 +21,7 @@ import { ProfileStats } from '../../components/profile/ProfileStats';
 import { useFreshFriends, useSocialScreen } from '../../components/profile/social';
 import { Rise } from '../../components/Rise';
 import { Screen } from '../../components/Screen';
+import { TabHeader } from '../../components/TabHeader';
 import { useEntrance } from '../../theme/motion';
 
 export default function ProfileTab() {
@@ -32,10 +33,7 @@ export default function ProfileTab() {
     <Screen>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Rise visit={visit} index={0}>
-          <AppText variant="title">Profil</AppText>
-          <AppText variant="caption" style={{ marginTop: 4 }}>
-            Ton profil public : ce que tes amis voient de toi.
-          </AppText>
+          <TabHeader title="Profil" subtitle="Ce que tes amis voient de toi" icon="person" />
         </Rise>
 
         <Rise visit={visit} index={1} style={{ marginTop: 18 }}>

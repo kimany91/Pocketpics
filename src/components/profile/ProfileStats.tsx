@@ -24,22 +24,13 @@ export function ProfileStats() {
   const wins = useGame((s) => s.save?.rank.wins ?? 0);
   const losses = useGame((s) => s.save?.rank.losses ?? 0);
 
+  // une seule ligne de quatre tuiles : tout se lit d'un coup d'œil
   return (
-    <View style={{ gap: 10 }}>
-      <View style={styles.row}>
-        <Stat icon="albums" color={colors.text} value={cards} label={cards > 1 ? 'Cartes' : 'Carte'} />
-        <Stat icon="cube" color="#B48CFF" value={packs} label={packs > 1 ? 'Paquets ouverts' : 'Paquet ouvert'} />
-      </View>
-      <View style={styles.row}>
-        <Stat icon="star" color={colors.gold} value={stars} total={TOTAL_STARS} label="Étoiles" />
-        <Stat
-          icon="trophy"
-          color={colors.success}
-          value={wins}
-          label={wins > 1 ? 'Victoires classées' : 'Victoire classée'}
-          caption={`${losses} défaite${losses > 1 ? 's' : ''}`}
-        />
-      </View>
+    <View style={styles.row}>
+      <Stat icon="albums" color={colors.text} value={cards} label={cards > 1 ? 'Cartes' : 'Carte'} />
+      <Stat icon="cube" color="#B48CFF" value={packs} label={packs > 1 ? 'Paquets' : 'Paquet'} />
+      <Stat icon="star" color={colors.gold} value={stars} label={`Étoiles /${TOTAL_STARS}`} />
+      <Stat icon="trophy" color={colors.success} value={wins} label={wins > 1 ? 'Victoires' : 'Victoire'} caption={`${losses} défaite${losses > 1 ? 's' : ''}`} />
     </View>
   );
 }
@@ -84,20 +75,22 @@ function Stat({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 10 },
+  row: { flexDirection: 'row', gap: 8 },
   tile: {
     flex: 1,
     gap: 2,
-    padding: 12,
-    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    borderRadius: 16,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     borderTopColor: 'rgba(255,255,255,0.11)',
   },
   valueRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 2 },
-  value: { fontFamily: fonts.black, fontSize: 24, color: colors.text },
+  value: { fontFamily: fonts.black, fontSize: 21, color: colors.text },
   total: { fontFamily: fonts.bold, fontSize: 13, color: colors.textFaint, marginLeft: 1, marginBottom: 3 },
-  label: { fontFamily: fonts.semibold, fontSize: 12, color: colors.textDim },
-  caption: { color: colors.textFaint },
+  label: { fontFamily: fonts.semibold, fontSize: 10.5, color: colors.textDim, textAlign: 'center' },
+  caption: { color: colors.textFaint, fontSize: 10, textAlign: 'center' },
 });

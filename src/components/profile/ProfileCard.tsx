@@ -9,7 +9,7 @@ import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { rankOf, shownMmr } from '../../game/rank';
+import { DIVISION_POINTS, LAST_INDEX, rankOf, shownMmr } from '../../game/rank';
 import { useSocial } from '../../net/social';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
@@ -114,6 +114,13 @@ export function ProfileCard({ active }: { active: boolean }) {
           </AppText>
           <Ionicons name="chevron-forward" size={14} color={colors.textFaint} />
         </Pressable>
+        {/* progression vers la division suivante */}
+        <View style={styles.progressRow}>
+          <View style={styles.track}>
+            <View style={[styles.fill, { width: `${Math.round(rank.progress * 100)}%`, backgroundColor: rank.tier.color }]} />
+          </View>
+          <AppText style={styles.points}>{rank.index >= LAST_INDEX ? 'Max' : `${Math.round(rank.points)}/${DIVISION_POINTS}`}</AppText>
+        </View>
       </View>
     </View>
   );
@@ -146,4 +153,8 @@ const styles = StyleSheet.create({
   },
   rankRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   rankLabel: { fontFamily: fonts.bold, fontSize: 13 },
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  track: { flex: 1, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  fill: { height: 6, borderRadius: 3 },
+  points: { fontFamily: fonts.bold, fontSize: 11, color: colors.textDim, fontVariant: ['tabular-nums'] },
 });
