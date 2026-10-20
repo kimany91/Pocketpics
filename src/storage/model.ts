@@ -60,6 +60,12 @@ export interface Card {
    */
   chromatic: boolean;
   /**
+   * Carte verrouillée par celui qui l'a donnée lors d'un échange : plus personne
+   * ne peut la modifier (nom, noms d'attaque, cadrage), et elle le reste si elle
+   * est échangée de nouveau (ajouté après : `false` si absent).
+   */
+  locked: boolean;
+  /**
    * PV et attaques pour les combats (ajouté après : générés à partir de l'id si
    * absents, donc identiques à chaque chargement). Les noms d'attaque sont modifiables.
    */
@@ -169,6 +175,7 @@ export function migrateCard(input: unknown, now = Date.now()): Card | null {
     sourceId: typeof c.sourceId === 'string' ? c.sourceId : null,
     favorite: c.favorite === true,
     chromatic: c.chromatic === true,
+    locked: c.locked === true,
     battle: normalizeStats(c.battle, c.id as string, getRarity(rarity).rank),
   };
 }

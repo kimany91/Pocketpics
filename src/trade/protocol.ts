@@ -4,7 +4,8 @@
  */
 import type { Card } from '../storage/model';
 
-export const PROTOCOL_VERSION = 1;
+// 2 : cartes verrouillées (le cadenas fait partie de l'accord)
+export const PROTOCOL_VERSION = 2;
 export const MAX_OFFER = 10;
 
 export interface OfferCard {
@@ -13,6 +14,8 @@ export interface OfferCard {
   rarity: string;
   /** Miniature JPEG en base64. */
   thumb: string;
+  /** Verrouillée : celui qui la reçoit ne pourra plus la modifier. */
+  locked?: boolean;
 }
 
 export interface TransferCard {
@@ -29,6 +32,9 @@ export type TradeMessage =
   | { t: 'cards'; cards: TransferCard[] }
   | { t: 'ack'; ids: string[] }
   | { t: 'bye' };
+
+/** Une carte dans la clé d'accord : son id, marqué s'il est verrouillé (changer un cadenas change l'accord). */
+export const offerTag = (id: string, locked: boolean) => (locked ? `${id}#lock` : id);
 
 /** Clé qui identifie un accord : mes cartes | ses cartes (triées). */
 export function offerKey(mine: string[], theirs: string[]): string {

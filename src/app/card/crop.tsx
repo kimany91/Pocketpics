@@ -121,7 +121,8 @@ export default function CropScreen() {
     router.back();
   };
 
-  const missing = !card || unreadable || !uri;
+  // carte verrouillée lors d'un échange : son cadrage ne change plus
+  const missing = !card || card.locked || unreadable || !uri;
   const ready = !!(base && win && uri);
 
   return (
@@ -137,7 +138,7 @@ export default function CropScreen() {
       >
         {missing ? (
           <AppText variant="caption" style={styles.center}>
-            {card ? 'La photo de cette carte est illisible.' : 'Cette carte n’est plus dans ta collection.'}
+            {!card ? 'Cette carte n’est plus dans ta collection.' : card.locked ? 'Cette carte est verrouillée : elle ne peut plus être modifiée.' : 'La photo de cette carte est illisible.'}
           </AppText>
         ) : ready && win && base ? (
           <CropStage uri={uri} base={base} win={win} zoom={zoom} offX={offX} offY={offY} grip={grip} enabled={focused && !busy} />
@@ -148,7 +149,9 @@ export default function CropScreen() {
 
       <View style={styles.footer}>
         <AppText variant="caption" style={styles.hint}>
-          {missing
+          {card?.locked
+            ? 'Celui qui te l’a donnée l’a verrouillée pendant l’échange.'
+            : missing
             ? 'Reviens à ta bibliothèque et réessaie.'
             : 'Déplace la photo, pince à deux doigts pour l’agrandir. Ce qui reste dans le cadre sera gardé sur la carte.'}
         </AppText>

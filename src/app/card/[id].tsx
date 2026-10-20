@@ -97,6 +97,11 @@ export default function CardScreen() {
     return () => clearTimeout(t);
   }, [toast]);
   const say = (next: Omit<Toast, 'key'>) => setToast((prev) => ({ ...next, key: (prev?.key ?? 0) + 1 }));
+  /** Carte verrouillée lors d'un échange : on explique pourquoi rien ne se passe. */
+  const sayLocked = () => {
+    haptic.warning();
+    say({ icon: 'lock-closed', text: 'Carte verrouillée par celui qui te l’a donnée : elle ne peut plus être modifiée', warn: true });
+  };
   const lastSpin = useRef(0);
 
   // Ordre de défilement : celui de la grille si la carte y figure, sinon les plus récentes d'abord.
@@ -489,7 +494,9 @@ export default function CardScreen() {
                 color={r.color}
                 renamed={renamed}
                 disabled={burning}
+                locked={card.locked}
                 onPress={() => {
+                  if (card.locked) return sayLocked();
                   setDraft(card.name ?? '');
                   setEditing(true);
                 }}
@@ -500,6 +507,12 @@ export default function CardScreen() {
                 {r.label}
               </AppText>
               {card.chromatic ? <ChromaticTag /> : null}
+              {card.locked ? (
+                <Pressable onPress={sayLocked} style={styles.lockedTag} accessibilityRole="button" accessibilityLabel="Carte verrouillée">
+                  <Ionicons name="lock-closed" size={11} color="#FFE08A" />
+                  <AppText style={styles.lockedText}>Verrouillée</AppText>
+                </Pressable>
+              ) : null}
             </View>
             <Pressable
               onPress={openStats}
@@ -553,12 +566,13 @@ export default function CardScreen() {
             </Pressable>
             <Pressable
               onPress={() => {
+                if (card.locked) return sayLocked();
                 haptic.light();
                 router.push({ pathname: '/card/crop', params: { id: card.id } });
               }}
               hitSlop={12}
-              style={styles.round}
-              accessibilityLabel="Recadrer la carte"
+              style={[styles.round, card.locked && { opacity: 0.45 }]}
+              accessibilityLabel={card.locked ? 'Recadrage impossible : carte verrouillée' : 'Recadrer la carte'}
               accessibilityRole="button"
             >
               <Ionicons name="crop" size={19} color={colors.text} />
@@ -600,7 +614,7 @@ export default function CardScreen() {
 
       <ActionToast toast={toast} top={insets.top + 58} />
 
-      {statsOpen ? <StatsSheet key={card.id} card={card} onClose={() => setStatsOpen(false)} onRename={(slot, name) => renameAttack(card.id, slot, name)} /> : null}
+      {statsOpen ? <StatsSheet key={card.id} card={card} onClose={() => setStatsOpen(false)} locked={card.locked} onLocked={sayLocked} onRename={(slot, name) => renameAttack(card.id, slot, name)} /> : null}
 
       {confirming ? (
         <ConfirmDelete
@@ -684,7 +698,7 @@ function Slot({
 }
 
 /** Nom de la carte : il rebondit et pétille quand on vient de le changer. */
-function NameRow({ name, color, renamed, disabled, onPress }: { name: string | null; color: string; renamed: number; disabled: boolean; onPress(): void }) {
+function NameRow({ name, color, renamed, disabled, locked, onPress }: { name: string | null; color: string; renamed: number; disabled: boolean; locked: boolean; onPress(): void }) {
   const pop = useSharedValue(0);
   useEffect(() => {
     if (renamed <= 0) return;
@@ -701,9 +715,9 @@ function NameRow({ name, color, renamed, disabled, onPress }: { name: string | n
       <Animated.View style={style}>
         <Pressable style={styles.nameRow} disabled={disabled} onPress={onPress} accessibilityRole="button" accessibilityLabel={name ? `Renommer ${name}` : 'Nommer la carte'}>
           <AppText variant="title" numberOfLines={1} style={{ flexShrink: 1, color: name ? colors.text : colors.textDim }}>
-            {name ?? 'Nommer la carte'}
+            {name ?? (locked ? 'Sans nom' : 'Nommer la carte')}
           </AppText>
-          <Ionicons name="pencil" size={16} color={colors.textDim} />
+          <Ionicons name={locked ? 'lock-closed' : 'pencil'} size={16} color={locked ? '#FFE08A' : colors.textDim} />
         </Pressable>
       </Animated.View>
     </View>
@@ -830,6 +844,8 @@ const styles = StyleSheet.create({
   topLeft: { flexDirection: 'row', gap: 10 },
   topRight: { flexDirection: 'row', gap: 10 },
   rarityRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  lockedTag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,224,138,0.12)', borderWidth: 1, borderColor: 'rgba(255,224,138,0.45)' },
+  lockedText: { fontFamily: fonts.bold, fontSize: 10.5, color: '#FFE08A', letterSpacing: 0.3 },
   statsPill: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -93,6 +93,7 @@ export async function generatePack(opts: {
         sourceId: photo.assetId,
         favorite: false,
         chromatic: opts.allChromatic === true || Math.random() < CHROMATIC_ODDS,
+        locked: false,
         battle: generateStats(id, getRarity(rarity).rank),
       },
     };

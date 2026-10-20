@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { CARD_SCHEMA_VERSION, migrateCard, migrateState } from '../src/storage/model';
 import { getRarity } from '../src/game/rarity';
-import { offerKey, mirrorKey, LineDecoder } from '../src/trade/protocol';
+import { offerKey, offerTag, mirrorKey, LineDecoder } from '../src/trade/protocol';
 
 test('une carte ancienne/incomplète est conservée et complétée', () => {
   const c = migrateCard({ id: 'abc', rarity: 'epic' }, 1000)!;
@@ -71,4 +71,18 @@ test('volume des sons : 55 % par défaut, 0 si le son était coupé, borné entr
 test('favori : faux par défaut, conservé s’il est coché', () => {
   assert.equal(migrateCard({ id: 'a' })!.favorite, false);
   assert.equal(migrateCard({ id: 'b', favorite: true })!.favorite, true);
+});
+
+test('carte verrouillée : faux par défaut, conservé s’il est posé (et voyage avec la carte)', () => {
+  assert.equal(migrateCard({ id: 'a', rarity: 'epic' })!.locked, false);
+  assert.equal(migrateCard({ id: 'a', rarity: 'epic', locked: true })!.locked, true);
+  assert.equal(migrateCard({ id: 'a', rarity: 'epic', locked: 'oui' })!.locked, false, 'seulement un vrai booléen');
+});
+
+test('échange : poser ou retirer un cadenas change l’accord (les validations tombent)', () => {
+  const open = offerKey([offerTag('a', false)], [offerTag('b', false)]);
+  const sealed = offerKey([offerTag('a', true)], [offerTag('b', false)]);
+  assert.notEqual(open, sealed);
+  // l'autre joueur voit le même accord, dans l'autre sens
+  assert.equal(mirrorKey(sealed), offerKey([offerTag('b', false)], [offerTag('a', true)]));
 });

@@ -1,6 +1,6 @@
 # PocketPics
 
-PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie photo. Toutes les 12 h tu gagnes un tirage (3 au maximum en réserve). Chaque paquet prend des photos au hasard dans ta galerie et donne à chacune une rareté. Tu peux ensuite échanger tes cartes avec tes amis, en ligne ou en face à face.
+PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie photo. Toutes les 12 h tu gagnes un tirage (2 au maximum en réserve). Chaque paquet prend des photos au hasard dans ta galerie et donne à chacune une rareté. Tu peux ensuite échanger tes cartes avec tes amis, en ligne ou en face à face.
 
 - **Android et iOS** : Expo (React Native) + TypeScript, publiable sur le Play Store et l'App Store.
 - **Mises à jour en ligne** : EAS Update (expo-updates est déjà configuré).
@@ -32,6 +32,8 @@ PocketPics est un jeu de cartes à collectionner fait à partir de ta galerie ph
 **Reflets qui suivent le téléphone** (`src/utils/motionTilt.ts`) : dans la carte agrandie (et en combat), les reflets holographiques bougent quand on incline le téléphone, comme une vraie carte en main. Dans la collection, les cartes chromatiques (Ultra Légendaire, Divine) brillent aussi selon l'inclinaison, plus discrètement. Le capteur ne tourne que quand l'onglet est affiché. Dans le navigateur, on passe par `deviceorientation` (Safari demande l'autorisation au premier toucher).
 
 **Carte agrandie** : on la fait tourner au doigt en semi-3D, avec de l'inertie. Un double-tap retourne la carte, et son dos affiche ses infos. On peut aussi la renommer. Le nom s'affiche sur la carte et la suit lors d'un échange.
+
+**Cartes verrouillées.** Dans la salle d'échange, un cadenas sous chaque carte de son offre permet de la verrouiller (ça change l'accord : les deux validations sont à refaire, comme pour un changement de cartes). Celui qui la reçoit ne peut plus du tout la modifier : ni son nom, ni ceux de ses attaques, ni son cadrage. Le verrou fait partie de la carte (`locked` dans `src/storage/model.ts`) : il reste si elle est échangée de nouveau, et ne s'enlève jamais. Un petit cadenas s'affiche en haut à gauche de la carte. Recevoir une carte verrouillée est une quête unique.
 
 - **Changer de carte** : glisser à côté de la carte (au-dessus, en dessous, sur les côtés), ou toucher les flèches. L'ordre suit celui de la collection (tri et filtre compris).
 - **Zoom** : pincer à deux doigts zoome jusqu'à ×4 sur le point pincé ; une fois zoomé, un doigt déplace la carte au lieu de la tourner, et un double-tap revient à la taille normale. Le défilement entre cartes est suspendu pendant le zoom.
@@ -239,7 +241,7 @@ Ces coups de pouce restent invisibles pour le joueur : pas de compteur affiché,
 
 ## Cartes chromatiques
 
-Une carte tirée sur vingt (`CHROMATIC_ODDS` dans `src/game/rarity.ts`), **à n'importe quelle rareté**, est **chromatique** : sa photo est traversée d'un voile arc-en-ciel qui se déplace quand on tourne la carte au doigt (ou qu'on bouge le téléphone). C'est un champ de la carte (`chromatic` dans `src/storage/model.ts`), décidé au tirage et conservé par les échanges. L'effet est dessiné par `src/components/card/Chromatic.tsx`, dans le même esprit que les reflets des cartes rares (`Foil.tsx`).
+Une carte tirée sur cent (`CHROMATIC_ODDS` dans `src/game/rarity.ts`), **à n'importe quelle rareté**, est **chromatique** : sa photo est traversée d'un voile arc-en-ciel qui se déplace quand on tourne la carte au doigt (ou qu'on bouge le téléphone). C'est un champ de la carte (`chromatic` dans `src/storage/model.ts`), décidé au tirage et conservé par les échanges. L'effet est dessiné par `src/components/card/Chromatic.tsx`, dans le même esprit que les reflets des cartes rares (`Foil.tsx`).
 
 **Bouton d'essai** (à retirer quand il n'aura plus d'utilité) : sur l'accueil de la version navigateur, « Prochain paquet chromatique (test) » rend chromatiques toutes les cartes du paquet suivant. Tout tient dans un bloc marqué « Essai » de `src/state/game.ts` et le bouton correspondant dans `src/app/(tabs)/index.tsx` : supprimer les deux suffit.
 

@@ -16,7 +16,7 @@ import { cardExists, readCardImagesBase64, readThumbBase64Sync, writeNewCard } f
 import { type Card, migrateCard } from '../storage/model';
 import type { TradeTarget } from './code';
 import { hostOnline, joinOnline } from './online';
-import { MAX_OFFER, type OfferCard, PROTOCOL_VERSION, type TradeMessage, mirrorKey, offerKey } from './protocol';
+import { MAX_OFFER, type OfferCard, PROTOCOL_VERSION, type TradeMessage, mirrorKey, offerKey, offerTag } from './protocol';
 import { type HostHandle, type TradeLink, hostTrade, joinTrade } from './transport';
 
 export type TradeMode = 'online' | 'lan';
@@ -29,6 +29,11 @@ interface TradeStore {
   error: string | null;
   peerName: string | null;
   myOffer: string[];
+  /**
+   * Cartes de mon offre que je verrouille (cadenas) : celui qui les reçoit ne
+   * pourra plus les modifier. Une carte déjà verrouillée le reste, sans être ici.
+   */
+  myLocks: string[];
   peerOffer: OfferCard[];
   myLocked: boolean;
   peerLocked: boolean;
@@ -42,6 +47,8 @@ interface TradeStore {
   host(mode?: TradeMode): Promise<void>;
   join(target: TradeTarget): Promise<void>;
   toggleCard(id: string): void;
+  /** Pose ou retire le cadenas d'une carte de mon offre (annule les validations, comme un changement d'offre). */
+  toggleCardLock(id: string): void;
   setLocked(locked: boolean): void;
   confirm(): void;
   leave(): void;
@@ -54,6 +61,7 @@ const initial = {
   error: null,
   peerName: null,
   myOffer: [] as string[],
+  myLocks: [] as string[],
   peerOffer: [] as OfferCard[],
   myLocked: false,
   peerLocked: false,
@@ -100,7 +108,13 @@ function teardown() {
 export const useTrade = create<TradeStore>((set, get) => {
   const send = (m: TradeMessage) => link?.send(m);
   const unlocked = { myLocked: false, peerLocked: false, myConfirmed: false, peerConfirmed: false };
-  const currentKey = () => offerKey(get().myOffer, get().peerOffer.map((c) => c.id));
+  /** Ma carte partira-t-elle verrouillée ? (déjà verrouillée, ou cadenas posé pour cet échange) */
+  const willLock = (id: string) => get().myLocks.includes(id) || useGame.getState().cards.some((c) => c.id === id && c.locked);
+  const currentKey = () =>
+    offerKey(
+      get().myOffer.map((id) => offerTag(id, willLock(id))),
+      get().peerOffer.map((c) => offerTag(c.id, c.locked === true)),
+    );
 
   const sendOffer = () => {
     const cards = useGame.getState().cards;
@@ -112,7 +126,7 @@ export const useTrade = create<TradeStore>((set, get) => {
       try {
         thumb = readThumbBase64Sync(id);
       } catch {}
-      offer.push({ id: c.id, name: c.name, rarity: c.rarity, thumb });
+      offer.push({ id: c.id, name: c.name, rarity: c.rarity, thumb, locked: willLock(id) });
     }
     send({ t: 'offer', cards: offer });
   };
@@ -136,7 +150,7 @@ export const useTrade = create<TradeStore>((set, get) => {
         const card = cards.find((c) => c.id === id);
         if (!card) throw new Error('Carte introuvable');
         const { image, thumb } = await readCardImagesBase64(id);
-        payload.push({ card, image, thumb });
+        payload.push({ card: { ...card, locked: willLock(id) }, image, thumb });
       }
       send({ t: 'cards', cards: payload });
     } catch (e) {
@@ -146,7 +160,8 @@ export const useTrade = create<TradeStore>((set, get) => {
   };
 
   const receiveCards = (msg: Extract<TradeMessage, { t: 'cards' }>) => {
-    const expected = new Set(get().peerOffer.map((c) => c.id));
+    const offered = new Map(get().peerOffer.map((c) => [c.id, c]));
+    const expected = new Set(offered.keys());
     const ids = msg.cards.map((c) => c?.card?.id);
     if (ids.length !== expected.size || !ids.every((id) => expected.has(id))) {
       set({ phase: 'ended', error: "Les cartes reçues ne correspondent pas à l'offre. Échange annulé." });
@@ -163,7 +178,9 @@ export const useTrade = create<TradeStore>((set, get) => {
       // L'identité de la carte voyage avec elle ; nouvel id seulement en cas de collision.
       const id = owned.has(base.id) || cardExists(base.id) ? randomUUID() : base.id;
       // La photo d'origine appartient à l'autre joueur : elle ne concerne pas notre galerie.
-      const card: Card = { ...base, id, origin: 'trade', obtainedAt: now, sourceId: null, favorite: false };
+      // verrouillée comme convenu dans l'offre (et une carte déjà verrouillée le reste)
+      const locked = base.locked || offered.get(base.id)?.locked === true;
+      const card: Card = { ...base, id, origin: 'trade', obtainedAt: now, sourceId: null, favorite: false, locked };
       writeNewCard(card, { image: { base64: tc.image }, thumb: { base64: tc.thumb || tc.image } });
       stored.push(card);
     }
@@ -196,6 +213,7 @@ export const useTrade = create<TradeStore>((set, get) => {
             name: typeof c.name === 'string' ? c.name.slice(0, 28) : null,
             rarity: String(c.rarity),
             thumb: typeof c.thumb === 'string' ? c.thumb : '',
+            locked: c.locked === true,
           })),
         });
         return;
@@ -297,7 +315,21 @@ export const useTrade = create<TradeStore>((set, get) => {
       if (s.phase !== 'room') return;
       const has = s.myOffer.includes(id);
       if (!has && s.myOffer.length >= MAX_OFFER) return;
-      set({ ...unlocked, myOffer: has ? s.myOffer.filter((x) => x !== id) : [...s.myOffer, id] });
+      set({
+        ...unlocked,
+        myOffer: has ? s.myOffer.filter((x) => x !== id) : [...s.myOffer, id],
+        myLocks: has ? s.myLocks.filter((x) => x !== id) : s.myLocks,
+      });
+      sendOffer();
+    },
+
+    toggleCardLock(id) {
+      const s = get();
+      if (s.phase !== 'room' || s.myLocked || !s.myOffer.includes(id)) return;
+      // une carte reçue verrouillée ne se déverrouille jamais
+      if (useGame.getState().cards.some((c) => c.id === id && c.locked)) return;
+      const has = s.myLocks.includes(id);
+      set({ ...unlocked, myLocks: has ? s.myLocks.filter((x) => x !== id) : [...s.myLocks, id] });
       sendOffer();
     },
 

@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { memo, useEffect } from 'react';
@@ -30,6 +31,8 @@ export interface CardLike {
   name: string | null;
   /** Variante chromatique (une carte sur vingt, toutes raretés confondues). */
   chromatic?: boolean;
+  /** Verrouillée lors d'un échange : un petit cadenas s'affiche en haut à gauche. */
+  locked?: boolean;
 }
 
 interface Props {
@@ -163,12 +166,22 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
       ) : (
         <Gem color={rarity.color} rank={rarity.rank} size={Math.max(7, width * 0.07)} right={border + width * 0.035} top={border + width * 0.035} />
       )}
+      {card.locked ? <LockBadge size={Math.max(13, width * 0.11)} left={border + width * 0.03} top={border + width * 0.03} /> : null}
     </View>
     {divine ? <DivineOrnaments width={width} height={height} /> : null}
     {galaxy ? <GalaxyOrnaments width={width} height={height} /> : null}
     </View>
   );
 });
+
+/** Petit cadenas des cartes verrouillées (en face du losange de rareté). */
+function LockBadge({ size, left, top }: { size: number; left: number; top: number }) {
+  return (
+    <View pointerEvents="none" style={[styles.lock, { width: size, height: size, borderRadius: size / 2, left, top }]}>
+      <Ionicons name="lock-closed" size={size * 0.58} color="#FFE08A" />
+    </View>
+  );
+}
 
 const CHROMA_HOLO = ['rgba(255,111,168,0.9)', 'rgba(255,230,107,0.9)', 'rgba(124,255,178,0.9)', 'rgba(110,216,255,0.9)', 'rgba(213,140,255,0.9)'];
 const DIVINE_HOLO = ['rgba(255,236,170,0.95)', 'rgba(220,224,235,0.7)', 'rgba(255,214,120,0.95)', 'rgba(255,190,230,0.5)', 'rgba(190,230,255,0.55)', 'rgba(255,240,190,0.95)'];
@@ -276,6 +289,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0,0,0,0.45)',
   },
   namePlate: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  lock: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(12,12,16,0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,224,138,0.75)',
+  },
   name: { fontFamily: fonts.bold, color: '#FFFFFF', letterSpacing: -0.2 },
   gem: {
     position: 'absolute',

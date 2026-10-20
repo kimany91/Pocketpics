@@ -32,6 +32,8 @@ export type QuestEvent =
   | 'friendAdd'
   | 'trade'
   | 'beatHigher'
+  /** Carte verrouillée reçue lors d'un échange. */
+  | 'lockedReceived'
   /** Carte brûlée, avec sa rareté (ex. « burn:mythic »). */
   | `burn:${string}`;
 export type Counts = Partial<Record<QuestEvent, number>>;
@@ -234,6 +236,8 @@ export interface QuestContext {
   friends: number;
   favorites: number;
   traded: number;
+  /** Cartes verrouillées reçues par échange encore dans la collection. */
+  lockedReceived: number;
   /** Cartes épinglées sur le profil, par rareté. */
   pinnedByRarity: Record<string, number>;
 }
@@ -274,6 +278,7 @@ export const QUESTS: readonly QuestDef[] = [
   { id: 'o-profile', period: 'once', group: 'start', title: 'Regarde le profil d’un ami', goal: 1, reward: { coins: 20 }, icon: 'person', value: (c) => c.q.ever.friendProfile ?? 0 },
   { id: 'o-friend', period: 'once', group: 'start', title: 'Ajoute un ami', goal: 1, reward: { coins: 20 }, icon: 'person-add', value: (c) => Math.max(c.q.ever.friendAdd ?? 0, c.friends) },
   { id: 'o-trade', period: 'once', group: 'start', title: 'Fais un échange avec un ami', goal: 1, reward: { coins: 20 }, icon: 'swap-horizontal', value: (c) => Math.max(c.q.ever.trade ?? 0, c.traded) },
+  { id: 'o-locked', period: 'once', group: 'start', title: 'Reçois une carte verrouillée', goal: 1, reward: { coins: 20 }, icon: 'lock-closed', value: (c) => Math.max(c.q.ever.lockedReceived ?? 0, c.lockedReceived) },
   // Uniques : aventure
   { id: 'o-world1', period: 'once', group: 'adventure', title: `Termine ${world(1)}`, goal: 1, reward: { coins: 50 }, icon: 'flag', value: (c) => worldDone(c, 1) },
   { id: 'o-world5', period: 'once', group: 'adventure', title: `Termine ${world(5)} (5e monde)`, goal: 1, reward: { coins: 100 }, icon: 'flag', value: (c) => worldDone(c, 5) },

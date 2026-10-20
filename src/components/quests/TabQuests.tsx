@@ -24,7 +24,7 @@ export type QuestTab = 'combat' | 'trade';
 const COMBAT = new Set(['d-solo', 'd-online', 'w-wins', 'w-online', 'o-solo', 'o-row4', 'o-higher']);
 /** Quête de combat : solo, en ligne, mondes de l'aventure, rangs. */
 export const isCombatQuest = (id: string) => COMBAT.has(id) || id.startsWith('o-world') || id.startsWith('o-rank-');
-export const isTradeQuest = (id: string) => id === 'o-trade';
+export const isTradeQuest = (id: string) => id === 'o-trade' || id === 'o-locked';
 const belongs = (tab: QuestTab, id: string) => (tab === 'combat' ? isCombatQuest(id) : isTradeQuest(id));
 
 /** Au plus ce nombre de quêtes dans l'onglet ; les autres sont sur l'écran des quêtes. */

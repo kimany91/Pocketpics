@@ -137,6 +137,7 @@ export function questContext(save: SaveState, cards: Card[]): QuestContext {
     friends: save.friends.length,
     favorites: cards.filter((c) => c.favorite).length,
     traded: cards.filter((c) => c.origin === 'trade').length,
+    lockedReceived: cards.filter((c) => c.locked && c.origin === 'trade').length,
     pinnedByRarity: countBy(save.pinned.map((id) => cards.find((c) => c.id === id)?.rarity).filter((r): r is string => !!r)),
   };
 }
@@ -264,6 +265,8 @@ export const useGame = create<GameStore>((set, get) => ({
 
   renameCard(id, rawName) {
     const name = rawName.trim().slice(0, 28) || null;
+    // carte verrouillée lors d'un échange : plus modifiable
+    if (get().cards.find((c) => c.id === id)?.locked) return;
     const cards = get().cards.map((c) => (c.id === id ? { ...c, name } : c));
     const card = cards.find((c) => c.id === id);
     if (!card) return;
@@ -274,7 +277,7 @@ export const useGame = create<GameStore>((set, get) => ({
 
   renameAttack(id, slot, rawName) {
     const name = rawName.trim().slice(0, ATTACK_NAME_MAX);
-    if (!name) return;
+    if (!name || get().cards.find((c) => c.id === id)?.locked) return;
     const cards = get().cards.map((c) => {
       if (c.id !== id) return c;
       const attacks = [...c.battle.attacks] as Card['battle']['attacks'];
@@ -462,7 +465,7 @@ export const useGame = create<GameStore>((set, get) => ({
 
   async cropCard(id, rect) {
     const card = get().cards.find((c) => c.id === id);
-    if (!card) return false;
+    if (!card || card.locked) return false;
     const out = await cropImage(disk.cardImageUri(id), rect);
     if (!out) return false;
     disk.writeCardImage(id, { image: { uri: out.imageUri }, thumb: { uri: out.thumbUri } });
@@ -488,8 +491,9 @@ export const useGame = create<GameStore>((set, get) => ({
     const save = get().save;
     if (save) {
       // les cartes ajoutées ici arrivent toujours d'un échange
+      const traded = withQuest(save, 'trade');
       const next = {
-        ...withQuest(save, 'trade'),
+        ...(newCards.some((c) => c.locked) ? withQuest(traded, 'lockedReceived') : traded),
         drawnHashes: [...new Set([...save.drawnHashes, ...newCards.map((c) => c.hash).filter(Boolean)])],
       };
       persistState(next);

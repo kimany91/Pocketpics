@@ -18,7 +18,7 @@ import { colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
 import { AppText } from '../AppText';
 
-export function StatsSheet({ card, onClose, onRename }: { card: Card; onClose(): void; onRename(slot: 0 | 1, name: string): void }) {
+export function StatsSheet({ card, onClose, onRename, locked = false, onLocked }: { card: Card; onClose(): void; onRename(slot: 0 | 1, name: string): void; locked?: boolean; onLocked?(): void }) {
   const { height } = useWindowDimensions();
   const r = getRarity(card.rarity);
   const b = card.battle;
@@ -88,7 +88,7 @@ export function StatsSheet({ card, onClose, onRename }: { card: Card; onClose():
           </Rise>
 
           <Rise index={1}>
-            <AttackRow slot={0} attack={b.attacks[0]} title="Attaque classique" sub="Illimitée" accent={colors.text} onRename={onRename} meterDelay={260} />
+            <AttackRow slot={0} attack={b.attacks[0]} title="Attaque classique" sub="Illimitée" accent={colors.text} onRename={onRename} locked={locked} onLocked={onLocked} meterDelay={260} />
           </Rise>
           <Rise index={2}>
             <AttackRow
@@ -97,13 +97,13 @@ export function StatsSheet({ card, onClose, onRename }: { card: Card; onClose():
               title="Attaque spéciale"
               sub={`${b.uses}× par combat`}
               accent={r.color}
-              onRename={onRename}
+              onRename={onRename} locked={locked} onLocked={onLocked}
               meterDelay={340}
             />
           </Rise>
           <Rise index={3}>
             <AppText variant="caption" style={styles.foot}>
-              Touche un nom pour le changer. En combat, on lira « {card.name ?? 'ta carte'} utilise … ! »
+              {locked ? 'Carte verrouillée : ses noms ne changent plus.' : 'Touche un nom pour le changer.'} En combat, on lira « {card.name ?? 'ta carte'} utilise … ! »
             </AppText>
           </Rise>
         </Animated.View>
@@ -120,6 +120,8 @@ function AttackRow({
   accent,
   onRename,
   meterDelay = 0,
+  locked = false,
+  onLocked,
 }: {
   slot: 0 | 1;
   attack: Attack;
@@ -128,6 +130,9 @@ function AttackRow({
   accent: string;
   onRename(slot: 0 | 1, name: string): void;
   meterDelay?: number;
+  /** Carte verrouillée : les noms d'attaque ne se changent plus. */
+  locked?: boolean;
+  onLocked?(): void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(attack.name);
@@ -169,15 +174,16 @@ function AttackRow({
         <Pressable
           style={styles.nameRow}
           onPress={() => {
+            if (locked) return onLocked?.();
             setDraft(attack.name);
             setEditing(true);
           }}
-          accessibilityLabel={`Renommer ${attack.name}`}
+          accessibilityLabel={locked ? `${attack.name} (verrouillée)` : `Renommer ${attack.name}`}
         >
           <AppText style={styles.attackName} numberOfLines={1}>
             {attack.name}
           </AppText>
-          <Ionicons name="pencil" size={14} color={colors.textDim} />
+          <Ionicons name={locked ? 'lock-closed' : 'pencil'} size={14} color={locked ? '#FFE08A' : colors.textDim} />
         </Pressable>
       )}
       <View style={styles.effectRow}>

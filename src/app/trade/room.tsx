@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useIsFocused } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, FlatList, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
@@ -25,6 +25,7 @@ import { Message } from '../../components/online/Message';
 import { LoadingDots, OnlineDot, PulseRings } from '../../components/online/Pulse';
 import { Screen } from '../../components/Screen';
 import { TradeTransfer } from '../../components/trade/TradeTransfer';
+import { playSfx } from '../../audio/sfx';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import type { Card } from '../../storage/model';
@@ -115,18 +116,45 @@ export default function RoomScreen() {
       />
 
       <View style={styles.offers}>
-        <OfferRow title={`${t.peerName ?? 'Ami'} donne`} locked={t.peerLocked} confirmed={t.peerConfirmed} empty="Rien pour l'instant">
+        <OfferRow
+          title={`${t.peerName ?? 'Ami'} donne`}
+          locked={t.peerLocked}
+          confirmed={t.peerConfirmed}
+          empty="Rien pour l'instant"
+          footer={t.peerOffer.some((c) => c.locked) ? 'Les cartes au cadenas arriveront verrouillées : tu ne pourras pas les modifier.' : null}
+        >
           {t.peerOffer.map((c) => (
             <PeerThumb key={c.id} card={c} />
           ))}
         </OfferRow>
         <SwapBadge ready={t.myLocked && t.peerLocked} />
-        <OfferRow title="Tu donnes" locked={t.myLocked} confirmed={t.myConfirmed} empty="Choisis des cartes ci-dessous">
-          {mine.map((c) => (
-            <OfferThumb key={c.id} from={1}>
-              <CardFace card={c} width={58} quality="thumb" animated={false} />
-            </OfferThumb>
-          ))}
+        <OfferRow
+          title="Tu donnes"
+          locked={t.myLocked}
+          confirmed={t.myConfirmed}
+          empty="Choisis des cartes ci-dessous"
+          footer={mine.length > 0 && !t.myLocked ? 'Touche un cadenas pour verrouiller la carte : ton ami ne pourra plus la modifier.' : null}
+        >
+          {mine.map((c) => {
+            // déjà verrouillée (reçue ainsi) : elle le reste, le cadenas ne s'ouvre pas
+            const forced = c.locked;
+            const locked = forced || t.myLocks.includes(c.id);
+            return (
+              <OfferThumb key={c.id} from={1}>
+                <CardFace card={{ ...c, locked }} width={58} quality="thumb" animated={false} />
+                <LockToggle
+                  locked={locked}
+                  disabled={forced || t.myLocked}
+                  onPress={() => {
+                    if (forced) return;
+                    haptic.medium();
+                    playSfx(locked ? 'tick' : 'lockon', { volume: 0.5 });
+                    t.toggleCardLock(c.id);
+                  }}
+                />
+              </OfferThumb>
+            );
+          })}
         </OfferRow>
       </View>
 
@@ -259,7 +287,51 @@ function SwapBadge({ ready }: { ready: boolean }) {
   );
 }
 
-function OfferRow({ title, locked, confirmed, empty, children }: { title: string; locked: boolean; confirmed: boolean; empty: string; children: React.ReactNode }) {
+/** Cadenas sous une carte de mon offre : fermé, la carte part verrouillée. Il claque quand on le ferme. */
+function LockToggle({ locked, disabled, onPress }: { locked: boolean; disabled: boolean; onPress(): void }) {
+  const pop = useSharedValue(1);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    pop.value = 0.6;
+    pop.value = withSpring(1, { damping: 7, stiffness: 320 });
+  }, [locked, pop]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={6}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: locked, disabled }}
+      accessibilityLabel={locked ? 'Carte verrouillée' : 'Verrouiller la carte'}
+      style={[styles.lockBtn, locked && styles.lockBtnOn, disabled && !locked && { opacity: 0.4 }]}
+    >
+      <Animated.View style={style}>
+        <Ionicons name={locked ? 'lock-closed' : 'lock-open-outline'} size={13} color={locked ? '#FFE08A' : colors.textDim} />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+function OfferRow({
+  title,
+  locked,
+  confirmed,
+  empty,
+  footer,
+  children,
+}: {
+  title: string;
+  locked: boolean;
+  confirmed: boolean;
+  empty: string;
+  footer?: string | null;
+  children: React.ReactNode;
+}) {
   const has = Array.isArray(children) ? children.length > 0 : !!children;
   // offre validée : la bordure s'allume puis respire
   const glow = useSharedValue(0);
@@ -296,6 +368,14 @@ function OfferRow({ title, locked, confirmed, empty, children }: { title: string
           <AppText variant="caption">{empty}</AppText>
         </View>
       )}
+      {footer ? (
+        <View style={styles.footer}>
+          <Ionicons name="lock-closed" size={11} color="#FFE08A" />
+          <AppText variant="caption" style={{ flex: 1, fontSize: 11.5 }}>
+            {footer}
+          </AppText>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -345,6 +425,12 @@ function TradeDone({ received, given, peer, onClose }: { received: Card[]; given
               <AppText variant="caption" style={{ marginTop: 6, color: getRarity(c.rarity).color }}>
                 {getRarity(c.rarity).label}
               </AppText>
+              {c.locked ? (
+                <View style={styles.lockedNote}>
+                  <Ionicons name="lock-closed" size={11} color="#FFE08A" />
+                  <AppText style={styles.lockedNoteText}>Verrouillée</AppText>
+                </View>
+              ) : null}
             </Animated.View>
           ))}
         </View>
@@ -363,6 +449,11 @@ const styles = StyleSheet.create({
   offerGlow: { borderRadius: 18, borderWidth: 1.5 },
   offerHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   emptyOffer: { height: 81, alignItems: 'center', justifyContent: 'center' },
+  lockBtn: { marginTop: 5, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: 'rgba(255,255,255,0.04)' },
+  lockBtnOn: { borderColor: 'rgba(255,224,138,0.6)', backgroundColor: 'rgba(255,224,138,0.14)' },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -2 },
+  lockedNote: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  lockedNoteText: { fontFamily: fonts.bold, fontSize: 11, color: '#FFE08A' },
   swap: { alignItems: 'center', justifyContent: 'center', height: 30, zIndex: 2, marginVertical: -8 },
   swapBadge: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, backgroundColor: colors.bgElevated, alignItems: 'center', justifyContent: 'center' },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, height: 22, borderRadius: 11 },

@@ -9,7 +9,7 @@
  */
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 
 import { playSfx } from '../../audio/sfx';
 import { CARD_RATIO } from '../../theme';
@@ -23,9 +23,9 @@ const STAGGER = 90;
 /** Sortie d'une carte hors de l'ouverture. */
 const LAUNCH = 380;
 /** Mise en éventail. */
-const LAND = 480;
-/** L'éventail reste ouvert un instant avant de se rassembler. */
-const HOLD = 380;
+const LAND = 380;
+/** Négatif : la pile commence à se former avant que l'éventail soit tout à fait posé (aucun temps mort). */
+const HOLD = -200;
 const GATHER = 460;
 /** Décalage entre deux cartes qui rejoignent la pile. */
 const GATHER_STAGGER = 30;
@@ -103,8 +103,8 @@ function FanCard({ index, count, cardW, fromY, gatherAt }: { index: number; coun
   useEffect(() => {
     const start = index * STAGGER;
     launch.value = withDelay(start, withTiming(1, { duration: LAUNCH, easing: Easing.out(Easing.cubic) }));
-    // ressort amorti : l'éventail s'ouvre sans rebond
-    land.value = withDelay(start + LAUNCH, withSpring(1, { damping: 20, stiffness: 140, overshootClamping: true }));
+    // courbe rapide qui ralentit à la fin (pas de ressort : sa longue traîne figeait l'éventail)
+    land.value = withDelay(start + LAUNCH, withTiming(1, { duration: LAND, easing: Easing.out(Easing.cubic) }));
     gather.value = withDelay(gatherAt + index * GATHER_STAGGER, withTiming(1, { duration: GATHER, easing: Easing.inOut(Easing.cubic) }));
   }, [launch, land, gather, index, gatherAt]);
 

@@ -78,6 +78,7 @@ export function questLink(def: QuestDef): Href | null {
     case 'o-friend':
       return '/profile';
     case 'o-trade':
+    case 'o-locked':
       return '/trade';
     default:
       return null;

@@ -50,6 +50,7 @@ const ctxOf = (q: QuestState, extra: Partial<QuestContext> = {}): QuestContext =
   friends: 0,
   favorites: 0,
   traded: 0,
+  lockedReceived: 0,
   pinnedByRarity: {},
   ...extra,
 });
@@ -305,4 +306,15 @@ test('quêtes qui changent : pas de tirage tant que le joueur n’a aucune carte
   assert.equal(empty.weeklyPin, null);
   const later = rollRotation(empty, { now: T + 60000, seed: 's', owned: { common: 5 } });
   assert.equal(later.rotation!.burn, 'common');
+});
+
+test('quête unique : recevoir une carte verrouillée (une seule fois, 20 pièces)', () => {
+  let q = initialQuests(T);
+  assert.equal(claim(ctxOf(q), 'o-locked'), null, 'pas encore');
+  q = bump(q, 'lockedReceived', T);
+  const got = claim(ctxOf(q), 'o-locked');
+  assert.deepEqual(got?.reward, { coins: 20 });
+  assert.equal(claim(ctxOf(got!.q), 'o-locked'), null, 'une seule fois');
+  // une carte verrouillée déjà dans la collection compte aussi (reçue avant la mise à jour du compteur)
+  assert.ok(claim(ctxOf(initialQuests(T), { lockedReceived: 1 }), 'o-locked'));
 });
