@@ -33,9 +33,10 @@ export interface Rarity {
 
 /**
  * Chance qu'une carte tirée soit chromatique, quelle que soit sa rareté
- * (environ une carte tous les quatre paquets).
+ * (environ un paquet sur vingt, soit une dizaine de jours avec les seuls
+ * tirages gratuits).
  */
-export const CHROMATIC_ODDS = 0.05;
+export const CHROMATIC_ODDS = 0.01;
 
 export const RARITIES: readonly Rarity[] = [
   {

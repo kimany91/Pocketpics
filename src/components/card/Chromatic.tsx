@@ -1,5 +1,5 @@
 /**
- * Cartes chromatiques : une carte sur vingt, toutes raretés confondues.
+ * Cartes chromatiques : une carte sur cent, toutes raretés confondues.
  *
  * Ce n'est pas une rareté, c'est une « variante » : les couleurs de la photo
  * elles-mêmes passent dans un filtre métallique arc-en-ciel, et la fenêtre de la
