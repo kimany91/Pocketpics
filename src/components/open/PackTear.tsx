@@ -209,7 +209,7 @@ export function PackTear({ width, onTorn, lucky = false }: { width: number; onTo
             <Burst trigger={boom} colors={['#FFE8B0', '#FFFFFF', '#B99CFF']} count={30} radius={width * 0.95} />
             {/* l'éclatement */}
             <Shockwave trigger={blast} color={lucky ? '#FFD36B' : '#FFFFFF'} size={width * 1.8} />
-            <Burst trigger={blast} colors={lucky ? ['#FFD36B', '#FFFFFF', '#FFC94D'] : ['#FFFFFF', '#FFE8B0', '#B99CFF', '#7CCBFF']} count={46} radius={width * 1.4} />
+            <Burst trigger={blast} colors={lucky ? ['#FFD36B', '#FFFFFF', '#FFC94D'] : ['#FFFFFF', '#FFE8B0', '#B99CFF', '#7CCBFF']} count={30} radius={width * 1.4} />
           </View>
           <Animated.View style={[styles.hint, { top: tearY - 14 }, hintStyle]}>
             <Ionicons name="finger-print" size={26} color="rgba(255,255,255,0.9)" />

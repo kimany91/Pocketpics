@@ -1,10 +1,13 @@
 /**
- * Les cartes jaillissent du paquet : l'une après l'autre, elles sortent par
- * l'ouverture, filent vers le haut en tournoyant (chacune avec son « fsss » et
- * sa vibration), retombent en un grand éventail qui respire un instant, puis se
- * rassemblent en pile au centre avec un bruit sourd. La révélation peut commencer.
+ * Les cartes sortent du paquet : l'une après l'autre, elles glissent tout droit
+ * hors de l'ouverture (chacune avec son « fsss » et sa vibration), s'ouvrent en
+ * éventail sans à-coup, puis se rassemblent en pile avec un bruit sourd.
+ *
+ * La pile finale est exactement celle des révélations (`RevealStack`) : la carte
+ * du dessus à sa place, les deux suivantes un peu plus bas et plus petites
+ * derrière. On passe donc de l'une à l'autre sans le moindre saut d'image.
  */
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 
@@ -12,25 +15,34 @@ import { playSfx } from '../../audio/sfx';
 import { CARD_RATIO } from '../../theme';
 import { haptic } from '../../utils/haptics';
 import { CardBack } from '../card/CardBack';
-import { Burst, Glow, Shockwave } from '../fx';
+import { Glow } from '../fx';
 import { REVEAL_CAPTION_H } from './layout';
 
-/** Écart entre deux cartes qui jaillissent. */
-const STAGGER = 95;
-/** Montée d'une carte au-dessus de l'ouverture. */
-const LAUNCH = 430;
-/** Retombée dans l'éventail. */
-const LAND = 520;
+/** Écart entre deux cartes qui sortent. */
+const STAGGER = 90;
+/** Sortie d'une carte hors de l'ouverture. */
+const LAUNCH = 380;
+/** Mise en éventail. */
+const LAND = 480;
 /** L'éventail reste ouvert un instant avant de se rassembler. */
-const HOLD = 420;
-const GATHER = 420;
+const HOLD = 380;
+const GATHER = 460;
+/** Décalage entre deux cartes qui rejoignent la pile. */
+const GATHER_STAGGER = 30;
 
-export const fanDuration = (count: number) => (count - 1) * STAGGER + LAUNCH + LAND + HOLD + GATHER + 120;
+export const fanDuration = (count: number) => (count - 1) * STAGGER + LAUNCH + LAND + HOLD + (count - 1) * GATHER_STAGGER + GATHER + 60;
+
+/**
+ * Place d'une carte dans la pile des révélations, selon sa profondeur (0 = dessus) :
+ * la même que dans `RevealStack` (10 px plus bas, 4 % plus petite et un quart plus
+ * transparente par carte ; au-delà de deux, cachée derrière).
+ */
+const stackPose = (depth: number) => (depth === 0 ? { y: 0, s: 1, o: 1 } : depth <= 2 ? { y: depth * 10, s: 1 - depth * 0.04, o: 1 - depth * 0.25 } : { y: 20, s: 0.92, o: 0 });
 
 export function CardFanOut({ count, cardW, fromY, lucky = false, onDone }: { count: number; cardW: number; fromY: number; lucky?: boolean; onDone(): void }) {
-  const [thud, setThud] = useState(0);
   const total = fanDuration(count);
   const gatherAt = (count - 1) * STAGGER + LAUNCH + LAND + HOLD;
+  const stacked = gatherAt + (count - 1) * GATHER_STAGGER + GATHER;
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     // chaque carte qui sort : un « fsss » et une petite vibration
@@ -43,13 +55,12 @@ export function CardFanOut({ count, cardW, fromY, lucky = false, onDone }: { cou
       );
     }
     timers.push(setTimeout(() => playSfx('fan', { volume: 0.9 }), (count - 1) * STAGGER + LAUNCH));
-    // la pile se forme : bruit sourd
+    // la pile se forme : bruit sourd (pas d'onde à l'écran : la révélation prend la suite tout de suite)
     timers.push(
       setTimeout(() => {
-        setThud(1);
         playSfx('hit', { volume: 0.5 });
         haptic.medium();
-      }, gatherAt + GATHER - 60),
+      }, stacked - 40),
     );
     timers.push(setTimeout(onDone, total));
     return () => timers.forEach(clearTimeout);
@@ -64,21 +75,17 @@ export function CardFanOut({ count, cardW, fromY, lucky = false, onDone }: { cou
         {Array.from({ length: count }).map((_, i) => (
           <FanCard key={i} index={i} count={count} cardW={cardW} fromY={fromY} gatherAt={gatherAt} />
         ))}
-        <View style={[styles.point, { left: cardW / 2, top: (cardW * CARD_RATIO) / 2 }]}>
-          <Shockwave trigger={thud} color={glowCol} size={cardW * 2.2} />
-          <Burst trigger={thud} colors={[glowCol, '#FFFFFF', '#FFE8B0']} count={18} radius={cardW * 1.2} />
-        </View>
       </View>
     </View>
   );
 }
 
-/** Halo derrière l'éventail : il s'allume quand les cartes retombent. */
+/** Halo derrière l'éventail : il s'allume quand les cartes s'ouvrent, et s'éteint quand elles se rassemblent (le halo des révélations prend le relais). */
 function FanGlow({ cardW, color, gatherAt }: { cardW: number; color: string; gatherAt: number }) {
   const on = useSharedValue(0);
   useEffect(() => {
-    on.value = withDelay(LAUNCH, withTiming(1, { duration: 500 }));
-    const t = setTimeout(() => (on.value = withTiming(0.4, { duration: GATHER })), gatherAt);
+    on.value = withDelay(LAUNCH, withTiming(0.9, { duration: 500 }));
+    const t = setTimeout(() => (on.value = withTiming(0, { duration: GATHER + 120 })), gatherAt);
     return () => clearTimeout(t);
   }, [on, gatherAt]);
   const size = cardW * 3.2;
@@ -91,33 +98,34 @@ function FanCard({ index, count, cardW, fromY, gatherAt }: { index: number; coun
   const gather = useSharedValue(0);
   const mid = (count - 1) / 2;
   const k = index - mid;
+  // la dernière sortie est celle du dessus de la pile
+  const pose = stackPose(count - 1 - index);
   useEffect(() => {
     const start = index * STAGGER;
     launch.value = withDelay(start, withTiming(1, { duration: LAUNCH, easing: Easing.out(Easing.cubic) }));
-    land.value = withDelay(start + LAUNCH, withSpring(1, { damping: 14, stiffness: 110 }));
-    gather.value = withDelay(gatherAt + (count - 1 - index) * 40, withTiming(1, { duration: GATHER, easing: Easing.inOut(Easing.cubic) }));
-  }, [launch, land, gather, index, count, gatherAt]);
+    // ressort amorti : l'éventail s'ouvre sans rebond
+    land.value = withDelay(start + LAUNCH, withSpring(1, { damping: 20, stiffness: 140, overshootClamping: true }));
+    gather.value = withDelay(gatherAt + index * GATHER_STAGGER, withTiming(1, { duration: GATHER, easing: Easing.inOut(Easing.cubic) }));
+  }, [launch, land, gather, index, gatherAt]);
 
   const style = useAnimatedStyle(() => {
     const L = launch.value;
     const D = land.value;
     const G = gather.value;
-    // départ (dans le paquet) → sommet (au-dessus de l'ouverture) → éventail → pile
-    // le sommet reste à l'écran : juste au-dessus de l'ouverture
-    const topX = k * cardW * 0.14;
-    const topY = Math.max(fromY - cardW * 0.6, -cardW * 1.05);
-    // l'éventail tient dans l'écran
+    // dans le paquet → juste au-dessus de l'ouverture → éventail → pile des révélations
+    const outX = k * cardW * 0.04;
+    const outY = Math.max(fromY - cardW * 0.5, -cardW * 0.95);
     const fanX = k * cardW * 0.21;
-    const fanY = Math.abs(k) * cardW * 0.08;
-    const x = topX * L + (fanX - topX) * D - fanX * G;
-    const y = fromY + (topY - fromY) * L + (fanY - topY) * D - fanY * G;
-    // une pirouette en montant, puis l'angle de l'éventail
-    const spin = (index % 2 === 0 ? 1 : -1) * 360;
-    const fanR = k * 9;
-    const r = spin * L + (fanR - spin) * D - fanR * G;
-    const s = 0.32 + 0.24 * L + (0.6 - 0.56) * D + (1 - 0.6) * G;
+    const fanY = Math.abs(k) * cardW * 0.06;
+    const x = outX * L + (fanX - outX) * D - fanX * G;
+    const y = fromY + (outY - fromY) * L + (fanY - outY) * D + (pose.y - fanY) * G;
+    // à peine incliné en sortant, puis l'angle de l'éventail, puis droit
+    const outR = k * 2.5;
+    const fanR = k * 7;
+    const r = outR * L + (fanR - outR) * D - fanR * G;
+    const s = 0.5 + 0.06 * L + 0.04 * D + (pose.s - 0.6) * G;
     return {
-      opacity: Math.min(1, L * 4),
+      opacity: Math.min(1, L * 5) * (1 - (1 - pose.o) * G),
       transform: [{ translateX: x }, { translateY: y }, { rotate: `${r}deg` }, { scale: s }],
       zIndex: index,
     };
@@ -131,5 +139,4 @@ function FanCard({ index, count, cardW, fromY, gatherAt }: { index: number; coun
 
 const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
-  point: { position: 'absolute', width: 0, height: 0, alignItems: 'center', justifyContent: 'center' },
 });
