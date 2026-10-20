@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native
 
 import { AppText } from '../../components/AppText';
 import { Rise } from '../../components/Rise';
+import { TabQuests } from '../../components/quests/TabQuests';
 import { Screen } from '../../components/Screen';
 import { Tile } from '../../components/Tile';
 import { useGame } from '../../state/game';
@@ -17,7 +18,7 @@ export default function TradeTab() {
   const cardsCount = useGame((s) => s.cards.length);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
-  const { visit } = useEntrance();
+  const { visit, focused } = useEntrance();
 
   return (
     <Screen>
@@ -82,6 +83,11 @@ export default function TradeTab() {
             Tu n'as pas encore de carte, mais tu peux en recevoir.
           </AppText>
         ) : null}
+
+        {/* Quêtes d'échange, s'il en reste */}
+        <Rise visit={visit} index={5} style={{ marginTop: 22 }}>
+          <TabQuests tab="trade" focused={focused} />
+        </Rise>
       </ScrollView>
     </Screen>
   );

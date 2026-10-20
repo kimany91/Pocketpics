@@ -2,7 +2,8 @@
  * Table de difficulté des défis du jour (npx tsx scripts/generate-challenges.ts).
  *
  * Pour chaque niveau de l'aventure, on simule des combats d'un joueur qui vise
- * bien (habileté 7 sur 10, comme dans tests/levels.test.ts) avec une équipe
+ * parfaitement (habileté 10 sur 10 : il arrête le curseur sur la cible presque à
+ * chaque coup, comme un joueur entraîné) avec une équipe
  * bridée : de 1 à 4 cartes, toutes de la même rareté (de Commune à Divine).
  * Le pourcentage de victoires de chaque contrainte est écrit dans
  * src/game/challengeTable.ts ; le jeu y pioche des défis durs mais gagnables.
@@ -17,7 +18,7 @@ import { TOTAL_LEVELS, getLevel, levelFighters } from '../src/battle/levels';
 import { generateStats } from '../src/battle/stats';
 import { RARITIES } from '../src/game/rarity';
 
-const SKILL = 7;
+const SKILL = 10;
 const GAMES = Number(process.argv[2] ?? 200);
 /** Rangs de Commune (0) à Divine (7). */
 const CAPS = 8;
@@ -75,7 +76,7 @@ writeFileSync(
  *
  * Une ligne par niveau (index 0 = niveau 1), 32 caractères : pour 1, 2, 3 puis
  * 4 cartes, les 8 raretés de Commune à Divine. Chaque caractère code le
- * pourcentage de victoires d'un joueur qui vise bien : de A (0 %) à Z (100 %),
+ * pourcentage de victoires d'un joueur qui vise parfaitement : de A (0 %) à Z (100 %),
  * par pas de 4 %.
  */
 export const CHALLENGE_TABLE: readonly string[] = [

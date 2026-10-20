@@ -22,6 +22,7 @@ import {
   fitsChallenge,
   pickChallenge,
   rollQuests,
+  rollRotation,
   startOnline,
 } from '../game/quests';
 import { cancelMatch, finishMatch, rankOf, settleAbandoned, shownMmr, startMatch } from '../game/rank';
@@ -99,8 +100,13 @@ interface GameStore {
   noteQuest(ev: QuestEvent): void;
   /** Récupère une quête finie : verse sa récompense. `null` si elle n'est pas prête. */
   claimQuest(id: string): Reward | null;
-  /** Défi du jour : le choisit au premier passage de la journée, puis le garde. */
+  /**
+   * Défi du jour et quêtes qui changent (brûler, épingler) : tirés au premier
+   * passage de la journée, puis gardés. Rend le défi du jour.
+   */
   ensureChallenge(): DailyChallenge | null;
+  /** L'animation « défi réussi » a été jouée sur l'écran des quêtes. */
+  celebrateChallenge(): void;
   /**
    * Défi du jour gagné avec cette équipe à ce niveau : verse la prime. Rend
    * `false` si ce n'était pas le défi (autre niveau, équipe hors règles, déjà fait).
@@ -131,7 +137,15 @@ export function questContext(save: SaveState, cards: Card[]): QuestContext {
     friends: save.friends.length,
     favorites: cards.filter((c) => c.favorite).length,
     traded: cards.filter((c) => c.origin === 'trade').length,
+    pinnedByRarity: countBy(save.pinned.map((id) => cards.find((c) => c.id === id)?.rarity).filter((r): r is string => !!r)),
   };
+}
+
+/** Nombre d'occurrences de chaque valeur. */
+function countBy(values: string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const v of values) out[v] = (out[v] ?? 0) + 1;
+  return out;
 }
 
 /* ------------------------- Essai : paquet chromatique -------------------------
@@ -515,6 +529,8 @@ export const useGame = create<GameStore>((set, get) => ({
         drawnAssetIds: card.sourceId ? save.drawnAssetIds.filter((a) => a !== card.sourceId) : save.drawnAssetIds,
         // brûlée : elle libère sa place sur le profil
         pinned: save.pinned.filter((x) => x !== id),
+        // quête « Brûle une carte … »
+        quests: bump(save.quests, `burn:${card.rarity}`, Date.now()),
       };
       persistState(next);
       set({ save: next });
@@ -547,8 +563,15 @@ export const useGame = create<GameStore>((set, get) => ({
   },
 
   ensureChallenge() {
-    const save = get().save;
-    if (!save) return null;
+    const before = get().save;
+    if (!before) return null;
+    // quêtes qui changent : une rareté à brûler, une à épingler (selon la collection)
+    const quests = rollRotation(before.quests, { now: Date.now(), seed: String(before.createdAt), owned: countBy(get().cards.map((c) => c.rarity)) });
+    if (quests !== before.quests) {
+      persistState({ ...before, quests });
+      set({ save: { ...before, quests } });
+    }
+    const save = get().save!;
     const day = dayKey(Date.now());
     const current = save.quests.challenge;
     // un défi du jour tiré avec d'anciennes règles, devenu trop facile, est retiré (s'il n'est pas déjà fait)
@@ -567,6 +590,15 @@ export const useGame = create<GameStore>((set, get) => ({
     persistState(next);
     set({ save: next });
     return challenge;
+  },
+
+  celebrateChallenge() {
+    const save = get().save;
+    const c = save?.quests.challenge;
+    if (!save || !c || !c.done || c.celebrated) return;
+    const next: SaveState = { ...save, quests: { ...save.quests, challenge: { ...c, celebrated: true } } };
+    persistState(next);
+    set({ save: next });
   },
 
   completeChallenge(level, deckIds) {

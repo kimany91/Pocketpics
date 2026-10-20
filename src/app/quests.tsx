@@ -5,9 +5,9 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { type Href, router, useIsFocused } from 'expo-router';
+import { router, useIsFocused } from 'expo-router';
 import { type ComponentProps, useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   FadeInDown,
@@ -17,19 +17,16 @@ import Animated, {
   useDerivedValue,
   useSharedValue,
   withRepeat,
-  withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
-import { playSfx } from '../audio/sfx';
 import { portraitRef } from '../battle/arenas';
 import { botArt } from '../battle/botArt';
 import { getLevel } from '../battle/levels';
 import { AppText } from '../components/AppText';
 import { Button } from '../components/Button';
 import { CoinChip, CoinIcon } from '../components/Coin';
-import { Burst, Glow } from '../components/fx';
+import { Glow } from '../components/fx';
 import { Header } from '../components/Header';
 import { Screen } from '../components/Screen';
 import { formatCountdown } from '../game/draws';
@@ -37,19 +34,17 @@ import {
   CHALLENGE_REWARD,
   type DailyChallenge,
   type QuestDef,
-  type QuestStatus,
-  type Reward,
   challengeOdds,
   challengeRule,
   dayKey,
   nextDay,
   nextWeek,
 } from '../game/quests';
-import { TIERS } from '../game/rank';
 import { useGame } from '../state/game';
 import { useQuests } from '../state/useQuests';
+import { QuestRow, sortQuests } from '../components/quests/QuestRow';
+import { ChallengeCelebration } from '../components/quests/ChallengeCelebration';
 import { colors, fonts } from '../theme';
-import { springs } from '../theme/motion';
 import { haptic } from '../utils/haptics';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -60,11 +55,6 @@ const GROUPS: { id: NonNullable<QuestDef['group']>; title: string; icon: IconNam
   { id: 'online', title: 'En ligne', icon: 'globe' },
   { id: 'rank', title: 'Classement', icon: 'medal' },
 ];
-
-/** Les prêtes d'abord, puis celles en cours (les plus avancées en haut), les faites en bas. */
-const order = (s: QuestStatus) => (s.claimed ? 2 : s.done ? 0 : 1);
-const sortQuests = (list: QuestStatus[]) =>
-  [...list].sort((a, b) => order(a) - order(b) || b.value / b.def.goal - a.value / a.def.goal);
 
 /** L'heure qui passe, une fois par seconde, seulement quand l'écran est affiché. */
 function useNow(active: boolean) {
@@ -90,6 +80,8 @@ export default function QuestsScreen() {
   useEffect(() => {
     if (focused) useGame.getState().ensureChallenge();
   }, [focused, today]);
+
+  const celebrate = focused && !!challenge && challenge.day === today && challenge.done && !challenge.celebrated;
 
   const daily = useMemo(() => sortQuests(statuses.filter((s) => s.def.period === 'daily')), [statuses]);
   const weekly = useMemo(() => sortQuests(statuses.filter((s) => s.def.period === 'weekly')), [statuses]);
@@ -142,6 +134,11 @@ export default function QuestsScreen() {
           })}
         </Section>
       </ScrollView>
+
+      {/* Défi du jour tout juste réussi : la fête, une seule fois */}
+      {celebrate && challenge ? (
+        <ChallengeCelebration level={challenge.level} rule={challengeRule(challenge)} onDone={() => useGame.getState().celebrateChallenge()} />
+      ) : null}
     </Screen>
   );
 }
@@ -208,7 +205,15 @@ function ChallengeHero({ challenge, now, focused }: { challenge: DailyChallenge 
           <Ionicons name={challenge.done ? 'checkmark' : 'flame'} size={24} color="#141414" />
         </Animated.View>
         <View style={{ flex: 1, gap: 2 }}>
-          <AppText style={[styles.kicker, challenge.done && { color: colors.success }]}>{challenge.done ? 'Défi du jour réussi' : 'Défi du jour'}</AppText>
+          <View style={styles.kickerRow}>
+            <AppText style={styles.kicker}>Défi du jour</AppText>
+            {challenge.done ? (
+              <View style={styles.doneBadge}>
+                <Ionicons name="checkmark" size={11} color="#141414" />
+                <AppText style={styles.doneBadgeText}>Réussi</AppText>
+              </View>
+            ) : null}
+          </View>
           <AppText style={styles.heroLevel} numberOfLines={1}>{`Niveau ${level.n} · ${level.world.place}`}</AppText>
         </View>
         <Image source={botArt(portraitRef(level.world))} style={[styles.portrait, { borderColor: tint }]} />
@@ -276,154 +281,15 @@ function Section({ title, icon, right, delay, children }: { title: string; icon:
   );
 }
 
-function RewardChip({ reward, dim }: { reward: Reward; dim?: boolean }) {
-  if (reward.draws) {
-    return (
-      <View style={[styles.reward, styles.rewardDraw, dim && styles.dim]}>
-        <Ionicons name="sparkles" size={13} color="#E3CCFF" />
-        <AppText style={[styles.rewardText, { color: '#E3CCFF' }]}>{reward.draws === 1 ? '1 tirage' : `${reward.draws} tirages`}</AppText>
-      </View>
-    );
-  }
-  return (
-    <View style={[styles.reward, dim && styles.dim]}>
-      <CoinIcon size={14} />
-      <AppText style={styles.rewardText}>{reward.coins}</AppText>
-    </View>
-  );
-}
-
-/**
- * Où mène une quête quand on la touche : l'écran où on la fait (le monde 5
- * pour « Termine le 5e monde », le rang Argent pour « Atteins le rang Argent »…).
- */
-function questLink(def: QuestDef): Href | null {
-  const world = /^o-world(\d+)$/.exec(def.id);
-  if (world) return { pathname: '/solo', params: { world: world[1] } };
-  const rank = /^o-rank-(\w+)$/.exec(def.id);
-  if (rank) return { pathname: '/ranks', params: { tier: String(TIERS.findIndex((t) => t.id === rank[1])) } };
-  switch (def.id) {
-    case 'd-packs':
-    case 'o-packs':
-      return '/';
-    case 'd-solo':
-    case 'o-solo':
-      return '/solo';
-    case 'w-wins':
-      return '/battle';
-    case 'd-online':
-    case 'w-online':
-    case 'o-row4':
-    case 'o-higher':
-      return '/multi';
-    case 'o-favorite':
-    case 'o-pin':
-    case 'o-crop':
-      return '/collection';
-    case 'o-profile':
-    case 'o-friend':
-      return '/profile';
-    case 'o-trade':
-      return '/trade';
-    default:
-      return null;
-  }
-}
-
-/** Une quête : icône, titre, barre d'avancement, et la récompense (à récupérer quand elle est finie). */
-function QuestRow({ status, index }: { status: QuestStatus; index: number }) {
-  const { def, value, done, claimed } = status;
-  const ready = done && !claimed;
-  const accent = def.color ?? (ready ? colors.gold : colors.text);
-  const [sparks, setSparks] = useState(0);
-  const pop = useSharedValue(0);
-  const pulse = useSharedValue(0);
-  useEffect(() => {
-    if (!ready) {
-      cancelAnimation(pulse);
-      pulse.value = 0;
-      return;
-    }
-    pulse.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }), -1, true);
-    return () => cancelAnimation(pulse);
-  }, [ready, pulse]);
-  const press = useSharedValue(0);
-  const rowStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pop.value * 0.03 - press.value * 0.02 }] }));
-  const link = questLink(def);
-  const btnStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pulse.value * 0.05 }] }));
-  const fill = Math.min(1, value / def.goal);
-
-  const take = () => {
-    const reward = useGame.getState().claimQuest(def.id);
-    if (!reward) return;
-    setSparks((n) => n + 1);
-    pop.value = withSequence(withTiming(1, { duration: 100 }), withSpring(0, springs.pop));
-    playSfx(reward.draws ? 'up5' : 'up3', { volume: 0.7 });
-    haptic.success();
-  };
-
-  return (
-    <Pressable
-      disabled={!link}
-      onPressIn={() => (press.value = withSpring(1, springs.press))}
-      onPressOut={() => (press.value = withSpring(0, springs.release))}
-      onPress={() => {
-        if (!link) return;
-        haptic.tick();
-        router.navigate(link);
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={`${def.title} : y aller`}
-    >
-    <Animated.View entering={FadeInDown.delay(60 + index * 40)} style={[styles.row, ready && styles.rowReady, claimed && styles.rowClaimed, rowStyle]}>
-      <View style={[styles.icon, { backgroundColor: claimed ? colors.surface2 : `${def.color ?? (ready ? colors.gold : '#FFFFFF')}1F` }]}>
-        <Ionicons name={(claimed ? 'checkmark' : def.icon) as IconName} size={18} color={claimed ? colors.success : accent} />
-      </View>
-      <View style={{ flex: 1, gap: 6 }}>
-        <AppText style={[styles.title, claimed && { color: colors.textDim }]} numberOfLines={2}>
-          {def.title}
-        </AppText>
-        {claimed ? (
-          <AppText style={styles.doneText}>Récupérée</AppText>
-        ) : (
-          <View style={styles.progressRow}>
-            <View style={styles.track}>
-              <View style={[styles.fill, { width: `${fill * 100}%`, backgroundColor: ready ? colors.gold : def.color ?? colors.success }]} />
-            </View>
-            <AppText style={styles.count}>{`${value}/${def.goal}`}</AppText>
-          </View>
-        )}
-      </View>
-      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-        {ready ? (
-          <Pressable onPress={take} accessibilityRole="button" accessibilityLabel={`Récupérer : ${def.title}`} hitSlop={6}>
-            <Animated.View style={[styles.claim, btnStyle]}>
-              <AppText style={styles.claimText}>Récupérer</AppText>
-              <View style={styles.claimReward}>
-                {def.reward.draws ? <Ionicons name="sparkles" size={12} color="#141414" /> : <CoinIcon size={13} />}
-                <AppText style={styles.claimAmount}>{def.reward.draws ? '1 tirage' : `+${def.reward.coins}`}</AppText>
-              </View>
-            </Animated.View>
-          </Pressable>
-        ) : (
-          <RewardChip reward={def.reward} dim={claimed} />
-        )}
-        <View pointerEvents="none" style={styles.sparkPoint}>
-          <Burst trigger={sparks} colors={[colors.gold, '#FFF3C2', '#FFFFFF']} count={12} radius={60} />
-        </View>
-      </View>
-      {link ? <Ionicons name="chevron-forward" size={16} color={colors.textFaint} style={{ marginLeft: -4 }} /> : null}
-    </Animated.View>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 48, gap: 22 },
   hero: { borderRadius: 22, borderWidth: 1.5, padding: 16, overflow: 'hidden', backgroundColor: colors.surface },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   flame: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
   kicker: { fontFamily: fonts.black, fontSize: 11, letterSpacing: 1.4, color: '#FFB067', textTransform: 'uppercase' },
+  kickerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  doneBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, height: 18, borderRadius: 9, backgroundColor: colors.success },
+  doneBadgeText: { fontFamily: fonts.black, fontSize: 10, color: '#141414' },
   heroLevel: { fontFamily: fonts.bold, fontSize: 15, color: colors.text },
   portrait: { width: 46, height: 46, borderRadius: 23, borderWidth: 2.5 },
   rule: { fontFamily: fonts.black, fontSize: 21, lineHeight: 28, color: colors.text, marginTop: 14 },
@@ -440,23 +306,4 @@ const styles = StyleSheet.create({
   groupRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
   groupTitle: { flex: 1, fontFamily: fonts.bold, fontSize: 12, letterSpacing: 0.8, color: colors.textDim, textTransform: 'uppercase' },
   groupCount: { fontFamily: fonts.bold, fontSize: 12, color: colors.textFaint, fontVariant: ['tabular-nums'] },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  rowReady: { borderColor: 'rgba(247,201,72,0.6)', backgroundColor: 'rgba(247,201,72,0.07)' },
-  rowClaimed: { opacity: 0.6 },
-  icon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  title: { fontFamily: fonts.bold, fontSize: 15, color: colors.text, lineHeight: 20 },
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  track: { flex: 1, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
-  fill: { height: 7, borderRadius: 4 },
-  count: { fontFamily: fonts.bold, fontSize: 12, color: colors.textDim, fontVariant: ['tabular-nums'], minWidth: 30, textAlign: 'right' },
-  doneText: { fontFamily: fonts.semibold, fontSize: 12, color: colors.success },
-  reward: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, height: 28, borderRadius: 14, backgroundColor: 'rgba(247,201,72,0.12)' },
-  rewardDraw: { backgroundColor: 'rgba(176,75,255,0.22)' },
-  rewardText: { fontFamily: fonts.black, fontSize: 13, color: colors.gold, fontVariant: ['tabular-nums'] },
-  dim: { opacity: 0.5 },
-  claim: { alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, backgroundColor: colors.gold },
-  claimText: { fontFamily: fonts.black, fontSize: 12, color: '#141414' },
-  claimReward: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  claimAmount: { fontFamily: fonts.black, fontSize: 13, color: '#141414', fontVariant: ['tabular-nums'] },
-  sparkPoint: { position: 'absolute', left: '50%', top: '50%', width: 0, height: 0 },
 });

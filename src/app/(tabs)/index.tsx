@@ -55,9 +55,7 @@ export default function DrawScreen() {
   useEffect(() => {
     if (isWeb) setImportOpen(true);
   }, [isWeb]);
-  // Place réellement libre pour le paquet (entre le bandeau des quêtes et le bas) : il ne déborde jamais dessus.
-  const [stageH, setStageH] = useState(0);
-  const packW = Math.min(width * 0.5, (height * 0.36) / PACK_RATIO, 240, stageH > 0 ? (stageH * 0.86) / PACK_RATIO : Infinity);
+  const packW = Math.min(width * 0.5, (height * 0.36) / PACK_RATIO, 240);
   const canOpen = available > 0 && (access === 'granted' || access === 'limited');
   const best = RARITIES[cards.reduce((m, c) => Math.max(m, getRarity(c.rarity).rank), -1)];
 
@@ -136,12 +134,11 @@ export default function DrawScreen() {
       </Rise>
 
       {/* Les quêtes, bien en vue juste sous le titre */}
-      <Rise visit={visit} index={1} style={{ paddingHorizontal: width < 390 ? 16 : 20, marginTop: 14, zIndex: 2 }}>
+      <Rise visit={visit} index={1} style={{ paddingHorizontal: width < 390 ? 16 : 20, marginTop: 8, zIndex: 2 }}>
         <QuestPill focused={focused} />
       </Rise>
 
       <Rise visit={visit} index={1} dy={34} scale={0.9} style={styles.stage}>
-        <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => setStageH(Math.round(e.nativeEvent.layout.height))} />
         <Glow color={canOpen ? '#B99CFF' : '#FFFFFF'} size={packW * 3} opacity={glowOpacity} />
         <Pressable
           onPress={open}
