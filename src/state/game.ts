@@ -295,16 +295,16 @@ export const useGame = create<GameStore>((set, get) => ({
         luckAfter = plan.state;
         return plan.rarities;
       },
+      // Filtre de contenu adulte : chaque photo passe au détecteur pendant la déchirure ;
+      // une photo censurée n'est jamais tirée, une autre prend sa place. Sans réponse
+      // à temps, la carte est floutée et vérifiée juste après.
+      screen: (photo) => scanWithin(photo.imageUri, PACK_SCAN_MS),
     });
-
-    // Filtre de contenu adulte : chaque photo passe au détecteur pendant la déchirure.
-    // Sans réponse à temps, la carte est floutée et vérifiée juste après.
-    const verdicts = await Promise.all(pack.cards.map(({ photo }) => scanWithin(photo.imageUri, PACK_SCAN_MS)));
 
     // 1) les cartes d'abord (si l'app est tuée ici, le joueur garde ses cartes ET son tirage)
     const written: Card[] = [];
-    pack.cards.forEach(({ card: made, photo }, i) => {
-      const card: Card = { ...made, ...scanFields(verdicts[i]) };
+    pack.cards.forEach(({ card: made, photo, verdict }) => {
+      const card: Card = { ...made, ...scanFields(verdict) };
       disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri } });
       written.push(card);
     });
@@ -319,7 +319,8 @@ export const useGame = create<GameStore>((set, get) => ({
       draws: regular ?? latest.draws,
       bonusDraws: regular ? latest.bonusDraws : Math.max(0, latest.bonusDraws - 1),
       drawnAssetIds: [...new Set([...latest.drawnAssetIds, ...pack.consumedAssetIds])],
-      drawnHashes: [...new Set([...latest.drawnHashes, ...written.map((c) => c.hash)])],
+      // les photos écartées par le filtre ne reviendront jamais (ni leurs copies)
+      drawnHashes: [...new Set([...latest.drawnHashes, ...written.map((c) => c.hash), ...pack.rejectedHashes])],
       totalPacksOpened: latest.totalPacksOpened + 1,
       luck: luckAfter,
       quests: bump(latest.quests, 'pack', Date.now()),
@@ -472,9 +473,10 @@ export const useGame = create<GameStore>((set, get) => ({
       drawnHashes: new Set(save.drawnHashes),
       count: 1,
       rarities: () => ['galaxy'],
+      screen: (photo) => scanWithin(photo.imageUri, PACK_SCAN_MS),
     });
-    const { card: made, photo } = pack.cards[0];
-    const card: Card = { ...made, ...scanFields(await scanWithin(photo.imageUri, PACK_SCAN_MS)) };
+    const { card: made, photo, verdict } = pack.cards[0];
+    const card: Card = { ...made, ...scanFields(verdict) };
     disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri } });
     const cards = [...get().cards, card];
     disk.saveIndex(cards);
@@ -483,7 +485,7 @@ export const useGame = create<GameStore>((set, get) => ({
       ...latest,
       galaxyClaimed: true,
       drawnAssetIds: [...new Set([...latest.drawnAssetIds, ...pack.consumedAssetIds])],
-      drawnHashes: [...new Set([...latest.drawnHashes, card.hash])],
+      drawnHashes: [...new Set([...latest.drawnHashes, card.hash, ...pack.rejectedHashes])],
     };
     persistState(next);
     set({ cards, save: next, pendingPack: [card] });

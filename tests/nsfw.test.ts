@@ -227,13 +227,17 @@ const src = (p: string) => readFileSync(join(import.meta.dirname, '..', 'src', p
 test('chaque entrée de photo passe par le détecteur', () => {
   // paquet, Galaxy, recadrage : vérifiés à la création
   const game = src('state/game.ts');
-  assert.match(game, /verdicts = await Promise\.all\(pack\.cards\.map\(\(\{ photo \}\) => scanWithin\(photo\.imageUri/);
-  assert.match(game, /scanFields\(await scanWithin\(photo\.imageUri/);
+  // paquet et Galaxy : une photo censurée n'est pas tirée, une autre prend sa place
+  assert.equal(game.match(/screen: \(photo\) => scanWithin\(photo\.imageUri, PACK_SCAN_MS\)/g)?.length, 2);
+  assert.match(game, /\.\.\.pack\.rejectedHashes/);
+  assert.match(src('game/pack.ts'), /if \(verdicts\[k\] === true\) rejected\.push\(photo\.hash\);/);
   assert.match(game, /scan: scanFields\(p\.censored \?\? null\)/);
   // Pioche amicale : l'ami vérifie avant d'offrir, celui qui pioche vérifie photo et miniature à la réception
   const pioche = src('net/pioche.ts');
   assert.match(pioche, /giverMayOffer\(await scanWithin\(res\.imageUri/);
   assert.match(pioche, /scans\.push\(Promise\.all\(uris\.map\(\(u\) => scanWithin\(u/);
+  // …et les photos reçues censurées sont retirées du paquet avant l'ouverture
+  assert.match(pioche, /received = received\.filter\(\(r\) => r\.censored !== true\)/);
   // échanges : carte reçue → vérifiée ici (floutée d'ici là)
   assert.match(src('trade/session.ts'), /receivedCard\(flagged\)/);
   // combat en ligne : image de l'adversaire vérifiée à l'arrivée

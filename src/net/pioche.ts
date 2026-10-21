@@ -251,6 +251,12 @@ export const usePioche = create<PiocheStore>((set, get) => {
         const gen = generation;
         void Promise.all(scans).then(() => {
           if (gen !== generation || get().phase !== 'sending') return;
+          // une photo censurée n'est jamais tirée : elle est retirée du paquet, sans le dire
+          received = received.filter((r) => r.censored !== true);
+          if (received.length === 0) {
+            send({ t: 'bye', reason: 'aucune photo utilisable.' });
+            return end(`Les photos de ${get().friend?.name ?? 'ton ami'} n’ont pas pu être utilisées. Rien n’a été payé.`);
+          }
           const lucky = useGame.getState().rollFriendLucky();
           send({ t: 'ready' });
           set({ phase: 'ready', lucky });

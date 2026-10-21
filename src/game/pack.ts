@@ -10,12 +10,16 @@ import { CHROMATIC_ODDS, type RarityId, getRarity, rollRarity } from './rarity';
 export interface GeneratedCard {
   card: Card;
   photo: ProcessedPhoto;
+  /** Réponse du filtre de contenu adulte : `false` = propre, `null` = pas de réponse à temps. */
+  verdict: boolean | null;
 }
 
 export interface PackResult {
   cards: GeneratedCard[];
-  /** Photos à ne plus jamais proposer (tirées ou doublons d'une photo déjà tirée). */
+  /** Photos à ne plus jamais proposer (tirées, doublons, ou écartées par le filtre). */
   consumedAssetIds: string[];
+  /** Empreintes des photos écartées par le filtre de contenu adulte (jamais tirées). */
+  rejectedHashes: string[];
 }
 
 export class NoPhotosLeftError extends Error {
@@ -46,6 +50,12 @@ export async function generatePack(opts: {
    * (démarrage, malchance, paquet brillant). Par défaut : tirage indépendant.
    */
   rarities?: (cards: number) => RarityId[];
+  /**
+   * Filtre de contenu adulte : `true` = photo à écarter (une autre est tirée à
+   * sa place, sans que le joueur le voie), `false` = propre, `null` = pas de
+   * réponse à temps (la photo est gardée, floutée puis vérifiée juste après).
+   */
+  screen?: (photo: ProcessedPhoto) => Promise<boolean | null>;
 }): Promise<PackResult> {
   const count = opts.count ?? CARDS_PER_PACK;
   const now = opts.now ?? Date.now();
@@ -54,32 +64,46 @@ export async function generatePack(opts: {
 
   const packHashes = new Set<string>();
   const consumed: string[] = [];
-  const photos: ProcessedPhoto[] = [];
-  const maxAttempts = count * 8;
+  const rejected: string[] = [];
+  const photos: { photo: ProcessedPhoto; verdict: boolean | null }[] = [];
+  const maxAttempts = count * 12;
+  let i = 0;
 
-  for (let i = 0; i < candidates.length && photos.length < count && i < maxAttempts; i++) {
-    const assetId = candidates[i];
-    try {
-      const res = await processPhoto(assetId, (h) => opts.drawnHashes.has(h) || packHashes.has(h));
-      if (!res) continue;
-      consumed.push(assetId);
-      if ('duplicate' in res) continue;
-      packHashes.add(res.hash);
-      photos.push(res);
-    } catch {
-      // photo illisible (supprimée, corrompue…) : on passe à la suivante
+  // Par tours : on prépare autant de photos qu'il en manque, le filtre les vérifie
+  // ensemble, et celles qu'il écarte sont remplacées au tour suivant.
+  while (photos.length < count && i < candidates.length && i < maxAttempts) {
+    const batch: ProcessedPhoto[] = [];
+    while (batch.length < count - photos.length && i < candidates.length && i < maxAttempts) {
+      const assetId = candidates[i++];
+      try {
+        const res = await processPhoto(assetId, (h) => opts.drawnHashes.has(h) || packHashes.has(h));
+        if (!res) continue;
+        consumed.push(assetId);
+        if ('duplicate' in res) continue;
+        packHashes.add(res.hash);
+        batch.push(res);
+      } catch {
+        // photo illisible (supprimée, corrompue…) : on passe à la suivante
+      }
     }
+    if (batch.length === 0) break;
+    const verdicts = opts.screen ? await Promise.all(batch.map((p) => opts.screen!(p).catch(() => null))) : batch.map(() => false);
+    batch.forEach((photo, k) => {
+      if (verdicts[k] === true) rejected.push(photo.hash);
+      else photos.push({ photo, verdict: verdicts[k] });
+    });
   }
   if (photos.length === 0) throw new NoPhotosLeftError();
 
   const rarities = opts.rarities ? opts.rarities(photos.length) : photos.map(() => rollRarity());
-  const cards: GeneratedCard[] = photos.map((photo, i) => ({
+  const cards: GeneratedCard[] = photos.map(({ photo, verdict }, k) => ({
     photo,
-    card: makeCard({ hash: photo.hash, width: photo.width, height: photo.height, sourceId: photo.assetId }, rarities[i] ?? rollRarity(), now),
+    verdict,
+    card: makeCard({ hash: photo.hash, width: photo.width, height: photo.height, sourceId: photo.assetId }, rarities[k] ?? rollRarity(), now),
   }));
   // La plus rare est révélée en dernier : le suspense monte.
   cards.sort((a, b) => getRarity(a.card.rarity).rank - getRarity(b.card.rarity).rank);
-  return { cards, consumedAssetIds: consumed };
+  return { cards, consumedAssetIds: consumed, rejectedHashes: rejected };
 }
 
 /**
