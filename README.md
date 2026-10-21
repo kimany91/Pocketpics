@@ -291,7 +291,6 @@ Version navigateur de test (l'échange en ligne y fonctionne aussi, sauf dans un
 - **Limite** : une page web ne peut pas lire la galerie seule. La version navigateur reste donc un test ; le jeu complet sur téléphone (`expo run`, ou build de développement EAS) lit toute la galerie automatiquement, sans choix.
 - **Galerie** : un navigateur ne laisse aucun site lire la galerie tout seul. « Ouvrir ma galerie » ouvre le sélecteur de photos de l'appareil, où l'on peut tout sélectionner. Sur ordinateur, « Importer un dossier » ajoute un dossier entier. Des photos de démo générées sont aussi disponibles. Si le sélecteur est bloqué (fenêtre intégrée, webview), on peut aussi coller des photos (Ctrl+V) ou les glisser sur la page.
 - **Sauvegarde** : les photos importées, la collection et les tirages restent dans le navigateur (IndexedDB) d'une visite à l'autre. L'écran des taux d'obtention permet de tout effacer.
-- **Tests** : sur la version navigateur seulement, un petit bouton rond flottant (flèche circulaire, en haut à gauche du paquet de l'accueil) recharge les tirages pour ne pas attendre 12 h. Il n'existe pas sur Android ni iOS.
 
 Vérifications :
 

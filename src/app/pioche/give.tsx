@@ -42,6 +42,8 @@ export default function PiocheGive() {
   const active = useIsFocused();
   const { width } = useWindowDimensions();
   const [boom, setBoom] = useState(0);
+  /** Panneau « Tu es sûr de vouloir refuser ? » ouvert. */
+  const [askRefuse, setAskRefuse] = useState(false);
   const name = friend?.name ?? 'Ton ami';
 
   // chaque carte retournée chez l'ami : un petit son ici aussi
@@ -144,7 +146,15 @@ export default function PiocheGive() {
               </View>
             ) : null}
             <View style={{ flexDirection: 'row', gap: 10, alignSelf: 'stretch' }}>
-              <Button label="Refuser" kind="secondary" style={{ flex: 1 }} onPress={() => usePioche.getState().judge(false)} />
+              <Button
+                label="Refuser"
+                kind="secondary"
+                style={{ flex: 1 }}
+                onPress={() => {
+                  haptic.warning();
+                  setAskRefuse(true);
+                }}
+              />
               <Button label="Valider" icon="checkmark" style={{ flex: 1.3 }} onPress={() => usePioche.getState().judge(true)} />
             </View>
             <AppText variant="caption" style={{ textAlign: 'center' }}>
@@ -168,11 +178,58 @@ export default function PiocheGive() {
     <Screen edges={['top', 'bottom']}>
       <Header title="Pioche amicale" onBack={close} />
       <View style={styles.body}>{body}</View>
+      {askRefuse && phase === 'judging' ? (
+        <RefuseConfirm
+          name={name}
+          count={opened.length}
+          onCancel={() => setAskRefuse(false)}
+          onConfirm={() => {
+            setAskRefuse(false);
+            usePioche.getState().judge(false);
+          }}
+        />
+      ) : null}
     </Screen>
   );
 }
 
+/**
+ * Avant de refuser : on explique ce que ça fait à l'ami (il perd les cartes et
+ * n'est pas remboursé), pour qu'un refus ne parte pas par erreur.
+ */
+function RefuseConfirm({ name, count, onCancel, onConfirm }: { name: string; count: number; onCancel(): void; onConfirm(): void }) {
+  return (
+    <Animated.View entering={FadeIn.duration(160)} style={styles.scrim}>
+      <Animated.View entering={ZoomIn.springify().damping(14)} style={styles.panel}>
+        <View style={styles.panelIcon}>
+          <Ionicons name="warning" size={26} color={colors.danger} />
+        </View>
+        <AppText variant="title" style={{ textAlign: 'center' }}>
+          Refuser ses cartes ?
+        </AppText>
+        <AppText variant="caption" style={styles.panelText}>
+          {`${name} perd les ${count} carte${count > 1 ? 's' : ''} qu’il vient d’ouvrir avec tes photos.`}
+        </AppText>
+        <AppText variant="caption" style={styles.panelText}>
+          {`Il ne sera pas remboursé : le tirage ou les pièces qu’il a payés sont perdus.`}
+        </AppText>
+        <AppText variant="caption" style={styles.panelText}>
+          Tes photos restent à toi dans tous les cas.
+        </AppText>
+        <View style={{ flexDirection: 'row', gap: 10, alignSelf: 'stretch', marginTop: 6 }}>
+          <Button label="Annuler" kind="secondary" style={{ flex: 1 }} onPress={onCancel} />
+          <Button label="Oui, refuser" kind="danger" style={{ flex: 1.3 }} onPress={onConfirm} />
+        </View>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
+  scrim: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.72)', alignItems: 'center', justifyContent: 'center', padding: 20, zIndex: 50 },
+  panel: { width: '100%', maxWidth: 380, alignItems: 'center', gap: 10, padding: 20, borderRadius: 22, backgroundColor: colors.bgElevated, borderWidth: 1, borderColor: 'rgba(255,90,103,0.4)' },
+  panelIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,90,103,0.12)' },
+  panelText: { textAlign: 'center', lineHeight: 18 },
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   centered: { alignItems: 'center', alignSelf: 'stretch', paddingHorizontal: 8 },
   hint: { textAlign: 'center', marginTop: 16, maxWidth: 310, lineHeight: 18 },

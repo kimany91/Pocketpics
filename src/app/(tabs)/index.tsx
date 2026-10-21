@@ -45,7 +45,6 @@ import { haptic } from '../../utils/haptics';
 export default function DrawScreen() {
   const { width, height } = useWindowDimensions();
   const cards = useGame((s) => s.cards);
-  const refillDrawsForDemo = useGame((s) => s.refillDrawsForDemo);
   const soundVolume = useGame((s) => s.save?.soundVolume ?? DEFAULT_SOUND_VOLUME);
   const coins = useGame((s) => s.save?.coins ?? 0);
   const buyDraw = useGame((s) => s.buyDraw);
@@ -173,8 +172,6 @@ export default function DrawScreen() {
             ) : null}
           </Animated.View>
         </Pressable>
-        {/* Version web de test seulement : recharge les tirages (jamais sur Android ni iOS) */}
-        {isWeb && (access === 'granted' || access === 'limited') ? <RefillFab onPress={refillDrawsForDemo} /> : null}
         {showPioche ? (
           <PiocheBadge
             active={focused}
@@ -326,24 +323,6 @@ function PiocheBadge({ active, count, style, onPress, hint }: { active: boolean;
   );
 }
 
-/** Bouton flottant de la version web de test : remet des tirages pour essayer. */
-function RefillFab({ onPress }: { onPress(): void }) {
-  return (
-    <Pressable
-      onPress={() => {
-        haptic.light();
-        onPress();
-      }}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel="Recharger les tirages (test)"
-      style={({ pressed }) => [styles.fab, pressed && { transform: [{ scale: 0.92 }] }]}
-    >
-      <Ionicons name="refresh" size={18} color={colors.text} />
-    </Pressable>
-  );
-}
-
 /** Plus de tirage : on peut en acheter un avec les pièces gagnées en solo. */
 function BuyDraw({ coins, onBuy }: { coins: number; onBuy(): void }) {
   const missing = DRAW_PRICE - coins;
@@ -469,20 +448,6 @@ const styles = StyleSheet.create({
   pipFill: { height: '100%', backgroundColor: 'rgba(247,201,72,0.35)' },
   timer: { textAlign: 'center', marginBottom: 14, fontFamily: fonts.medium, fontVariant: ['tabular-nums'] },
   limited: { flexDirection: 'row', justifyContent: 'center', marginTop: 10 },
-  fab: {
-    position: 'absolute',
-    left: 16,
-    top: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.surface2,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    boxShadow: '0px 4px 14px rgba(0,0,0,0.5)',
-  },
   buyBase: { height: 58, borderRadius: 18, backgroundColor: '#B8861E', paddingBottom: 4 },
   buy: {
     flex: 1,

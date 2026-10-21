@@ -23,11 +23,11 @@ test('tuto : les étapes de la phase 1 se suivent, une à la fois', () => {
   let t = initialTutorial();
   assert.equal(t.step, 'pack1');
   const seen = [t.step];
-  for (const from of ['pack1', 'pack2', 'friend', 'pioche', 'battle'] as const) {
+  for (const from of ['pack1', 'pack2', 'pseudo', 'friend', 'pioche', 'battle'] as const) {
     t = advance(t, from, T);
     seen.push(t.step);
   }
-  assert.deepEqual(seen, ['pack1', 'pack2', 'friend', 'pioche', 'battle', 'phase2']);
+  assert.deepEqual(seen, ['pack1', 'pack2', 'pseudo', 'friend', 'pioche', 'battle', 'phase2']);
   assert.equal(t.phase2At, T);
 });
 
@@ -45,6 +45,7 @@ test('tuto : ce qui est ouvert à chaque étape', () => {
     (['index', 'profile', 'battle', 'collection', 'trade', 'multi', 'quests', 'pioche'] as const).filter((f) => isUnlocked(step, f));
   assert.deepEqual(open('pack1'), ['index']);
   assert.deepEqual(open('pack2'), ['index']);
+  assert.deepEqual(open('pseudo'), ['index', 'profile'], 'le pseudo se choisit sur le Profil');
   assert.deepEqual(open('friend'), ['index', 'profile']);
   assert.deepEqual(open('pioche'), ['index', 'profile', 'pioche']);
   assert.deepEqual(open('battle'), ['index', 'profile', 'battle', 'pioche']);

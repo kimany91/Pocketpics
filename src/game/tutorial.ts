@@ -4,7 +4,8 @@
  * Phase 1 (guidée, obligatoire) — chaque étape débloque un bout du jeu :
  *  - `pack1`  : ouvrir son premier paquet (seul l'onglet Tirage est ouvert) ;
  *  - `pack2`  : ouvrir le deuxième ;
- *  - `friend` : l'onglet Profil s'ouvre, ajouter Paul#1234 (un bot, voir paul.ts) ;
+ *  - `pseudo` : l'onglet Profil s'ouvre, choisir son pseudo ;
+ *  - `friend` : ajouter Paul#1234 (un bot, voir paul.ts) ;
  *  - `pioche` : retour au menu, le « ! » de la Pioche amicale apparaît, piocher chez Paul (gratuit) ;
  *  - `battle` : l'onglet Combat s'ouvre, premier combat solo guidé.
  * Quand ce combat se termine (gagné ou perdu), tout le jeu est débloqué :
@@ -14,7 +15,7 @@
  * Pur (testable sous Node).
  */
 
-export const TUTO_STEPS = ['pack1', 'pack2', 'friend', 'pioche', 'battle', 'phase2', 'done'] as const;
+export const TUTO_STEPS = ['pack1', 'pack2', 'pseudo', 'friend', 'pioche', 'battle', 'phase2', 'done'] as const;
 export type TutoStep = (typeof TUTO_STEPS)[number];
 
 export interface TutorialState {
@@ -42,7 +43,7 @@ export type TutoFeature = TabName | 'pioche' | 'multi' | 'quests';
 
 const UNLOCK: Record<TutoFeature, TutoStep> = {
   index: 'pack1',
-  profile: 'friend',
+  profile: 'pseudo',
   pioche: 'pioche',
   battle: 'battle',
   collection: 'phase2',
@@ -108,7 +109,7 @@ export const drawsNeeded = (step: TutoStep) => (step === 'pack1' ? 2 : step === 
 
 /** Onglet vers lequel la flèche de la barre du bas doit pointer (l'étape se joue là-bas). */
 export function tabTarget(step: TutoStep): TabName | null {
-  if (step === 'friend') return 'profile';
+  if (step === 'pseudo' || step === 'friend') return 'profile';
   if (step === 'pioche') return 'index';
   if (step === 'battle') return 'battle';
   return null;

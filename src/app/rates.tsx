@@ -9,6 +9,7 @@ import { Rise } from '../components/Rise';
 import { CARDS_PER_PACK, MAX_STORED_DRAWS } from '../game/draws';
 import { PACK_RARITIES, RARITIES, formatChance } from '../game/rarity';
 import { useGame } from '../state/game';
+import { GAME_VERSION, platformLabel } from '../game/version';
 import { resetWebSave } from '../storage/disk';
 import { colors } from '../theme';
 
@@ -48,6 +49,10 @@ export default function RatesScreen() {
           );
         })}
         {Platform.OS === 'web' ? <WebReset /> : null}
+        <View style={styles.version}>
+          <AppText variant="caption">{`PocketPics · version ${GAME_VERSION}`}</AppText>
+          <AppText variant="caption">{platformLabel()}</AppText>
+        </View>
       </ScrollView>
     </View>
   );
@@ -100,6 +105,7 @@ function WebReset() {
 }
 
 const styles = StyleSheet.create({
+  version: { alignItems: 'center', gap: 2, marginTop: 28, marginBottom: 12, opacity: 0.8 },
   reset: { alignItems: 'center', gap: 4, marginTop: 28, padding: 14, borderRadius: 14, backgroundColor: 'rgba(255,90,103,0.08)' },
   root: { flex: 1, backgroundColor: colors.bgElevated },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },

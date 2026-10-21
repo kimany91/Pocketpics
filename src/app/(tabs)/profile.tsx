@@ -20,9 +20,11 @@ import { ProfileCard } from '../../components/profile/ProfileCard';
 import { ProfileStats } from '../../components/profile/ProfileStats';
 import { useFreshFriends, useSocialScreen } from '../../components/profile/social';
 import { Rise } from '../../components/Rise';
+import { PseudoStep } from '../../components/tuto/PseudoStep';
 import { Screen } from '../../components/Screen';
 import { TabHeader } from '../../components/TabHeader';
 import { useTutoStep } from '../../state/useTuto';
+import { GAME_VERSION, platformLabel } from '../../game/version';
 import { inPhase1, phase2Todo } from '../../game/tutorial';
 import { useGame } from '../../state/game';
 import { useEntrance } from '../../theme/motion';
@@ -44,10 +46,15 @@ export default function ProfileTab() {
             <TabHeader title="Profil" subtitle="Ce que tes amis voient de toi" icon="person" />
           </Rise>
           <Rise visit={visit} index={1}>
-            <FriendAdd
-              onAdded={welcome}
-              hint={step === 'friend' ? { text: 'Ajoute ton premier ami : écris Paul#1234 puis touche Ajouter', sub: 'Paul est un ami du tuto, il va t’aider' } : undefined}
-            />
+            {/* tuto : d'abord le pseudo, ensuite seulement l'ajout de Paul */}
+            {step === 'pseudo' ? (
+              <PseudoStep />
+            ) : (
+              <FriendAdd
+                onAdded={welcome}
+                hint={step === 'friend' ? { text: 'Ajoute ton premier ami : écris Paul#1234 puis touche Ajouter', sub: 'Paul est un ami du tuto, il va t’aider' } : undefined}
+              />
+            )}
           </Rise>
           <FriendRequests onAccepted={welcome} />
           <FriendList fresh={fresh} active={focused} />
@@ -79,6 +86,9 @@ export default function ProfileTab() {
 
         <Section visit={visit} index={3} title="Statistiques">
           <ProfileStats />
+          <AppText variant="caption" style={styles.version}>
+            {`PocketPics · version ${GAME_VERSION} · ${platformLabel()}`}
+          </AppText>
         </Section>
 
         <Section visit={visit} index={4} title="Cartes épinglées">
@@ -108,4 +118,5 @@ function Section({ visit, index, title, children }: { visit: number; index: numb
 const styles = StyleSheet.create({
   content: { padding: 16, paddingTop: 12, paddingBottom: 40 },
   section: { marginTop: 26, gap: 10 },
+  version: { textAlign: 'center', opacity: 0.8 },
 });
