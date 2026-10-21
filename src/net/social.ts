@@ -243,11 +243,13 @@ export const useSocial = create<SocialStore>((set, get) => {
     for (const id of s?.pinned ?? []) {
       const c = cards.find((x) => x.id === id);
       if (!c) continue;
+      // Filtre de contenu adulte : une carte censurée reste épinglée, mais sa photo ne part pas
+      // (l'ami la voit censurée). Les autres photos sont de toute façon vérifiées chez l'ami.
       let thumb = '';
       try {
-        thumb = readThumbBase64Sync(c.id);
+        if (!c.censored) thumb = readThumbBase64Sync(c.id);
       } catch {}
-      out.push({ ref: c.id, name: c.name ?? '', rarity: c.rarity, battle: c.battle, thumb });
+      out.push({ ref: c.id, name: c.name ?? '', rarity: c.rarity, battle: c.battle, thumb, ...(c.censored ? { censored: true } : {}) });
     }
     return out;
   };

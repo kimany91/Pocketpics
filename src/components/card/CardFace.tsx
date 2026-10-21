@@ -14,7 +14,10 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { type NsfwScan, type PhotoMark, photoMark } from '../../game/nsfw';
+import { usePhotoVerdict } from '../../game/nsfwScan';
 import { getRarity } from '../../game/rarity';
+import { usePhotoMark } from '../../state/game';
 import { cardImageUri, cardThumbUri } from '../../storage/disk';
 import { CARD_RATIO, fonts } from '../../theme';
 import { Twinkles } from '../fx';
@@ -24,6 +27,7 @@ import { DivineHalo } from './DivineHalo';
 import { DivineOrnaments } from './Ornaments';
 import { ChromaticPhoto, GALAXY_COLORS, GalaxyGem, GalaxyHalo, GalaxyOrnaments, GalaxyTwinkles, GalaxyWindowGlow } from './Galaxy';
 import { ChromaticImage, ChromaticRim, ChromaticVeil } from './Chromatic';
+import { HiddenPhoto } from './HiddenPhoto';
 
 export interface CardLike {
   id: string;
@@ -33,6 +37,24 @@ export interface CardLike {
   chromatic?: boolean;
   /** Verrouillée lors d'un échange : un petit cadenas s'affiche en haut à gauche. */
   locked?: boolean;
+  /** Filtre de contenu adulte : photo censurée (floutée, tampon « CENSURÉ »). */
+  censored?: boolean;
+  /** Filtre de contenu adulte : `'pending'` → floutée tant que le détecteur n'a pas répondu. */
+  nsfwScan?: NsfwScan;
+}
+
+/**
+ * Ce qu'on montre de la photo : l'état à jour de mes cartes (par l'id), le
+ * drapeau porté par la carte, et pour une image venue d'ailleurs (`imageUri`),
+ * la vérification faite ici. Censurée si l'un des trois le dit ; floutée tant
+ * qu'une vérification attend.
+ */
+function useShownMark(card: CardLike, foreignUri: string | undefined): PhotoMark {
+  const live = usePhotoMark(card.id);
+  const foreign = usePhotoVerdict(foreignUri);
+  const own = live ?? photoMark(card);
+  if (card.censored === true || own === 'censored' || foreign === 'censored') return 'censored';
+  return own === 'pending' || foreign === 'pending' ? 'pending' : 'clean';
 }
 
 interface Props {
@@ -108,6 +130,11 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
   const chromatic = card.chromatic === true && !galaxy;
   // Plus léger en miniature, et sur les cartes qui ont déjà un foil irisé (Ultra Légendaire, Divine).
   const veilIntensity = (quality === 'thumb' ? 0.55 : 1) * (fx === 'chromatic' || fx === 'divine' ? 0.6 : 1);
+  // Filtre de contenu adulte : une image fournie (venue d'un autre joueur) est vérifiée ici avant d'être montrée.
+  const mark = useShownMark(card, imageSource === undefined && imageUri ? imageUri : undefined);
+  const hidden = mark !== 'clean';
+  const winW = width - border * 2;
+  const winH = height - border * 2;
 
   return (
     <View style={{ width, height }}>
@@ -125,7 +152,9 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
       >
         {/* Chromatique : la photo passe dans un filtre qui pousse ses couleurs et son
             contraste — ce sont bien les couleurs de l'image qui changent. */}
-        {chromatic && (imageSource !== undefined || uri) ? (
+        {hidden ? (
+          <HiddenPhoto source={imageSource !== undefined ? imageSource : uri ? { uri } : undefined} width={winW} height={winH} mark={mark as 'censored' | 'pending'} />
+        ) : chromatic && (imageSource !== undefined || uri) ? (
           <ChromaticImage
             id={card.id}
             source={imageSource !== undefined ? imageSource : { uri: uri as string }}
@@ -138,7 +167,7 @@ export const CardFace = memo(function CardFace({ card, width, quality = 'full', 
           <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" recyclingKey={card.id} transition={quality === 'thumb' ? 120 : 0} />
         ) : null}
         {galaxy ? <ChromaticPhoto width={width - border * 2} height={height - border * 2} /> : null}
-        {chromatic ? (
+        {chromatic && !hidden ? (
           <ChromaticVeil width={width - border * 2} height={height - border * 2} tilt={tilt} animated={animated} intensity={veilIntensity} />
         ) : null}
         {rarity.frameStyle === 'chromatic' && !tilt ? <Holo colors={CHROMA_HOLO} opacity={0.18} animated={animated} width={width} height={height} /> : null}

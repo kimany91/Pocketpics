@@ -30,6 +30,8 @@ import { cancelMatch, finishMatch, rankOf, settleAbandoned, shownMmr, startMatch
 import { getRarity } from '../game/rarity';
 import { type CropRect, cropImage } from '../game/gallery';
 import { type FriendDrawPayment, type FriendPhoto, payFriendDraw } from '../game/friendDraw';
+import { NSFW_SCAN_VERSION, type PhotoMark, photoMark, scanFields, scanOrder, withScan } from '../game/nsfw';
+import { forgetPhoto, nsfwReady, preloadNsfw, scanPhoto, scanWithin } from '../game/nsfwScan';
 import { generatePack, makeCard } from '../game/pack';
 import { PAUL_NAME, paulFriend, paulHash } from '../game/paul';
 import { loadPaulPhotos } from '../game/paulPack';
@@ -48,6 +50,13 @@ interface GameStore {
   pendingPack: Card[];
   /** Le paquet en cours d'ouverture est un paquet brillant (sachet doré). */
   openingLucky: boolean;
+  /**
+   * Filtre de contenu adulte : ce qu'on montre de la photo de chaque carte
+   * (normale, floutée en attendant la vérification, censurée), tenu à jour.
+   * Les écrans qui gardent une copie des cartes (ouverture, combat…) le lisent
+   * par l'id : une carte censurée l'est aussitôt partout.
+   */
+  marks: Record<string, PhotoMark>;
 
   init(): Promise<void>;
   drawStatus(now?: number): DrawStatus;
@@ -210,6 +219,7 @@ export const useGame = create<GameStore>((set, get) => ({
   save: null,
   pendingPack: [],
   openingLucky: false,
+  marks: {},
 
   async init() {
     if (get().ready) return;
@@ -246,6 +256,9 @@ export const useGame = create<GameStore>((set, get) => ({
       setSfxVolume(save.soundVolume);
       setMusicVolume(save.musicVolume);
       set({ ready: true, cards, save });
+      // filtre de contenu adulte : le détecteur se prépare, puis les cartes pas encore vérifiées passent une à une
+      preloadNsfw();
+      setTimeout(() => void scanBacklog(), BACKLOG_DELAY_MS);
       disk
         .verifyCardsAgainstSidecars(cards)
         .then((fixed) => fixed && set({ cards: fixed }))
@@ -284,12 +297,17 @@ export const useGame = create<GameStore>((set, get) => ({
       },
     });
 
+    // Filtre de contenu adulte : chaque photo passe au détecteur pendant la déchirure.
+    // Sans réponse à temps, la carte est floutée et vérifiée juste après.
+    const verdicts = await Promise.all(pack.cards.map(({ photo }) => scanWithin(photo.imageUri, PACK_SCAN_MS)));
+
     // 1) les cartes d'abord (si l'app est tuée ici, le joueur garde ses cartes ET son tirage)
     const written: Card[] = [];
-    for (const { card, photo } of pack.cards) {
+    pack.cards.forEach(({ card: made, photo }, i) => {
+      const card: Card = { ...made, ...scanFields(verdicts[i]) };
       disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri } });
       written.push(card);
-    }
+    });
     const cards = [...get().cards, ...written];
     disk.saveIndex(cards);
 
@@ -310,6 +328,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const tuto = latest.tutorial.step === 'pack1' || latest.tutorial.step === 'pack2' ? withTutoStep(next, latest.tutorial.step) : next;
     persistState(tuto);
     set({ cards, save: tuto, pendingPack: written });
+    void scanBacklog();
     return written;
   },
 
@@ -337,7 +356,8 @@ export const useGame = create<GameStore>((set, get) => ({
     const name = giver.slice(0, 24);
     const made = photos.map((p, i) => ({
       p,
-      card: makeCard({ hash: p.hash, width: p.width, height: p.height, sourceId: null }, plan.rarities[i], now, { origin: 'friend', giver: name }),
+      // photo vérifiée ICI à sa réception (voir src/net/pioche.ts), jamais sur la parole de l'ami
+      card: makeCard({ hash: p.hash, width: p.width, height: p.height, sourceId: null }, plan.rarities[i], now, { origin: 'friend', giver: name, scan: scanFields(p.censored ?? null) }),
     }));
     // la plus rare en dernier, comme un paquet normal
     made.sort((a, b) => getRarity(a.card.rarity).rank - getRarity(b.card.rarity).rank);
@@ -357,6 +377,7 @@ export const useGame = create<GameStore>((set, get) => ({
     };
     persistState(next);
     set({ cards, save: next, pendingPack: written, openingLucky: lucky });
+    void scanBacklog();
     return { cards: written, paid: pay.paid };
   },
 
@@ -452,7 +473,8 @@ export const useGame = create<GameStore>((set, get) => ({
       count: 1,
       rarities: () => ['galaxy'],
     });
-    const { card, photo } = pack.cards[0];
+    const { card: made, photo } = pack.cards[0];
+    const card: Card = { ...made, ...scanFields(await scanWithin(photo.imageUri, PACK_SCAN_MS)) };
     disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri } });
     const cards = [...get().cards, card];
     disk.saveIndex(cards);
@@ -465,6 +487,7 @@ export const useGame = create<GameStore>((set, get) => ({
     };
     persistState(next);
     set({ cards, save: next, pendingPack: [card] });
+    void scanBacklog();
     return card;
   },
 
@@ -624,12 +647,21 @@ export const useGame = create<GameStore>((set, get) => ({
 
   async cropCard(id, rect) {
     const card = get().cards.find((c) => c.id === id);
-    if (!card || card.locked) return false;
+    // une photo censurée (ou pas encore vérifiée) ne se recadre pas
+    if (!card || card.locked || photoMark(card) !== 'clean') return false;
     const out = await cropImage(disk.cardImageUri(id), rect);
     if (!out) return false;
+    // le nouveau cadrage repasse au détecteur (il ne peut que rendre la carte plus stricte)
+    const verdict = await scanWithin(out.imageUri, PACK_SCAN_MS);
     disk.writeCardImage(id, { image: { uri: out.imageUri }, thumb: { uri: out.thumbUri } });
+    forgetPhoto(disk.cardImageUri(id));
     // l'écran doit redessiner la carte : on change son objet (l'adresse, elle, ne bouge pas)
-    set({ cards: get().cards.map((c) => (c.id === id ? { ...c } : c)) });
+    const cards = get().cards.map((c) => (c.id === id ? (verdict === null ? { ...c, nsfwScan: 'pending' as const } : withScan(c, verdict)) : c));
+    const cropped = cards.find((c) => c.id === id);
+    if (cropped) disk.updateCardSidecar(cropped);
+    disk.saveIndex(cards);
+    set({ cards });
+    if (verdict === null) void scanBacklog();
     get().noteQuest('crop');
     return true;
   },
@@ -648,6 +680,8 @@ export const useGame = create<GameStore>((set, get) => ({
     if (newCards.length === 0) return;
     const cards = [...get().cards, ...newCards];
     disk.saveIndex(cards);
+    // cartes reçues : leur photo est vérifiée ici (floutées d'ici là)
+    setTimeout(() => void scanBacklog(), 0);
     const save = get().save;
     if (save) {
       // les cartes ajoutées ici arrivent toujours d'un échange
@@ -807,7 +841,13 @@ export const useGame = create<GameStore>((set, get) => ({
     const now = Date.now();
     // que des communes, jamais chromatiques : elles sont là pour montrer la pioche
     const written = photos.map((p) => {
-      const card = makeCard({ hash: paulHash(p.ref), width: p.width, height: p.height, sourceId: null }, 'common', now, { origin: 'friend', giver: PAUL_NAME, chromatic: false });
+      // illustrations du jeu : rien à vérifier
+      const card = makeCard({ hash: paulHash(p.ref), width: p.width, height: p.height, sourceId: null }, 'common', now, {
+        origin: 'friend',
+        giver: PAUL_NAME,
+        chromatic: false,
+        scan: { censored: false, nsfwScan: NSFW_SCAN_VERSION },
+      });
       disk.writeNewCard(card, { image: { base64: p.image }, thumb: { base64: p.image } });
       return card;
     });
@@ -839,3 +879,100 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ save: next });
   },
 }));
+
+/* ----------------------- Filtre de contenu adulte ----------------------- */
+
+/** Attente maximale du détecteur pendant l'ouverture d'un paquet (sinon : floutée, vérifiée juste après). */
+const PACK_SCAN_MS = 8000;
+/** Les anciennes cartes attendent un peu après le démarrage, pour ne pas le ralentir. */
+const BACKLOG_DELAY_MS = 4000;
+/** Pause entre deux anciennes cartes vérifiées en fond. */
+const BACKLOG_PAUSE_MS = 120;
+/** Le détecteur ne répond pas : on réessaie plus tard. */
+const BACKLOG_RETRY_MS = 30_000;
+/** Une carte dont la photo n'a pas pu être lue 3 fois est laissée pour cette session. */
+const MAX_CARD_FAILS = 3;
+
+let backlogRunning = false;
+let backlogTimer: ReturnType<typeof setTimeout> | null = null;
+let indexTimer: ReturnType<typeof setTimeout> | null = null;
+const cardFails = new Map<string, number>();
+
+/** index.json est réécrit une fois la série de vérifications passée (pas à chaque carte). */
+function saveIndexSoon() {
+  if (indexTimer) clearTimeout(indexTimer);
+  indexTimer = setTimeout(() => {
+    indexTimer = null;
+    disk.saveIndex(useGame.getState().cards);
+  }, 1500);
+}
+
+/** Note le résultat du détecteur sur une carte (la censure ne fait que s'ajouter). */
+function applyScan(id: string, censored: boolean) {
+  const cards = useGame.getState().cards.map((c) => (c.id === id ? withScan(c, censored) : c));
+  const card = cards.find((c) => c.id === id);
+  if (!card) return;
+  disk.updateCardSidecar(card);
+  saveIndexSoon();
+  useGame.setState({ cards });
+}
+
+/**
+ * Vérifie, une à une, les cartes qui ne l'ont pas encore été : d'abord les
+ * nouvelles et les reçues (floutées en attendant), puis les anciennes cartes
+ * (montrées normalement d'ici là), en tâche de fond.
+ */
+async function scanBacklog(): Promise<void> {
+  if (backlogRunning || !useGame.getState().ready) return;
+  backlogRunning = true;
+  if (backlogTimer) clearTimeout(backlogTimer);
+  backlogTimer = null;
+  let retry = false;
+  try {
+    for (;;) {
+      const next = scanOrder(useGame.getState().cards).find((c) => (cardFails.get(c.id) ?? 0) < MAX_CARD_FAILS);
+      if (!next) break;
+      try {
+        await nsfwReady();
+      } catch {
+        retry = true; // le détecteur n'a pas pu se charger
+        break;
+      }
+      const urgent = next.nsfwScan === 'pending';
+      // carte reçue d'un autre joueur : sa miniature aussi vient de lui, elle est vérifiée à part
+      const uris = new Set([disk.cardImageUri(next.id), ...(next.origin === 'draw' ? [] : [disk.cardThumbUri(next.id)])]);
+      try {
+        const verdicts = await Promise.all([...uris].map((u) => scanPhoto(u, urgent ? 'high' : 'low')));
+        applyScan(next.id, verdicts.some((v) => v));
+      } catch {
+        cardFails.set(next.id, (cardFails.get(next.id) ?? 0) + 1);
+        retry = true;
+      }
+      if (!urgent) await new Promise((r) => setTimeout(r, BACKLOG_PAUSE_MS));
+    }
+  } finally {
+    backlogRunning = false;
+  }
+  if (retry && !backlogTimer) backlogTimer = setTimeout(() => void scanBacklog(), BACKLOG_RETRY_MS);
+}
+
+function marksOf(cards: Card[]): Record<string, PhotoMark> {
+  const out: Record<string, PhotoMark> = {};
+  for (const c of cards) out[c.id] = photoMark(c);
+  return out;
+}
+
+function sameMarks(a: Record<string, PhotoMark>, b: Record<string, PhotoMark>) {
+  const ka = Object.keys(a);
+  return ka.length === Object.keys(b).length && ka.every((k) => a[k] === b[k]);
+}
+
+// les marques suivent la collection
+useGame.subscribe((s, prev) => {
+  if (s.cards === prev.cards) return;
+  const marks = marksOf(s.cards);
+  if (!sameMarks(marks, s.marks)) useGame.setState({ marks });
+});
+
+/** Ce qu'on montre de la photo d'une de mes cartes (`undefined` si ce n'est pas une de mes cartes). */
+export const usePhotoMark = (id: string): PhotoMark | undefined => useGame((s) => s.marks[id]);

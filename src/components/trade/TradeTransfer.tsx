@@ -320,7 +320,7 @@ function InCard({ p, offset, lane, box, width, card }: { p: SharedValue<number>;
         <CardBack width={width} />
       </Animated.View>
       <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ rotateY: '180deg' }] }, front]}>
-        <CardFace card={{ id: card.id, name: card.name, rarity: card.rarity }} width={width} quality="thumb" animated={false} imageUri={thumb} />
+        <CardFace card={{ id: card.id, name: card.name, rarity: card.rarity, censored: card.censored }} width={width} quality="thumb" animated={false} imageUri={thumb} />
       </Animated.View>
     </Animated.View>
   );

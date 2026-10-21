@@ -16,6 +16,7 @@ import { type SoloDay } from '../game/economy';
 import { type LuckState, initialLuck } from '../game/luck';
 import { type QuestState, initialQuests, migrateQuests } from '../game/quests';
 import { type RankState, initialRank, migrateRank } from '../game/rank';
+import { type NsfwScan, readScan } from '../game/nsfw';
 import { getRarity } from '../game/rarity';
 import { type TutorialState, initialTutorial, migrateTutorial } from '../game/tutorial';
 
@@ -71,6 +72,18 @@ export interface Card {
   locked: boolean;
   /** Pioche amicale : pseudo de l'ami dans la galerie duquel la carte a été piochée. */
   giver?: string;
+  /**
+   * Photo jugée pornographique par le détecteur de contenu adulte (src/game/nsfw.ts) :
+   * elle est floutée et marquée « Censuré » partout. Définitif : ne repasse jamais
+   * à `false` (ajouté après : `false` si absent).
+   */
+  censored: boolean;
+  /**
+   * Vérification de la photo par le détecteur : version qui l'a vérifiée,
+   * `'pending'` (nouvelle ou reçue, floutée en attendant) ou `null` (carte
+   * d'avant le filtre, pas encore vérifiée). Ajouté après : `null` si absent.
+   */
+  nsfwScan: NsfwScan;
   /**
    * PV et attaques pour les combats (ajouté après : générés à partir de l'id si
    * absents, donc identiques à chaque chargement). Les noms d'attaque sont modifiables.
@@ -201,6 +214,8 @@ export function migrateCard(input: unknown, now = Date.now()): Card | null {
     favorite: c.favorite === true,
     chromatic: c.chromatic === true,
     locked: c.locked === true,
+    censored: c.censored === true,
+    nsfwScan: readScan(c.nsfwScan),
     giver: typeof c.giver === 'string' && c.giver ? c.giver.slice(0, 24) : undefined,
     battle: normalizeStats(c.battle, c.id as string, getRarity(rarity).rank),
   };

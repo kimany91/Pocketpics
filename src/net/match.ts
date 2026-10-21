@@ -9,6 +9,7 @@
 import { create } from 'zustand';
 
 import { type Battle, createBattle } from '../battle/engine';
+import { scanPhoto } from '../game/nsfwScan';
 import { getRarity } from '../game/rarity';
 import { shownMmr } from '../game/rank';
 import { useGame } from '../state/game';
@@ -116,7 +117,7 @@ const initial = {
 
 /** Carte envoyée à l'adversaire (sans son image : elle part à part, voir `sendArt`). */
 export function toNetFighter(c: Card): NetFighter {
-  return { ref: c.id, name: c.name ?? `Carte ${getRarity(c.rarity).label}`, rarity: c.rarity, battle: c.battle, thumb: '' };
+  return { ref: c.id, name: c.name ?? `Carte ${getRarity(c.rarity).label}`, rarity: c.rarity, battle: c.battle, thumb: '', ...(c.censored ? { censored: true } : {}) };
 }
 
 /** Miniature d'une carte, en base64 (vide si elle n'est pas lisible). */
@@ -173,7 +174,10 @@ export const useMatch = create<MatchStore>((set, get) => {
   /** Image reçue pour une des cartes de l'adversaire. */
   const gotArt = (ref: string, thumb: string) => {
     if (!thumb || thumb.length > 300_000 || get().oppArt[ref]) return;
-    set({ oppArt: { ...get().oppArt, [ref]: `data:image/jpeg;base64,${thumb}` } });
+    const uri = `data:image/jpeg;base64,${thumb}`;
+    // Filtre de contenu adulte : vérifiée ici tout de suite (l'écran la montre floutée d'ici là, voir CardFace)
+    scanPhoto(uri).catch(() => {});
+    set({ oppArt: { ...get().oppArt, [ref]: uri } });
   };
 
   const handle = (m: BattleMsg) => {
@@ -278,8 +282,9 @@ export const useMatch = create<MatchStore>((set, get) => {
       if (!bot) {
         channel.send({ t: 'deck', fighters: myNet });
         // les images ensuite, une par une : elles ne retardent pas le combat
+        // filtre de contenu adulte : la photo d'une carte censurée ne part pas
         for (const c of cards) {
-          const thumb = thumbOf(c.id);
+          const thumb = c.censored ? '' : thumbOf(c.id);
           if (thumb) channel.send({ t: 'art', ref: c.id, thumb });
         }
       }

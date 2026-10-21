@@ -13,6 +13,7 @@ import { create } from 'zustand';
 
 import { useGame } from '../state/game';
 import { cardExists, readCardImagesBase64, readThumbBase64Sync, writeNewCard } from '../storage/disk';
+import { receivedCard, withScan } from '../game/nsfw';
 import { type Card, migrateCard } from '../storage/model';
 import type { TradeTarget } from './code';
 import { hostOnline, joinOnline } from './online';
@@ -135,7 +136,7 @@ export const useTrade = create<TradeStore>((set, get) => {
       try {
         thumb = readThumbBase64Sync(id);
       } catch {}
-      offer.push({ id: c.id, name: c.name, rarity: c.rarity, thumb, locked: willLock(id) });
+      offer.push({ id: c.id, name: c.name, rarity: c.rarity, thumb, locked: willLock(id), ...(c.censored ? { censored: true } : {}) });
     }
     send({ t: 'offer', cards: offer });
   };
@@ -191,7 +192,12 @@ export const useTrade = create<TradeStore>((set, get) => {
       // La photo d'origine appartient à l'autre joueur : elle ne concerne pas notre galerie.
       // verrouillée comme convenu dans l'offre (et une carte déjà verrouillée le reste)
       const locked = base.locked || offered.get(base.id)?.locked === true;
-      const card: Card = { ...base, id, origin: 'trade', obtainedAt: now, sourceId: null, favorite: false, locked };
+      const traded: Card = { ...base, id, origin: 'trade', obtainedAt: now, sourceId: null, favorite: false, locked };
+      // Filtre de contenu adulte : la photo reçue est vérifiée par CE téléphone (floutée d'ici là) ;
+      // la censure de l'autre joueur (carte ou offre) est gardée, elle ne peut que rendre la carte plus stricte.
+      // Paul (tuto) envoie une illustration du jeu : rien à vérifier.
+      const flagged = offered.get(base.id)?.censored === true ? { ...traded, censored: true } : traded;
+      const card = get().paul ? withScan(flagged, false) : receivedCard(flagged);
       writeNewCard(card, { image: { base64: tc.image }, thumb: { base64: tc.thumb || tc.image } });
       stored.push(card);
     }
@@ -225,6 +231,7 @@ export const useTrade = create<TradeStore>((set, get) => {
             rarity: String(c.rarity),
             thumb: typeof c.thumb === 'string' ? c.thumb : '',
             locked: c.locked === true,
+            censored: c.censored === true,
           })),
         });
         return;

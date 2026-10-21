@@ -22,11 +22,14 @@ import {
   type PiocheMsg,
   VERDICT_TTL_MS,
   friendDrawPayment,
+  giverMayOffer,
+  receivedVerdict,
   sanitizeOpening,
   sanitizePhoto,
   wantedHashes,
 } from '../game/friendDraw';
 import { listPhotoIds, processPhoto, type ProcessedPhoto } from '../game/gallery';
+import { scanWithin } from '../game/nsfwScan';
 import { useGame } from '../state/game';
 import { readUriBase64 } from '../storage/disk';
 import type { Card } from '../storage/model';
@@ -122,6 +125,10 @@ let generation = 0;
 /** asker : empreintes acceptées et photos reçues. */
 let wanted = new Set<string>();
 let received: FriendPhoto[] = [];
+/** asker : vérifications des photos reçues (filtre de contenu adulte). */
+let scans: Promise<void>[] = [];
+/** Attente maximale du détecteur pour une photo (préparée ou reçue). */
+const PHOTO_SCAN_MS = 10_000;
 /** Délai de réponse de l'ami (une fois l'ouverture finie). */
 let verdictTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -135,6 +142,7 @@ function teardown() {
   hostHandle = null;
   wanted = new Set();
   received = [];
+  scans = [];
   if (verdictTimer) clearTimeout(verdictTimer);
   verdictTimer = null;
 }
@@ -152,16 +160,22 @@ function shuffle<T>(arr: T[]): T[] {
   return arr;
 }
 
-/** giver : quelques photos au hasard de la galerie, prêtes à devenir des cartes. */
+/**
+ * giver : quelques photos au hasard de la galerie, prêtes à devenir des cartes.
+ * Filtre de contenu adulte : chacune passe d'abord au détecteur de ce téléphone ;
+ * seules celles jugées correctes sont proposées.
+ */
 async function preparePhotos(): Promise<ProcessedPhoto[]> {
   const ids = shuffle(await listPhotoIds());
   const seen = new Set<string>();
+  const censoredHashes = new Set(useGame.getState().cards.filter((c) => c.censored).map((c) => c.hash));
   const out: ProcessedPhoto[] = [];
   for (let i = 0; i < ids.length && out.length < FRIEND_DRAW_CANDIDATES && i < FRIEND_DRAW_CANDIDATES * 4; i++) {
     try {
       const res = await processPhoto(ids[i], (h) => seen.has(h));
       if (!res || 'duplicate' in res) continue;
       seen.add(res.hash);
+      if (!giverMayOffer(await scanWithin(res.imageUri, PHOTO_SCAN_MS), res.hash, censoredHashes)) continue;
       out.push(res);
     } catch {
       // photo illisible : la suivante
@@ -224,14 +238,23 @@ export const usePioche = create<PiocheStore>((set, get) => {
         if (s.phase !== 'sending') return;
         const p = sanitizePhoto(m, wanted);
         if (!p || received.some((r) => r.hash === p.hash)) return;
-        received.push({ hash: p.hash, image: p.image, thumb: p.thumb, width: p.width, height: p.height });
+        const photo: FriendPhoto = { hash: p.hash, image: p.image, thumb: p.thumb, width: p.width, height: p.height, censored: null };
+        received.push(photo);
         wanted.delete(p.hash);
+        // Filtre de contenu adulte : la photo ET sa miniature sont vérifiées ici, dès leur arrivée
+        // (on ne se fie jamais à l'ami) ; la carte sera censurée si l'une des deux l'est.
+        const uris = [...new Set([p.image, p.thumb])].map((b64) => `data:image/jpeg;base64,${b64}`);
+        scans.push(Promise.all(uris.map((u) => scanWithin(u, PHOTO_SCAN_MS))).then((v) => void (photo.censored = receivedVerdict(v))));
         set({ progress: { done: received.length, total: p.n } });
         if (received.length < p.n) return;
-        // tout est là : on peut ouvrir (rien n'est payé avant la déchirure)
-        const lucky = useGame.getState().rollFriendLucky();
-        send({ t: 'ready' });
-        set({ phase: 'ready', lucky });
+        // tout est là : on attend les vérifications, puis on peut ouvrir (rien n'est payé avant la déchirure)
+        const gen = generation;
+        void Promise.all(scans).then(() => {
+          if (gen !== generation || get().phase !== 'sending') return;
+          const lucky = useGame.getState().rollFriendLucky();
+          send({ t: 'ready' });
+          set({ phase: 'ready', lucky });
+        });
         return;
       }
       case 'verdict':

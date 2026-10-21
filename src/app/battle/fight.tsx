@@ -86,6 +86,7 @@ import { VsIntro } from '../../components/battle/VsIntro';
 import { SoundSheet } from '../../components/SoundSheet';
 import { CardFace } from '../../components/card/CardFace';
 import { Burst, Confetti, Flash, Glow, ImpactLines, Rays, Shockwave } from '../../components/fx';
+import { usePhotoVerdict } from '../../game/nsfwScan';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import { TutoArrow, TutoBubble } from '../../components/tuto/TutoArrow';
@@ -135,6 +136,8 @@ interface Foe {
   label: string;
   art?: { uri: string } | number;
   image(ref: string): { imageSource?: number; imageUri?: string };
+  /** En ligne : sa carte est censurée chez lui (filtre de contenu adulte ; son image est de toute façon vérifiée ici). */
+  censored?(ref: string): boolean;
   /** Monde final : la Galerie (`gallery`) ou son boss, le Grand Portrait (`portrait`). */
   stage?: 'gallery' | 'portrait';
 }
@@ -175,6 +178,7 @@ export default function FightScreen() {
         label: bot?.friendly ? 'Combat amical' : 'Combat classé',
         art: bot?.portrait ? botArt(bot.portrait) : bot && m.oppDeck?.[0] ? botArt(m.oppDeck[0].ref) : undefined,
         image: (ref) => (bot ? { imageSource: botArt(ref) } : { imageUri: useMatch.getState().oppArt[ref] || undefined }),
+        censored: (ref) => useMatch.getState().oppDeck?.find((f) => f.ref === ref)?.censored === true,
       };
       return { deck, foe, battle: m.start, controller: m.controller };
     }
@@ -634,7 +638,9 @@ export default function FightScreen() {
   // Ses images arrivent une par une pendant le combat : la première sert de décor.
   const oppArt = useMatch((s) => s.oppArt);
   const firstArt = Object.values(oppArt)[0];
-  const foeArt = foeInfo?.art ?? (firstArt ? { uri: firstArt } : undefined);
+  // filtre de contenu adulte : son image ne sert de décor qu'une fois vérifiée ici
+  const firstArtMark = usePhotoVerdict(foeInfo?.art ? undefined : firstArt);
+  const foeArt = foeInfo?.art ?? (firstArt && firstArtMark === 'clean' ? { uri: firstArt } : undefined);
 
   // En ligne : l'adversaire part (victoire) ou ma connexion lâche (défaite).
   const oppGone = useMatch((s) => s.oppGone);
@@ -918,7 +924,7 @@ export default function FightScreen() {
           <Pressable onPress={() => look(1, shown.sides[1].active)} disabled={mode === 'timing'} accessibilityLabel={`Voir ${foe.name}`}>
           <FighterView
             key={foe.ref}
-            card={{ id: foe.ref, rarity: foe.rarity, name: foe.name }}
+            card={{ id: foe.ref, rarity: foe.rarity, name: foe.name, censored: foeInfo.censored?.(foe.ref) }}
             {...foeInfo.image(foe.ref)}
             width={layout.foeW}
             facing={-1}
@@ -1188,7 +1194,7 @@ function InspectOverlay({
   return (
     <InspectFighter
       fighter={f}
-      card={{ id: f.ref, rarity: f.rarity, name: f.name }}
+      card={{ id: f.ref, rarity: f.rarity, name: f.name, censored: foe.censored?.(f.ref) }}
       {...foe.image(f.ref)}
       owner={`Carte de ${foe.name}`}
       status={status}

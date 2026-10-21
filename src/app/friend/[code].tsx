@@ -193,7 +193,7 @@ export default function FriendProfileScreen() {
                     style={({ pressed }) => pressed && { transform: [{ scale: 0.97 }] }}
                   >
                     <CardFace
-                      card={{ id: c.ref, rarity: c.rarity, name: c.name }}
+                      card={{ id: c.ref, rarity: c.rarity, name: c.name, censored: c.censored }}
                       imageUri={c.thumb ? `data:image/jpeg;base64,${c.thumb}` : undefined}
                       width={cardW}
                       quality="thumb"
@@ -224,7 +224,7 @@ export default function FriendProfileScreen() {
       {open ? (
         <InspectFighter
           fighter={makeFighter({ ref: open.ref, name: open.name || 'Sa carte', rarity: open.rarity, battle: open.battle })}
-          card={{ id: open.ref, rarity: open.rarity, name: open.name }}
+          card={{ id: open.ref, rarity: open.rarity, name: open.name, censored: open.censored }}
           imageUri={open.thumb ? `data:image/jpeg;base64,${open.thumb}` : undefined}
           owner={`Carte de ${friend.name}`}
           status="Épinglée"

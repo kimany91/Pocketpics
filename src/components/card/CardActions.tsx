@@ -15,6 +15,7 @@ import Animated, { FadeIn, FadeInDown, FadeOut, SlideInDown, SlideOutDown } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { playSfx } from '../../audio/sfx';
+import { photoMark } from '../../game/nsfw';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import { MAX_PINNED } from '../../storage/model';
@@ -108,17 +109,20 @@ export function CardActions({ cardId, onClose }: { cardId: string; onClose(): vo
           }}
         />
 
-        <Row
-          icon="crop"
-          color={colors.text}
-          label="Recadrer la carte"
-          caption="Choisis la partie de la photo à garder."
-          onPress={() => {
-            haptic.tick();
-            onClose();
-            router.push({ pathname: '/card/crop', params: { id: card.id } });
-          }}
-        />
+        {/* filtre de contenu adulte : une photo censurée (ou pas encore vérifiée) ne se recadre pas */}
+        {photoMark(card) === 'clean' ? (
+          <Row
+            icon="crop"
+            color={colors.text}
+            label="Recadrer la carte"
+            caption="Choisis la partie de la photo à garder."
+            onPress={() => {
+              haptic.tick();
+              onClose();
+              router.push({ pathname: '/card/crop', params: { id: card.id } });
+            }}
+          />
+        ) : null}
 
         <Button label="Fermer" kind="ghost" onPress={onClose} />
       </Animated.View>

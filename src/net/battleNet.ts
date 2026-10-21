@@ -27,6 +27,12 @@ export interface NetFighter {
   battle: BattleStats;
   /** Miniature JPEG en base64. */
   thumb: string;
+  /**
+   * Censurée par le filtre de contenu adulte de son propriétaire (champ ajouté
+   * après) : sa photo n'est alors pas envoyée. Une image reçue est de toute façon
+   * vérifiée par le téléphone qui la reçoit.
+   */
+  censored?: boolean;
 }
 
 export type BattleMsg =
@@ -100,7 +106,8 @@ export function sanitizeFighter(raw: unknown): NetFighter | null {
   };
   const name = typeof r.name === 'string' && r.name.trim() ? r.name.trim().slice(0, 28) : `Carte ${rarity.label}`;
   const thumb = typeof r.thumb === 'string' && r.thumb.length <= MAX_THUMB ? r.thumb : '';
-  return { ref: r.ref, name, rarity: rarity.id, battle, thumb };
+  // censurée chez son propriétaire : on ne garde pas d'image (elle ne devrait pas en avoir)
+  return r.censored === true ? { ref: r.ref, name, rarity: rarity.id, battle, thumb: '', censored: true } : { ref: r.ref, name, rarity: rarity.id, battle, thumb };
 }
 
 export function sanitizeDeck(raw: unknown): NetFighter[] | null {

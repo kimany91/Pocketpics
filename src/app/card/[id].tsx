@@ -42,6 +42,7 @@ import { ConfirmDelete } from '../../components/viewer/ConfirmDelete';
 import { SpinFx, spinCooldown } from '../../components/viewer/SpinFx';
 import { StatsSheet } from '../../components/viewer/StatsSheet';
 import { powerLabel } from '../../battle/stats';
+import { photoMark } from '../../game/nsfw';
 import { getRarity } from '../../game/rarity';
 import { measureThumb, useCollectionView } from '../../state/collectionView';
 import { useGame } from '../../state/game';
@@ -101,6 +102,15 @@ export default function CardScreen() {
   const sayLocked = () => {
     haptic.warning();
     say({ icon: 'lock-closed', text: 'Carte verrouillée par celui qui te l’a donnée : elle ne peut plus être modifiée', warn: true });
+  };
+  // Filtre de contenu adulte : une photo censurée (ou pas encore vérifiée) ne se recadre pas
+  const sayHidden = (censored: boolean) => {
+    haptic.warning();
+    say(
+      censored
+        ? { icon: 'eye-off', text: 'Photo censurée par le filtre de contenu adulte : elle ne peut pas être recadrée', warn: true }
+        : { icon: 'hourglass-outline', text: 'La photo est en cours de vérification, réessaie dans un instant', warn: true },
+    );
   };
   const lastSpin = useRef(0);
 
@@ -513,6 +523,12 @@ export default function CardScreen() {
                   <AppText style={styles.lockedText}>Verrouillée</AppText>
                 </Pressable>
               ) : null}
+              {card.censored ? (
+                <Pressable onPress={() => sayHidden(true)} style={styles.censoredTag} accessibilityRole="button" accessibilityLabel="Photo censurée">
+                  <Ionicons name="eye-off" size={11} color="#FF8A95" />
+                  <AppText style={styles.censoredText}>Censurée</AppText>
+                </Pressable>
+              ) : null}
             </View>
             <Pressable
               onPress={openStats}
@@ -567,11 +583,12 @@ export default function CardScreen() {
             <Pressable
               onPress={() => {
                 if (card.locked) return sayLocked();
+                if (photoMark(card) !== 'clean') return sayHidden(card.censored);
                 haptic.light();
                 router.push({ pathname: '/card/crop', params: { id: card.id } });
               }}
               hitSlop={12}
-              style={[styles.round, card.locked && { opacity: 0.45 }]}
+              style={[styles.round, (card.locked || photoMark(card) !== 'clean') && { opacity: 0.45 }]}
               accessibilityLabel={card.locked ? 'Recadrage impossible : carte verrouillée' : 'Recadrer la carte'}
               accessibilityRole="button"
             >
@@ -846,6 +863,8 @@ const styles = StyleSheet.create({
   rarityRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   lockedTag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,224,138,0.12)', borderWidth: 1, borderColor: 'rgba(255,224,138,0.45)' },
   lockedText: { fontFamily: fonts.bold, fontSize: 10.5, color: '#FFE08A', letterSpacing: 0.3 },
+  censoredTag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, height: 20, borderRadius: 10, backgroundColor: 'rgba(215,38,61,0.16)', borderWidth: 1, borderColor: 'rgba(255,110,125,0.5)' },
+  censoredText: { fontFamily: fonts.bold, fontSize: 10.5, color: '#FF8A95', letterSpacing: 0.3 },
   statsPill: {
     flexDirection: 'row',
     alignItems: 'center',

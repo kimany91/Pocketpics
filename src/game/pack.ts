@@ -4,6 +4,7 @@ import { CARD_SCHEMA_VERSION, type Card } from '../storage/model';
 import { CARDS_PER_PACK } from './draws';
 import { listPhotoIds, processPhoto, type ProcessedPhoto } from './gallery';
 import { generateStats } from '../battle/stats';
+import { type NsfwScan } from './nsfw';
 import { CHROMATIC_ODDS, type RarityId, getRarity, rollRarity } from './rarity';
 
 export interface GeneratedCard {
@@ -89,7 +90,13 @@ export function makeCard(
   photo: { hash: string; width: number; height: number; sourceId: string | null },
   rarity: RarityId,
   now: number,
-  opts: { origin?: Card['origin']; giver?: string; chromatic?: boolean } = {},
+  opts: {
+    origin?: Card['origin'];
+    giver?: string;
+    chromatic?: boolean;
+    /** Résultat du détecteur de contenu adulte. Par défaut : pas encore vérifiée, donc floutée en attendant. */
+    scan?: { censored: boolean; nsfwScan: NsfwScan };
+  } = {},
 ): Card {
   const id = randomUUID();
   return {
@@ -107,6 +114,8 @@ export function makeCard(
     favorite: false,
     chromatic: opts.chromatic ?? Math.random() < CHROMATIC_ODDS,
     locked: false,
+    censored: opts.scan?.censored === true,
+    nsfwScan: opts.scan?.nsfwScan ?? 'pending',
     ...(opts.giver ? { giver: opts.giver } : {}),
     battle: generateStats(id, getRarity(rarity).rank),
   };

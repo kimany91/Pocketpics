@@ -68,6 +68,27 @@ export interface FriendPhoto {
   thumb: string;
   width: number;
   height: number;
+  /**
+   * Filtre de contenu adulte, chez celui qui pioche seulement (jamais envoyé) :
+   * résultat de SA vérification de la photo et de sa miniature. `null` ou absent :
+   * pas encore vérifiée → la carte est floutée et vérifiée ensuite.
+   */
+  censored?: boolean | null;
+}
+
+/**
+ * Filtre de contenu adulte, chez l'ami qui donne : seule une photo que SON
+ * détecteur a vérifiée et jugée correcte peut partir (pas vérifiée à temps ou
+ * censurée : elle reste chez lui), et jamais celle d'une de ses cartes censurées.
+ */
+export function giverMayOffer(verdict: boolean | null, hash: string, censoredHashes: ReadonlySet<string>): boolean {
+  return verdict === false && !censoredHashes.has(hash);
+}
+
+/** Résultat des vérifications d'une photo reçue (photo et miniature) : censurée si l'une l'est. */
+export function receivedVerdict(verdicts: (boolean | null)[]): boolean | null {
+  if (verdicts.some((v) => v === true)) return true;
+  return verdicts.length > 0 && verdicts.every((v) => v === false) ? false : null;
 }
 
 export type PiocheMsg =

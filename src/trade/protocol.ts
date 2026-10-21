@@ -16,6 +16,12 @@ export interface OfferCard {
   thumb: string;
   /** Verrouillée : celui qui la reçoit ne pourra plus la modifier. */
   locked?: boolean;
+  /**
+   * Censurée par le filtre de contenu adulte de celui qui l'offre (champ ajouté
+   * après, absent chez les anciennes versions). Celui qui la reçoit vérifie la
+   * miniature lui-même ; ce drapeau ne peut que la rendre plus stricte.
+   */
+  censored?: boolean;
 }
 
 export interface TransferCard {

@@ -22,6 +22,7 @@ import { Screen } from '../../components/Screen';
 import { CropStage, EASE } from '../../components/crop/CropStage';
 import { type Size, coverSize, framingToRect } from '../../components/crop/geometry';
 import { useGame } from '../../state/game';
+import { photoMark } from '../../game/nsfw';
 import { cardImageUri } from '../../storage/disk';
 import { CARD_RATIO, colors } from '../../theme';
 import { useScreenFocus } from '../../theme/motion';
@@ -122,7 +123,9 @@ export default function CropScreen() {
   };
 
   // carte verrouillée lors d'un échange : son cadrage ne change plus
-  const missing = !card || card.locked || unreadable || !uri;
+  // filtre de contenu adulte : une photo censurée (ou pas encore vérifiée) ne se recadre pas
+  const hiddenPhoto = !!card && photoMark(card) !== 'clean';
+  const missing = !card || card.locked || hiddenPhoto || unreadable || !uri;
   const ready = !!(base && win && uri);
 
   return (
@@ -138,7 +141,15 @@ export default function CropScreen() {
       >
         {missing ? (
           <AppText variant="caption" style={styles.center}>
-            {!card ? 'Cette carte n’est plus dans ta collection.' : card.locked ? 'Cette carte est verrouillée : elle ne peut plus être modifiée.' : 'La photo de cette carte est illisible.'}
+            {!card
+              ? 'Cette carte n’est plus dans ta collection.'
+              : card.locked
+                ? 'Cette carte est verrouillée : elle ne peut plus être modifiée.'
+                : card.censored
+                  ? 'Cette photo est censurée par le filtre de contenu adulte : elle ne peut pas être recadrée.'
+                  : hiddenPhoto
+                    ? 'La photo est en cours de vérification. Réessaie dans un instant.'
+                    : 'La photo de cette carte est illisible.'}
           </AppText>
         ) : ready && win && base ? (
           <CropStage uri={uri} base={base} win={win} zoom={zoom} offX={offX} offY={offY} grip={grip} enabled={focused && !busy} />
