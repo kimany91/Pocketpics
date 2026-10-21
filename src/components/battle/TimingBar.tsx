@@ -3,10 +3,13 @@
  * puis on touche à nouveau quand il passe sur la cible au centre. Plus on est
  * près du centre, plus le coup fait mal. Une attaque à deux coups enchaîne
  * deux passages (le second repart dans l'autre sens).
+ *
+ * Pendant le mini-jeu, toucher n'importe où sur l'écran compte comme toucher la
+ * barre : l'écran de combat appelle `handle.current.tap()` (voir fight.tsx).
  */
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import Animated, { Easing, FadeIn, ZoomIn, cancelAnimation, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
@@ -30,17 +33,24 @@ export const QUALITY_LABEL: Record<Quality, { text: string; color: string }> = {
 
 type Phase = 'ready' | 'running' | 'stopped';
 
+/** Commande de la barre depuis l'extérieur : un toucher ailleurs sur l'écran. */
+export interface TimingHandle {
+  tap(): void;
+}
+
 export function TimingBar({
   hits,
   attackName,
   accent,
   compact,
+  handle,
   onDone,
 }: {
   hits: number;
   attackName: string;
   accent: string;
   compact?: boolean;
+  handle?: Ref<TimingHandle>;
   onDone(timings: number[]): void;
 }) {
   const [barW, setBarW] = useState(0);
@@ -98,21 +108,35 @@ export function TimingBar({
     });
   };
 
+  /** Dernier toucher pris en compte : un même toucher ne compte jamais deux fois. */
+  const lastTap = useRef(0);
   const onPress = () => {
-    if (phase === 'ready') {
+    const now = Date.now();
+    if (now - lastTap.current < 80) return;
+    lastTap.current = now;
+    if (running.current) stop(Math.abs(pos.value - 0.5) / 0.5);
+    else if (phase === 'ready' && !finished.current) {
       haptic.tick();
       launch(forward);
-    } else if (phase === 'running') {
-      stop(Math.abs(pos.value - 0.5) / 0.5);
     }
   };
+  useImperativeHandle(handle, () => ({ tap: onPress }));
 
   const cursorStyle = useAnimatedStyle(() => ({ transform: [{ translateX: pos.value * Math.max(0, barW - CURSOR_W) }] }));
   const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
   const label = result ? QUALITY_LABEL[result.q] : null;
 
   return (
-    <Pressable onPress={onPress} style={[styles.root, compact && { gap: 6, paddingVertical: 2 }]} accessibilityRole="button" accessibilityLabel={phase === 'ready' ? 'Lancer le curseur' : 'Arrêter le curseur'}>
+    // dès que le doigt se pose (pas au relâché, ni après un délai) : la visée reste précise
+    <View
+      onStartShouldSetResponder={() => true}
+      onResponderGrant={onPress}
+      onAccessibilityTap={onPress}
+      accessible
+      style={[styles.root, compact && { gap: 6, paddingVertical: 2 }]}
+      accessibilityRole="button"
+      accessibilityLabel={phase === 'ready' ? 'Lancer le curseur' : 'Arrêter le curseur'}
+    >
       <View style={styles.head}>
         <AppText variant="label" numberOfLines={1} style={{ flex: 1, color: accent }}>
           {attackName}
@@ -146,7 +170,7 @@ export function TimingBar({
           {phase === 'ready' ? 'Touche pour lancer le curseur' : phase === 'running' ? 'Touche quand il passe sur la cible !' : ' '}
         </AppText>
       </Animated.View>
-    </Pressable>
+    </View>
   );
 }
 

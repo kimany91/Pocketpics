@@ -9,9 +9,10 @@
  * parle. Un coup se joue en trois temps : l'élan (`use`), la ruée de la carte
  * qui attaque (`hit`, `STRIKE_MS`), puis l'impact au contact : image figée un
  * instant, chiffre, tremblement de l'écran à la mesure des PV perdus (zoom et
- * éclair en plus sur un critique). Au K.O., la carte éclate ; le dernier K.O.
- * affiche un grand « K.O. ! » avant l'écran de fin (confettis, étoiles une à une,
- * pièces qui défilent).
+ * éclair en plus sur un critique, et un grand « Critique ! » que les deux joueurs
+ * voient). Pendant la visée, toucher n'importe où compte comme toucher la barre.
+ * Au K.O., la carte éclate ; le dernier K.O. affiche un grand « K.O. ! » avant
+ * l'écran de fin (confettis, étoiles une à une, pièces qui défilent).
  */
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -80,7 +81,8 @@ import { KIND_LOOK, STATUS_LOOK, activeStatuses, attackHint, turnOf } from '../.
 import { FitLines, FitText, type TextPart, fitFontSize } from '../../components/battle/FitText';
 import { ArenaBackdrop } from '../../components/battle/ArenaBackdrop';
 import { InspectFighter } from '../../components/battle/InspectFighter';
-import { QUALITY_LABEL, TimingBar } from '../../components/battle/TimingBar';
+import { QUALITY_LABEL, TimingBar, type TimingHandle } from '../../components/battle/TimingBar';
+import { CritStamp } from '../../components/battle/CritStamp';
 import { TurnBanner } from '../../components/battle/TurnBanner';
 import { VsIntro } from '../../components/battle/VsIntro';
 import { SoundSheet } from '../../components/SoundSheet';
@@ -289,6 +291,10 @@ export default function FightScreen() {
   };
   /** Grand « K.O. ! » quand la dernière carte d'un camp tombe. */
   const [koStamp, setKoStamp] = useState<{ n: number; won: boolean }>({ n: 0, won: true });
+  /** Grand « Critique ! » à chaque coup critique, quel que soit le camp (rejoué chez les deux joueurs). */
+  const [crit, setCrit] = useState<{ n: number; short: boolean }>({ n: 0, short: false });
+  /** Barre de visée : un toucher n'importe où sur l'écran lui est transmis. */
+  const timingRef = useRef<TimingHandle>(null);
   const [pending, setPending] = useState<{ slot: 0 | 1; attack: Attack; hits: number } | null>(null);
   const [switchTo, setSwitchTo] = useState<number | null>(null);
   const [result, setResult] = useState<SideId | null>(null);
@@ -418,6 +424,11 @@ export default function FightScreen() {
                 flashScreen(e.execute ? '#FF2E3F' : '#FFF3C2', 0.26);
                 punch(0.035);
               } else if (part > 0.25) punch(0.015);
+              if (e.quality === 'crit') {
+                // plus court si le coup met K.O. (le « K.O. ! » suit de près)
+                setCrit((c) => ({ n: c.n + 1, short: e.hp <= 0 }));
+                playSfx('up5', { volume: 0.5 });
+              }
             } else doReact(e.side, 'whiff');
             if (e.quality === 'miss') playSfx('miss');
             else if (e.quality === 'crit' || e.execute) playSfx('crit');
@@ -433,7 +444,8 @@ export default function FightScreen() {
                 ? {
                     main: `-${e.damage}`,
                     color: strong ? colors.gold : '#FFFFFF',
-                    sub: tag ?? q.text,
+                    // critique : le grand « Critique ! » le dit déjà
+                    sub: tag ?? (e.quality === 'crit' ? undefined : q.text),
                     subColor: tag ? colors.gold : q.color,
                     big: strong,
                   }
@@ -871,7 +883,7 @@ export default function FightScreen() {
         : null;
   const tutoActions =
     tutoOn && mode === 'timing' && tutoAims < 2
-      ? { text: 'Touche la barre, puis touche encore quand le curseur passe sur la cible dorée !', sub: 'Plus tu es près du centre, plus le coup fait mal' }
+      ? { text: 'Touche l’écran pour lancer le curseur, puis touche encore quand il passe sur la cible dorée !', sub: 'Plus tu es près du centre, plus le coup fait mal' }
       : tutoOn && mode === 'menu' && stunned
         ? { text: 'Ta carte est étourdie : passe ton tour, ou envoie une remplaçante' }
         : null;
@@ -1032,7 +1044,7 @@ export default function FightScreen() {
           <View>
             {mode === 'timing' && pending ? (
               <Animated.View entering={FadeInUp.duration(220)}>
-                <TimingBar hits={pending.hits} attackName={pending.attack.name} accent={getRarity(me.rarity).color} onDone={onTimed} compact={layout.compact} />
+                <TimingBar handle={timingRef} hits={pending.hits} attackName={pending.attack.name} accent={getRarity(me.rarity).color} onDone={onTimed} compact={layout.compact} />
               </Animated.View>
             ) : mode === 'confirmSwitch' && switchTo !== null ? (
               <Animated.View entering={FadeIn.duration(180)} style={{ gap: 10 }}>
@@ -1104,7 +1116,18 @@ export default function FightScreen() {
         </View>
       </View>
 
+      {/* Visée : tout l'écran (sauf la barre du haut : abandon, son) compte comme la barre,
+          dès que le doigt se pose (un Pressable attend 50 ms sur le web) */}
+      {mode === 'timing' && pending ? (
+        <View
+          onStartShouldSetResponder={() => true}
+          onResponderGrant={() => timingRef.current?.tap()}
+          accessibilityLabel="Toucher pour viser"
+          style={[StyleSheet.absoluteFill, { top: insets.top + 48 }]}
+        />
+      ) : null}
       <Flash trigger={flash.n} color={flash.color} peak={flash.peak} />
+      {crit.n > 0 && result === null ? <CritStamp key={crit.n} width={width} short={crit.short} /> : null}
       {koStamp.n > 0 && result === null ? <KoStamp key={koStamp.n} won={koStamp.won} /> : null}
       {intro ? (
         <VsIntro arenaLabel={foeInfo.label} bot={foeInfo.name} tint={foeInfo.tint} width={width} myMmr={myMmr} foeMmr={foeInfo.mmr} stage={foeInfo.stage} art={foeArt} onDone={endIntro} />
