@@ -57,7 +57,7 @@ export default function OnlineScanScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <Header title={friend ? 'Scanner un code ami' : 'Scanner un code de combat'} />
+      <Header title={friend ? 'Scanner le QR code d’un ami' : 'Scanner un code de combat'} />
       {!permission ? null : !permission.granted ? (
         <View style={styles.center}>
           <AppText variant="body" style={{ textAlign: 'center', marginBottom: 20 }}>
@@ -82,7 +82,7 @@ export default function OnlineScanScreen() {
                     : 'Code lu, connexion…'
                   : bad
                     ? friend
-                      ? 'Ce QR code n’est pas un code ami PocketPics.'
+                      ? 'Ce QR code n’est pas celui d’un joueur PocketPics.'
                       : 'Ce QR code n’est pas un combat PocketPics.'
                     : 'Vise le QR code affiché sur le téléphone de ton ami'}
               </AppText>

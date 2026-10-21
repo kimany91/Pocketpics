@@ -54,7 +54,7 @@ export function FriendList({ fresh, active }: { fresh: string[]; active: boolean
         <Animated.View entering={FadeInDown.delay(160)} style={styles.empty}>
           <Ionicons name="people-outline" size={26} color={colors.textDim} />
           <AppText variant="caption" style={{ flex: 1 }}>
-            Donne ton code à un ami (ou montre-lui ton QR code), ou entre le sien. Vous pourrez vous défier dès que vous êtes en ligne tous les deux.
+            Donne ton pseudo et tes 4 caractères à un ami (ou montre-lui ton QR code), ou entre les siens. Vous pourrez vous défier dès que vous êtes en ligne tous les deux.
           </AppText>
         </Animated.View>
       ) : (
@@ -82,7 +82,7 @@ export function FriendList({ fresh, active }: { fresh: string[]; active: boolean
               router.push({ pathname: '/friend/[code]', params: { code: f.code } });
             }}
             onRemove={() =>
-              confirmAction(`Retirer ${f.name} ?`, 'Tu pourras le rajouter avec son code.', 'Retirer', () => codes.forEach((c) => removeFriend(c)))
+              confirmAction(`Retirer ${f.name} ?`, 'Tu pourras le rajouter avec son pseudo et ses 4 caractères.', 'Retirer', () => codes.forEach((c) => removeFriend(c)))
             }
           />
         ))
@@ -159,6 +159,8 @@ function FriendRow({
           <View style={styles.statusRow}>
             <OnlineDot online={online} active={active} />
             <AppText variant="caption" numberOfLines={1} style={{ flex: 1 }}>
+              {/* ses 4 caractères ici : sur la ligne du nom, ils seraient coupés par les boutons */}
+              {friend.tag ? <AppText variant="caption" style={{ color: colors.text }}>{`#${friend.tag} · `}</AppText> : null}
               <AppText variant="caption" style={{ color: rank.tier.color }}>
                 {rank.label}
               </AppText>

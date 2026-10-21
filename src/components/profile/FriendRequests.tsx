@@ -44,6 +44,7 @@ export function FriendRequests({ onAccepted }: { onAccepted(code: string): void 
               <View style={{ flex: 1 }}>
                 <AppText variant="heading" numberOfLines={1}>
                   {r.name}
+                  {r.tag ? <AppText variant="caption" style={{ color: colors.textDim }}>{`#${r.tag}`}</AppText> : null}
                 </AppText>
                 <AppText variant="caption">{`${rank.label} · veut être ton ami`}</AppText>
               </View>

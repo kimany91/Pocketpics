@@ -16,6 +16,7 @@ export function useSocialScreen(active = true) {
   const [, tick] = useState(0);
   useEffect(() => {
     useSocial.getState().myCode();
+    useSocial.getState().myTag();
     useSocial.getState().start();
   }, []);
   useEffect(() => {

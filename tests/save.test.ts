@@ -86,3 +86,48 @@ test('échange : poser ou retirer un cadenas change l’accord (les validations 
   // l'autre joueur voit le même accord, dans l'autre sens
   assert.equal(mirrorKey(sealed), offerKey([offerTag('b', false)], [offerTag('a', true)]));
 });
+
+test('pseudo et 4 caractères : les trois façons de l’écrire donnent le même joueur', async () => {
+  const { parseFriendInput, handleKey, cleanPseudo, newFriendTag, isFriendTag, FRIEND_QR_PREFIX } = await import('../src/net/socialCore');
+  const want = handleKey('Léo', '7F3K');
+  for (const typed of ['Léo#7F3K', 'Léo #7F3K', 'Léo7F3K', 'leo#7f3k', ' LÉO # 7F3K ']) {
+    const p = parseFriendInput(typed);
+    assert.ok(p && 'key' in p, typed);
+    assert.equal(p.key, want, typed);
+    assert.equal(p.tag, '7F3K');
+  }
+  // un pseudo qui finit par des chiffres : ce sont toujours les 4 derniers caractères
+  const p = parseFriendInput('Joueur 4821#AB12');
+  assert.ok(p && 'key' in p);
+  assert.equal(p.key, handleKey('Joueur 4821', 'AB12'));
+  assert.equal((parseFriendInput('Joueur 4821AB12') as { key: string }).key, p.key);
+  // lettres confondues dans le tag : O → 0, I/L → 1
+  assert.equal((parseFriendInput('Léo#7FOI') as { tag: string }).tag, '7F01');
+  // trop court, ou tag impossible
+  assert.equal(parseFriendInput('7F3K'), null);
+  assert.equal(parseFriendInput('Léo#7F3U'), null);
+  // QR code et ancien code ami : le code directement
+  assert.deepEqual(parseFriendInput(`${FRIEND_QR_PREFIX}ABCDEFGH12`), { code: 'ABCDEFGH12' });
+  assert.deepEqual(parseFriendInput('ABC-DEF-GH12'), { code: 'ABCDEFGH12' });
+  // le pseudo ne peut pas contenir « # »
+  assert.equal(cleanPseudo('  Lé#o   le  Roi '), 'Léo le Roi');
+  const tag = newFriendTag((n) => new Uint8Array(n).map((_, i) => i * 7));
+  assert.ok(isFriendTag(tag));
+});
+
+test('annuaire : une fiche ne s’ouvre qu’avec le bon pseudo et les bons 4 caractères', async () => {
+  const { sealDirectory, openDirectory, handleKey } = await import('../src/net/socialCore');
+  const key = handleKey('Léo', '7F3K');
+  const e = { code: 'ABCDEFGH12', name: 'Léo', tag: '7F3K', at: 1 };
+  assert.deepEqual(openDirectory(key, sealDirectory(key, e)), e);
+  assert.equal(openDirectory(handleKey('Léo', '7F3J'), sealDirectory(key, e)), null);
+  assert.equal(openDirectory(key, new Uint8Array(0)), null, 'fiche effacée');
+});
+
+test('sauvegarde : tag du joueur et de ses amis gardés s’ils sont valides', () => {
+  const s = migrateState({ friendTag: '7F3K', friends: [{ code: 'ABCDEFGH12', name: 'Léo', tag: '9Z9Z' }, { code: 'BBCDEFGH12', name: 'Max', tag: 'nope' }] });
+  assert.equal(s.friendTag, '7F3K');
+  assert.equal(s.friends[0].tag, '9Z9Z');
+  assert.equal(s.friends[1].tag, undefined);
+  assert.equal(migrateState({}).friendTag, null);
+});

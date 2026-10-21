@@ -1,6 +1,7 @@
 /**
- * Ajouter un ami : son code tapé à la main (ou scanné depuis son QR code).
- * Même bloc sur l'onglet Profil et sur l'écran Amis.
+ * Ajouter un ami : son pseudo et ses 4 caractères (« Léo#7F3K », « Léo #7F3K »
+ * ou « Léo7F3K », peu importe), ou son QR code. Le jeu cherche le joueur dans
+ * l'annuaire du relais, puis l'ajoute. Même bloc sur l'onglet Profil et sur l'écran Amis.
  */
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -9,7 +10,7 @@ import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 
 import { useSocial } from '../../net/social';
-import { parseFriendCode } from '../../net/socialCore';
+import { parseFriendInput } from '../../net/socialCore';
 import { colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
 import { AppText } from '../AppText';
@@ -19,30 +20,42 @@ import { useShake } from '../online/Pulse';
 export function FriendAdd({ onAdded }: { onAdded(code: string): void }) {
   const addFriend = useSocial((s) => s.addFriend);
   const [draft, setDraft] = useState('');
+  const [searching, setSearching] = useState(false);
   const [note, setNote] = useState<{ text: string; ok: boolean; n: number } | null>(null);
   const [shakes, setShakes] = useState(0);
   const shake = useShake(shakes);
 
   const say = (text: string, ok: boolean) => setNote((n) => ({ text, ok, n: (n?.n ?? 0) + 1 }));
 
-  const add = (raw: string) => {
-    const c = parseFriendCode(raw);
-    if (!c) {
-      haptic.warning();
-      setShakes((n) => n + 1);
-      say('Ce code ami n’est pas valide (10 caractères).', false);
-      return;
+  const fail = (text: string) => {
+    haptic.warning();
+    setShakes((n) => n + 1);
+    say(text, false);
+  };
+
+  const add = async (raw: string) => {
+    if (searching) return;
+    const parsed = parseFriendInput(raw);
+    if (!parsed) return fail('Écris son pseudo suivi de ses 4 caractères, par exemple Léo#7F3K.');
+    let code: string;
+    let hint: { name: string; tag: string } | undefined;
+    if ('code' in parsed) code = parsed.code;
+    else {
+      if (useSocial.getState().status !== 'online') return fail('Pas de connexion pour le moment : réessaie dans un instant.');
+      setSearching(true);
+      const found = await useSocial.getState().findPlayer(parsed.key);
+      setSearching(false);
+      if (!found) return fail(`Aucun joueur « ${raw.trim()} ». Vérifie son pseudo et ses 4 caractères (il doit avoir ouvert le jeu depuis la dernière mise à jour).`);
+      code = found.code;
+      hint = { name: found.name, tag: found.tag };
     }
-    const r = addFriend(c);
-    if (r === 'self') {
-      setShakes((n) => n + 1);
-      say('C’est ton propre code !', false);
-      return;
-    }
+    const r = addFriend(code, hint);
+    if (r === 'self') return fail('C’est toi !');
     haptic.success();
     setDraft('');
-    if (r !== 'exists') onAdded(c);
-    say(r === 'exists' ? 'Déjà dans tes amis.' : 'Ami ajouté ! Il te verra dès qu’il ouvrira le jeu.', true);
+    if (r !== 'exists') onAdded(code);
+    const who = hint ? `${hint.name}#${hint.tag}` : 'Ami';
+    say(r === 'exists' ? `${who} est déjà dans tes amis.` : `${who} ajouté ! Il te verra dès qu’il ouvrira le jeu.`, true);
   };
 
   return (
@@ -55,20 +68,20 @@ export function FriendAdd({ onAdded }: { onAdded(code: string): void }) {
           value={draft}
           onChangeText={(t) => {
             setNote(null);
-            setDraft(t.toUpperCase());
+            setDraft(t);
           }}
-          placeholder="Son code ami"
+          placeholder="Pseudo#1234"
           placeholderTextColor={colors.textFaint}
-          autoCapitalize="characters"
+          autoCapitalize="none"
           autoCorrect={false}
-          maxLength={14}
+          maxLength={40}
           style={[styles.input, note && !note.ok && { borderColor: colors.danger }]}
           returnKeyType="done"
-          onSubmitEditing={() => add(draft)}
+          onSubmitEditing={() => void add(draft)}
           selectionColor={colors.gold}
-          accessibilityLabel="Code ami à ajouter"
+          accessibilityLabel="Pseudo et 4 caractères de l’ami à ajouter"
         />
-        <Button label="Ajouter" onPress={() => add(draft)} disabled={draft.replace(/[^0-9A-Za-z]/g, '').length < 10} />
+        <Button label={searching ? 'Recherche' : 'Ajouter'} loading={searching} onPress={() => void add(draft)} disabled={!parseFriendInput(draft)} />
         {Platform.OS !== 'web' ? (
           <Pressable
             onPress={() => router.push({ pathname: '/online/scan', params: { for: 'friend' } })}
@@ -107,8 +120,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     color: colors.text,
     fontFamily: fonts.bold,
-    fontSize: 17,
-    letterSpacing: 1.5,
+    fontSize: 16,
   },
   note: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   scan: { width: 50, height: 50, borderRadius: 14, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' },

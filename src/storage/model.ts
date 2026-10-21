@@ -120,6 +120,12 @@ export interface SaveState {
   rank: RankState;
   /** Code ami, créé au premier lancement en ligne (ajouté après : `null` si absent). */
   friendCode: string | null;
+  /**
+   * Les 4 caractères après le pseudo (« Léo#7F3K ») : c'est ce que les amis
+   * tapent pour l'ajouter. Tiré au hasard, retiré en cas de doublon (ajouté
+   * après : `null` si absent, créé à la connexion).
+   */
+  friendTag: string | null;
   /** Amis ajoutés (ajouté après : liste vide si absent). */
   friends: Friend[];
   /** Cartes épinglées sur le profil, dans l'ordre choisi (6 au plus). */
@@ -141,6 +147,8 @@ export interface Friend {
   addedAt: number;
   /** L'ami nous a ajouté lui aussi. */
   mutual: boolean;
+  /** Ses 4 caractères (« Léo#7F3K »), quand on les connaît. */
+  tag?: string;
 }
 
 type Raw = Record<string, unknown>;
@@ -218,6 +226,7 @@ export function createInitialState(now = Date.now()): SaveState {
     soloDay: null,
     rank: initialRank(),
     friendCode: null,
+    friendTag: null,
     friends: [],
     pinned: [],
     quests: initialQuests(now),
@@ -227,6 +236,7 @@ export function createInitialState(now = Date.now()): SaveState {
 }
 
 const FRIEND_CODE = /^[0-9A-Z]{10}$/;
+const FRIEND_TAG = /^[0-9A-Z]{4}$/;
 
 /** Nombre de cartes qu'on peut épingler sur son profil. */
 export const MAX_PINNED = 6;
@@ -238,7 +248,15 @@ function migrateFriends(raw: unknown): Friend[] {
     if (!f || typeof f !== 'object') continue;
     const r = f as Raw;
     if (typeof r.code !== 'string' || !FRIEND_CODE.test(r.code) || out.some((x) => x.code === r.code)) continue;
-    out.push({ ...r, code: r.code, name: str(r.name, 'Ami').slice(0, 24), mmr: Math.max(0, num(r.mmr, 0)), addedAt: num(r.addedAt, 0), mutual: r.mutual === true });
+    out.push({
+      ...r,
+      code: r.code,
+      name: str(r.name, 'Ami').slice(0, 24),
+      mmr: Math.max(0, num(r.mmr, 0)),
+      addedAt: num(r.addedAt, 0),
+      mutual: r.mutual === true,
+      tag: typeof r.tag === 'string' && FRIEND_TAG.test(r.tag) ? r.tag : undefined,
+    });
   }
   return out;
 }
@@ -317,6 +335,7 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     soloDay: migrateSoloDay(s.soloDay),
     rank: migrateRank(s.rank),
     friendCode: typeof s.friendCode === 'string' && FRIEND_CODE.test(s.friendCode) ? s.friendCode : null,
+    friendTag: typeof s.friendTag === 'string' && FRIEND_TAG.test(s.friendTag) ? s.friendTag : null,
     friends: migrateFriends(s.friends),
     pinned: Array.isArray(s.pinned) ? s.pinned.filter((x): x is string => typeof x === 'string').slice(0, MAX_PINNED) : [],
     quests: migrateQuests(s.quests, now),

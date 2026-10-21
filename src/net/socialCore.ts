@@ -44,6 +44,96 @@ export function parseFriendCode(input: string): string | null {
   return code.length === FRIEND_CODE_LENGTH && [...code].every((c) => ALPHABET.includes(c)) ? code : null;
 }
 
+/* ----------------------------- Pseudo#TAG ----------------------------- *
+ * Ce que les joueurs se donnent : leur pseudo suivi de 4 caractères tirés au
+ * hasard (« Léo#7F3K »). Le code ami (10 caractères) reste l'adresse interne
+ * (boîte aux lettres, présence, QR code) ; un « annuaire » sur le relais fait
+ * le lien : sous un sujet dérivé de pseudo + tag, chaque joueur garde un
+ * message retenu qui donne son code. Deux joueurs ont le même pseudo et le
+ * même tag : le second s'en aperçoit (il lit le message de l'autre sous son
+ * propre sujet) et tire un autre tag.
+ */
+export const TAG_LENGTH = 4;
+
+export function newFriendTag(randomBytes: (n: number) => Uint8Array): string {
+  return Array.from(randomBytes(TAG_LENGTH), (b) => ALPHABET[b & 31]).join('');
+}
+
+export const isFriendTag = (t: unknown): t is string => typeof t === 'string' && t.length === TAG_LENGTH && [...t].every((c) => ALPHABET.includes(c));
+
+/** Pseudo propre : pas de « # » (il sépare le tag), espaces simplifiés, 24 caractères au plus. */
+export const cleanPseudo = (name: string) => name.replace(/#/g, '').replace(/\s+/g, ' ').trim().slice(0, 24);
+
+/** Pseudo tel qu'on le compare : sans majuscules, accents, espaces ni « # » (« Léo » = « leo »). */
+export const pseudoKey = (name: string) =>
+  name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[\s#]/g, '');
+
+/** Tag tapé : majuscules, et les lettres qu'on confond corrigées (O → 0, I/L → 1). */
+const tagFrom = (raw: string) => raw.toUpperCase().replace(/O/g, '0').replace(/[IL]/g, '1');
+
+export const formatHandle = (name: string, tag: string) => `${cleanPseudo(name)}#${tag}`;
+
+/** Clé d'annuaire d'un joueur. */
+export const handleKey = (name: string, tag: string) => `${pseudoKey(name)}#${tag}`;
+
+/**
+ * Ce que le joueur a tapé (ou scanné) pour ajouter un ami :
+ *  - « Pseudo#1234 », « Pseudo #1234 » ou « Pseudo1234 » : les 4 derniers caractères sont le tag ;
+ *  - le lien d'un QR code, ou un ancien code ami écrit « XXX-XXX-XXXX » : le code directement.
+ */
+export function parseFriendInput(input: string): { code: string } | { key: string; tag: string; pseudo: string } | null {
+  const raw = input.trim();
+  if (raw.startsWith(FRIEND_QR_PREFIX) || /^[0-9A-Za-z]{3}-[0-9A-Za-z]{3}-[0-9A-Za-z]{4}$/.test(raw)) {
+    const code = parseFriendCode(raw);
+    return code ? { code } : null;
+  }
+  const compact = raw.replace(/[\s#]/g, '');
+  if (compact.length <= TAG_LENGTH) return null;
+  const tag = tagFrom(compact.slice(-TAG_LENGTH));
+  const pseudo = compact.slice(0, -TAG_LENGTH);
+  if (!isFriendTag(tag) || !pseudoKey(pseudo)) return null;
+  return { key: `${pseudoKey(pseudo)}#${tag}`, tag, pseudo };
+}
+
+export const directoryTopic = (key: string) => roomTopic(key, 'name/');
+const directoryKey = (key: string) => roomKey(key, 'name/');
+
+/** Fiche d'annuaire : sous pseudo + tag, le code ami du joueur. */
+export interface DirectoryEntry {
+  code: string;
+  name: string;
+  tag: string;
+  at: number;
+}
+
+export function sealDirectory(key: string, e: DirectoryEntry): Uint8Array {
+  const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
+  const box = nacl.secretbox(utf8Encode(JSON.stringify(e)), nonce, directoryKey(key));
+  const out = new Uint8Array(nonce.length + box.length);
+  out.set(nonce);
+  out.set(box, nonce.length);
+  return out;
+}
+
+export function openDirectory(key: string, bytes: Uint8Array): DirectoryEntry | null {
+  const n = nacl.secretbox.nonceLength;
+  if (bytes.length <= n) return null;
+  const plain = nacl.secretbox.open(bytes.slice(n), bytes.slice(0, n), directoryKey(key));
+  if (!plain) return null;
+  try {
+    const e = JSON.parse(utf8Decode(plain)) as Partial<DirectoryEntry>;
+    return typeof e.code === 'string' && e.code.length === FRIEND_CODE_LENGTH && typeof e.name === 'string' && isFriendTag(e.tag)
+      ? { code: e.code, name: e.name.slice(0, 24), tag: e.tag, at: Number(e.at) || 0 }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export const inboxTopic = (code: string) => roomTopic(code, 'inbox/');
 export const presenceTopic = (code: string) => roomTopic(code, 'presence/');
 const keyOf = (code: string) => roomKey(code, 'friend/');
@@ -53,11 +143,11 @@ export type PinnedCard = NetFighter;
 
 export type SocialMsg =
   /** `pv` : version de la Pioche amicale de son app (absente : app trop ancienne pour piocher chez lui). */
-  | { k: 'presence'; from: string; name: string; mmr: number; online: boolean; at: number; pv?: number }
+  | { k: 'presence'; from: string; name: string; mmr: number; online: boolean; at: number; pv?: number; tag?: string }
   /** Demande d'ami (ou « je t'ai ajouté »). */
-  | { k: 'req'; from: string; name: string; mmr: number; at: number }
+  | { k: 'req'; from: string; name: string; mmr: number; at: number; tag?: string }
   /** Réponse : « moi aussi, je t'ai ajouté ». */
-  | { k: 'ok'; from: string; name: string; mmr: number; at: number }
+  | { k: 'ok'; from: string; name: string; mmr: number; at: number; tag?: string }
   /**
    * Défi, invitation à échanger (`kind: 'trade'` : `room` est le code de l'échange)
    * ou demande de Pioche amicale (`kind: 'draw'` : `room` est le salon de la pioche).

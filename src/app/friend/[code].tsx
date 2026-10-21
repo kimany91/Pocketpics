@@ -101,6 +101,7 @@ export default function FriendProfileScreen() {
           <View style={{ flex: 1, gap: 3 }}>
             <AppText variant="title" numberOfLines={1}>
               {friend.name}
+              {friend.tag ? <AppText style={styles.tagText}>{`#${friend.tag}`}</AppText> : null}
             </AppText>
             <AppText style={[styles.rankLabel, { color: rank.tier.color }]}>{rank.label}</AppText>
             <View style={styles.statusRow}>
@@ -250,6 +251,7 @@ const styles = StyleSheet.create({
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   card: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 20, borderWidth: 1.5, backgroundColor: colors.surface, overflow: 'hidden' },
   rankLabel: { fontFamily: fonts.bold, fontSize: 13 },
+  tagText: { fontFamily: fonts.bold, fontSize: 15, color: colors.textDim },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   note: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, backgroundColor: colors.surface2 },

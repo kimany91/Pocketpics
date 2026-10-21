@@ -31,6 +31,7 @@ import { getRarity } from '../game/rarity';
 import { type CropRect, cropImage } from '../game/gallery';
 import { type FriendDrawPayment, type FriendPhoto, payFriendDraw } from '../game/friendDraw';
 import { generatePack, makeCard } from '../game/pack';
+import { cleanPseudo } from '../net/socialCore';
 import * as disk from '../storage/disk';
 import { MAX_PINNED } from '../storage/model';
 import type { Card, Friend, SaveState } from '../storage/model';
@@ -87,6 +88,10 @@ interface GameStore {
   resetStreak(): void;
   /** Donne un code ami au joueur s'il n'en a pas encore. */
   ensureFriendCode(make: () => string): string;
+  /** Donne au joueur ses 4 caractères (« Léo#7F3K ») s'il n'en a pas encore. */
+  ensureFriendTag(make: () => string): string;
+  /** Change ses 4 caractères (doublon détecté : un autre joueur a le même pseudo et le même tag). */
+  setFriendTag(tag: string): void;
   /** Ajoute ou met à jour un ami. */
   upsertFriend(friend: Pick<Friend, 'code' | 'name'> & Partial<Friend>): void;
   removeFriend(code: string): void;
@@ -499,6 +504,24 @@ export const useGame = create<GameStore>((set, get) => ({
     return next.friendCode as string;
   },
 
+  ensureFriendTag(make) {
+    const save = get().save;
+    if (!save) return '';
+    if (save.friendTag) return save.friendTag;
+    const next: SaveState = { ...save, friendTag: make() };
+    persistState(next);
+    set({ save: next });
+    return next.friendTag as string;
+  },
+
+  setFriendTag(tag) {
+    const save = get().save;
+    if (!save || save.friendTag === tag) return;
+    const next: SaveState = { ...save, friendTag: tag };
+    persistState(next);
+    set({ save: next });
+  },
+
   upsertFriend(f) {
     const save = get().save;
     if (!save || f.code === save.friendCode) return;
@@ -510,8 +533,9 @@ export const useGame = create<GameStore>((set, get) => ({
       mmr: f.mmr ?? old?.mmr ?? 0,
       addedAt: old?.addedAt ?? Date.now(),
       mutual: f.mutual ?? old?.mutual ?? false,
+      tag: f.tag ?? old?.tag,
     };
-    if (old && old.name === merged.name && old.mmr === merged.mmr && old.mutual === merged.mutual) return;
+    if (old && old.name === merged.name && old.mmr === merged.mmr && old.mutual === merged.mutual && old.tag === merged.tag) return;
     const friends = old ? save.friends.map((x) => (x.code === f.code ? merged : x)) : [...save.friends, merged];
     const next: SaveState = { ...(old ? save : withQuest(save, 'friendAdd')), friends };
     persistState(next);
@@ -581,7 +605,8 @@ export const useGame = create<GameStore>((set, get) => ({
 
   setPlayerName(rawName) {
     const save = get().save;
-    const name = rawName.trim().slice(0, 24);
+    // pas de « # » : il sépare le pseudo de ses 4 caractères (« Léo#7F3K »)
+    const name = cleanPseudo(rawName);
     if (!save || !name) return;
     const next = { ...save, playerName: name };
     persistState(next);

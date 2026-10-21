@@ -1,5 +1,6 @@
 /**
- * Mon code ami : son QR code, le code en clair, ma présence en ligne et le
+ * Comment mes amis m'ajoutent : mon pseudo et mes 4 caractères (« Léo#7F3K »),
+ * le QR code (qui contient mon code ami complet), ma présence en ligne et le
  * bouton de partage. Même bloc sur l'onglet Profil et sur l'écran Amis.
  */
 import { Ionicons } from '@expo/vector-icons';
@@ -9,7 +10,7 @@ import QRCode from 'react-native-qrcode-svg';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { useSocial } from '../../net/social';
-import { FRIEND_QR_PREFIX, formatFriendCode } from '../../net/socialCore';
+import { FRIEND_QR_PREFIX, cleanPseudo } from '../../net/socialCore';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
@@ -21,6 +22,9 @@ const QR_SIZE = 92;
 
 export function FriendCodeCard({ active }: { active: boolean }) {
   const code = useGame((s) => s.save?.friendCode ?? '');
+  const tag = useGame((s) => s.save?.friendTag ?? '');
+  const name = useGame((s) => cleanPseudo(s.save?.playerName ?? ''));
+  const handle = tag ? `${name}#${tag}` : '';
   const status = useSocial((s) => s.status);
   const online = status === 'online';
   const statusColor = online ? colors.success : status === 'connecting' ? colors.gold : colors.danger;
@@ -42,9 +46,16 @@ export function FriendCodeCard({ active }: { active: boolean }) {
         )}
       </View>
       <View style={{ flex: 1, gap: 4 }}>
-        <AppText style={styles.kicker}>Ton code ami</AppText>
-        <AppText selectable style={styles.code} numberOfLines={1} adjustsFontSizeToFit>
-          {code ? formatFriendCode(code) : '…'}
+        <AppText style={styles.kicker}>Pour t’ajouter</AppText>
+        <AppText selectable style={styles.code} numberOfLines={1} adjustsFontSizeToFit accessibilityLabel={handle ? `${name} dièse ${tag.split('').join(' ')}` : undefined}>
+          {tag ? (
+            <>
+              {name}
+              <AppText style={[styles.code, styles.tag]}>{`#${tag}`}</AppText>
+            </>
+          ) : (
+            '…'
+          )}
         </AppText>
         <View style={styles.statusRow}>
           <OnlineDot online={online || status === 'connecting'} color={statusColor} off={colors.danger} active={active} />
@@ -57,11 +68,11 @@ export function FriendCodeCard({ active }: { active: boolean }) {
         <Pressable
           onPress={() => {
             haptic.light();
-            void Share.share({ message: `Ajoute-moi sur PocketPics ! Mon code ami : ${formatFriendCode(code)}` }).catch(() => {});
+            void Share.share({ message: `Ajoute-moi sur PocketPics ! Mon pseudo : ${handle}` }).catch(() => {});
           }}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Partager ton code ami"
+          accessibilityLabel="Partager ton pseudo"
           style={({ pressed }) => [styles.share, pressed && { transform: [{ scale: 0.95 }], opacity: 0.85 }]}
         >
           <Ionicons name="share-outline" size={15} color="#0B0B0D" />
@@ -88,6 +99,7 @@ const styles = StyleSheet.create({
   kicker: { fontFamily: fonts.black, fontSize: 10, letterSpacing: 2, color: colors.gold, textTransform: 'uppercase' },
   // le code tient en entier sur une ligne, même sur un petit téléphone
   code: { fontFamily: fonts.black, fontSize: 18, letterSpacing: 0.4, color: colors.text },
+  tag: { color: colors.gold },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   share: {
     flexDirection: 'row',

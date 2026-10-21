@@ -21,7 +21,25 @@ import { PIOCHE_VERSION } from '../game/friendDraw';
 import { piocheBusy, usePioche } from './pioche';
 import { useMatch } from './match';
 import { sanitizeFighter } from './battleNet';
-import { CHALLENGE_TTL_MS, PRESENCE_MAX_SKEW_MS, type PinnedCard, type SocialMsg, inboxTopic, isOnline, newFriendCode, openFor, presenceTopic, sealFor } from './socialCore';
+import {
+  CHALLENGE_TTL_MS,
+  type DirectoryEntry,
+  PRESENCE_MAX_SKEW_MS,
+  type PinnedCard,
+  type SocialMsg,
+  directoryTopic,
+  handleKey,
+  inboxTopic,
+  isFriendTag,
+  isOnline,
+  newFriendCode,
+  newFriendTag,
+  openDirectory,
+  openFor,
+  presenceTopic,
+  sealDirectory,
+  sealFor,
+} from './socialCore';
 
 export interface Presence {
   name: string;
@@ -46,7 +64,7 @@ interface SocialStore {
   status: 'off' | 'connecting' | 'online' | 'error';
   presence: Record<string, Presence>;
   /** Demandes d'ami reçues. */
-  requests: { from: string; name: string; mmr: number }[];
+  requests: { from: string; name: string; mmr: number; tag?: string }[];
   /** Défi reçu, en attente de réponse. */
   challenge: Challenge | null;
   /** Défi envoyé. */
@@ -61,7 +79,15 @@ interface SocialStore {
   stop(): void;
   /** Mon code ami (créé au besoin). */
   myCode(): string;
-  addFriend(code: string): 'ok' | 'self' | 'exists';
+  /** Mes 4 caractères après le pseudo (créés au besoin). */
+  myTag(): string;
+  /** `hint` : son pseudo et ses 4 caractères, quand on l'a trouvé par « Pseudo#1234 ». */
+  addFriend(code: string, hint?: { name: string; tag: string }): 'ok' | 'self' | 'exists';
+  /**
+   * Cherche un joueur dans l'annuaire du relais à partir de « pseudo + tag »
+   * (voir `parseFriendInput`). `null` s'il n'est pas trouvé (ou hors ligne).
+   */
+  findPlayer(key: string): Promise<DirectoryEntry | null>;
   acceptRequest(from: string): void;
   ignoreRequest(from: string): void;
   challengeFriend(code: string): Promise<void>;
@@ -85,6 +111,19 @@ let retry: ReturnType<typeof setTimeout> | null = null;
 let generation = 0;
 /** Demandes d'ami déjà renvoyées pendant cette session (pour un ami qui ne nous a pas encore ajouté). */
 const resent = new Set<string>();
+/**
+ * Ma fiche d'annuaire (sujet + clé). `published` : écrite par moi sur le relais
+ * (à effacer quand le pseudo change). Avant d'écrire, on écoute un instant le
+ * sujet : si un autre joueur l'occupe déjà, on change de tag sans écraser sa fiche.
+ */
+let myDirectory: { topic: string; key: string; published: boolean; timer: ReturnType<typeof setTimeout> | null } | null = null;
+/** Temps d'écoute avant d'écrire sa fiche (le relais renvoie aussitôt une fiche retenue). */
+const DIRECTORY_CHECK_MS = 1500;
+/** Recherches d'un joueur en cours, par sujet d'annuaire. */
+const lookups = new Map<string, { key: string; done(e: DirectoryEntry | null): void }>();
+/** Fiches d'annuaire déjà reçues (une seconde recherche du même joueur répond tout de suite). */
+const directory = new Map<string, DirectoryEntry>();
+const LOOKUP_MS = 7000;
 const HEARTBEAT_MS = 45_000;
 
 const save = () => useGame.getState().save;
@@ -99,14 +138,47 @@ function publish(topic: string, payload: Uint8Array, retain = false) {
 
 export const useSocial = create<SocialStore>((set, get) => {
   const myCode = () => useGame.getState().ensureFriendCode(() => newFriendCode(getRandomBytes));
+  const myTag = () => useGame.getState().ensureFriendTag(() => newFriendTag(getRandomBytes));
+
+  /**
+   * Ma fiche d'annuaire : sous « pseudo + tag », mon code ami, gardé par le
+   * relais. Si le pseudo a changé, l'ancienne fiche est effacée.
+   */
+  const publishDirectory = () => {
+    if (!conns.length) return;
+    const name = profile().name;
+    const tag = myTag();
+    const key = handleKey(name, tag);
+    const topic = directoryTopic(key);
+    const old = myDirectory;
+    if (old?.timer) clearTimeout(old.timer);
+    if (old && old.topic === topic && old.published) {
+      // même fiche : on la rafraîchit simplement (et on réécoute le sujet après une reconnexion)
+      for (const c of conns) c.subscribe?.(topic);
+      publish(topic, sealDirectory(key, { code: myCode(), name, tag, at: now() }), true);
+      return;
+    }
+    // pseudo ou tag changé : l'ancienne fiche (si elle était à moi) est effacée
+    if (old && old.topic !== topic && old.published) publish(old.topic, new Uint8Array(0), true);
+    const entry = { topic, key, published: false, timer: null as ReturnType<typeof setTimeout> | null };
+    myDirectory = entry;
+    for (const c of conns) c.subscribe?.(topic);
+    entry.timer = setTimeout(() => {
+      if (myDirectory !== entry) return;
+      entry.timer = null;
+      entry.published = true;
+      publish(topic, sealDirectory(key, { code: myCode(), name, tag, at: now() }), true);
+    }, DIRECTORY_CHECK_MS);
+  };
   const now = () => Date.now();
 
   const sendTo = (code: string, msg: SocialMsg) => publish(inboxTopic(code), sealFor(code, msg));
 
-  const presenceMsg = (online: boolean): SocialMsg => ({ k: 'presence', from: myCode(), ...profile(), online, at: now(), pv: PIOCHE_VERSION });
+  const presenceMsg = (online: boolean): SocialMsg => ({ k: 'presence', from: myCode(), ...profile(), online, at: now(), pv: PIOCHE_VERSION, tag: myTag() });
   const announce = () => publish(presenceTopic(myCode()), sealFor(myCode(), presenceMsg(true)), true);
 
-  const sendRequest = (to: string, kind: 'req' | 'ok') => sendTo(to, { k: kind, from: myCode(), ...profile(), at: now() });
+  const sendRequest = (to: string, kind: 'req' | 'ok') => sendTo(to, { k: kind, from: myCode(), ...profile(), at: now(), tag: myTag() });
+  const tagOf = (t: unknown) => (isFriendTag(t) ? t : undefined);
 
   const friendCodes = () => (save()?.friends ?? []).map((f) => f.code);
 
@@ -140,6 +212,28 @@ export const useSocial = create<SocialStore>((set, get) => {
 
   const handle = (topic: string, payload: Uint8Array) => {
     const mine = myCode();
+    // annuaire : un joueur cherché, ou ma propre fiche
+    const look = lookups.get(topic);
+    if (look) {
+      const e = openDirectory(look.key, payload);
+      if (e) {
+        directory.set(topic, e);
+        look.done(e);
+      }
+      return;
+    }
+    if (myDirectory && topic === myDirectory.topic) {
+      const e = openDirectory(myDirectory.key, payload);
+      // un autre joueur a déjà ce pseudo et ces 4 caractères : on en tire d'autres
+      // (sa fiche n'est pas touchée : la mienne n'était pas encore écrite, ou il l'a récrite après moi)
+      if (e && e.code !== mine) {
+        if (myDirectory.published) myDirectory.published = false;
+        useGame.getState().setFriendTag(newFriendTag(getRandomBytes));
+        publishDirectory();
+        announce();
+      }
+      return;
+    }
     if (topic === inboxTopic(mine)) {
       const m = openFor(mine, payload);
       if (!m || m.from === mine) return;
@@ -147,14 +241,14 @@ export const useSocial = create<SocialStore>((set, get) => {
       switch (m.k) {
         case 'req':
           if (friend) {
-            useGame.getState().upsertFriend({ code: m.from, name: m.name, mmr: m.mmr, mutual: true });
+            useGame.getState().upsertFriend({ code: m.from, name: m.name, mmr: m.mmr, mutual: true, tag: tagOf(m.tag) });
             sendRequest(m.from, 'ok');
           } else if (!get().requests.some((r) => r.from === m.from)) {
-            set({ requests: [...get().requests, { from: m.from, name: String(m.name).slice(0, 24), mmr: m.mmr }] });
+            set({ requests: [...get().requests, { from: m.from, name: String(m.name).slice(0, 24), mmr: m.mmr, tag: tagOf(m.tag) }] });
           }
           return;
         case 'ok':
-          if (friend) useGame.getState().upsertFriend({ code: m.from, name: m.name, mmr: m.mmr, mutual: true });
+          if (friend) useGame.getState().upsertFriend({ code: m.from, name: m.name, mmr: m.mmr, mutual: true, tag: tagOf(m.tag) });
           return;
         case 'challenge': {
           // seulement les amis, et seulement un défi récent
@@ -225,7 +319,7 @@ export const useSocial = create<SocialStore>((set, get) => {
     const pv = typeof m.pv === 'number' && Number.isFinite(m.pv) ? m.pv : 0;
     set({ presence: { ...get().presence, [code]: { name: m.name, mmr: m.mmr, online: m.online && recent, at: now(), pv } } });
     const friend = save()?.friends.find((f) => f.code === code);
-    if (friend) useGame.getState().upsertFriend({ code, name: m.name || friend.name, mmr: m.mmr });
+    if (friend) useGame.getState().upsertFriend({ code, name: m.name || friend.name, mmr: m.mmr, tag: tagOf(m.tag) });
     // il ne nous a pas encore ajouté : on lui renvoie la demande quand il est là
     if (friend && !friend.mutual && m.online && !resent.has(code)) {
       resent.add(code);
@@ -265,6 +359,7 @@ export const useSocial = create<SocialStore>((set, get) => {
     }
     set({ status: 'online' });
     announce();
+    publishDirectory();
     heartbeat = setInterval(announce, HEARTBEAT_MS);
   };
 
@@ -295,12 +390,13 @@ export const useSocial = create<SocialStore>((set, get) => {
     },
 
     myCode,
+    myTag,
 
-    addFriend(code) {
+    addFriend(code, hint) {
       if (code === myCode()) return 'self';
       const exists = save()?.friends.some((f) => f.code === code);
       const req = get().requests.find((r) => r.from === code);
-      useGame.getState().upsertFriend({ code, name: req?.name ?? 'Nouvel ami', mmr: req?.mmr ?? 0, mutual: !!req });
+      useGame.getState().upsertFriend({ code, name: req?.name ?? hint?.name ?? 'Nouvel ami', mmr: req?.mmr ?? 0, mutual: !!req, tag: req?.tag ?? hint?.tag });
       for (const c of conns) c.subscribe?.(presenceTopic(code));
       sendRequest(code, req ? 'ok' : 'req');
       if (req) set({ requests: get().requests.filter((r) => r.from !== code) });
@@ -366,7 +462,33 @@ export const useSocial = create<SocialStore>((set, get) => {
     },
 
     announce() {
-      if (conns.length) announce();
+      if (!conns.length) return;
+      announce();
+      // pseudo changé : la fiche d'annuaire suit
+      publishDirectory();
+    },
+
+    findPlayer(key) {
+      const topic = directoryTopic(key);
+      const known = directory.get(topic);
+      if (known) return Promise.resolve(known);
+      if (!conns.length) return Promise.resolve(null);
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          lookups.delete(topic);
+          resolve(null);
+        }, LOOKUP_MS);
+        lookups.set(topic, {
+          key,
+          done: (e) => {
+            clearTimeout(timer);
+            lookups.delete(topic);
+            resolve(e);
+          },
+        });
+        // le relais renvoie aussitôt la fiche retenue sous ce sujet
+        for (const c of conns) c.subscribe?.(topic);
+      });
     },
 
     isOnline(code) {
