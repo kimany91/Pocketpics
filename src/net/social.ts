@@ -19,6 +19,7 @@ import { newOnlineCode } from '../trade/relayCore';
 import { useTrade } from '../trade/session';
 import { inBusyScreen } from '../state/route';
 import { PIOCHE_VERSION } from '../game/friendDraw';
+import { isPaul } from '../game/paul';
 import { piocheBusy, usePioche } from './pioche';
 import { useMatch } from './match';
 import { sanitizeFighter } from './battleNet';
@@ -184,7 +185,10 @@ export const useSocial = create<SocialStore>((set, get) => {
   };
   const now = () => Date.now();
 
-  const sendTo = (code: string, msg: SocialMsg) => publish(inboxTopic(code), sealFor(code, msg));
+  // Paul (le bot du tuto) n'existe que sur ce téléphone : rien ne lui est jamais envoyé
+  const sendTo = (code: string, msg: SocialMsg) => {
+    if (!isPaul(code)) publish(inboxTopic(code), sealFor(code, msg));
+  };
 
   const presenceMsg = (online: boolean): SocialMsg => ({
     k: 'presence',
@@ -206,7 +210,7 @@ export const useSocial = create<SocialStore>((set, get) => {
   const notify = (code: string, title: string, body: string, kind: string, token?: string) => {
     const friend = save()?.friends.find((f) => f.code === code);
     const to = token ?? friend?.push;
-    if (!to || isOnline(get().presence[code], now())) return;
+    if (!to || isPaul(code) || isOnline(get().presence[code], now())) return;
     void pushToFriend(to, { title, body, data: { kind, from: myCode() } });
   };
 
@@ -229,7 +233,7 @@ export const useSocial = create<SocialStore>((set, get) => {
     }, RESEND_MS);
   };
 
-  const friendCodes = () => (save()?.friends ?? []).map((f) => f.code);
+  const friendCodes = () => (save()?.friends ?? []).map((f) => f.code).filter((c) => !isPaul(c));
 
   /** Mes cartes épinglées, prêtes à être montrées à un ami. */
   const myPins = (): PinnedCard[] => {
@@ -445,6 +449,11 @@ export const useSocial = create<SocialStore>((set, get) => {
 
     addFriend(code, hint) {
       if (code === myCode()) return 'self';
+      if (isPaul(code)) {
+        const known = save()?.friends.some((f) => f.code === code);
+        useGame.getState().addPaul();
+        return known ? 'exists' : 'ok';
+      }
       const exists = save()?.friends.some((f) => f.code === code);
       const req = get().requests.find((r) => r.from === code);
       const push = req?.push ?? hint?.push;
@@ -467,7 +476,8 @@ export const useSocial = create<SocialStore>((set, get) => {
 
     async challengeFriend(code) {
       const friend = save()?.friends.find((f) => f.code === code);
-      if (!friend) return;
+      // Paul : un combat simulé, sans réseau (phase 2 du tuto)
+      if (!friend || isPaul(code)) return;
       const room = newOnlineCode(getRandomBytes);
       set({ outgoing: { kind: 'fight', to: code, name: friend.name, room, at: now(), state: 'waiting' } });
       await useMatch.getState().host({ code: room, friend: { code, name: friend.name } });
@@ -477,7 +487,7 @@ export const useSocial = create<SocialStore>((set, get) => {
 
     inviteTrade(code, tradeCode) {
       const friend = save()?.friends.find((f) => f.code === code);
-      if (!friend) return;
+      if (!friend || isPaul(code)) return;
       set({ outgoing: { kind: 'trade', to: code, name: friend.name, room: tradeCode, at: now(), state: 'waiting' } });
       invite(code, { k: 'challenge', kind: 'trade', from: myCode(), ...profile(), room: tradeCode, at: now() });
       notify(code, `${profile().name} veut échanger avec toi`, 'Ouvre PocketPics pour voir son offre.', 'trade');
@@ -485,7 +495,7 @@ export const useSocial = create<SocialStore>((set, get) => {
 
     inviteDraw(code, room) {
       const friend = save()?.friends.find((f) => f.code === code);
-      if (!friend) return;
+      if (!friend || isPaul(code)) return;
       set({ outgoing: { kind: 'draw', to: code, name: friend.name, room, at: now(), state: 'waiting' } });
       invite(code, { k: 'challenge', kind: 'draw', from: myCode(), ...profile(), room, at: now() });
       notify(code, `${profile().name} veut piocher chez toi`, 'Ouvre PocketPics pour regarder son ouverture en direct.', 'draw');
@@ -535,6 +545,11 @@ export const useSocial = create<SocialStore>((set, get) => {
 
     askPins(code) {
       if (!save()?.friends.some((f) => f.code === code)) return;
+      // Paul n'épingle rien
+      if (isPaul(code)) {
+        if (!get().pins[code]) set({ pins: { ...get().pins, [code]: { at: now(), n: 0, cards: [] } } });
+        return;
+      }
       set({ pins: { ...get().pins, [code]: get().pins[code] ?? { at: 0, n: 0, cards: [] } } });
       sendTo(code, { k: 'pins?', from: myCode(), at: now() });
     },
@@ -570,7 +585,8 @@ export const useSocial = create<SocialStore>((set, get) => {
     },
 
     isOnline(code) {
-      return isOnline(get().presence[code], now());
+      // Paul est toujours là
+      return isPaul(code) || isOnline(get().presence[code], now());
     },
   };
 });

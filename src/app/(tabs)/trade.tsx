@@ -24,6 +24,7 @@ import { Screen } from '../../components/Screen';
 import { TabHeader } from '../../components/TabHeader';
 import { rankOf } from '../../game/rank';
 import { groupFriends } from '../../net/friends';
+import { isPaul } from '../../game/paul';
 import { useSocial } from '../../net/social';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
@@ -183,6 +184,8 @@ function FriendsToTrade({ active }: { active: boolean }) {
               <Button
                 label="Échanger"
                 icon="swap-horizontal"
+                // Paul (tuto) : pas d'échange par le réseau (phase 2 : version simulée)
+                disabled={isPaul(friend.code)}
                 onPress={() => {
                   haptic.medium();
                   router.push({ pathname: '/trade/host', params: { friend: friend.code } });

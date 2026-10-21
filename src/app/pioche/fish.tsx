@@ -9,6 +9,9 @@
  *
  * `friend` : ami déjà choisi (depuis son profil, ou « Repiocher ») ; la ligne
  * part droit sur lui après le lancer.
+ *
+ * Tuto (étape `pioche`) : seul Paul est dans l'eau. Rien ne passe par le
+ * réseau : il « accepte » au bout d'un instant, et son paquet est offert.
  */
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -24,6 +27,7 @@ import { useFriendDraw } from '../../components/pioche/entry';
 import { type FishFriend, FishingScene, type FishingStage } from '../../components/pioche/FishingScene';
 import { Screen } from '../../components/Screen';
 import { FRIEND_DRAW_PRICE, paymentLabel } from '../../game/friendDraw';
+import { PAUL_NAME, isPaul } from '../../game/paul';
 import { usePioche } from '../../net/pioche';
 import { useSocial } from '../../net/social';
 import { useGame } from '../../state/game';
@@ -52,9 +56,17 @@ export default function PiocheFish() {
   const [round, setRound] = useState(0);
   const autoPick = useRef(preset ?? null);
   const pullSince = useRef(0);
+  // Tuto : la pêche chez Paul est jouée sur place
+  const tuto = useGame((s) => s.save?.tutorial.step === 'pioche');
+  const [tutoStatus, setTutoStatus] = useState<string | null>(null);
+  const tutoTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => tutoTimers.current.forEach(clearTimeout), []);
 
   // Les amis, ceux qu'on peut pêcher en premier
   const friends: FishFriend[] = useMemo(() => {
+    if (tuto) {
+      return friendsSaved.filter((f) => isPaul(f.code)).map((f) => ({ code: f.code, name: f.name, tag: f.tag, mmr: f.mmr, selectable: true, note: 'en ligne', live: true }));
+    }
     const list = friendsSaved.map((f) => {
       const live = isOnline(f.code);
       const reachable = live || !!f.push;
@@ -65,7 +77,7 @@ export default function PiocheFish() {
     });
     return list.sort((a, b) => Number(b.selectable) - Number(a.selectable) || Number(b.live) - Number(a.live));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [friendsSaved, presence, payment]);
+  }, [friendsSaved, presence, payment, tuto]);
   const chosen = friends.find((f) => f.code === chosenCode) ?? null;
 
   const choose = (code: string) => {
@@ -75,6 +87,18 @@ export default function PiocheFish() {
     setChosenCode(code);
     pullSince.current = Date.now();
     setStage('pull');
+    if (tuto && isPaul(code)) {
+      // Paul répond tout seul : il accepte, prépare ses photos, et la ligne ramène son paquet
+      const at = (ms: number, fn: () => void) => tutoTimers.current.push(setTimeout(fn, ms));
+      setTutoStatus(`Ça tire… ${PAUL_NAME} doit accepter`);
+      at(900, () => {
+        haptic.success();
+        setTutoStatus(`${PAUL_NAME} accepte !`);
+      });
+      at(1700, () => setTutoStatus(`${PAUL_NAME} prépare ses photos…`));
+      at(MIN_PULL_MS, () => setStage('catch'));
+      return;
+    }
     void usePioche
       .getState()
       .ask({ code: f.code, name: f.name })
@@ -127,8 +151,11 @@ export default function PiocheFish() {
   };
 
   const name = chosen?.name ?? 'ton ami';
-  const status =
-    stage === 'catch'
+  const status = tuto
+    ? stage === 'catch'
+      ? `Prise ! Le paquet de ${name}`
+      : tutoStatus
+    : stage === 'catch'
       ? `Prise ! Le paquet de ${name}`
       : phase === 'waiting'
         ? chosen && !isOnline(chosen.code)
@@ -151,10 +178,20 @@ export default function PiocheFish() {
         status={status}
         onCast={onCast}
         onChoose={choose}
-        onCaught={() => router.replace({ pathname: '/open', params: { friend: '1' } })}
+        onCaught={() => router.replace({ pathname: '/open', params: tuto ? { paul: '1' } : { friend: '1' } })}
+        pointAt={tuto && stage === 'choose' && friends[0] ? { code: friends[0].code, text: `Touche ${friends[0].name} pour piocher dans sa galerie` } : undefined}
       />
       <View style={styles.panel}>
-        {stage === 'break' ? (
+        {tuto ? (
+          <View style={styles.row}>
+            <Ionicons name="gift" size={16} color={colors.gold} />
+            <AppText variant="caption" style={{ flex: 1, color: colors.text }}>
+              {stage === 'choose' || stage === 'cast'
+                ? 'La Pioche amicale : tu ouvres un paquet fait avec les photos d’un ami. Celle-ci est offerte, c’est le tuto !'
+                : 'Pioche offerte : ni tirage ni pièces cette fois.'}
+            </AppText>
+          </View>
+        ) : stage === 'break' ? (
           <Animated.View entering={FadeInDown.duration(300)} style={{ gap: 8 }}>
             <View style={styles.row}>
               <Ionicons name="close-circle" size={18} color={colors.danger} />

@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from 'expo-router/build/react-navigation/bottom-tabs';
-import { type ComponentProps, useEffect, useRef } from 'react';
+import { type ComponentProps, useEffect, useRef, useState } from 'react';
 import { type LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
+  FadeIn,
+  FadeOut,
   interpolateColor,
   useAnimatedStyle,
   useSharedValue,
@@ -11,9 +13,12 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { type TabName, isUnlocked, tabTarget } from '../game/tutorial';
+import { useTutoStep } from '../state/useTuto';
 import { colors, fonts } from '../theme';
 import { springs } from '../theme/motion';
 import { haptic } from '../utils/haptics';
+import { TutoArrow } from './tuto/TutoArrow';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -28,12 +33,28 @@ const TABS: Record<string, { label: string; icon: IconName; iconActive: IconName
 /** Largeur de la pastille : elle doit tenir dans un onglet sur cinq (~72 px à 360 px de large). */
 const PILL_W = 56;
 
+/** Tuto : la consigne au-dessus de l'onglet où se joue l'étape. */
+const TAB_HINT: Partial<Record<TabName, string>> = {
+  profile: 'Nouvel onglet débloqué ! Va dans Profil pour ajouter un ami',
+  index: 'Paul a accepté ! Retourne au menu principal',
+  battle: 'Les combats sont débloqués ! Va dans Combat',
+};
+
 export function TabBar({ state, navigation, insets, descriptors }: BottomTabBarProps) {
   const routes = state.routes.filter((r) => TABS[r.name]);
   const active = Math.max(0, routes.findIndex((r) => r.key === state.routes[state.index]?.key));
   const tabW = useSharedValue(0);
   const x = useSharedValue(0);
   const target = useSharedValue(0);
+  // Tuto : onglets fermés, et flèche vers celui où se joue l'étape
+  const step = useTutoStep();
+  const hintTab = tabTarget(step);
+  const [toast, setToast] = useState<{ text: string; n: number } | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 1900);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     target.value = active;
@@ -63,7 +84,8 @@ export function TabBar({ state, navigation, insets, descriptors }: BottomTabBarP
         {routes.map((route) => {
           const meta = TABS[route.name];
           const focused = state.routes[state.index]?.key === route.key;
-          const badge = descriptors[route.key]?.options.tabBarBadge;
+          const locked = !isUnlocked(step, route.name as TabName);
+          const badge = locked ? undefined : descriptors[route.key]?.options.tabBarBadge;
           return (
             <TabItem
               key={route.key}
@@ -71,7 +93,14 @@ export function TabBar({ state, navigation, insets, descriptors }: BottomTabBarP
               icon={focused ? meta.iconActive : meta.icon}
               focused={focused}
               badge={badge}
+              locked={locked}
+              hint={hintTab === route.name && !focused ? TAB_HINT[hintTab] : undefined}
               onPress={() => {
+                if (locked) {
+                  haptic.warning();
+                  setToast((t) => ({ text: `Termine le tuto pour débloquer ${meta.label}`, n: (t?.n ?? 0) + 1 }));
+                  return;
+                }
                 const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
                 if (!focused && !event.defaultPrevented) {
                   haptic.tick();
@@ -82,16 +111,50 @@ export function TabBar({ state, navigation, insets, descriptors }: BottomTabBarP
           );
         })}
       </View>
+      {toast ? (
+        <Animated.View key={toast.n} entering={FadeIn.duration(160)} exiting={FadeOut.duration(200)} pointerEvents="none" style={styles.toast}>
+          <Ionicons name="lock-closed" size={14} color={colors.gold} />
+          <Animated.Text style={styles.toastText}>{toast.text}</Animated.Text>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
 
-function TabItem({ label, icon, focused, badge, onPress }: { label: string; icon: IconName; focused: boolean; badge?: string | number; onPress(): void }) {
+function TabItem({
+  label,
+  icon,
+  focused,
+  badge,
+  locked = false,
+  hint,
+  onPress,
+}: {
+  label: string;
+  icon: IconName;
+  focused: boolean;
+  badge?: string | number;
+  /** Tuto : onglet pas encore débloqué (grisé, un cadenas). */
+  locked?: boolean;
+  /** Tuto : consigne et flèche au-dessus de l'onglet. */
+  hint?: string;
+  onPress(): void;
+}) {
   const on = useSharedValue(focused ? 1 : 0);
   const pop = useSharedValue(0);
   const press = useSharedValue(0);
   const wiggle = useSharedValue(0);
   const first = useRef(true);
+  // Tuto : un onglet qui se débloque saute et se balance
+  const wasLocked = useRef(locked);
+  useEffect(() => {
+    if (wasLocked.current && !locked) {
+      pop.value = withSequence(withTiming(1.3, { duration: 160 }), withSpring(0, springs.pop));
+      wiggle.value = withSequence(withTiming(-1, { duration: 90 }), withTiming(1, { duration: 110 }), withTiming(-0.6, { duration: 100 }), withSpring(0, springs.pop));
+      haptic.success();
+    }
+    wasLocked.current = locked;
+  }, [locked, pop, wiggle]);
 
   useEffect(() => {
     on.value = withTiming(focused ? 1 : 0, { duration: 180 });
@@ -122,8 +185,8 @@ function TabItem({ label, icon, focused, badge, onPress }: { label: string; icon
   return (
     <Pressable
       accessibilityRole="tab"
-      accessibilityState={{ selected: focused }}
-      accessibilityLabel={label}
+      accessibilityState={{ selected: focused, disabled: locked }}
+      accessibilityLabel={locked ? `${label} (verrouillé)` : label}
       onPressIn={() => (press.value = withSpring(1, springs.press))}
       onPressOut={() => (press.value = withSpring(0, springs.release))}
       onPress={() => {
@@ -136,13 +199,19 @@ function TabItem({ label, icon, focused, badge, onPress }: { label: string; icon
       }}
       style={styles.item}
     >
-      <Animated.View style={iconStyle}>
+      <Animated.View style={[iconStyle, locked && { opacity: 0.35 }]}>
         <Ionicons name={icon} size={23} color={color} />
         {badge !== undefined ? <Badge value={badge} /> : null}
+        {locked ? (
+          <View style={styles.lock}>
+            <Ionicons name="lock-closed" size={10} color={colors.text} />
+          </View>
+        ) : null}
       </Animated.View>
-      <Animated.Text numberOfLines={1} style={[styles.label, labelStyle]}>
+      <Animated.Text numberOfLines={1} style={[styles.label, labelStyle, locked && { opacity: 0.35 }]}>
         {label}
       </Animated.Text>
+      {hint ? <TutoArrow text={hint} gap={6} /> : null}
     </Pressable>
   );
 }
@@ -208,4 +277,33 @@ const styles = StyleSheet.create({
     borderColor: colors.bgElevated,
   },
   badgeText: { fontFamily: fonts.bold, fontSize: 10, color: '#111' },
+  lock: {
+    position: 'absolute',
+    bottom: -3,
+    right: -7,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.surface2,
+    borderWidth: 1.5,
+    borderColor: colors.bgElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toast: {
+    position: 'absolute',
+    bottom: '100%',
+    alignSelf: 'center',
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 14,
+    backgroundColor: '#17131F',
+    borderWidth: 1,
+    borderColor: 'rgba(247,201,72,0.5)',
+  },
+  toastText: { fontFamily: fonts.bold, fontSize: 13, color: colors.text },
 });

@@ -9,21 +9,27 @@ import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 
+import { playSfx } from '../../audio/sfx';
+import { PAUL_CODE, PAUL_HANDLE, isPaulInput } from '../../game/paul';
 import { useSocial } from '../../net/social';
 import { parseFriendInput } from '../../net/socialCore';
+import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
 import { AppText } from '../AppText';
 import { Button } from '../Button';
+import { Burst } from '../fx';
 import { useShake } from '../online/Pulse';
+import { TutoArrow } from '../tuto/TutoArrow';
 
-export function FriendAdd({ onAdded }: { onAdded(code: string): void }) {
+export function FriendAdd({ onAdded, hint }: { onAdded(code: string): void; /** Tuto : consigne au-dessus du champ. */ hint?: { text: string; sub?: string } }) {
   const addFriend = useSocial((s) => s.addFriend);
   const [draft, setDraft] = useState('');
   const [searching, setSearching] = useState(false);
   const [note, setNote] = useState<{ text: string; ok: boolean; n: number } | null>(null);
   const [shakes, setShakes] = useState(0);
   const shake = useShake(shakes);
+  const [party, setParty] = useState(0);
 
   const say = (text: string, ok: boolean) => setNote((n) => ({ text, ok, n: (n?.n ?? 0) + 1 }));
 
@@ -37,6 +43,17 @@ export function FriendAdd({ onAdded }: { onAdded(code: string): void }) {
     if (searching) return;
     const parsed = parseFriendInput(raw);
     if (!parsed) return fail('Écris son pseudo suivi de ses 4 caractères, par exemple Léo#7F3K.');
+    // Tuto : Paul est un bot local, il accepte tout de suite (aucune recherche sur le réseau)
+    if (isPaulInput(raw) && useGame.getState().save?.tutorial.step !== 'done') {
+      const r = addFriend(PAUL_CODE);
+      haptic.success();
+      playSfx('up3', { volume: 0.6 });
+      setDraft('');
+      setParty((n) => n + 1);
+      if (r !== 'exists') onAdded(PAUL_CODE);
+      say(r === 'exists' ? `${PAUL_HANDLE} est déjà dans tes amis.` : `${PAUL_HANDLE} a accepté ta demande ! Vous êtes amis.`, true);
+      return;
+    }
     let code: string;
     let hint: { name: string; tag: string; push?: string } | undefined;
     if ('code' in parsed) code = parsed.code;
@@ -63,6 +80,7 @@ export function FriendAdd({ onAdded }: { onAdded(code: string): void }) {
       <AppText variant="heading" style={styles.section}>
         Ajouter un ami
       </AppText>
+      {hint ? <TutoArrow inline text={hint.text} sub={hint.sub} /> : null}
       <Animated.View style={[styles.addRow, shake]}>
         <TextInput
           value={draft}
@@ -93,6 +111,11 @@ export function FriendAdd({ onAdded }: { onAdded(code: string): void }) {
           </Pressable>
         ) : null}
       </Animated.View>
+      {party ? (
+        <View pointerEvents="none" style={styles.party}>
+          <Burst trigger={party} colors={[colors.success, colors.gold, '#FFFFFF']} count={22} radius={120} />
+        </View>
+      ) : null}
       {note ? (
         <Animated.View key={note.n} entering={FadeInDown.duration(240)} style={styles.note}>
           <Animated.View entering={ZoomIn.delay(80).springify().damping(9)}>
@@ -123,5 +146,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   note: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  party: { position: 'absolute', left: '40%', bottom: 30, width: 0, height: 0, alignItems: 'center', justifyContent: 'center' },
   scan: { width: 50, height: 50, borderRadius: 14, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' },
 });

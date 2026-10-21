@@ -22,12 +22,42 @@ import { useFreshFriends, useSocialScreen } from '../../components/profile/socia
 import { Rise } from '../../components/Rise';
 import { Screen } from '../../components/Screen';
 import { TabHeader } from '../../components/TabHeader';
+import { useTutoStep } from '../../state/useTuto';
+import { inPhase1 } from '../../game/tutorial';
 import { useEntrance } from '../../theme/motion';
 
 export default function ProfileTab() {
   const { visit, focused } = useEntrance();
   const { fresh, welcome } = useFreshFriends();
   useSocialScreen(focused);
+  const step = useTutoStep();
+
+  // Tuto : les amis d'abord (ajouter Paul), le reste du profil ensuite
+  if (inPhase1(step)) {
+    return (
+      <Screen>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Rise visit={visit} index={0}>
+            <TabHeader title="Profil" subtitle="Ce que tes amis voient de toi" icon="person" />
+          </Rise>
+          <Rise visit={visit} index={1}>
+            <FriendAdd
+              onAdded={welcome}
+              hint={step === 'friend' ? { text: 'Ajoute ton premier ami : écris Paul#1234 puis touche Ajouter', sub: 'Paul est un ami du tuto, il va t’aider' } : undefined}
+            />
+          </Rise>
+          <FriendRequests onAccepted={welcome} />
+          <FriendList fresh={fresh} active={focused} />
+          <Rise visit={visit} index={2} style={{ marginTop: 26 }}>
+            <ProfileCard active={focused} />
+          </Rise>
+          <Rise visit={visit} index={3} style={{ marginTop: 12 }}>
+            <FriendCodeCard active={focused} />
+          </Rise>
+        </ScrollView>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>

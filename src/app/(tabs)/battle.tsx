@@ -7,7 +7,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
@@ -37,6 +37,9 @@ import { RollingNumber } from '../../components/RollingNumber';
 import { Screen } from '../../components/Screen';
 import { TabHeader } from '../../components/TabHeader';
 import { rankOf, shownMmr } from '../../game/rank';
+import { isUnlocked } from '../../game/tutorial';
+import { TutoArrow } from '../../components/tuto/TutoArrow';
+import { useTutoStep } from '../../state/useTuto';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
 import { easeOut, springs, useEntrance } from '../../theme/motion';
@@ -57,6 +60,10 @@ export default function BattleTab() {
   const panelW = width - 32;
   const myRank = rankOf(rank ? shownMmr(rank) : 0);
   const { visit, focused } = useEntrance();
+  // Tuto : flèche vers l'aventure ; le multijoueur et les quêtes attendent la fin du tuto
+  const step = useTutoStep();
+  const multiOpen = isUnlocked(step, 'multi');
+  const [lockNote, setLockNote] = useState(0);
 
   return (
     <Screen>
@@ -64,6 +71,10 @@ export default function BattleTab() {
         <Rise visit={visit} index={0}>
           <TabHeader title="Combat" subtitle="Aventure, classé et quêtes" icon="flash" right={<CoinChip amount={coins} />} />
         </Rise>
+
+        {step === 'battle' && focused ? (
+          <TutoArrow inline text="Touche Aventure pour lancer ton premier combat" sub="Un combat guidé, pas à pas" />
+        ) : null}
 
         {/* Solo */}
         <Rise visit={visit} index={1} dy={36} scale={0.94}>
@@ -105,8 +116,12 @@ export default function BattleTab() {
         {/* Multijoueur */}
         <Rise visit={visit} index={2} dy={36} scale={0.94}>
           <Panel
-            label="Multijoueur"
-            onPress={() => router.push('/multi')}
+            label={multiOpen ? 'Multijoueur' : 'Multijoueur (verrouillé)'}
+            onPress={() => {
+              if (multiOpen) return router.push('/multi');
+              haptic.warning();
+              setLockNote((n) => n + 1);
+            }}
             border={myRank.tier.color}
             height={210}
             width={panelW}
@@ -129,14 +144,25 @@ export default function BattleTab() {
                 </AppText>
               </View>
             </View>
-            <PlayChip focused={focused} delay={450} />
+            {multiOpen ? (
+              <PlayChip focused={focused} delay={450} />
+            ) : (
+              <View style={styles.locked}>
+                <Ionicons name="lock-closed" size={26} color={colors.text} />
+                <AppText key={lockNote} style={styles.lockedText}>
+                  {lockNote ? 'Gagne ou perds ton premier combat solo pour le débloquer' : 'Termine le tuto pour débloquer'}
+                </AppText>
+              </View>
+            )}
           </Panel>
         </Rise>
 
         {/* Quêtes de combat (et défi du jour) */}
-        <Rise visit={visit} index={3} dy={30} style={{ marginTop: 6 }}>
-          <TabQuests tab="combat" focused={focused} />
-        </Rise>
+        {isUnlocked(step, 'quests') ? (
+          <Rise visit={visit} index={3} dy={30} style={{ marginTop: 6 }}>
+            <TabQuests tab="combat" focused={focused} />
+          </Rise>
+        ) : null}
 
         <Rise visit={visit} index={4}>
           <AppText variant="caption" style={{ marginTop: 4 }}>
@@ -446,4 +472,6 @@ const styles = StyleSheet.create({
   playChip: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 42, paddingHorizontal: 16, borderRadius: 21, backgroundColor: colors.gold, borderWidth: 3, borderColor: OUTLINE },
   playText: { fontFamily: fonts.black, fontSize: 15, color: '#141414' },
   multiArt: { position: 'absolute', left: 26, top: 40, width: 100, alignItems: 'center' },
+  locked: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(8,8,12,0.72)', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 30 },
+  lockedText: { fontFamily: fonts.bold, fontSize: 14, color: colors.text, textAlign: 'center' },
 });

@@ -6,6 +6,7 @@ import { useQuestBadge } from '../../components/QuestEntry';
 import { TabBar } from '../../components/TabBar';
 import { useSocial } from '../../net/social';
 import { useDrawStatus } from '../../state/useDrawStatus';
+import { useUnlocked } from '../../state/useTuto';
 import { colors } from '../../theme';
 
 /**
@@ -33,6 +34,8 @@ export default function TabsLayout() {
   const requests = useSocial((s) => s.requests.length);
   /** Quêtes à récupérer (ou défi du jour à relever) : en pastille sur l'onglet Combat. */
   const questBadge = useQuestBadge();
+  // tuto : les quêtes ne s'ouvrent qu'à la fin de la phase guidée
+  const questsOpen = useUnlocked('quests');
   return (
     <Tabs
       tabBar={(props) => <TabBar {...props} />}
@@ -40,7 +43,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ tabBarBadge: available > 0 ? available : undefined }} />
       <Tabs.Screen name="collection" />
-      <Tabs.Screen name="battle" options={{ tabBarBadge: questBadge }} />
+      <Tabs.Screen name="battle" options={{ tabBarBadge: questsOpen ? questBadge : undefined }} />
       <Tabs.Screen name="trade" />
       <Tabs.Screen name="profile" options={{ tabBarBadge: requests > 0 ? requests : undefined }} />
     </Tabs>

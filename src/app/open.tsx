@@ -2,6 +2,7 @@
  * Ouverture d'un paquet : déchirure → les cartes jaillissent → révélations → récapitulatif.
  * Avec `?galaxy=1` : naissance de la carte Galaxy (gagnée contre le Grand Portrait) :
  * vortex cosmique → la carte sort de la galaxie → on la fait monter jusqu'à Galaxy → vue 3D.
+ * Avec `?paul=1` (tuto) : la Pioche amicale chez Paul, gratuite, sans réseau.
  */
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -41,6 +42,9 @@ import { FriendRefused, FriendVerdictBanner, RepiocheButton } from '../component
 import { usePioche } from '../net/pioche';
 import { useGame } from '../state/game';
 import { useDrawStatus } from '../state/useDrawStatus';
+import { useTutoStep } from '../state/useTuto';
+import { isUnlocked } from '../game/tutorial';
+import { TutoArrow, TutoBubble } from '../components/tuto/TutoArrow';
 import type { Card } from '../storage/model';
 import { CARD_RATIO, colors, fonts } from '../theme';
 import { haptic } from '../utils/haptics';
@@ -52,15 +56,15 @@ const AMBIENT = ['#B99CFF', '#FFFFFF', '#7CCBFF', '#FFD9A0'];
 const CHROMA_FX = ['#FF7EB3', '#FFD36E', '#8CFFB4', '#6EC8FF', '#B48CFF'];
 
 export default function OpenScreen() {
-  const { galaxy, friend } = useLocalSearchParams<{ galaxy?: string; friend?: string }>();
+  const { galaxy, friend, paul } = useLocalSearchParams<{ galaxy?: string; friend?: string; paul?: string }>();
   // Changer de clé relance une session complète : « Paquet suivant ».
   const [round, setRound] = useState(0);
   if (galaxy === '1') return <GalaxySession />;
   // Pioche amicale : les photos de l'ami sont là ; payé et créé au premier coup de déchirure.
-  return <PackSession key={round} friend={friend === '1' && round === 0} onNext={() => setRound((r) => r + 1)} />;
+  return <PackSession key={round} friend={friend === '1' && round === 0} paul={paul === '1' && round === 0} onNext={() => setRound((r) => r + 1)} />;
 }
 
-function PackSession({ onNext, friend = false }: { onNext(): void; friend?: boolean }) {
+function PackSession({ onNext, friend = false, paul = false }: { onNext(): void; friend?: boolean; /** Tuto : le paquet offert par Paul. */ paul?: boolean }) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const openPack = useGame((s) => s.openPack);
@@ -83,6 +87,16 @@ function PackSession({ onNext, friend = false }: { onNext(): void; friend?: bool
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+    if (paul) {
+      // Tuto : les cartes de Paul se préparent pendant qu'on déchire (gratuit, sans réseau)
+      useGame
+        .getState()
+        .openPaulPack()
+        .then(setCards)
+        .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+      setLuckKnown(true);
+      return;
+    }
     if (friend) {
       // Pioche amicale : rien n'est payé avant que le joueur commence à déchirer (voir `beginTear`)
       if (usePioche.getState().phase !== 'ready') setError('La pioche chez ton ami est terminée.');
@@ -101,7 +115,7 @@ function PackSession({ onNext, friend = false }: { onNext(): void; friend?: bool
         ),
       );
     setLuckKnown(true);
-  }, [openPack, friend]);
+  }, [openPack, friend, paul]);
 
   // Paquet brillant : le sachet devient doré, avec son et vibration.
   useEffect(() => {
@@ -189,6 +203,15 @@ function PackSession({ onNext, friend = false }: { onNext(): void; friend?: bool
         </Animated.View>
       ) : null}
 
+      {phase === 'pack' && paul ? (
+        <Animated.View entering={ZoomIn.springify().damping(12)} pointerEvents="none" style={[styles.luckyBanner, { top: insets.top + 18 }]}>
+          <AppText style={[styles.luckyTitle, { color: '#D9C8FF' }]}>Pioche amicale</AppText>
+          <AppText variant="caption" style={{ color: '#D9C8FF', textAlign: 'center' }}>
+            Les photos de Paul · offerte pour le tuto
+          </AppText>
+        </Animated.View>
+      ) : null}
+
       {phase === 'fan' ? <CardFanOut count={cards?.length ?? CARDS_PER_PACK} cardW={cardW} fromY={fromY} lucky={lucky} onDone={() => setPhase(cards ? 'reveal' : 'waiting')} /> : null}
 
       {phase === 'waiting' ? <WaitingStack cardW={cardW} /> : null}
@@ -205,7 +228,16 @@ function PackSession({ onNext, friend = false }: { onNext(): void; friend?: bool
         />
       ) : null}
 
-      {phase === 'summary' && cards ? <Summary cards={cards} onClose={close} onNext={onNext} header={friend ? <FriendVerdictBanner /> : null} next={friend ? <RepiocheButton /> : undefined} /> : null}
+      {phase === 'summary' && cards ? (
+        <Summary
+          cards={cards}
+          onClose={close}
+          onNext={onNext}
+          header={friend ? <FriendVerdictBanner /> : paul ? <PaulHeader /> : null}
+          next={friend ? <RepiocheButton /> : undefined}
+          paul={paul}
+        />
+      ) : null}
       {phase === 'summary' && cards && friend ? <FriendRefused onClose={close} /> : null}
 
       {phase === 'reveal' ? (
@@ -257,9 +289,38 @@ function WaitingStack({ cardW }: { cardW: number }) {
   );
 }
 
-function Summary({ cards, onClose, onNext, header, next }: { cards: Card[]; onClose(): void; onNext(): void; header?: React.ReactNode; /** Remplace « Paquet suivant » (Pioche amicale : repiocher chez l'ami). */ next?: React.ReactNode }) {
+/** Tuto : ce que sont les cartes de Paul. */
+function PaulHeader() {
+  return (
+    <View style={{ marginBottom: 18 }}>
+      <TutoBubble text="Voici les cartes de Paul !" sub="Des communes au hasard : c’est juste pour te montrer la Pioche amicale. Avec un vrai ami, tu piocheras dans ses vraies photos." />
+    </View>
+  );
+}
+
+function Summary({
+  cards,
+  onClose,
+  onNext,
+  header,
+  next,
+  paul = false,
+}: {
+  cards: Card[];
+  onClose(): void;
+  onNext(): void;
+  header?: React.ReactNode;
+  /** Remplace « Paquet suivant » (Pioche amicale : repiocher chez l'ami). */
+  next?: React.ReactNode;
+  /** Tuto : le paquet de Paul. */
+  paul?: boolean;
+}) {
   const { width } = useWindowDimensions();
   const { available: charges } = useDrawStatus();
+  // Tuto : après le 1er paquet, flèche sur « Paquet suivant » ; après le 2e et chez Paul, « Continuer »
+  const step = useTutoStep();
+  const tutoNext = !paul && step === 'pack2' && charges > 0;
+  const tutoDone = paul ? 'Les combats sont débloqués !' : step === 'friend' ? 'Bravo ! Un nouvel onglet est débloqué' : null;
   const cols = cards.length <= 4 ? 2 : 3;
   const gap = 14;
   const cardW = Math.min((width - 40 - gap * (cols - 1)) / cols, 170);
@@ -291,7 +352,20 @@ function Summary({ cards, onClose, onNext, header, next }: { cards: Card[]; onCl
         </View>
       </ScrollView>
       <View style={styles.summaryFooter}>
-        {next !== undefined ? (
+        {tutoDone ? (
+          <View>
+            <Button label="Continuer" icon="arrow-forward" size="lg" onPress={onClose} />
+            <TutoArrow text={tutoDone} ring={18} gap={8} />
+          </View>
+        ) : tutoNext ? (
+          <>
+            <View>
+              <Button label={`Paquet suivant · ${charges}`} icon="sparkles" size="lg" onPress={onNext} />
+              <TutoArrow text="Ouvre ton deuxième paquet !" ring={18} gap={8} />
+            </View>
+            <Button label="Fermer" kind="ghost" onPress={onClose} />
+          </>
+        ) : next !== undefined ? (
           <>
             {next}
             <Button label="Fermer" kind="ghost" onPress={onClose} />
@@ -301,6 +375,9 @@ function Summary({ cards, onClose, onNext, header, next }: { cards: Card[]; onCl
             <Button label={`Paquet suivant · ${charges}`} icon="sparkles" size="lg" onPress={onNext} />
             <Button label="Fermer" kind="ghost" onPress={onClose} />
           </>
+        ) : !isUnlocked(step, 'collection') ? (
+          // tuto : la collection n'est pas encore ouverte
+          <Button label="Fermer" size="lg" onPress={onClose} />
         ) : (
           <>
             <Button label="Voir ma collection" size="lg" onPress={() => router.dismissTo('/collection')} />

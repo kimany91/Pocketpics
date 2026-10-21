@@ -42,6 +42,8 @@ import { RollingNumber } from '../components/RollingNumber';
 import { LEVEL_REWARD } from '../game/economy';
 import { rankOf } from '../game/rank';
 import { useGame } from '../state/game';
+import { useTutoStep } from '../state/useTuto';
+import { TutoArrow } from '../components/tuto/TutoArrow';
 import { colors, fonts } from '../theme';
 import { springs, useScreenFocus } from '../theme/motion';
 import { haptic } from '../utils/haptics';
@@ -69,6 +71,8 @@ export default function SoloScreen() {
   const current = Math.min(TOTAL_LEVELS, cleared + 1);
   /** Le Volcan est battu, la Divine attend au sanctuaire. */
   const gated = cleared >= DIVINE_GATE && !divineUnlocked;
+  /** Tuto : premier combat guidé. */
+  const tuto = useTutoStep() === 'battle';
 
   // Tous les niveaux s'ouvrent, même verrouillés : on peut voir l'adversaire et ses cartes, pas y jouer.
   const pick = (n: number) => {
@@ -114,7 +118,10 @@ export default function SoloScreen() {
           {gated ? (
             <PlayButton label="La Divine t’attend" icon="sparkles" onPress={() => setCeremony({ from: null })} />
           ) : (
-            <PlayButton label={`Niveau ${current}`} onPress={() => pick(current)} />
+            <View>
+              <PlayButton label={`Niveau ${current}`} onPress={() => pick(current)} />
+              {tuto ? <TutoArrow text={`Touche Niveau ${current} pour voir ton premier adversaire`} gap={8} /> : null}
+            </View>
           )}
         </Animated.View>
       ) : null}
@@ -128,6 +135,7 @@ export default function SoloScreen() {
           divineLocked={needsDivine(open.n) && !divineUnlocked}
           onClose={() => setOpen(null)}
           bottom={insets.bottom}
+          tuto={tuto}
         />
       ) : null}
 
@@ -224,6 +232,7 @@ function LevelSheet({
   divineLocked,
   onClose,
   bottom,
+  tuto = false,
 }: {
   level: Level;
   best: number;
@@ -233,6 +242,8 @@ function LevelSheet({
   divineLocked: boolean;
   onClose(): void;
   bottom: number;
+  /** Tuto : flèche sur « Jouer ». */
+  tuto?: boolean;
 }) {
   const locked = notYet || divineLocked;
   const foes = useMemo(() => levelFighters(level), [level]);
@@ -405,18 +416,20 @@ function LevelSheet({
 
           <Rise visit={1} index={5} delay={230} style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
             <Button label="Fermer" kind="secondary" style={{ flex: 1 }} onPress={() => close()} />
-            <Button
-              label={divineLocked ? 'Verrouillé' : locked ? `Après le niv. ${level.n - 1}` : done ? 'Rejouer' : 'Jouer'}
-              icon={locked ? 'lock-closed' : 'flash'}
-              size="lg"
-              disabled={locked}
-              style={{ flex: 1.6 }}
-              onPress={() => {
-                haptic.medium();
-                onClose();
-                router.push({ pathname: '/battle/deck', params: { level: String(level.n) } });
-              }}
-            />
+            <View style={{ flex: 1.6 }}>
+              <Button
+                label={divineLocked ? 'Verrouillé' : locked ? `Après le niv. ${level.n - 1}` : done ? 'Rejouer' : 'Jouer'}
+                icon={locked ? 'lock-closed' : 'flash'}
+                size="lg"
+                disabled={locked}
+                onPress={() => {
+                  haptic.medium();
+                  onClose();
+                  router.push({ pathname: '/battle/deck', params: { level: String(level.n) } });
+                }}
+              />
+              {tuto && !locked ? <TutoArrow text="Voici ton adversaire et ses cartes. Touche Jouer !" ring={18} gap={8} /> : null}
+            </View>
           </Rise>
         </View>
       </Animated.View>

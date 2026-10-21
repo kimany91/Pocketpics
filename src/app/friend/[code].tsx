@@ -28,6 +28,7 @@ import { useSocial } from '../../net/social';
 import type { PinnedCard } from '../../net/socialCore';
 import { PIOCHE_COLOR, startFriendDraw, useFriendDraw } from '../../components/pioche/entry';
 import { FRIEND_DRAW_PRICE } from '../../game/friendDraw';
+import { isPaul } from '../../game/paul';
 import { useGame } from '../../state/game';
 import { MAX_PINNED } from '../../storage/model';
 import { CARD_RATIO, colors, fonts } from '../../theme';
@@ -123,7 +124,8 @@ export default function FriendProfileScreen() {
             icon="flash"
             size="lg"
             style={{ flex: 1 }}
-            disabled={!reachable}
+            // Paul (tuto) : pas de vrai défi ni d'échange par le réseau (phase 2 : version simulée)
+            disabled={!reachable || isPaul(friend.code)}
             onPress={async () => {
               haptic.medium();
               await challengeFriend(friend.code);
@@ -136,7 +138,8 @@ export default function FriendProfileScreen() {
             size="lg"
             kind="secondary"
             style={{ flex: 1 }}
-            disabled={!reachable}
+            // Paul (tuto) : pas de vrai défi ni d'échange par le réseau (phase 2 : version simulée)
+            disabled={!reachable || isPaul(friend.code)}
             onPress={() => {
               haptic.medium();
               router.push({ pathname: '/trade/host', params: { friend: friend.code } });

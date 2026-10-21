@@ -18,7 +18,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { isPaul } from '../../game/paul';
 import { rankOf } from '../../game/rank';
+import { inPhase1 } from '../../game/tutorial';
 import { groupFriends } from '../../net/friends';
 import { useSocial } from '../../net/social';
 import { useGame } from '../../state/game';
@@ -40,6 +42,7 @@ export function FriendList({ fresh, active }: { fresh: string[]; active: boolean
   const presence = useSocial((s) => s.presence);
   const isOnline = useSocial((s) => s.isOnline);
   const challengeFriend = useSocial((s) => s.challengeFriend);
+  const tutoStep = useGame((s) => s.save?.tutorial.step ?? 'done');
   // une ligne par personne : deux appareils (ou une réinstallation) ne font pas deux amis
   const people = groupFriends(friends, isOnline);
 
@@ -68,6 +71,8 @@ export function FriendList({ fresh, active }: { fresh: string[]; active: boolean
             active={active}
             mmr={presence[f.code]?.mmr ?? f.mmr}
             devices={codes.length}
+            // Paul (tuto) : pas de vrai défi ni d'échange par le réseau (phase 2 : version simulée)
+            noActions={isPaul(f.code)}
             onChallenge={async () => {
               haptic.medium();
               await challengeFriend(f.code);
@@ -82,7 +87,10 @@ export function FriendList({ fresh, active }: { fresh: string[]; active: boolean
               router.push({ pathname: '/friend/[code]', params: { code: f.code } });
             }}
             onRemove={() =>
-              confirmAction(`Retirer ${f.name} ?`, 'Tu pourras le rajouter avec son pseudo et ses 4 caractères.', 'Retirer', () => codes.forEach((c) => removeFriend(c)))
+              // Paul reste pendant le tuto
+              isPaul(f.code) && inPhase1(tutoStep)
+                ? haptic.warning()
+                : confirmAction(`Retirer ${f.name} ?`, 'Tu pourras le rajouter avec son pseudo et ses 4 caractères.', 'Retirer', () => codes.forEach((c) => removeFriend(c)))
             }
           />
         ))
@@ -99,6 +107,7 @@ function FriendRow({
   fresh,
   active,
   devices,
+  noActions = false,
   onOpen,
   onChallenge,
   onTrade,
@@ -112,6 +121,8 @@ function FriendRow({
   active: boolean;
   /** Nombre d'appareils de cette personne (2 ou plus : elle a plusieurs codes). */
   devices: number;
+  /** Défi et échange indisponibles (Paul, le bot du tuto). */
+  noActions?: boolean;
   /** Ouvre son profil (ses cartes épinglées). */
   onOpen(): void;
   onChallenge(): void;
@@ -174,15 +185,15 @@ function FriendRow({
         </View>
       </Pressable>
       {/* hors ligne mais joignable par notification : on peut l'inviter quand même */}
-      <Button label="Défier" icon="flash" kind={online ? 'primary' : 'secondary'} disabled={!online && !friend.push} onPress={onChallenge} />
+      <Button label="Défier" icon="flash" kind={online ? 'primary' : 'secondary'} disabled={noActions || (!online && !friend.push)} onPress={onChallenge} />
       {/* Échanger : un bouton rond, pour laisser la place au nom */}
       <Pressable
         onPress={onTrade}
-        disabled={!online && !friend.push}
+        disabled={noActions || (!online && !friend.push)}
         hitSlop={6}
         accessibilityRole="button"
         accessibilityLabel={`Échanger avec ${friend.name}`}
-        style={({ pressed }) => [styles.tradeBtn, !online && !friend.push && { opacity: 0.4 }, pressed && { transform: [{ scale: 0.92 }] }]}
+        style={({ pressed }) => [styles.tradeBtn, (noActions || (!online && !friend.push)) && { opacity: 0.4 }, pressed && { transform: [{ scale: 0.92 }] }]}
       >
         <Ionicons name="swap-horizontal" size={20} color={online ? colors.gold : colors.textDim} />
       </Pressable>

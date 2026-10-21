@@ -41,6 +41,7 @@ import { AppText } from '../AppText';
 import { Burst, Glow, Shockwave } from '../fx';
 import { PackArt } from '../PackArt';
 import { RankEmblem } from '../rank/RankEmblem';
+import { TutoArrow } from '../tuto/TutoArrow';
 import { PIOCHE_COLOR } from './entry';
 
 export type FishingStage = 'cast' | 'choose' | 'pull' | 'break' | 'catch';
@@ -72,6 +73,7 @@ export function FishingScene({
   onCast,
   onChoose,
   onCaught,
+  pointAt,
 }: {
   stage: FishingStage;
   friends: FishFriend[];
@@ -81,11 +83,13 @@ export function FishingScene({
   onCast(): void;
   onChoose(code: string): void;
   onCaught(): void;
+  /** Tuto : flèche et consigne sous cet ami. */
+  pointAt?: { code: string; text: string };
 }) {
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   return (
     <View style={styles.root} onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-      {size ? <Scene w={size.w} h={size.h} stage={stage} friends={friends} chosen={chosen} status={status} onCast={onCast} onChoose={onChoose} onCaught={onCaught} /> : null}
+      {size ? <Scene w={size.w} h={size.h} stage={stage} friends={friends} chosen={chosen} status={status} onCast={onCast} onChoose={onChoose} onCaught={onCaught} pointAt={pointAt} /> : null}
     </View>
   );
 }
@@ -100,6 +104,7 @@ function Scene({
   onCast,
   onChoose,
   onCaught,
+  pointAt,
 }: {
   w: number;
   h: number;
@@ -110,6 +115,7 @@ function Scene({
   onCast(): void;
   onChoose(code: string): void;
   onCaught(): void;
+  pointAt?: { code: string; text: string };
 }) {
   // ---- géométrie ----
   const waterH = h * 0.64;
@@ -276,7 +282,7 @@ function Scene({
               <AppText style={styles.emptyText}>Rien ne mord : ajoute des amis dans ton profil pour piocher chez eux.</AppText>
             </Animated.View>
           ) : (
-            friends.map((f, i) => <FriendBubble key={f.code} friend={f} index={i} onPress={() => onChoose(f.code)} />)
+            friends.map((f, i) => <FriendBubble key={f.code} friend={f} index={i} onPress={() => onChoose(f.code)} hint={pointAt?.code === f.code ? pointAt.text : undefined} />)
           )}
         </ScrollView>
       ) : null}
@@ -338,7 +344,7 @@ function Scene({
 }
 
 /** Un ami qui flotte à la surface : sa bulle (rang), son nom, et s'il peut mordre. */
-function FriendBubble({ friend, index, onPress }: { friend: FishFriend; index: number; onPress(): void }) {
+function FriendBubble({ friend, index, onPress, hint }: { friend: FishFriend; index: number; onPress(): void; /** Tuto : consigne et flèche. */ hint?: string }) {
   const float = useSharedValue(0);
   useEffect(() => {
     float.value = withDelay(index * 140, withRepeat(withTiming(1, { duration: 1400 + (index % 3) * 300, easing: Easing.inOut(Easing.sin) }), -1, true));
@@ -371,6 +377,7 @@ function FriendBubble({ friend, index, onPress }: { friend: FishFriend; index: n
           </AppText>
         ) : null}
       </Pressable>
+      {hint ? <TutoArrow text={hint} side="bottom" /> : null}
     </Animated.View>
   );
 }

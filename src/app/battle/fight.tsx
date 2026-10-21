@@ -88,6 +88,7 @@ import { CardFace } from '../../components/card/CardFace';
 import { Burst, Confetti, Flash, Glow, ImpactLines, Rays, Shockwave } from '../../components/fx';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
+import { TutoArrow, TutoBubble } from '../../components/tuto/TutoArrow';
 import type { Card } from '../../storage/model';
 import { CARD_RATIO, colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
@@ -192,6 +193,12 @@ export default function FightScreen() {
     const hidden = hiddenAdjust(level, mine);
     return { deck, foe, battle: createBattle(mine, levelFighters(level, hidden.mult), { catchUp: 1 }), controller: new BotController(level.botLevel, hidden.edge) as BattleController };
   });
+  /** Tuto : premier combat solo, guidé par des bulles. Sa fin (gagné ou perdu) termine la phase 1. */
+  const [tuto] = useState(() => !online && !!level && useGame.getState().save?.tutorial.step === 'battle');
+  /** Tuto : coups joués et visées faites (les bulles changent au fil du combat). */
+  const [tutoTurns, setTutoTurns] = useState(0);
+  const [tutoAims, setTutoAims] = useState(0);
+  const [tutoDone, setTutoDone] = useState(false);
   const deck = setup?.deck ?? [];
   const foeInfo = setup?.foe;
   const controller = setup?.controller;
@@ -579,6 +586,11 @@ export default function FightScreen() {
       if (params.challenge === '1') setChallengeWon(useGame.getState().completeChallenge(level.n, deck.map((c) => c.id)));
       if (level.world.final && level.boss && !useGame.getState().save?.galaxyClaimed) setGalaxyWin(true);
     }
+    // Tuto : fin du premier combat, tout le jeu se débloque (phase 2)
+    if (tuto) {
+      useGame.getState().advanceTuto('battle');
+      setTutoDone(true);
+    }
     if (winner === 0) {
       playSfx('win');
       haptic.success();
@@ -676,6 +688,7 @@ export default function FightScreen() {
   /** Envoie le coup du joueur, puis met en scène ce qui en résulte. */
   const submit = (move: Move) => {
     if (!battle || !controller) return;
+    if (tuto && move.type === 'act') setTutoTurns((n) => n + 1);
     setBusy(true);
     setMode('idle');
     setTurnLeft(null);
@@ -766,6 +779,7 @@ export default function FightScreen() {
 
   const onTimed = (timings: number[]) => {
     if (!pending) return;
+    if (tuto) setTutoAims((n) => n + 1);
     const slot = pending.slot;
     setPending(null);
     submit({ type: 'act', action: { type: 'attack', slot, timings } });
@@ -822,6 +836,30 @@ export default function FightScreen() {
 
   const special = resolveAttack(shown, 0, 1);
   const specialKind = kindOf(me.attacks[1]);
+  // Tuto : la bulle du moment (rien pendant l'ouverture, une fiche ouverte ou la fin)
+  const tutoOn = tuto && !intro && result === null && !inspect && !soundOpen && !quitting && !busy;
+  const benchAlive = shown.sides[0].fighters.some((f, i) => i !== shown.sides[0].active && f.hp > 0);
+  const tutoAttack =
+    tutoOn && mode === 'menu' && !stunned
+      ? tutoTurns === 0
+        ? { slot: 0, text: 'C’est ton tour ! Touche ton attaque classique', sub: 'Elle marche à chaque tour' }
+        : tutoTurns === 1 && special && me.usesLeft > 0
+          ? { slot: 1, text: 'Essaie ton attaque spéciale !', sub: `Plus forte, mais limitée : ${me.usesLeft}/${me.maxUses} utilisations` }
+          : null
+      : null;
+  const tutoBench =
+    tutoOn && mode === 'replace'
+      ? { text: 'Ta carte est K.O. ! Touche une remplaçante pour l’envoyer' }
+      : tutoOn && mode === 'menu' && !stunned && tutoTurns === 2 && benchAlive
+        ? { text: 'Astuce : touche une remplaçante pour changer de carte', sub: 'Ça utilise ton tour. Sinon, attaque !' }
+        : null;
+  const tutoActions =
+    tutoOn && mode === 'timing' && tutoAims < 2
+      ? { text: 'Touche la barre, puis touche encore quand le curseur passe sur la cible dorée !', sub: 'Plus tu es près du centre, plus le coup fait mal' }
+      : tutoOn && mode === 'menu' && stunned
+        ? { text: 'Ta carte est étourdie : passe ton tour, ou envoie une remplaçante' }
+        : null;
+  const tutoConfirm = tutoOn && mode === 'confirmSwitch' ? (confirmFrom === 'replace' ? 'Touche Envoyer pour la faire entrer' : 'Touche Envoyer pour changer de carte') : null;
   const infoW = Math.max(110, width - layout.cardW - 56);
 
   return (
@@ -947,7 +985,7 @@ export default function FightScreen() {
           <AppText variant="caption" numberOfLines={2} style={{ width: 92 }}>
             {mode === 'replace' ? 'Choisis ta carte' : 'Remplaçantes'}
           </AppText>
-          <View style={styles.benchCards}>
+          <View style={[styles.benchCards, tutoBench && { zIndex: 10 }]}>
             {shown.sides[0].fighters.map((f, i) => {
               if (i === shown.sides[0].active) return null;
               const c = deck.find((d) => d.id === f.ref);
@@ -968,75 +1006,85 @@ export default function FightScreen() {
                 </Pressable>
               );
             })}
+            {tutoBench ? <TutoArrow key={tutoBench.text} text={tutoBench.text} sub={tutoBench.sub} gap={4} /> : null}
           </View>
         </View>
 
         {/* Actions */}
         <View style={[styles.actions, { minHeight: layout.actionsH }]}>
-          {mode === 'timing' && pending ? (
-            <Animated.View entering={FadeInUp.duration(220)}>
-              <TimingBar hits={pending.hits} attackName={pending.attack.name} accent={getRarity(me.rarity).color} onDone={onTimed} compact={layout.compact} />
-            </Animated.View>
-          ) : mode === 'confirmSwitch' && switchTo !== null ? (
-            <Animated.View entering={FadeIn.duration(180)} style={{ gap: 10 }}>
-              <AppText variant="body" style={{ textAlign: 'center' }} numberOfLines={2}>
-                {confirmFrom === 'replace'
-                  ? `Envoyer ${shown.sides[0].fighters[switchTo].name} ?`
-                  : `Envoyer ${shown.sides[0].fighters[switchTo].name} ? Ça utilise ton tour.`}
+          {/* le contenu est en bas : la bulle du tuto se pose juste au-dessus */}
+          <View>
+            {mode === 'timing' && pending ? (
+              <Animated.View entering={FadeInUp.duration(220)}>
+                <TimingBar hits={pending.hits} attackName={pending.attack.name} accent={getRarity(me.rarity).color} onDone={onTimed} compact={layout.compact} />
+              </Animated.View>
+            ) : mode === 'confirmSwitch' && switchTo !== null ? (
+              <Animated.View entering={FadeIn.duration(180)} style={{ gap: 10 }}>
+                <AppText variant="body" style={{ textAlign: 'center' }} numberOfLines={2}>
+                  {confirmFrom === 'replace'
+                    ? `Envoyer ${shown.sides[0].fighters[switchTo].name} ?`
+                    : `Envoyer ${shown.sides[0].fighters[switchTo].name} ? Ça utilise ton tour.`}
+                </AppText>
+                <View style={styles.twoButtons}>
+                  <Button label="Annuler" kind="secondary" style={{ flex: 1 }} onPress={cancelSwitch} />
+                  <Button label="Info" icon="information-circle-outline" kind="secondary" style={{ flex: 1 }} onPress={() => look(0, switchTo)} />
+                  <View style={{ flex: 1.2 }}>
+                    <Button label="Envoyer" icon="swap-horizontal" onPress={doSwitch} />
+                    {tutoConfirm ? <TutoArrow key={tutoConfirm} text={tutoConfirm} ring={14} gap={6} /> : null}
+                  </View>
+                </View>
+              </Animated.View>
+            ) : mode === 'replace' ? (
+              <AppText variant="body" style={{ textAlign: 'center', color: colors.textDim }}>
+                Touche une remplaçante pour l'envoyer.
               </AppText>
-              <View style={styles.twoButtons}>
-                <Button label="Annuler" kind="secondary" style={{ flex: 1 }} onPress={cancelSwitch} />
-                <Button label="Info" icon="information-circle-outline" kind="secondary" style={{ flex: 1 }} onPress={() => look(0, switchTo)} />
-                <Button label="Envoyer" icon="swap-horizontal" style={{ flex: 1.2 }} onPress={doSwitch} />
+            ) : stunned && mode === 'menu' ? (
+              <View style={{ gap: 10 }}>
+                <AppText variant="caption" style={{ textAlign: 'center' }}>
+                  Ta carte est étourdie : passe ton tour, ou envoie une remplaçante.
+                </AppText>
+                <Button label="Passer le tour" icon="hourglass-outline" kind="secondary" onPress={doPass} />
               </View>
-            </Animated.View>
-          ) : mode === 'replace' ? (
-            <AppText variant="body" style={{ textAlign: 'center', color: colors.textDim }}>
-              Touche une remplaçante pour l'envoyer.
-            </AppText>
-          ) : stunned && mode === 'menu' ? (
-            <View style={{ gap: 10 }}>
-              <AppText variant="caption" style={{ textAlign: 'center' }}>
-                Ta carte est étourdie : passe ton tour, ou envoie une remplaçante.
-              </AppText>
-              <Button label="Passer le tour" icon="hourglass-outline" kind="secondary" onPress={doPass} />
-            </View>
-          ) : (
-            <View style={styles.twoButtons}>
-              <AttackButton
-                index={0}
-                attack={me.attacks[0]}
-                tag="Classique"
-                hint={attackHint(shown, me, foe, me.attacks[0], false)}
-                accent={colors.text}
-                compact={layout.compact}
-                disabled={!canPlay}
-                onPress={() => attack(0)}
-              />
-              <AttackButton
-                index={1}
-                attack={me.attacks[1]}
-                tag="Spéciale"
-                kind={specialKind}
-                uses={`${me.usesLeft}/${me.maxUses}`}
-                hint={
-                  me.usesLeft <= 0
-                    ? { text: 'Plus d’utilisation', hot: false }
-                    : me.jammed > 0
-                      ? { text: `Brouillée · ${me.jammed} tour${me.jammed > 1 ? 's' : ''}`, hot: false }
-                      : specialKind === 'mirror'
-                        ? special
-                          ? { text: `Copie ${special.attack.name} ×1,3`, hot: true }
-                          : { text: 'Rien à copier', hot: false }
-                        : attackHint(shown, me, foe, me.attacks[1], true)
-                }
-                accent={getRarity(me.rarity).color}
-                compact={layout.compact}
-                disabled={!canPlay || !special}
-                onPress={() => attack(1)}
-              />
-            </View>
-          )}
+            ) : (
+              <View style={styles.twoButtons}>
+                <AttackButton
+                  index={0}
+                  attack={me.attacks[0]}
+                  tag="Classique"
+                  hint={attackHint(shown, me, foe, me.attacks[0], false)}
+                  accent={colors.text}
+                  compact={layout.compact}
+                  disabled={!canPlay}
+                  onPress={() => attack(0)}
+                  tuto={tutoAttack?.slot === 0 ? tutoAttack : undefined}
+                />
+                <AttackButton
+                  index={1}
+                  attack={me.attacks[1]}
+                  tag="Spéciale"
+                  kind={specialKind}
+                  uses={`${me.usesLeft}/${me.maxUses}`}
+                  hint={
+                    me.usesLeft <= 0
+                      ? { text: 'Plus d’utilisation', hot: false }
+                      : me.jammed > 0
+                        ? { text: `Brouillée · ${me.jammed} tour${me.jammed > 1 ? 's' : ''}`, hot: false }
+                        : specialKind === 'mirror'
+                          ? special
+                            ? { text: `Copie ${special.attack.name} ×1,3`, hot: true }
+                            : { text: 'Rien à copier', hot: false }
+                          : attackHint(shown, me, foe, me.attacks[1], true)
+                  }
+                  accent={getRarity(me.rarity).color}
+                  compact={layout.compact}
+                  disabled={!canPlay || !special}
+                  onPress={() => attack(1)}
+                  tuto={tutoAttack?.slot === 1 ? tutoAttack : undefined}
+                />
+              </View>
+            )}
+            {tutoActions ? <TutoArrow key={tutoActions.text} text={tutoActions.text} sub={tutoActions.sub} gap={4} /> : null}
+          </View>
         </View>
       </View>
 
@@ -1066,6 +1114,7 @@ export default function FightScreen() {
             challenge={params.challenge === '1'}
             challengeWon={challengeWon}
             onRevive={!revived && params.challenge !== '1' && result === 1 ? revive : undefined}
+            tutoDone={tutoDone}
           />
         ) : null
       ) : null}
@@ -1291,6 +1340,7 @@ function AttackButton({
   compact,
   disabled,
   onPress,
+  tuto,
 }: {
   /** Place du bouton : les deux boutons entrent l'un après l'autre. */
   index: number;
@@ -1305,6 +1355,8 @@ function AttackButton({
   compact: boolean;
   disabled: boolean;
   onPress(): void;
+  /** Tuto : consigne et flèche sur ce bouton. */
+  tuto?: { text: string; sub?: string };
 }) {
   const { width } = useWindowDimensions();
   // Deux boutons côte à côte : le nom de l'attaque doit toujours tenir en entier.
@@ -1388,6 +1440,7 @@ function AttackButton({
           {hint.text}
         </AppText>
       </Pressable>
+      {tuto ? <TutoArrow key={tuto.text} text={tuto.text} sub={tuto.sub} ring={16} gap={6} /> : null}
     </Animated.View>
   );
 }
@@ -1485,6 +1538,7 @@ function ResultOverlay({
   challenge = false,
   challengeWon = false,
   onRevive,
+  tutoDone = false,
 }: {
   won: boolean;
   levelN: number;
@@ -1499,6 +1553,8 @@ function ResultOverlay({
   galaxy?: boolean;
   /** Défaite en solo : revivre en regardant une pub (absent si déjà fait, ou pendant le défi du jour). */
   onRevive?: () => Promise<AdResult>;
+  /** Tuto : ce combat vient de terminer la phase guidée. */
+  tutoDone?: boolean;
 }) {
   const { width, height } = useWindowDimensions();
   // suivi en direct : une fois la carte révélée (retour de l'écran d'ouverture), le bouton disparaît
@@ -1601,6 +1657,12 @@ function ResultOverlay({
           <AppText style={styles.challengeWonText}>Défi du jour réussi</AppText>
           <CoinIcon size={18} />
           <AppText style={styles.challengeWonPrize}>{`+${CHALLENGE_REWARD}`}</AppText>
+        </Animated.View>
+      ) : null}
+      {tutoDone ? (
+        // Phase 2 du tuto : le menu « tuto terminé » prendra la suite
+        <Animated.View entering={FadeInDown.delay(won ? coinsAt : 600)} style={{ alignSelf: 'stretch', paddingHorizontal: 24, marginTop: 16 }}>
+          <TutoBubble text="Premier combat terminé ! Tout le jeu est débloqué." sub="Multijoueur, collection, échanges, quêtes : à toi de jouer." />
         </Animated.View>
       ) : null}
       {mvp ? (

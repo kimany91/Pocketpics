@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { MAX_STORED_DRAWS, computeDraws, consumeDraw, type DrawStatus } from '../game/draws';
+import { CARDS_PER_PACK, MAX_STORED_DRAWS, computeDraws, consumeDraw, type DrawStatus } from '../game/draws';
 import { setMusicVolume } from '../audio/music';
 import { setSfxVolume } from '../audio/sfx';
 import { ATTACK_NAME_MAX } from '../battle/stats';
@@ -31,6 +31,9 @@ import { getRarity } from '../game/rarity';
 import { type CropRect, cropImage } from '../game/gallery';
 import { type FriendDrawPayment, type FriendPhoto, payFriendDraw } from '../game/friendDraw';
 import { generatePack, makeCard } from '../game/pack';
+import { PAUL_NAME, paulFriend, paulHash } from '../game/paul';
+import { loadPaulPhotos } from '../game/paulPack';
+import { type TutoStep, type TutorialState, advance, drawsNeeded, finish as finishTuto, finishedTutorial, inPhase1, reached, skipTutorialForTests } from '../game/tutorial';
 import { cleanPseudo } from '../net/socialCore';
 import * as disk from '../storage/disk';
 import { MAX_PINNED } from '../storage/model';
@@ -141,10 +144,40 @@ interface GameStore {
   /** Essai : le prochain paquet sort tout chromatique (voir le bloc d'essai plus haut). */
   chromaticNext: boolean;
   toggleChromaticNext(): void;
+
+  /* ---------------------------------- Tuto ---------------------------------- */
+  /** Passe à l'étape suivante si on est bien à `from` (sans effet sinon : on peut appeler deux fois). */
+  advanceTuto(from: TutoStep): void;
+  /** Tuto : ajoute Paul (sans réseau, il accepte tout de suite) et passe à la Pioche. */
+  addPaul(): void;
+  /**
+   * Tuto : la Pioche amicale chez Paul, gratuite. Crée 5 cartes communes avec
+   * les illustrations des bots, puis débloque les combats.
+   */
+  openPaulPack(): Promise<Card[]>;
+  /** Phase 2 : note l'échange ou le combat fait avec Paul. */
+  patchTuto(patch: Partial<Pick<TutorialState, 'tradeDone' | 'fightDone'>>): void;
+  /** Fin du tuto (après la phase 2, ou en la passant avec `skipped`). */
+  finishTutorial(skipped?: boolean): void;
 }
 
 function persistState(save: SaveState) {
   disk.saveState(save);
+}
+
+/**
+ * Tuto : les deux premiers paquets doivent pouvoir s'ouvrir. S'il manque des
+ * tirages (réserve entamée), ils sont offerts en tirages bonus.
+ */
+function withTutoDraws(save: SaveState, now = Date.now()): SaveState {
+  const missing = drawsNeeded(save.tutorial.step) - computeDraws(save.draws, now).charges - save.bonusDraws;
+  return missing > 0 ? { ...save, bonusDraws: save.bonusDraws + missing } : save;
+}
+
+/** La sauvegarde avec le tuto avancé d'une étape (si on est bien à `from`). */
+function withTutoStep(save: SaveState, from: TutoStep): SaveState {
+  const tutorial = advance(save.tutorial, from);
+  return tutorial === save.tutorial ? save : withTutoDraws({ ...save, tutorial });
 }
 
 /** La sauvegarde avec un évènement de quête en plus. */
@@ -210,7 +243,15 @@ export const useGame = create<GameStore>((set, get) => ({
       const settled = base.rank.pending ? { ...base, rank: settleAbandoned(base.rank) } : base;
       // quêtes : nouveau jour / nouvelle semaine, et le rang déjà atteint compte
       const quests = rollQuests(settled.quests, Date.now());
-      const save: SaveState = { ...settled, quests: { ...quests, bestTier: Math.max(quests.bestTier, rankOf(shownMmr(settled.rank)).tierIndex) } };
+      const withQuests: SaveState = { ...settled, quests: { ...quests, bestTier: Math.max(quests.bestTier, rankOf(shownMmr(settled.rank)).tierIndex) } };
+      // Tuto : passé pour les tests du navigateur, ou si une collection existe déjà (state.json reconstruit ;
+      // quelques cartes seulement : l'app a pu être coupée pendant le premier paquet, le tuto continue)
+      const skipTuto = inPhase1(withQuests.tutorial.step) && (skipTutorialForTests() || (withQuests.tutorial.step === 'pack1' && cards.length > CARDS_PER_PACK * 2));
+      const tutoSave = skipTuto ? { ...withQuests, tutorial: finishedTutorial() } : withQuests;
+      // Paul doit être là pour la suite de la phase 1 (étapes Pioche et Combat)
+      const paul = paulFriend();
+      const needsPaul = inPhase1(tutoSave.tutorial.step) && reached(tutoSave.tutorial.step, 'pioche') && !tutoSave.friends.some((f) => f.code === paul.code);
+      const save = withTutoDraws(needsPaul ? { ...tutoSave, friends: [...tutoSave.friends, paul] } : tutoSave);
       persistState(save);
       setSfxVolume(save.soundVolume);
       setMusicVolume(save.musicVolume);
@@ -278,8 +319,10 @@ export const useGame = create<GameStore>((set, get) => ({
       luck: luckAfter,
       quests: bump(latest.quests, 'pack', Date.now()),
     };
-    persistState(next);
-    set({ cards, save: next, pendingPack: written });
+    // tuto : premier paquet → deuxième ; deuxième → l'onglet Profil s'ouvre
+    const tuto = latest.tutorial.step === 'pack1' || latest.tutorial.step === 'pack2' ? withTutoStep(next, latest.tutorial.step) : next;
+    persistState(tuto);
+    set({ cards, save: tuto, pendingPack: written });
     return written;
   },
 
@@ -756,5 +799,62 @@ export const useGame = create<GameStore>((set, get) => ({
   refillDrawsForDemo() {
     const save = get().save;
     if (save) set({ save: { ...save, draws: { charges: MAX_STORED_DRAWS, anchor: Date.now() } } });
+  },
+
+  advanceTuto(from) {
+    const save = get().save;
+    if (!save) return;
+    const next = withTutoStep(save, from);
+    if (next === save) return;
+    persistState(next);
+    set({ save: next });
+  },
+
+  addPaul() {
+    if (!get().save) return;
+    // déjà là (relance de l'app) : on met juste le tuto à jour
+    if (!get().save?.friends.some((f) => f.code === paulFriend().code)) get().upsertFriend(paulFriend());
+    get().advanceTuto('friend');
+  },
+
+  async openPaulPack() {
+    const save = get().save;
+    if (!save) throw new Error('Sauvegarde non chargée');
+    set({ openingLucky: false });
+    const photos = await loadPaulPhotos(CARDS_PER_PACK);
+    if (photos.length === 0) throw new Error('Les photos de Paul ne se sont pas chargées.');
+    const now = Date.now();
+    // que des communes, jamais chromatiques : elles sont là pour montrer la pioche
+    const written = photos.map((p) => {
+      const card = makeCard({ hash: paulHash(p.ref), width: p.width, height: p.height, sourceId: null }, 'common', now, { origin: 'friend', giver: PAUL_NAME, chromatic: false });
+      disk.writeNewCard(card, { image: { base64: p.image }, thumb: { base64: p.image } });
+      return card;
+    });
+    const cards = [...get().cards, ...written];
+    disk.saveIndex(cards);
+    const latest = get().save ?? save;
+    // gratuit : ni tirage ni pièces, et pas compté comme un paquet (chance, quêtes)
+    const next = withTutoStep({ ...latest, drawnHashes: [...new Set([...latest.drawnHashes, ...written.map((c) => c.hash)])] }, 'pioche');
+    persistState(next);
+    set({ cards, save: next, pendingPack: written });
+    return written;
+  },
+
+  patchTuto(patch) {
+    const save = get().save;
+    if (!save) return;
+    const next: SaveState = { ...save, tutorial: { ...save.tutorial, ...patch } };
+    persistState(next);
+    set({ save: next });
+  },
+
+  finishTutorial(skipped = false) {
+    const save = get().save;
+    if (!save) return;
+    const tutorial = finishTuto(save.tutorial, skipped);
+    if (tutorial === save.tutorial) return;
+    const next: SaveState = { ...save, tutorial };
+    persistState(next);
+    set({ save: next });
   },
 }));

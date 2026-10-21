@@ -51,6 +51,8 @@ import { rankOf } from '../../game/rank';
 import { useMatch } from '../../net/match';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
+import { useTutoStep } from '../../state/useTuto';
+import { TutoArrow } from '../../components/tuto/TutoArrow';
 import type { Card } from '../../storage/model';
 import { colors, fonts } from '../../theme';
 import { confirmAction } from '../../utils/confirm';
@@ -99,6 +101,8 @@ export default function DeckScreen() {
       : lastDeck.filter((id) => cards.some((c) => c.id === id)).slice(0, DECK_SIZE),
   );
 
+  // Tuto : premier combat guidé (« Auto », puis « Combattre »)
+  const tuto = useTutoStep() === 'battle' && !online && !challenge;
   const cols = 3;
   const gap = 12;
   const cardW = Math.floor((width - 32 - gap * (cols - 1)) / cols);
@@ -236,12 +240,18 @@ export default function DeckScreen() {
         </View>
       ) : null}
 
-      <View style={styles.titleRow}>
+      {/* tuto : la bulle sous « Auto » passe par-dessus la liste */}
+      <View style={[styles.titleRow, tuto && { zIndex: 10 }]}>
         <View style={{ flex: 1 }}>
           <AppText variant="heading">{online || challenge ? `Choisis ${need} carte${need > 1 ? 's' : ''}` : `Choisis jusqu’à ${need} carte${need > 1 ? 's' : ''}`}</AppText>
           <AppText variant="caption">La première choisie commence le combat.</AppText>
         </View>
-        {cards.length > 0 ? <Button label="Auto" icon="flash-outline" kind="secondary" onPress={auto} /> : null}
+        {cards.length > 0 ? (
+          <View>
+            <Button label="Auto" icon="flash-outline" kind="secondary" onPress={auto} />
+            {tuto && picked.length < need ? <TutoArrow side="bottom" text="Touche Auto : le jeu choisit tes 4 meilleures cartes" sub="Tu peux aussi les toucher une par une" ring={14} gap={8} /> : null}
+          </View>
+        ) : null}
       </View>
 
       {cards.length === 0 ? (
@@ -271,6 +281,7 @@ export default function DeckScreen() {
           </View>
         ) : (
           <FightButton
+            hint={tuto && need > 0 && picked.length >= need ? 'Ton équipe est prête ! Touche Combattre' : undefined}
             label={
               picked.length >= need && need > 0
                 ? online
@@ -359,7 +370,7 @@ function TeamSlots({ cards, slots, onRemove }: { cards: Card[]; slots: number; o
 }
 
 /** Le bouton du combat : quand l'équipe est prête, il bondit et un halo doré respire derrière lui. */
-function FightButton({ label, disabled, onPress }: { label: string; disabled: boolean; onPress(): void }) {
+function FightButton({ label, disabled, onPress, hint }: { label: string; disabled: boolean; onPress(): void; /** Tuto : consigne et flèche. */ hint?: string }) {
   const glow = useSharedValue(0);
   const bump = useSharedValue(0);
   useEffect(() => {
@@ -380,6 +391,7 @@ function FightButton({ label, disabled, onPress }: { label: string; disabled: bo
         <Glow color={colors.gold} size={90} stretchX={4.2} />
       </Animated.View>
       <Button label={label} size="lg" icon="flash" disabled={disabled} onPress={onPress} />
+      {hint ? <TutoArrow text={hint} ring={18} gap={8} /> : null}
     </Animated.View>
   );
 }

@@ -17,6 +17,7 @@ import { type LuckState, initialLuck } from '../game/luck';
 import { type QuestState, initialQuests, migrateQuests } from '../game/quests';
 import { type RankState, initialRank, migrateRank } from '../game/rank';
 import { getRarity } from '../game/rarity';
+import { type TutorialState, initialTutorial, migrateTutorial } from '../game/tutorial';
 
 export const CARD_SCHEMA_VERSION = 1;
 
@@ -137,6 +138,11 @@ export interface SaveState {
   friendDrawIntro: boolean;
   /** Paquets gagnés avec des pubs aujourd'hui (ajouté après : à zéro si absent). */
   ads: AdState;
+  /**
+   * Tuto du premier lancement (ajouté après : une partie déjà commencée le
+   * passe, une nouvelle le commence ; voir src/game/tutorial.ts).
+   */
+  tutorial: TutorialState;
   [extra: string]: unknown;
 }
 
@@ -235,6 +241,7 @@ export function createInitialState(now = Date.now()): SaveState {
     quests: initialQuests(now),
     friendDrawIntro: false,
     ads: initialAds(now),
+    tutorial: initialTutorial(),
   };
 }
 
@@ -345,5 +352,6 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     quests: migrateQuests(s.quests, now),
     friendDrawIntro: s.friendDrawIntro === true,
     ads: migrateAds(s.ads, now),
+    tutorial: migrateTutorial(s.tutorial, s),
   };
 }

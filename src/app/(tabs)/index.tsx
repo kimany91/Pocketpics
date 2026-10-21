@@ -28,6 +28,7 @@ import { QuestPill } from '../../components/QuestEntry';
 import { AdPackButton } from '../../components/ads/AdPackButton';
 import { PIOCHE_COLOR, startFriendDraw, useFriendDraw } from '../../components/pioche/entry';
 import { Screen } from '../../components/Screen';
+import { TutoArrow } from '../../components/tuto/TutoArrow';
 import { DRAW_INTERVAL_MS, MAX_STORED_DRAWS, formatCountdown } from '../../game/draws';
 import { DRAW_PRICE } from '../../game/economy';
 import { galleryPhotoCount, isDesktopBrowser, openLimitedPicker } from '../../game/gallery';
@@ -35,6 +36,8 @@ import { RARITIES, getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import { useDrawStatus } from '../../state/useDrawStatus';
 import { useGalleryAccess } from '../../state/useGalleryAccess';
+import { useTutoStep } from '../../state/useTuto';
+import { isUnlocked } from '../../game/tutorial';
 import { colors, fonts } from '../../theme';
 import { springs, useEntrance } from '../../theme/motion';
 import { haptic } from '../../utils/haptics';
@@ -118,6 +121,10 @@ export default function DrawScreen() {
   const friendDraw = useFriendDraw();
   // seulement les amis dont l'app sait faire la Pioche amicale en direct
   const showPioche = friendDraw.ready.length > 0;
+  // Tuto : flèche sur le bouton des deux premiers paquets, puis sur le « ! » (Pioche chez Paul)
+  const step = useTutoStep();
+  const tutoReady = focused && !importOpen && !soundOpen;
+  const packHint = tutoReady && canOpen && (step === 'pack1' || step === 'pack2');
 
   return (
     <Screen>
@@ -140,10 +147,12 @@ export default function DrawScreen() {
         </View>
       </Rise>
 
-      {/* Les quêtes, bien en vue juste sous le titre */}
-      <Rise visit={visit} index={1} style={{ paddingHorizontal: width < 390 ? 16 : 20, marginTop: 8, zIndex: 2 }}>
-        <QuestPill focused={focused} />
-      </Rise>
+      {/* Les quêtes, bien en vue juste sous le titre (fermées pendant le tuto) */}
+      {isUnlocked(step, 'quests') ? (
+        <Rise visit={visit} index={1} style={{ paddingHorizontal: width < 390 ? 16 : 20, marginTop: 8, zIndex: 2 }}>
+          <QuestPill focused={focused} />
+        </Rise>
+      ) : null}
 
       <Rise visit={visit} index={1} dy={34} scale={0.9} style={styles.stage}>
         <Glow color={canOpen ? '#B99CFF' : '#FFFFFF'} size={packW * 3} opacity={glowOpacity} />
@@ -171,6 +180,7 @@ export default function DrawScreen() {
             style={{ transform: [{ translateX: packW * 0.5 - 4 }, { translateY: -packW * PACK_RATIO * 0.5 + 4 }] }}
             // la canne remonte la liste de tous les amis : on choisit dans l'eau
             onPress={() => startFriendDraw()}
+            hint={tutoReady && step === 'pioche' ? 'Paul est en ligne ! Touche le « ! » pour piocher dans sa galerie' : undefined}
           />
         ) : null}
       </Rise>
@@ -231,7 +241,18 @@ export default function DrawScreen() {
                 />
               </>
             ) : (
-              <Button label="Ouvrir un paquet" icon="sparkles" size="lg" disabled={!canOpen} onPress={open} />
+              <View>
+                <Button label="Ouvrir un paquet" icon="sparkles" size="lg" disabled={!canOpen} onPress={open} />
+                {packHint ? (
+                  <TutoArrow
+                    key={step}
+                    text={step === 'pack1' ? 'Ouvre ton premier paquet !' : 'Encore un ! Ouvre ton deuxième paquet'}
+                    sub={step === 'pack1' ? 'Chaque carte est une photo de ta galerie' : undefined}
+                    ring={18}
+                    gap={8}
+                  />
+                ) : null}
+              </View>
             )}
             {isWeb ? (
               <View style={[styles.limited, { flexWrap: 'wrap', rowGap: 6 }]}>
@@ -293,7 +314,7 @@ export default function DrawScreen() {
  * ligne, on peut piocher dans leur galerie. Il rebondit de temps en temps et
  * une onde violette en part.
  */
-function PiocheBadge({ active, count, style, onPress }: { active: boolean; count: number; style: object; onPress(): void }) {
+function PiocheBadge({ active, count, style, onPress, hint }: { active: boolean; count: number; style: object; onPress(): void; /** Tuto : consigne et flèche. */ hint?: string }) {
   const hop = useSharedValue(0);
   const ring = useSharedValue(0);
   useEffect(() => {
@@ -327,6 +348,8 @@ function PiocheBadge({ active, count, style, onPress }: { active: boolean; count
           <AppText style={styles.piocheMark}>!</AppText>
         </Animated.View>
       </Pressable>
+      {/* en dessous : au-dessus, la bulle sortirait de l'écran */}
+      {hint ? <TutoArrow text={hint} side="bottom" gap={4} ring={20} /> : null}
     </View>
   );
 }
