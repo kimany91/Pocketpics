@@ -38,7 +38,7 @@ export function FriendAdd({ onAdded }: { onAdded(code: string): void }) {
     const parsed = parseFriendInput(raw);
     if (!parsed) return fail('Écris son pseudo suivi de ses 4 caractères, par exemple Léo#7F3K.');
     let code: string;
-    let hint: { name: string; tag: string } | undefined;
+    let hint: { name: string; tag: string; push?: string } | undefined;
     if ('code' in parsed) code = parsed.code;
     else {
       if (useSocial.getState().status !== 'online') return fail('Pas de connexion pour le moment : réessaie dans un instant.');
@@ -47,7 +47,7 @@ export function FriendAdd({ onAdded }: { onAdded(code: string): void }) {
       setSearching(false);
       if (!found) return fail(`Aucun joueur « ${raw.trim()} ». Vérifie son pseudo et ses 4 caractères (il doit avoir ouvert le jeu depuis la dernière mise à jour).`);
       code = found.code;
-      hint = { name: found.name, tag: found.tag };
+      hint = { name: found.name, tag: found.tag, push: found.pt };
     }
     const r = addFriend(code, hint);
     if (r === 'self') return fail('C’est toi !');

@@ -11,7 +11,8 @@ import { create } from 'zustand';
 
 import { shownMmr } from '../game/rank';
 import { useGame } from '../state/game';
-import { readThumbBase64Sync } from '../storage/disk';
+import { pushToFriend, isPushToken } from '../notify';
+import { loadPinsCache, readThumbBase64Sync, savePinsCache } from '../storage/disk';
 import { type MqttConnection } from '../trade/mqtt';
 import { connectRelay, deps } from '../trade/online';
 import { newOnlineCode } from '../trade/relayCore';
@@ -64,7 +65,7 @@ interface SocialStore {
   status: 'off' | 'connecting' | 'online' | 'error';
   presence: Record<string, Presence>;
   /** Demandes d'ami reçues. */
-  requests: { from: string; name: string; mmr: number; tag?: string }[];
+  requests: { from: string; name: string; mmr: number; tag?: string; push?: string }[];
   /** Défi reçu, en attente de réponse. */
   challenge: Challenge | null;
   /** Défi envoyé. */
@@ -73,7 +74,7 @@ interface SocialStore {
    * Cartes épinglées des amis, telles qu'ils nous les ont envoyées. `cards` est
    * incomplet tant que `n` cartes ne sont pas arrivées.
    */
-  pins: Record<string, { at: number; n: number; cards: PinnedCard[] }>;
+  pins: Record<string, { at: number; n: number; cards: PinnedCard[]; /** Gardées de sa dernière visite (il n'est pas en ligne). */ saved?: boolean }>;
 
   start(): void;
   stop(): void;
@@ -82,7 +83,7 @@ interface SocialStore {
   /** Mes 4 caractères après le pseudo (créés au besoin). */
   myTag(): string;
   /** `hint` : son pseudo et ses 4 caractères, quand on l'a trouvé par « Pseudo#1234 ». */
-  addFriend(code: string, hint?: { name: string; tag: string }): 'ok' | 'self' | 'exists';
+  addFriend(code: string, hint?: { name: string; tag: string; push?: string }): 'ok' | 'self' | 'exists';
   /**
    * Cherche un joueur dans l'annuaire du relais à partir de « pseudo + tag »
    * (voir `parseFriendInput`). `null` s'il n'est pas trouvé (ou hors ligne).
@@ -100,6 +101,10 @@ interface SocialStore {
   declineChallenge(): void;
   /** Demande à un ami ses cartes épinglées (il doit être en ligne). */
   askPins(code: string): void;
+  /** Ses dernières cartes épinglées vues, gardées sur l'appareil (pour quand il est hors ligne). */
+  loadSavedPins(code: string): void;
+  /** Mon jeton de notification (téléphone, une fois l'autorisation donnée). */
+  setPushToken(token: string | null): void;
   /** Republie ma présence (pseudo ou rang changé). */
   announce(): void;
   isOnline(code: string): boolean;
@@ -124,6 +129,13 @@ const lookups = new Map<string, { key: string; done(e: DirectoryEntry | null): v
 /** Fiches d'annuaire déjà reçues (une seconde recherche du même joueur répond tout de suite). */
 const directory = new Map<string, DirectoryEntry>();
 const LOOKUP_MS = 7000;
+/** Mon jeton de notification, donné à mes amis. */
+let myPush: string | null = null;
+/** Invitations déjà traitées (acceptées, refusées, pioche lancée) : leurs renvois sont ignorés. */
+const handledRooms = new Set<string>();
+/** Renvoi de l'invitation en cours, pour un ami qui ouvre l'app grâce à la notification. */
+let resendTimer: ReturnType<typeof setInterval> | null = null;
+const RESEND_MS = 4000;
 const HEARTBEAT_MS = 45_000;
 
 const save = () => useGame.getState().save;
@@ -155,7 +167,7 @@ export const useSocial = create<SocialStore>((set, get) => {
     if (old && old.topic === topic && old.published) {
       // même fiche : on la rafraîchit simplement (et on réécoute le sujet après une reconnexion)
       for (const c of conns) c.subscribe?.(topic);
-      publish(topic, sealDirectory(key, { code: myCode(), name, tag, at: now() }), true);
+      publish(topic, sealDirectory(key, { code: myCode(), name, tag, at: now(), ...(myPush ? { pt: myPush } : {}) }), true);
       return;
     }
     // pseudo ou tag changé : l'ancienne fiche (si elle était à moi) est effacée
@@ -167,18 +179,55 @@ export const useSocial = create<SocialStore>((set, get) => {
       if (myDirectory !== entry) return;
       entry.timer = null;
       entry.published = true;
-      publish(topic, sealDirectory(key, { code: myCode(), name, tag, at: now() }), true);
+      publish(topic, sealDirectory(key, { code: myCode(), name, tag, at: now(), ...(myPush ? { pt: myPush } : {}) }), true);
     }, DIRECTORY_CHECK_MS);
   };
   const now = () => Date.now();
 
   const sendTo = (code: string, msg: SocialMsg) => publish(inboxTopic(code), sealFor(code, msg));
 
-  const presenceMsg = (online: boolean): SocialMsg => ({ k: 'presence', from: myCode(), ...profile(), online, at: now(), pv: PIOCHE_VERSION, tag: myTag() });
+  const presenceMsg = (online: boolean): SocialMsg => ({
+    k: 'presence',
+    from: myCode(),
+    ...profile(),
+    online,
+    at: now(),
+    pv: PIOCHE_VERSION,
+    tag: myTag(),
+    ...(myPush ? { pt: myPush } : {}),
+  });
   const announce = () => publish(presenceTopic(myCode()), sealFor(myCode(), presenceMsg(true)), true);
 
-  const sendRequest = (to: string, kind: 'req' | 'ok') => sendTo(to, { k: kind, from: myCode(), ...profile(), at: now(), tag: myTag() });
+  const sendRequest = (to: string, kind: 'req' | 'ok') => sendTo(to, { k: kind, from: myCode(), ...profile(), at: now(), tag: myTag(), ...(myPush ? { pt: myPush } : {}) });
   const tagOf = (t: unknown) => (isFriendTag(t) ? t : undefined);
+  const pushOf = (t: unknown) => (isPushToken(t) ? t : undefined);
+
+  /** Prévient un ami par notification, seulement si son app est fermée (sinon il le voit à l'écran). */
+  const notify = (code: string, title: string, body: string, kind: string, token?: string) => {
+    const friend = save()?.friends.find((f) => f.code === code);
+    const to = token ?? friend?.push;
+    if (!to || isOnline(get().presence[code], now())) return;
+    void pushToFriend(to, { title, body, data: { kind, from: myCode() } });
+  };
+
+  /**
+   * Invitation (défi, échange, pioche) : envoyée tout de suite, puis renvoyée
+   * tant qu'elle attend, pour qu'un ami qui ouvre l'app grâce à la
+   * notification la reçoive encore.
+   */
+  const invite = (code: string, msg: SocialMsg & { k: 'challenge' }) => {
+    sendTo(code, msg);
+    if (resendTimer) clearInterval(resendTimer);
+    resendTimer = setInterval(() => {
+      const out = get().outgoing;
+      if (!out || out.room !== msg.room || out.state !== 'waiting' || now() - out.at > CHALLENGE_TTL_MS) {
+        if (resendTimer) clearInterval(resendTimer);
+        resendTimer = null;
+        return;
+      }
+      sendTo(code, { ...msg, at: now() });
+    }, RESEND_MS);
+  };
 
   const friendCodes = () => (save()?.friends ?? []).map((f) => f.code);
 
@@ -241,26 +290,27 @@ export const useSocial = create<SocialStore>((set, get) => {
       switch (m.k) {
         case 'req':
           if (friend) {
-            useGame.getState().upsertFriend({ code: m.from, name: m.name, mmr: m.mmr, mutual: true, tag: tagOf(m.tag) });
+            useGame.getState().upsertFriend({ code: m.from, name: m.name, mmr: m.mmr, mutual: true, tag: tagOf(m.tag), push: pushOf(m.pt) });
             sendRequest(m.from, 'ok');
           } else if (!get().requests.some((r) => r.from === m.from)) {
-            set({ requests: [...get().requests, { from: m.from, name: String(m.name).slice(0, 24), mmr: m.mmr, tag: tagOf(m.tag) }] });
+            set({ requests: [...get().requests, { from: m.from, name: String(m.name).slice(0, 24), mmr: m.mmr, tag: tagOf(m.tag), push: pushOf(m.pt) }] });
           }
           return;
         case 'ok':
-          if (friend) useGame.getState().upsertFriend({ code: m.from, name: m.name, mmr: m.mmr, mutual: true, tag: tagOf(m.tag) });
+          if (friend) useGame.getState().upsertFriend({ code: m.from, name: m.name, mmr: m.mmr, mutual: true, tag: tagOf(m.tag), push: pushOf(m.pt) });
           return;
         case 'challenge': {
           // seulement les amis, et seulement un défi récent
           // (les messages d'invitation ne sont pas gardés par le relais : ils arrivent en direct ;
           // on n'écarte que ceux d'une horloge vraiment fantaisiste)
-          if (!friend || Math.abs(now() - m.at) > PRESENCE_MAX_SKEW_MS || get().challenge?.room === m.room) return;
+          if (!friend || Math.abs(now() - m.at) > PRESENCE_MAX_SKEW_MS || get().challenge?.room === m.room || handledRooms.has(m.room)) return;
           const kind = m.kind === 'trade' ? 'trade' : m.kind === 'draw' ? 'draw' : 'fight';
           if (kind === 'draw') {
             // Pioche amicale : pas de oui/non au début, le téléphone rejoint tout seul
             // (l'ami regarde l'ouverture en direct et ne décide qu'à la fin).
             // Seulement s'il n'est pas en plein combat, échange ou ouverture.
             const occupied = piocheBusy() || useTrade.getState().phase !== 'idle' || useMatch.getState().phase !== 'idle' || inBusyScreen();
+            handledRooms.add(m.room);
             if (occupied) sendTo(m.from, { k: 'decline', from: mine, room: m.room, at: now() });
             else void usePioche.getState().give(m.room, { code: m.from, name: friend.name || m.name });
             return;
@@ -296,12 +346,17 @@ export const useSocial = create<SocialStore>((set, get) => {
           const fresh = !old || old.at < m.at ? { at: m.at, n, cards: [] } : old;
           // aucune carte épinglée : on le sait tout de suite
           if (n === 0) {
-            set({ pins: { ...get().pins, [m.from]: { at: m.at, n: 0, cards: [] } } });
+            const none = { at: m.at, n: 0, cards: [] };
+            set({ pins: { ...get().pins, [m.from]: none } });
+            savePinsCache(m.from, none);
             return;
           }
           const card = sanitizeFighter(m.card);
           if (!card || fresh.cards.some((c) => c.ref === card.ref)) return;
-          set({ pins: { ...get().pins, [m.from]: { ...fresh, n, cards: [...fresh.cards, card] } } });
+          const next = { at: fresh.at, n, cards: [...fresh.cards, card] };
+          set({ pins: { ...get().pins, [m.from]: next } });
+          // toutes arrivées : gardées sur l'appareil, pour les revoir quand il sera hors ligne
+          if (next.cards.length >= n) savePinsCache(m.from, next);
           return;
         }
       }
@@ -319,7 +374,7 @@ export const useSocial = create<SocialStore>((set, get) => {
     const pv = typeof m.pv === 'number' && Number.isFinite(m.pv) ? m.pv : 0;
     set({ presence: { ...get().presence, [code]: { name: m.name, mmr: m.mmr, online: m.online && recent, at: now(), pv } } });
     const friend = save()?.friends.find((f) => f.code === code);
-    if (friend) useGame.getState().upsertFriend({ code, name: m.name || friend.name, mmr: m.mmr, tag: tagOf(m.tag) });
+    if (friend) useGame.getState().upsertFriend({ code, name: m.name || friend.name, mmr: m.mmr, tag: tagOf(m.tag), push: pushOf(m.pt) });
     // il ne nous a pas encore ajouté : on lui renvoie la demande quand il est là
     if (friend && !friend.mutual && m.online && !resent.has(code)) {
       resent.add(code);
@@ -396,10 +451,13 @@ export const useSocial = create<SocialStore>((set, get) => {
       if (code === myCode()) return 'self';
       const exists = save()?.friends.some((f) => f.code === code);
       const req = get().requests.find((r) => r.from === code);
-      useGame.getState().upsertFriend({ code, name: req?.name ?? hint?.name ?? 'Nouvel ami', mmr: req?.mmr ?? 0, mutual: !!req, tag: req?.tag ?? hint?.tag });
+      const push = req?.push ?? hint?.push;
+      useGame.getState().upsertFriend({ code, name: req?.name ?? hint?.name ?? 'Nouvel ami', mmr: req?.mmr ?? 0, mutual: !!req, tag: req?.tag ?? hint?.tag, push });
       for (const c of conns) c.subscribe?.(presenceTopic(code));
       sendRequest(code, req ? 'ok' : 'req');
       if (req) set({ requests: get().requests.filter((r) => r.from !== code) });
+      // nouvelle demande d'ami : il est prévenu même app fermée
+      else if (!exists) notify(code, `${profile().name} veut être ton ami`, 'Ouvre PocketPics pour accepter sa demande.', 'friend', push);
       return exists ? 'exists' : 'ok';
     },
 
@@ -417,21 +475,24 @@ export const useSocial = create<SocialStore>((set, get) => {
       const room = newOnlineCode(getRandomBytes);
       set({ outgoing: { kind: 'fight', to: code, name: friend.name, room, at: now(), state: 'waiting' } });
       await useMatch.getState().host({ code: room, friend: { code, name: friend.name } });
-      sendTo(code, { k: 'challenge', from: myCode(), ...profile(), room, at: now() });
+      invite(code, { k: 'challenge', from: myCode(), ...profile(), room, at: now() });
+      notify(code, `${profile().name} te défie !`, 'Ouvre PocketPics pour accepter le combat.', 'fight');
     },
 
     inviteTrade(code, tradeCode) {
       const friend = save()?.friends.find((f) => f.code === code);
       if (!friend) return;
       set({ outgoing: { kind: 'trade', to: code, name: friend.name, room: tradeCode, at: now(), state: 'waiting' } });
-      sendTo(code, { k: 'challenge', kind: 'trade', from: myCode(), ...profile(), room: tradeCode, at: now() });
+      invite(code, { k: 'challenge', kind: 'trade', from: myCode(), ...profile(), room: tradeCode, at: now() });
+      notify(code, `${profile().name} veut échanger avec toi`, 'Ouvre PocketPics pour voir son offre.', 'trade');
     },
 
     inviteDraw(code, room) {
       const friend = save()?.friends.find((f) => f.code === code);
       if (!friend) return;
       set({ outgoing: { kind: 'draw', to: code, name: friend.name, room, at: now(), state: 'waiting' } });
-      sendTo(code, { k: 'challenge', kind: 'draw', from: myCode(), ...profile(), room, at: now() });
+      invite(code, { k: 'challenge', kind: 'draw', from: myCode(), ...profile(), room, at: now() });
+      notify(code, `${profile().name} veut piocher chez toi`, 'Ouvre PocketPics pour regarder son ouverture en direct.', 'draw');
     },
 
     cancelChallenge() {
@@ -443,6 +504,7 @@ export const useSocial = create<SocialStore>((set, get) => {
     acceptChallenge() {
       const c = get().challenge;
       set({ challenge: null });
+      if (c) handledRooms.add(c.room);
       if (!c || now() - c.at > CHALLENGE_TTL_MS) return null;
       if (c.kind === 'trade') void useTrade.getState().join({ kind: 'online', code: c.room });
       else void useMatch.getState().join(c.room, { friend: { code: c.from, name: c.name } });
@@ -451,8 +513,27 @@ export const useSocial = create<SocialStore>((set, get) => {
 
     declineChallenge() {
       const c = get().challenge;
+      if (c) handledRooms.add(c.room);
       if (c) sendTo(c.from, { k: 'decline', from: myCode(), room: c.room, at: now() });
       set({ challenge: null });
+    },
+
+    loadSavedPins(code) {
+      if (get().pins[code]?.cards.length) return;
+      const saved = loadPinsCache<{ cards: unknown[] }>(code);
+      if (!saved) return;
+      const cards = saved.cards.map((c) => sanitizeFighter(c)).filter((c): c is PinnedCard => !!c);
+      set({ pins: { ...get().pins, [code]: { at: saved.at, n: cards.length, cards, saved: true } } });
+    },
+
+    setPushToken(token) {
+      if (token === myPush) return;
+      myPush = token;
+      // mes amis l'apprennent avec ma présence et ma fiche d'annuaire
+      if (conns.length) {
+        announce();
+        publishDirectory();
+      }
     },
 
     askPins(code) {

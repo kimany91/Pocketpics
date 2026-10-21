@@ -534,8 +534,9 @@ export const useGame = create<GameStore>((set, get) => ({
       addedAt: old?.addedAt ?? Date.now(),
       mutual: f.mutual ?? old?.mutual ?? false,
       tag: f.tag ?? old?.tag,
+      push: f.push ?? old?.push,
     };
-    if (old && old.name === merged.name && old.mmr === merged.mmr && old.mutual === merged.mutual && old.tag === merged.tag) return;
+    if (old && old.name === merged.name && old.mmr === merged.mmr && old.mutual === merged.mutual && old.tag === merged.tag && old.push === merged.push) return;
     const friends = old ? save.friends.map((x) => (x.code === f.code ? merged : x)) : [...save.friends, merged];
     const next: SaveState = { ...(old ? save : withQuest(save, 'friendAdd')), friends };
     persistState(next);

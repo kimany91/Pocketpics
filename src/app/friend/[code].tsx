@@ -44,6 +44,8 @@ export default function FriendProfileScreen() {
   const { width } = useWindowDimensions();
   const [open, setOpen] = useState<PinnedCard | null>(null);
   const online = !!code && isOnline(code);
+  // hors ligne mais joignable : il reçoit une notification et l'invitation l'attend une minute
+  const reachable = online || !!friend?.push;
   const { canPay, upToDate } = useFriendDraw();
   const fresh = !!code && upToDate(code);
 
@@ -58,6 +60,8 @@ export default function FriendProfileScreen() {
   useEffect(() => {
     if (!code || !focused) return;
     useSocial.getState().start();
+    // ses dernières cartes vues d'abord (gardées sur l'appareil), puis les fraîches s'il est là
+    useSocial.getState().loadSavedPins(code);
     useSocial.getState().askPins(code);
     const t = setInterval(() => {
       const p = useSocial.getState().pins[code];
@@ -119,7 +123,7 @@ export default function FriendProfileScreen() {
             icon="flash"
             size="lg"
             style={{ flex: 1 }}
-            disabled={!online}
+            disabled={!reachable}
             onPress={async () => {
               haptic.medium();
               await challengeFriend(friend.code);
@@ -132,7 +136,7 @@ export default function FriendProfileScreen() {
             size="lg"
             kind="secondary"
             style={{ flex: 1 }}
-            disabled={!online}
+            disabled={!reachable}
             onPress={() => {
               haptic.medium();
               router.push({ pathname: '/trade/host', params: { friend: friend.code } });
@@ -140,11 +144,15 @@ export default function FriendProfileScreen() {
           />
         </Animated.View>
         <Animated.View entering={FadeInDown.delay(130)}>
-          <PiocheButton online={online && fresh} payment={canPay} onPress={() => startFriendDraw(friend.code)} />
+          <PiocheButton online={reachable && fresh} payment={canPay} onPress={() => startFriendDraw(friend.code)} />
         </Animated.View>
-        {!online ? (
+        {!reachable ? (
           <AppText variant="caption" style={{ textAlign: 'center', marginTop: 8 }}>
             Défi, échange et pioche possibles quand il a le jeu ouvert.
+          </AppText>
+        ) : !online ? (
+          <AppText variant="caption" style={{ textAlign: 'center', marginTop: 8 }}>
+            Il n’a pas le jeu ouvert : il recevra une notification, et ton invitation l’attendra une minute.
           </AppText>
         ) : !fresh ? (
           <AppText variant="caption" style={{ textAlign: 'center', marginTop: 8 }}>
@@ -157,7 +165,12 @@ export default function FriendProfileScreen() {
         ) : null}
 
         <Animated.View entering={FadeInDown.delay(160)} style={{ marginTop: 26, gap: 10 }}>
-          <AppText variant="heading">Ses cartes épinglées</AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+            <AppText variant="heading">Ses cartes épinglées</AppText>
+            {pins?.saved && !online && cards.length > 0 ? (
+              <AppText variant="caption">{`vues ${seenWhen(pins.at)}`}</AppText>
+            ) : null}
+          </View>
           {cards.length > 0 ? (
             <View style={styles.grid}>
               {cards.slice(0, MAX_PINNED).map((c, i) => (
@@ -187,7 +200,7 @@ export default function FriendProfileScreen() {
               <Ionicons name={online ? 'hourglass-outline' : 'cloud-offline-outline'} size={22} color={colors.textDim} />
               <AppText variant="caption" style={{ flex: 1 }}>
                 {!online
-                  ? 'Ses cartes ne sont visibles que quand il a le jeu ouvert.'
+                  ? 'Tu verras ses cartes épinglées dès qu’il aura ouvert le jeu une fois en même temps que toi : elles restent ensuite affichées.'
                   : waiting
                     ? 'Ses cartes arrivent…'
                     : 'Il n’a épinglé aucune carte pour l’instant.'}
@@ -241,6 +254,15 @@ function PiocheButton({ online, payment, onPress }: { online: boolean; payment: 
       <Ionicons name="chevron-forward" size={18} color={PIOCHE_COLOR} />
     </Pressable>
   );
+}
+
+/** « aujourd'hui », « hier », ou la date. */
+function seenWhen(at: number) {
+  if (!at) return 'à sa dernière visite';
+  const d = new Date(at);
+  const today = new Date();
+  const days = Math.round((new Date(today.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86400000);
+  return days <= 0 ? 'aujourd’hui' : days === 1 ? 'hier' : `le ${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`;
 }
 
 const styles = StyleSheet.create({

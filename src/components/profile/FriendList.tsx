@@ -173,15 +173,16 @@ function FriendRow({
           </View>
         </View>
       </Pressable>
-      <Button label="Défier" icon="flash" kind={online ? 'primary' : 'secondary'} disabled={!online} onPress={onChallenge} />
+      {/* hors ligne mais joignable par notification : on peut l'inviter quand même */}
+      <Button label="Défier" icon="flash" kind={online ? 'primary' : 'secondary'} disabled={!online && !friend.push} onPress={onChallenge} />
       {/* Échanger : un bouton rond, pour laisser la place au nom */}
       <Pressable
         onPress={onTrade}
-        disabled={!online}
+        disabled={!online && !friend.push}
         hitSlop={6}
         accessibilityRole="button"
         accessibilityLabel={`Échanger avec ${friend.name}`}
-        style={({ pressed }) => [styles.tradeBtn, !online && { opacity: 0.4 }, pressed && { transform: [{ scale: 0.92 }] }]}
+        style={({ pressed }) => [styles.tradeBtn, !online && !friend.push && { opacity: 0.4 }, pressed && { transform: [{ scale: 0.92 }] }]}
       >
         <Ionicons name="swap-horizontal" size={20} color={online ? colors.gold : colors.textDim} />
       </Pressable>

@@ -29,7 +29,7 @@ import { colors } from '../../theme';
 import { haptic } from '../../utils/haptics';
 
 /** Le téléphone de l'ami rejoint tout seul : sans nouvelles au bout de ce délai, on abandonne (rien n'est payé). */
-const JOIN_TIMEOUT_MS = 30_000;
+const JOIN_TIMEOUT_MS = 60_000;
 
 export default function PiocheAsk() {
   // `again=1` : « Repiocher » après une pioche, la demande part sans repasser par la confirmation
@@ -39,7 +39,9 @@ export default function PiocheAsk() {
   const role = usePioche((s) => s.role);
   const error = usePioche((s) => s.error);
   const progress = usePioche((s) => s.progress);
-  const online = useSocial((s) => (code ? s.isOnline(code) : false));
+  const live = useSocial((s) => (code ? s.isOnline(code) : false));
+  // hors ligne mais joignable par notification : la demande l'attend une minute
+  const online = live || !!friend?.push;
   const { payment, adsLeft, upToDate } = useFriendDraw();
   const active = useIsFocused();
   /** Nombre de demandes envoyées (0 : on attend la confirmation du joueur). */
@@ -152,7 +154,7 @@ export default function PiocheAsk() {
   } else {
     const step =
       phase === 'waiting'
-        ? { tone: 'waiting' as const, text: `Demande envoyée à ${name}` }
+        ? { tone: 'waiting' as const, text: live ? `Demande envoyée à ${name}` : `Notification envoyée à ${name}` }
         : phase === 'preparing'
           ? { tone: 'connecting' as const, text: `Le téléphone de ${name} prépare ses photos` }
           : { tone: 'found' as const, text: `Photos reçues : ${progress.done} / ${progress.total}` };

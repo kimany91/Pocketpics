@@ -83,6 +83,33 @@ export function saveState(state: SaveState) {
   writeJsonAtomic(new File(root(), 'state.json'), state, new File(root(), 'state.bak.json'));
 }
 
+/* ----------------------- Cartes épinglées des amis ----------------------- */
+
+/** Ce qu'on garde des cartes épinglées d'un ami (dernière fois qu'on les a vues). */
+export interface SavedPins {
+  at: number;
+  n: number;
+  cards: PinnedCardData[];
+}
+type PinnedCardData = { ref: string; name: string; rarity: string; battle: unknown; thumb: string };
+
+const pinsFile = (code: string) => new File(new Directory(root(), 'friend-pins'), `${code.replace(/[^0-9A-Z]/g, '')}.json`);
+
+export function savePinsCache(code: string, data: { at: number; n: number; cards: unknown[] }) {
+  try {
+    writeJsonAtomic(pinsFile(code), data);
+  } catch {}
+}
+
+export function loadPinsCache<T = SavedPins>(code: string): (T & { at: number; n: number }) | null {
+  try {
+    const v = readJson(pinsFile(code)) as (T & { at: number; n: number }) | undefined;
+    return v && typeof v === 'object' && Array.isArray((v as { cards?: unknown }).cards) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 /* --------------------------------- Cartes --------------------------------- */
 
 function readCardSidecar(id: string): Card | null {

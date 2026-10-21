@@ -35,6 +35,13 @@ export function computeDraws(state: DrawState, now: number): DrawStatus {
   return { charges, anchor, nextAt: anchor + DRAW_INTERVAL_MS };
 }
 
+/** Heure à laquelle la réserve sera pleine (tous les paquets prêts), ou `null` si elle l'est déjà. */
+export function fullAt(state: DrawState, now: number): number | null {
+  const s = computeDraws(state, now);
+  if (s.charges >= MAX_STORED_DRAWS || s.nextAt === null) return null;
+  return s.nextAt + (MAX_STORED_DRAWS - s.charges - 1) * DRAW_INTERVAL_MS;
+}
+
 /** Consomme un tirage. Retourne `null` s'il n'y en a pas. */
 export function consumeDraw(state: DrawState, now: number): DrawState | null {
   const s = computeDraws(state, now);

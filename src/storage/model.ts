@@ -8,6 +8,7 @@
  *  - une carte n'est jamais supprimée par une migration, seulement complétée.
  */
 import { type AdState, initialAds, migrateAds } from '../game/ads';
+import { isPushToken } from '../notify/types';
 import { type BattleStats, normalizeStats } from '../battle/stats';
 import type { DrawState } from '../game/draws';
 import { initialDrawState } from '../game/draws';
@@ -149,6 +150,8 @@ export interface Friend {
   mutual: boolean;
   /** Ses 4 caractères (« Léo#7F3K »), quand on les connaît. */
   tag?: string;
+  /** Son jeton de notification : on le prévient d'un défi, d'un échange ou d'une pioche quand son app est fermée. */
+  push?: string;
 }
 
 type Raw = Record<string, unknown>;
@@ -256,6 +259,7 @@ function migrateFriends(raw: unknown): Friend[] {
       addedAt: num(r.addedAt, 0),
       mutual: r.mutual === true,
       tag: typeof r.tag === 'string' && FRIEND_TAG.test(r.tag) ? r.tag : undefined,
+      push: isPushToken(r.push) ? r.push : undefined,
     });
   }
   return out;

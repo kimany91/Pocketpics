@@ -12,6 +12,8 @@ interface StoredCard {
 }
 
 const images = new Map<string, { image: string; thumb: string }>();
+/** Cartes épinglées des amis, gardées de leur dernière visite (clé « pins:<code> »). */
+const savedPins = new Map<string, unknown>();
 const sidecars = new Map<string, Card>();
 let storedState: unknown;
 
@@ -22,6 +24,7 @@ const toB64 = (uri: string) => uri.replace(/^data:[^,]+,/, '');
 export async function prepare() {
   const [kv, cards] = await Promise.all([idbEntries<unknown>('kv'), idbEntries<StoredCard>('cards')]);
   storedState = kv.find(([k]) => k === 'state')?.[1];
+  for (const [k, v] of kv) if (k.startsWith('pins:')) savedPins.set(k.slice(5), v);
   for (const [id, v] of cards) {
     const card = migrateCard(v?.card);
     if (!card || typeof v.image !== 'string') continue;
@@ -39,6 +42,16 @@ export function loadState(): { state: SaveState; recovered: boolean } {
 
 export function saveState(state: SaveState) {
   void idbPut('kv', 'state', state);
+}
+
+export function savePinsCache(code: string, data: { at: number; n: number; cards: unknown[] }) {
+  savedPins.set(code, data);
+  void idbPut('kv', `pins:${code}`, data);
+}
+
+export function loadPinsCache<T>(code: string): (T & { at: number; n: number }) | null {
+  const v = savedPins.get(code) as (T & { at: number; n: number; cards?: unknown }) | undefined;
+  return v && Array.isArray(v.cards) ? v : null;
 }
 
 export const loadCards = (): Card[] => [...sidecars.values()].sort((a, b) => a.obtainedAt - b.obtainedAt);

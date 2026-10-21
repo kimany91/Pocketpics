@@ -18,6 +18,7 @@ import { AppText } from '../components/AppText';
 import { ChallengeOverlay } from '../components/ChallengeOverlay';
 import { PiocheWatcher } from '../components/pioche/PiocheWatcher';
 import { AdHost } from '../components/ads/AdHost';
+import { NotificationsSetup } from '../components/notify/NotificationsSetup';
 import { useSocial } from '../net/social';
 import { useGame } from '../state/game';
 import { colors } from '../theme';
@@ -93,6 +94,7 @@ export default function RootLayout() {
       <ChallengeOverlay />
       <PiocheWatcher />
       <AdHost />
+      <NotificationsSetup />
     </GestureHandlerRootView>
   );
 }

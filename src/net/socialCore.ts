@@ -16,6 +16,7 @@ import nacl from 'tweetnacl';
 import type { NetFighter } from './battleNet';
 import { utf8Decode, utf8Encode } from '../trade/mqtt';
 import { roomKey, roomTopic } from '../trade/relayCore';
+import { isPushToken } from '../notify/types';
 
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 export const FRIEND_CODE_LENGTH = 10;
@@ -108,6 +109,8 @@ export interface DirectoryEntry {
   name: string;
   tag: string;
   at: number;
+  /** Son jeton de notification (pour le prévenir d'une demande d'ami). */
+  pt?: string;
 }
 
 export function sealDirectory(key: string, e: DirectoryEntry): Uint8Array {
@@ -127,7 +130,7 @@ export function openDirectory(key: string, bytes: Uint8Array): DirectoryEntry | 
   try {
     const e = JSON.parse(utf8Decode(plain)) as Partial<DirectoryEntry>;
     return typeof e.code === 'string' && e.code.length === FRIEND_CODE_LENGTH && typeof e.name === 'string' && isFriendTag(e.tag)
-      ? { code: e.code, name: e.name.slice(0, 24), tag: e.tag, at: Number(e.at) || 0 }
+      ? { code: e.code, name: e.name.slice(0, 24), tag: e.tag, at: Number(e.at) || 0, ...(isPushToken(e.pt) ? { pt: e.pt } : {}) }
       : null;
   } catch {
     return null;
@@ -143,11 +146,12 @@ export type PinnedCard = NetFighter;
 
 export type SocialMsg =
   /** `pv` : version de la Pioche amicale de son app (absente : app trop ancienne pour piocher chez lui). */
-  | { k: 'presence'; from: string; name: string; mmr: number; online: boolean; at: number; pv?: number; tag?: string }
+  /** `pt` : son jeton de notification, pour le prévenir quand son app est fermée. */
+  | { k: 'presence'; from: string; name: string; mmr: number; online: boolean; at: number; pv?: number; tag?: string; pt?: string }
   /** Demande d'ami (ou « je t'ai ajouté »). */
-  | { k: 'req'; from: string; name: string; mmr: number; at: number; tag?: string }
+  | { k: 'req'; from: string; name: string; mmr: number; at: number; tag?: string; pt?: string }
   /** Réponse : « moi aussi, je t'ai ajouté ». */
-  | { k: 'ok'; from: string; name: string; mmr: number; at: number; tag?: string }
+  | { k: 'ok'; from: string; name: string; mmr: number; at: number; tag?: string; pt?: string }
   /**
    * Défi, invitation à échanger (`kind: 'trade'` : `room` est le code de l'échange)
    * ou demande de Pioche amicale (`kind: 'draw'` : `room` est le salon de la pioche).
