@@ -44,7 +44,8 @@ export default function FriendProfileScreen() {
   const { width } = useWindowDimensions();
   const [open, setOpen] = useState<PinnedCard | null>(null);
   const online = !!code && isOnline(code);
-  const { payment } = useFriendDraw();
+  const { canPay, upToDate } = useFriendDraw();
+  const fresh = !!code && upToDate(code);
 
   // Quête « Regarde le profil d'un ami ».
   const known = !!friend;
@@ -138,15 +139,19 @@ export default function FriendProfileScreen() {
           />
         </Animated.View>
         <Animated.View entering={FadeInDown.delay(130)}>
-          <PiocheButton online={online} payment={!!payment} onPress={() => startFriendDraw(friend.code)} />
+          <PiocheButton online={online && fresh} payment={canPay} onPress={() => startFriendDraw(friend.code)} />
         </Animated.View>
         {!online ? (
           <AppText variant="caption" style={{ textAlign: 'center', marginTop: 8 }}>
             Défi, échange et pioche possibles quand il a le jeu ouvert.
           </AppText>
-        ) : !payment ? (
+        ) : !fresh ? (
           <AppText variant="caption" style={{ textAlign: 'center', marginTop: 8 }}>
-            {`Pioche amicale : il te faut un tirage ou ${FRIEND_DRAW_PRICE} pièces.`}
+            Pioche amicale : il doit d’abord mettre à jour le jeu.
+          </AppText>
+        ) : !canPay ? (
+          <AppText variant="caption" style={{ textAlign: 'center', marginTop: 8 }}>
+            {`Pioche amicale : il te faut un tirage ou ${FRIEND_DRAW_PRICE} pièces (et tes pubs du jour sont déjà regardées).`}
           </AppText>
         ) : null}
 

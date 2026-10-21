@@ -52,7 +52,8 @@ const keyOf = (code: string) => roomKey(code, 'friend/');
 export type PinnedCard = NetFighter;
 
 export type SocialMsg =
-  | { k: 'presence'; from: string; name: string; mmr: number; online: boolean; at: number }
+  /** `pv` : version de la Pioche amicale de son app (absente : app trop ancienne pour piocher chez lui). */
+  | { k: 'presence'; from: string; name: string; mmr: number; online: boolean; at: number; pv?: number }
   /** Demande d'ami (ou « je t'ai ajouté »). */
   | { k: 'req'; from: string; name: string; mmr: number; at: number }
   /** Réponse : « moi aussi, je t'ai ajouté ». */

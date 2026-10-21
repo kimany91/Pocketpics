@@ -15,7 +15,9 @@ export function PiocheWatcher() {
   const role = usePioche((s) => s.role);
   const phase = usePioche((s) => s.phase);
   useEffect(() => {
-    if (role === 'giver' && phase === 'connecting') router.push('/pioche/give');
+    // déjà sur l'écran (pioche suivante du même ami) : il se met à jour tout seul
+    if (role === 'giver' && phase === 'connecting' && !path.startsWith('/pioche/give')) router.push('/pioche/give');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, phase]);
   return null;
 }

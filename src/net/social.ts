@@ -17,6 +17,7 @@ import { connectRelay, deps } from '../trade/online';
 import { newOnlineCode } from '../trade/relayCore';
 import { useTrade } from '../trade/session';
 import { inBusyScreen } from '../state/route';
+import { PIOCHE_VERSION } from '../game/friendDraw';
 import { piocheBusy, usePioche } from './pioche';
 import { useMatch } from './match';
 import { sanitizeFighter } from './battleNet';
@@ -27,6 +28,8 @@ export interface Presence {
   mmr: number;
   online: boolean;
   at: number;
+  /** Version de la Pioche amicale de son app (0 : trop ancienne). */
+  pv: number;
 }
 
 export interface Challenge {
@@ -100,7 +103,7 @@ export const useSocial = create<SocialStore>((set, get) => {
 
   const sendTo = (code: string, msg: SocialMsg) => publish(inboxTopic(code), sealFor(code, msg));
 
-  const presenceMsg = (online: boolean): SocialMsg => ({ k: 'presence', from: myCode(), ...profile(), online, at: now() });
+  const presenceMsg = (online: boolean): SocialMsg => ({ k: 'presence', from: myCode(), ...profile(), online, at: now(), pv: PIOCHE_VERSION });
   const announce = () => publish(presenceTopic(myCode()), sealFor(myCode(), presenceMsg(true)), true);
 
   const sendRequest = (to: string, kind: 'req' | 'ok') => sendTo(to, { k: kind, from: myCode(), ...profile(), at: now() });
@@ -219,7 +222,8 @@ export const useSocial = create<SocialStore>((set, get) => {
     // à la même heure ne doivent pas faire croire qu'un ami en ligne est parti. On
     // écarte seulement une présence vraiment ancienne (gardée par le relais).
     const recent = Math.abs(now() - m.at) < PRESENCE_MAX_SKEW_MS;
-    set({ presence: { ...get().presence, [code]: { name: m.name, mmr: m.mmr, online: m.online && recent, at: now() } } });
+    const pv = typeof m.pv === 'number' && Number.isFinite(m.pv) ? m.pv : 0;
+    set({ presence: { ...get().presence, [code]: { name: m.name, mmr: m.mmr, online: m.online && recent, at: now(), pv } } });
     const friend = save()?.friends.find((f) => f.code === code);
     if (friend) useGame.getState().upsertFriend({ code, name: m.name || friend.name, mmr: m.mmr });
     // il ne nous a pas encore ajouté : on lui renvoie la demande quand il est là

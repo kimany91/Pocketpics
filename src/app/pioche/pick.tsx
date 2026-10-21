@@ -22,7 +22,7 @@ import { colors } from '../../theme';
 import { haptic } from '../../utils/haptics';
 
 export default function PiochePick() {
-  const { payment, online } = useFriendDraw();
+  const { payment, adsLeft, canPay, online, upToDate } = useFriendDraw();
   const presence = useSocial((s) => s.presence);
   const active = useIsFocused();
 
@@ -37,12 +37,14 @@ export default function PiochePick() {
           </AppText>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(80).duration(300)} style={[styles.cost, !payment && { borderColor: `${colors.danger}55` }]}>
-          {payment === 'coins' ? <CoinIcon size={16} /> : <Ionicons name={payment ? 'sparkles' : 'alert-circle'} size={16} color={payment ? colors.gold : colors.danger} />}
-          <AppText variant="caption" style={{ flex: 1, color: payment ? colors.text : colors.danger }}>
+        <Animated.View entering={FadeInDown.delay(80).duration(300)} style={[styles.cost, !canPay && { borderColor: `${colors.danger}55` }]}>
+          {payment === 'coins' ? <CoinIcon size={16} /> : <Ionicons name={payment ? 'sparkles' : canPay ? 'play-circle' : 'alert-circle'} size={16} color={canPay ? colors.gold : colors.danger} />}
+          <AppText variant="caption" style={{ flex: 1, color: canPay ? colors.text : colors.danger }}>
             {payment
               ? `Coût : ${paymentLabel(payment)}, payé quand tu commences à ouvrir. S’il refuse à la fin, tu perds les cartes, sans remboursement.`
-              : `Il te faut un tirage disponible, ou ${FRIEND_DRAW_PRICE} pièces s’il ne t’en reste plus.`}
+              : adsLeft > 0
+                ? `Plus de tirage ni ${FRIEND_DRAW_PRICE} pièces : tu pourras regarder 2 pubs pour payer la pioche.`
+                : `Il te faut un tirage disponible, ou ${FRIEND_DRAW_PRICE} pièces s’il ne t’en reste plus.`}
           </AppText>
         </Animated.View>
 
@@ -64,15 +66,15 @@ export default function PiochePick() {
                   </AppText>
                   <View style={styles.status}>
                     <OnlineDot online active={active} />
-                    <AppText variant="caption" style={{ color: colors.success }}>
-                      en ligne
+                    <AppText variant="caption" style={{ color: upToDate(f.code) ? colors.success : colors.textDim }}>
+                      {upToDate(f.code) ? 'en ligne' : 'en ligne · doit mettre à jour le jeu'}
                     </AppText>
                   </View>
                 </View>
                 <Button
                   label="Piocher"
                   icon="sparkles"
-                  disabled={!payment}
+                  disabled={!canPay || !upToDate(f.code)}
                   onPress={() => {
                     haptic.medium();
                     router.replace({ pathname: '/pioche/ask', params: { friend: f.code } });

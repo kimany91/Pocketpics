@@ -37,7 +37,7 @@ import { PACK_RATIO, TEAR_LINE } from '../components/PackArt';
 import { CARDS_PER_PACK } from '../game/draws';
 import { NoPhotosLeftError } from '../game/pack';
 import { getRarity } from '../game/rarity';
-import { FriendRefused, FriendVerdictBanner } from '../components/pioche/FriendVerdict';
+import { FriendRefused, FriendVerdictBanner, RepiocheButton } from '../components/pioche/FriendVerdict';
 import { usePioche } from '../net/pioche';
 import { useGame } from '../state/game';
 import { useDrawStatus } from '../state/useDrawStatus';
@@ -205,7 +205,7 @@ function PackSession({ onNext, friend = false }: { onNext(): void; friend?: bool
         />
       ) : null}
 
-      {phase === 'summary' && cards ? <Summary cards={cards} onClose={close} onNext={onNext} header={friend ? <FriendVerdictBanner /> : null} /> : null}
+      {phase === 'summary' && cards ? <Summary cards={cards} onClose={close} onNext={onNext} header={friend ? <FriendVerdictBanner /> : null} next={friend ? <RepiocheButton /> : undefined} /> : null}
       {phase === 'summary' && cards && friend ? <FriendRefused onClose={close} /> : null}
 
       {phase === 'reveal' ? (
@@ -257,7 +257,7 @@ function WaitingStack({ cardW }: { cardW: number }) {
   );
 }
 
-function Summary({ cards, onClose, onNext, header }: { cards: Card[]; onClose(): void; onNext(): void; header?: React.ReactNode }) {
+function Summary({ cards, onClose, onNext, header, next }: { cards: Card[]; onClose(): void; onNext(): void; header?: React.ReactNode; /** Remplace « Paquet suivant » (Pioche amicale : repiocher chez l'ami). */ next?: React.ReactNode }) {
   const { width } = useWindowDimensions();
   const { available: charges } = useDrawStatus();
   const cols = cards.length <= 4 ? 2 : 3;
@@ -291,7 +291,12 @@ function Summary({ cards, onClose, onNext, header }: { cards: Card[]; onClose():
         </View>
       </ScrollView>
       <View style={styles.summaryFooter}>
-        {charges > 0 ? (
+        {next !== undefined ? (
+          <>
+            {next}
+            <Button label="Fermer" kind="ghost" onPress={onClose} />
+          </>
+        ) : charges > 0 ? (
           <>
             <Button label={`Paquet suivant · ${charges}`} icon="sparkles" size="lg" onPress={onNext} />
             <Button label="Fermer" kind="ghost" onPress={onClose} />

@@ -12,6 +12,7 @@ import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 
 import { AppText } from '../../components/AppText';
 import { Button } from '../../components/Button';
+import { AdPackButton } from '../../components/ads/AdPackButton';
 import { CardBack } from '../../components/card/CardBack';
 import { CoinIcon } from '../../components/Coin';
 import { Header } from '../../components/Header';
@@ -31,14 +32,15 @@ import { haptic } from '../../utils/haptics';
 const JOIN_TIMEOUT_MS = 30_000;
 
 export default function PiocheAsk() {
-  const { friend: code } = useLocalSearchParams<{ friend?: string }>();
+  // `again=1` : « Repiocher » après une pioche, la demande part sans repasser par la confirmation
+  const { friend: code, again } = useLocalSearchParams<{ friend?: string; again?: string }>();
   const friend = useGame((s) => s.save?.friends.find((f) => f.code === code));
   const phase = usePioche((s) => s.phase);
   const role = usePioche((s) => s.role);
   const error = usePioche((s) => s.error);
   const progress = usePioche((s) => s.progress);
   const online = useSocial((s) => (code ? s.isOnline(code) : false));
-  const { payment } = useFriendDraw();
+  const { payment, adsLeft, upToDate } = useFriendDraw();
   const active = useIsFocused();
   /** Nombre de demandes envoyées (0 : on attend la confirmation du joueur). */
   const [attempt, setAttempt] = useState(0);
@@ -94,22 +96,46 @@ export default function PiocheAsk() {
   };
 
   const name = friend?.name ?? 'ton ami';
+  const fresh = !!code && upToDate(code);
+
+  // Repiocher : les règles ont déjà été acceptées, la demande part tout de suite si on peut payer
+  const auto = useRef(again === '1');
+  useEffect(() => {
+    if (!auto.current || !confirming || !payment || !online || !fresh) return;
+    auto.current = false;
+    confirm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirming, payment, online, fresh]);
 
   let body: React.ReactNode;
   if (!friend) {
     body = <Message icon="person-outline" title="Ami introuvable" text="Cet ami n’est plus dans ta liste." onBack={() => router.back()} />;
-  } else if (!payment && (confirming || role !== 'asker')) {
+  } else if (!online && (confirming || role !== 'asker')) {
+    body = <Message icon="cloud-offline-outline" title={`${name} n’est pas en ligne`} text="La Pioche amicale marche quand ton ami a le jeu ouvert." onBack={() => router.back()} />;
+  } else if (!fresh && (confirming || role !== 'asker')) {
+    // son app est d'avant la Pioche amicale en direct : elle prendrait la demande pour un défi
     body = (
       <Message
-        icon="wallet-outline"
+        icon="cloud-download-outline"
         tone="warn"
-        title="Pas de quoi piocher"
-        text={`Il te faut un tirage disponible, ou ${FRIEND_DRAW_PRICE} pièces s’il ne t’en reste plus. Gagne des pièces dans l’aventure !`}
+        title={`${name} doit mettre à jour le jeu`}
+        text={`Son PocketPics est trop ancien pour la Pioche amicale : il verrait ta demande comme un défi à accepter. Dès qu’il a mis à jour (ou rechargé la page), tu pourras piocher chez lui.`}
         onBack={() => router.back()}
       />
     );
-  } else if (!online && (confirming || role !== 'asker')) {
-    body = <Message icon="cloud-offline-outline" title={`${name} n’est pas en ligne`} text="La Pioche amicale marche quand ton ami a le jeu ouvert." onBack={() => router.back()} />;
+  } else if (!payment && (confirming || role !== 'asker')) {
+    body =
+      adsLeft > 0 ? (
+        <NoPayment name={name} />
+      ) : (
+        <Message
+          icon="wallet-outline"
+          tone="warn"
+          title="Pas de quoi piocher"
+          text={`Il te faut un tirage disponible, ou ${FRIEND_DRAW_PRICE} pièces s’il ne t’en reste plus. Tu as déjà regardé toutes tes pubs d’aujourd’hui.`}
+          onBack={() => router.back()}
+        />
+      );
   } else if (confirming && payment) {
     body = <Confirm name={name} payment={payment} onSend={confirm} />;
   } else if (phase === 'ended') {
@@ -154,6 +180,28 @@ export default function PiocheAsk() {
       <Header title="Pioche amicale" />
       <View style={styles.body}>{body}</View>
     </Screen>
+  );
+}
+
+/** Ni tirage ni 200 pièces : 2 pubs donnent le tirage qui paie la pioche (s'il en reste aujourd'hui). */
+function NoPayment({ name }: { name: string }) {
+  return (
+    <View style={{ alignItems: 'center', alignSelf: 'stretch' }}>
+      <Animated.View entering={ZoomIn.springify().damping(12)} style={styles.confirmIcon}>
+        <Ionicons name="wallet" size={32} color="#141414" />
+      </Animated.View>
+      <Animated.View entering={FadeInDown.delay(100).duration(350)} style={{ alignItems: 'center' }}>
+        <AppText variant="title" style={{ textAlign: 'center', marginTop: 18 }}>{`Piocher chez ${name}`}</AppText>
+        <AppText variant="caption" style={{ textAlign: 'center', marginTop: 6, maxWidth: 310 }}>
+          {`Il te faut un tirage, ou ${FRIEND_DRAW_PRICE} pièces s’il ne t’en reste plus. Tu peux aussi regarder 2 pubs pour gagner le tirage qui paie la pioche.`}
+        </AppText>
+      </Animated.View>
+      <Animated.View entering={FadeInDown.delay(200).duration(350)} style={{ alignSelf: 'stretch', marginTop: 22, gap: 6 }}>
+        {/* le tirage gagné s'ajoute à la réserve : l'écran passe alors à la confirmation */}
+        <AdPackButton label="1 tirage" onPack={() => {}} />
+        <Button label="Annuler" kind="ghost" onPress={() => router.back()} />
+      </Animated.View>
+    </View>
   );
 }
 

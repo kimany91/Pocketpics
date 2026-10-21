@@ -5,6 +5,7 @@
  * retirées, paiement non rendu).
  */
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { useEffect } from 'react';
@@ -48,8 +49,9 @@ export function FriendRefused({ onClose }: { onClose(): void }) {
             {`Les cartes de cette pioche te sont retirées. ${paid === 'coins' ? `Tes ${FRIEND_DRAW_PRICE} pièces ne sont pas remboursées.` : 'Ton tirage n’est pas remboursé.'}`}
           </AppText>
         </Animated.View>
-        <Animated.View entering={FadeIn.delay(300)} style={{ alignSelf: 'stretch', marginTop: 26 }}>
-          <Button label="Fermer" size="lg" onPress={onClose} />
+        <Animated.View entering={FadeIn.delay(300)} style={{ alignSelf: 'stretch', marginTop: 26, gap: 8 }}>
+          <RepiocheButton />
+          <Button label="Fermer" kind="ghost" onPress={onClose} />
         </Animated.View>
       </Animated.View>
     );
@@ -108,3 +110,27 @@ const styles = StyleSheet.create({
   refusedIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center' },
   refusedText: { textAlign: 'center', marginTop: 8, maxWidth: 300, lineHeight: 18 },
 });
+
+/**
+ * « Repiocher chez X » : une nouvelle pioche chez le même ami, sans repasser
+ * par la confirmation. Seulement une fois qu'il a décidé (sinon partir
+ * couperait sa décision).
+ */
+export function RepiocheButton() {
+  const phase = usePioche((s) => s.phase);
+  const friend = usePioche((s) => s.friend);
+  if (!friend || (phase !== 'done' && phase !== 'refused')) {
+    return <Button label={friend ? `${friend.name} décide…` : 'Repiocher'} icon="hourglass-outline" size="lg" disabled onPress={() => {}} />;
+  }
+  return (
+    <Button
+      label={`Repiocher chez ${friend.name}`}
+      icon="sparkles"
+      size="lg"
+      onPress={() => {
+        haptic.medium();
+        router.replace({ pathname: '/pioche/ask', params: { friend: friend.code, again: '1' } });
+      }}
+    />
+  );
+}
