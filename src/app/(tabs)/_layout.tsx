@@ -1,12 +1,14 @@
 import { Tabs } from 'expo-router/js-tabs';
 import type { BottomTabNavigationOptions } from 'expo-router/build/react-navigation/bottom-tabs';
-import { Easing } from 'react-native';
+import { Easing, View } from 'react-native';
+import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useQuestBadge } from '../../components/QuestEntry';
 import { TabBar } from '../../components/TabBar';
+import { TutoSkipBar } from '../../components/tuto/TutoSkipBar';
 import { useSocial } from '../../net/social';
 import { useDrawStatus } from '../../state/useDrawStatus';
-import { useUnlocked } from '../../state/useTuto';
+import { useTutoStep, useUnlocked } from '../../state/useTuto';
 import { colors } from '../../theme';
 
 /**
@@ -36,16 +38,24 @@ export default function TabsLayout() {
   const questBadge = useQuestBadge();
   // tuto : les quêtes ne s'ouvrent qu'à la fin de la phase guidée
   const questsOpen = useUnlocked('quests');
+  // tuto, phase 2 : la barre « Passer le tuto » prend le haut de l'écran (les onglets passent dessous)
+  const phase2 = useTutoStep() === 'phase2';
+  const insets = useSafeAreaInsets();
   return (
-    <Tabs
-      tabBar={(props) => <TabBar {...props} />}
-      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg }, animation: 'shift', sceneStyleInterpolator, transitionSpec }}
-    >
-      <Tabs.Screen name="index" options={{ tabBarBadge: available > 0 ? available : undefined }} />
-      <Tabs.Screen name="collection" />
-      <Tabs.Screen name="battle" options={{ tabBarBadge: questsOpen ? questBadge : undefined }} />
-      <Tabs.Screen name="trade" />
-      <Tabs.Screen name="profile" options={{ tabBarBadge: requests > 0 ? requests : undefined }} />
-    </Tabs>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      {phase2 ? <TutoSkipBar top={insets.top} /> : null}
+      <SafeAreaInsetsContext.Provider value={phase2 ? { ...insets, top: 0 } : insets}>
+        <Tabs
+          tabBar={(props) => <TabBar {...props} />}
+          screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg }, animation: 'shift', sceneStyleInterpolator, transitionSpec }}
+        >
+          <Tabs.Screen name="index" options={{ tabBarBadge: available > 0 ? available : undefined }} />
+          <Tabs.Screen name="collection" />
+          <Tabs.Screen name="battle" options={{ tabBarBadge: questsOpen ? questBadge : undefined }} />
+          <Tabs.Screen name="trade" />
+          <Tabs.Screen name="profile" options={{ tabBarBadge: requests > 0 ? requests : undefined }} />
+        </Tabs>
+      </SafeAreaInsetsContext.Provider>
+    </View>
   );
 }

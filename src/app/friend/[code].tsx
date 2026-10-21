@@ -29,6 +29,8 @@ import type { PinnedCard } from '../../net/socialCore';
 import { PIOCHE_COLOR, startFriendDraw, useFriendDraw } from '../../components/pioche/entry';
 import { FRIEND_DRAW_PRICE } from '../../game/friendDraw';
 import { isPaul } from '../../game/paul';
+import { inPhase1 } from '../../game/tutorial';
+import { fightPaul, tradeWithPaul } from '../../components/tuto/paul';
 import { useGame } from '../../state/game';
 import { MAX_PINNED } from '../../storage/model';
 import { CARD_RATIO, colors, fonts } from '../../theme';
@@ -49,6 +51,9 @@ export default function FriendProfileScreen() {
   const reachable = online || !!friend?.push;
   const { canPay, upToDate } = useFriendDraw();
   const fresh = !!code && upToDate(code);
+  // Paul (bot du tuto) : ni défi ni échange avant la phase 2, puis joués sur place
+  const paul = isPaul(code);
+  const paulLocked = useGame((s) => paul && inPhase1(s.save?.tutorial.step ?? 'done'));
 
   // Quête « Regarde le profil d'un ami ».
   const known = !!friend;
@@ -124,9 +129,9 @@ export default function FriendProfileScreen() {
             icon="flash"
             size="lg"
             style={{ flex: 1 }}
-            // Paul (tuto) : pas de vrai défi ni d'échange par le réseau (phase 2 : version simulée)
-            disabled={!reachable || isPaul(friend.code)}
+            disabled={!reachable || paulLocked}
             onPress={async () => {
+              if (paul) return void fightPaul();
               haptic.medium();
               await challengeFriend(friend.code);
               router.push('/online/host');
@@ -138,9 +143,9 @@ export default function FriendProfileScreen() {
             size="lg"
             kind="secondary"
             style={{ flex: 1 }}
-            // Paul (tuto) : pas de vrai défi ni d'échange par le réseau (phase 2 : version simulée)
-            disabled={!reachable || isPaul(friend.code)}
+            disabled={!reachable || paulLocked}
             onPress={() => {
+              if (paul) return tradeWithPaul();
               haptic.medium();
               router.push({ pathname: '/trade/host', params: { friend: friend.code } });
             }}

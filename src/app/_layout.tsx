@@ -16,6 +16,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initSfx } from '../audio/sfx';
 import { AppText } from '../components/AppText';
 import { ChallengeOverlay } from '../components/ChallengeOverlay';
+import { NoticeToast } from '../components/Notice';
+import { PaulWatcher } from '../components/tuto/PaulWatcher';
+import { TutoDoneMenu } from '../components/tuto/TutoDoneMenu';
 import { PiocheWatcher } from '../components/pioche/PiocheWatcher';
 import { AdHost } from '../components/ads/AdHost';
 import { NotificationsSetup } from '../components/notify/NotificationsSetup';
@@ -90,7 +93,10 @@ export default function RootLayout() {
         <Stack.Screen name="online/join" options={{ gestureEnabled: false }} />
         <Stack.Screen name="online/scan" options={UP} />
       </Stack>
+      <TutoDoneMenu />
       <ChallengeOverlay />
+      <PaulWatcher />
+      <NoticeToast />
       <PiocheWatcher />
       <AdHost />
       <NotificationsSetup />

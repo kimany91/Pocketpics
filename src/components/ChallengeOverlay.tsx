@@ -25,6 +25,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { playSfx } from '../audio/sfx';
+import { isPaul } from '../game/paul';
 import { rankOf } from '../game/rank';
 import { useSocial } from '../net/social';
 import { CHALLENGE_TTL_MS } from '../net/socialCore';
@@ -120,7 +121,7 @@ export function ChallengeOverlay() {
                 <Animated.View style={boltStyle}>
                   <Ionicons name={icon} size={13} color={colors.gold} />
                 </Animated.View>
-                <AppText style={styles.kicker}>{draw ? 'Pioche amicale' : trade ? 'Échange' : 'Défi'}</AppText>
+                <AppText style={styles.kicker}>{draw ? 'Pioche amicale' : trade ? 'Échange' : isPaul(challenge.from) ? 'Combat amical' : 'Défi'}</AppText>
               </View>
               <AppText variant="heading" numberOfLines={draw ? 2 : 1}>
                 {draw ? `${challenge.name} veut piocher chez toi !` : trade ? `${challenge.name} veut échanger !` : `${challenge.name} te défie !`}

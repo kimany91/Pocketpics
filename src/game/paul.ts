@@ -12,6 +12,7 @@
  * Pur (testable sous Node).
  */
 import type { Friend } from '../storage/model';
+import type { BotOpponent } from '../net/botMatch';
 import { handleKey, parseFriendInput } from '../net/socialCore';
 
 export const PAUL_CODE = 'PAUL0BOT00';
@@ -43,3 +44,24 @@ export function pickPaulArt(count: number, rand: () => number = Math.random, ref
 
 /** Empreinte unique d'une carte de Paul (jamais la même, pour ne pas bloquer une vraie photo). */
 export const paulHash = (ref: string, rand: () => number = Math.random) => `paul:${ref}:${Math.floor(rand() * 1e9).toString(36)}`;
+
+/** Son portrait (combat amical) : le pigeon du parc, son illustration préférée. */
+export const PAUL_PORTRAIT = 'bot:1:1';
+
+/**
+ * Paul en combat amical : abordable (il vise moyennement, ses cartes sont un
+ * peu moins fortes que les tiennes) ; ni rang, ni quêtes, ni série en jeu.
+ */
+export const paulOpponent = (): BotOpponent => ({
+  name: PAUL_NAME,
+  mmr: 0,
+  botLevel: 3,
+  edge: 0,
+  mult: 0.85,
+  resetStreak: false,
+  friendly: true,
+  portrait: PAUL_PORTRAIT,
+});
+
+/** Sa réponse quand on lui propose un nouvel échange (il n'en fait qu'un). */
+export const PAUL_TRADE_REFUSAL = 'Paul refuse l’échange : il garde ses cartes !';

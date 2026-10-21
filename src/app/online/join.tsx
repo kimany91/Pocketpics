@@ -32,6 +32,8 @@ export default function JoinBattleScreen() {
   const friend = useMatch((s) => s.friend);
   const roomCode = useMatch((s) => s.code);
   const opp = useMatch((s) => s.opp);
+  // Paul : combat amical (sans rang)
+  const friendly = useMatch((s) => s.bot?.friendly === true);
   const myName = useGame((s) => s.save?.playerName ?? 'Toi');
   const myMmr = useGame((s) => (s.save ? shownMmr(s.save.rank) : 0));
   const [code, setCode] = useState('');
@@ -143,7 +145,7 @@ export default function JoinBattleScreen() {
           </View>
         )}
       </KeyboardAvoidingView>
-      {found && phase === 'lobby' ? <MatchFound me={{ name: myName, mmr: myMmr }} opp={opp ? { name: opp.name, mmr: opp.mmr } : null} oppFallback={friend?.name} /> : null}
+      {found && phase === 'lobby' ? <MatchFound me={{ name: myName, mmr: myMmr }} opp={opp ? { name: opp.name, mmr: opp.mmr } : null} oppFallback={friend?.name} kicker={friendly ? 'Combat amical' : undefined} /> : null}
     </Screen>
   );
 }

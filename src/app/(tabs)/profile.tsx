@@ -23,7 +23,8 @@ import { Rise } from '../../components/Rise';
 import { Screen } from '../../components/Screen';
 import { TabHeader } from '../../components/TabHeader';
 import { useTutoStep } from '../../state/useTuto';
-import { inPhase1 } from '../../game/tutorial';
+import { inPhase1, phase2Todo } from '../../game/tutorial';
+import { useGame } from '../../state/game';
 import { useEntrance } from '../../theme/motion';
 
 export default function ProfileTab() {
@@ -31,9 +32,11 @@ export default function ProfileTab() {
   const { fresh, welcome } = useFreshFriends();
   useSocialScreen(focused);
   const step = useTutoStep();
+  // phase 2 : le combat contre Paul reste à faire (flèche sur son « Défier »)
+  const todoFight = useGame((s) => (s.save ? phase2Todo(s.save.tutorial).fight : false));
 
-  // Tuto : les amis d'abord (ajouter Paul), le reste du profil ensuite
-  if (inPhase1(step)) {
+  // Tuto : les amis d'abord (ajouter Paul, puis le défier), le reste du profil ensuite
+  if (inPhase1(step) || todoFight) {
     return (
       <Screen>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">

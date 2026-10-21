@@ -182,7 +182,7 @@ export default function DeckScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <Header title={level ? `Niveau ${level.n} · ${level.world.place}` : 'Combat classé'} onBack={online ? leaveOnline : undefined} />
+      <Header title={level ? `Niveau ${level.n} · ${level.world.place}` : match.bot?.friendly ? 'Combat amical' : 'Combat classé'} onBack={online ? leaveOnline : undefined} />
       {online ? (
         <View style={[styles.foe, { borderColor: `${oppRank.tier.color}55` }]}>
           {opp ? <RankEmblem rank={oppRank} size={50} /> : <ActivityIndicator color={colors.text} />}

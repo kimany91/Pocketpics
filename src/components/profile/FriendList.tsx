@@ -20,7 +20,7 @@ import Animated, {
 
 import { isPaul } from '../../game/paul';
 import { rankOf } from '../../game/rank';
-import { inPhase1 } from '../../game/tutorial';
+import { inPhase1, phase2Todo } from '../../game/tutorial';
 import { groupFriends } from '../../net/friends';
 import { useSocial } from '../../net/social';
 import { useGame } from '../../state/game';
@@ -33,6 +33,8 @@ import { Button } from '../Button';
 import { Burst } from '../fx';
 import { OnlineDot } from '../online/Pulse';
 import { RankEmblem } from '../rank/RankEmblem';
+import { TutoArrow } from '../tuto/TutoArrow';
+import { fightPaul, tradeWithPaul } from '../tuto/paul';
 
 const layout = LinearTransition.springify().damping(18);
 
@@ -43,6 +45,8 @@ export function FriendList({ fresh, active }: { fresh: string[]; active: boolean
   const isOnline = useSocial((s) => s.isOnline);
   const challengeFriend = useSocial((s) => s.challengeFriend);
   const tutoStep = useGame((s) => s.save?.tutorial.step ?? 'done');
+  // phase 2 : flèche sur « Défier » de Paul tant que le combat amical reste à faire
+  const todoFight = useGame((s) => (s.save ? phase2Todo(s.save.tutorial).fight : false));
   // une ligne par personne : deux appareils (ou une réinstallation) ne font pas deux amis
   const people = groupFriends(friends, isOnline);
 
@@ -71,14 +75,17 @@ export function FriendList({ fresh, active }: { fresh: string[]; active: boolean
             active={active}
             mmr={presence[f.code]?.mmr ?? f.mmr}
             devices={codes.length}
-            // Paul (tuto) : pas de vrai défi ni d'échange par le réseau (phase 2 : version simulée)
-            noActions={isPaul(f.code)}
+            // Paul (bot du tuto) : rien avant la phase 2, puis un combat amical et un échange joués sur place
+            noActions={isPaul(f.code) && inPhase1(tutoStep)}
+            hint={isPaul(f.code) && todoFight ? 'Nouveau ! Affronte Paul en combat amical' : undefined}
             onChallenge={async () => {
+              if (isPaul(f.code)) return void fightPaul();
               haptic.medium();
               await challengeFriend(f.code);
               router.push('/online/host');
             }}
             onTrade={() => {
+              if (isPaul(f.code)) return tradeWithPaul();
               haptic.medium();
               router.push({ pathname: '/trade/host', params: { friend: f.code } });
             }}
@@ -87,8 +94,8 @@ export function FriendList({ fresh, active }: { fresh: string[]; active: boolean
               router.push({ pathname: '/friend/[code]', params: { code: f.code } });
             }}
             onRemove={() =>
-              // Paul reste pendant le tuto
-              isPaul(f.code) && inPhase1(tutoStep)
+              // Paul reste pendant tout le tuto
+              isPaul(f.code) && tutoStep !== 'done'
                 ? haptic.warning()
                 : confirmAction(`Retirer ${f.name} ?`, 'Tu pourras le rajouter avec son pseudo et ses 4 caractères.', 'Retirer', () => codes.forEach((c) => removeFriend(c)))
             }
@@ -108,6 +115,7 @@ function FriendRow({
   active,
   devices,
   noActions = false,
+  hint,
   onOpen,
   onChallenge,
   onTrade,
@@ -123,6 +131,8 @@ function FriendRow({
   devices: number;
   /** Défi et échange indisponibles (Paul, le bot du tuto). */
   noActions?: boolean;
+  /** Tuto : consigne et flèche sur « Défier ». */
+  hint?: string;
   /** Ouvre son profil (ses cartes épinglées). */
   onOpen(): void;
   onChallenge(): void;
@@ -185,7 +195,10 @@ function FriendRow({
         </View>
       </Pressable>
       {/* hors ligne mais joignable par notification : on peut l'inviter quand même */}
-      <Button label="Défier" icon="flash" kind={online ? 'primary' : 'secondary'} disabled={noActions || (!online && !friend.push)} onPress={onChallenge} />
+      <View>
+        <Button label="Défier" icon="flash" kind={online ? 'primary' : 'secondary'} disabled={noActions || (!online && !friend.push)} onPress={onChallenge} />
+        {hint ? <TutoArrow text={hint} ring={12} gap={6} /> : null}
+      </View>
       {/* Échanger : un bouton rond, pour laisser la place au nom */}
       <Pressable
         onPress={onTrade}

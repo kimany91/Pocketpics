@@ -33,7 +33,7 @@ import { type FriendDrawPayment, type FriendPhoto, payFriendDraw } from '../game
 import { generatePack, makeCard } from '../game/pack';
 import { PAUL_NAME, paulFriend, paulHash } from '../game/paul';
 import { loadPaulPhotos } from '../game/paulPack';
-import { type TutoStep, type TutorialState, advance, drawsNeeded, finish as finishTuto, finishedTutorial, inPhase1, reached, skipTutorialForTests } from '../game/tutorial';
+import { type TutoPatch, type TutoStep, advance, patchTutorial, drawsNeeded, finish as finishTuto, finishedTutorial, inPhase1, reached, skipTutorialForTests } from '../game/tutorial';
 import { cleanPseudo } from '../net/socialCore';
 import * as disk from '../storage/disk';
 import { MAX_PINNED } from '../storage/model';
@@ -155,8 +155,8 @@ interface GameStore {
    * les illustrations des bots, puis débloque les combats.
    */
   openPaulPack(): Promise<Card[]>;
-  /** Phase 2 : note l'échange ou le combat fait avec Paul. */
-  patchTuto(patch: Partial<Pick<TutorialState, 'tradeDone' | 'fightDone'>>): void;
+  /** Phase 2 : note l'échange ou le combat fait avec Paul (les deux faits : fin du tuto), le menu vu… */
+  patchTuto(patch: TutoPatch): void;
   /** Fin du tuto (après la phase 2, ou en la passant avec `skipped`). */
   finishTutorial(skipped?: boolean): void;
 }
@@ -843,7 +843,7 @@ export const useGame = create<GameStore>((set, get) => ({
   patchTuto(patch) {
     const save = get().save;
     if (!save) return;
-    const next: SaveState = { ...save, tutorial: { ...save.tutorial, ...patch } };
+    const next: SaveState = { ...save, tutorial: patchTutorial(save.tutorial, patch) };
     persistState(next);
     set({ save: next });
   },

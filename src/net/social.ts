@@ -19,7 +19,7 @@ import { newOnlineCode } from '../trade/relayCore';
 import { useTrade } from '../trade/session';
 import { inBusyScreen } from '../state/route';
 import { PIOCHE_VERSION } from '../game/friendDraw';
-import { isPaul } from '../game/paul';
+import { isPaul, paulOpponent } from '../game/paul';
 import { piocheBusy, usePioche } from './pioche';
 import { useMatch } from './match';
 import { sanitizeFighter } from './battleNet';
@@ -476,8 +476,14 @@ export const useSocial = create<SocialStore>((set, get) => {
 
     async challengeFriend(code) {
       const friend = save()?.friends.find((f) => f.code === code);
-      // Paul : un combat simulé, sans réseau (phase 2 du tuto)
-      if (!friend || isPaul(code)) return;
+      if (!friend) return;
+      // Paul : un combat amical sur ce téléphone, sans réseau ; il accepte au bout d'un instant
+      if (isPaul(code)) {
+        const room = `paul-${now()}`;
+        set({ outgoing: { kind: 'fight', to: code, name: friend.name, room, at: now(), state: 'waiting' } });
+        useMatch.getState().startBotMatch(paulOpponent(), { friend: { code, name: friend.name }, acceptAfterMs: 1600 + Math.random() * 1200 });
+        return;
+      }
       const room = newOnlineCode(getRandomBytes);
       set({ outgoing: { kind: 'fight', to: code, name: friend.name, room, at: now(), state: 'waiting' } });
       await useMatch.getState().host({ code: room, friend: { code, name: friend.name } });
@@ -487,7 +493,12 @@ export const useSocial = create<SocialStore>((set, get) => {
 
     inviteTrade(code, tradeCode) {
       const friend = save()?.friends.find((f) => f.code === code);
-      if (!friend || isPaul(code)) return;
+      if (!friend) return;
+      // Paul ne fait pas d'échange en ligne : il refuse tout de suite (l'échange du tuto se joue sur place)
+      if (isPaul(code)) {
+        set({ outgoing: { kind: 'trade', to: code, name: friend.name, room: tradeCode, at: now(), state: 'declined' } });
+        return;
+      }
       set({ outgoing: { kind: 'trade', to: code, name: friend.name, room: tradeCode, at: now(), state: 'waiting' } });
       invite(code, { k: 'challenge', kind: 'trade', from: myCode(), ...profile(), room: tradeCode, at: now() });
       notify(code, `${profile().name} veut échanger avec toi`, 'Ouvre PocketPics pour voir son offre.', 'trade');
@@ -512,6 +523,11 @@ export const useSocial = create<SocialStore>((set, get) => {
       set({ challenge: null });
       if (c) handledRooms.add(c.room);
       if (!c || now() - c.at > CHALLENGE_TTL_MS) return null;
+      // Paul : son combat amical, sans réseau
+      if (isPaul(c.from)) {
+        useMatch.getState().startBotMatch(paulOpponent(), { friend: { code: c.from, name: c.name } });
+        return { ...c, kind: 'fight' };
+      }
       if (c.kind === 'trade') void useTrade.getState().join({ kind: 'online', code: c.room });
       else if (c.kind === 'draw') void usePioche.getState().give(c.room, { code: c.from, name: c.name });
       else void useMatch.getState().join(c.room, { friend: { code: c.from, name: c.name } });

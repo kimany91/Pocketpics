@@ -29,7 +29,8 @@ import { playSfx } from '../../audio/sfx';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import type { Card } from '../../storage/model';
-import { MAX_OFFER, type OfferCard } from '../../trade/protocol';
+import { TutoArrow, TutoBubble } from '../../components/tuto/TutoArrow';
+import type { OfferCard } from '../../trade/protocol';
 import { useTrade } from '../../trade/session';
 import { colors, fonts } from '../../theme';
 import { confirmAction } from '../../utils/confirm';
@@ -91,7 +92,7 @@ export default function RoomScreen() {
     );
   }
 
-  if (t.phase === 'done' && revealed) return <TradeDone received={t.received} given={t.givenCount} peer={t.peerName ?? 'ton ami'} onClose={exit} />;
+  if (t.phase === 'done' && revealed) return <TradeDone received={t.received} given={t.givenCount} peer={t.peerName ?? 'ton ami'} paul={t.paul} onClose={exit} />;
 
   if (t.phase === 'transferring' || t.phase === 'done') {
     return (
@@ -106,6 +107,11 @@ export default function RoomScreen() {
   }
 
   const nothing = t.myOffer.length + t.peerOffer.length === 0;
+  // Tuto : l'échange avec Paul, expliqué pas à pas (une carte contre une)
+  const paulReady = t.paul && t.phase === 'room' && t.peerOffer.length > 0;
+  const paulPick = paulReady && t.myOffer.length === 0;
+  const paulValidate = paulReady && t.myOffer.length === 1 && !t.myLocked;
+  const paulConfirm = paulReady && t.myLocked && t.peerLocked && !t.myConfirmed;
 
   return (
     <Screen edges={['top', 'bottom']}>
@@ -133,7 +139,7 @@ export default function RoomScreen() {
           locked={t.myLocked}
           confirmed={t.myConfirmed}
           empty="Choisis des cartes ci-dessous"
-          footer={mine.length > 0 && !t.myLocked ? 'Touche un cadenas pour verrouiller la carte : ton ami ne pourra plus la modifier.' : null}
+          footer={mine.length > 0 && !t.myLocked && !t.paul ? 'Touche un cadenas pour verrouiller la carte : ton ami ne pourra plus la modifier.' : null}
         >
           {mine.map((c) => {
             // déjà verrouillée (reçue ainsi) : elle le reste, le cadenas ne s'ouvre pas
@@ -158,9 +164,20 @@ export default function RoomScreen() {
         </OfferRow>
       </View>
 
+      {t.paul && t.peerOffer.length === 0 ? (
+        <View style={styles.tuto}>
+          <TutoBubble text="Paul choisit une carte à te donner…" sub="Il en pose une, tu en offres une : c’est un échange." />
+        </View>
+      ) : null}
+      {paulPick ? (
+        <View style={styles.tuto}>
+          <TutoArrow inline text="Paul te propose sa carte ! Touche UNE de tes cartes pour la lui offrir" sub="Choisis-en une que tu veux bien donner" />
+        </View>
+      ) : null}
+
       <View style={styles.pickHeader}>
         <AppText variant="label">Ta collection</AppText>
-        <AppText variant="caption">{`${t.myOffer.length}/${MAX_OFFER}`}</AppText>
+        <AppText variant="caption">{`${t.myOffer.length}/${t.maxOffer}`}</AppText>
       </View>
       <FlatList
         data={sorted}
@@ -193,7 +210,10 @@ export default function RoomScreen() {
 
       <View style={styles.actions}>
         {!t.myLocked ? (
-          <Button label="Valider mon offre" size="lg" disabled={nothing} onPress={() => t.setLocked(true)} />
+          <View>
+            <Button label="Valider mon offre" size="lg" disabled={nothing || (t.paul && t.myOffer.length !== 1)} onPress={() => t.setLocked(true)} />
+            {paulValidate ? <TutoArrow text="Touche Valider : Paul va regarder ta carte" ring={16} gap={6} /> : null}
+          </View>
         ) : !t.peerLocked ? (
           <View style={{ gap: 8 }}>
             <Waiting text={`En attente de la validation de ${t.peerName ?? 'ton ami'}…`} />
@@ -201,7 +221,10 @@ export default function RoomScreen() {
           </View>
         ) : !t.myConfirmed ? (
           <View style={{ gap: 8 }}>
-            <Button label="Confirmer l'échange" icon="swap-horizontal" size="lg" onPress={() => t.confirm()} />
+            <View>
+              <Button label="Confirmer l'échange" icon="swap-horizontal" size="lg" onPress={() => t.confirm()} />
+              {paulConfirm ? <TutoArrow text="Paul a validé ! Confirme pour échanger vos cartes" ring={16} gap={6} /> : null}
+            </View>
             <Button label="Modifier mon offre" kind="ghost" onPress={() => t.setLocked(false)} />
           </View>
         ) : (
@@ -388,7 +411,7 @@ function PeerThumb({ card }: { card: OfferCard }) {
   );
 }
 
-function TradeDone({ received, given, peer, onClose }: { received: Card[]; given: number; peer: string; onClose(): void }) {
+function TradeDone({ received, given, peer, paul = false, onClose }: { received: Card[]; given: number; peer: string; /** Tuto : l'échange avec Paul. */ paul?: boolean; onClose(): void }) {
   const { width } = useWindowDimensions();
   const cardW = Math.min((width - 64) / 2, 160);
   const [fx, setFx] = useState(0);
@@ -418,6 +441,11 @@ function TradeDone({ received, given, peer, onClose }: { received: Card[]; given
             {`Tu as donné ${given} carte${given > 1 ? 's' : ''} et reçu ${received.length} carte${received.length > 1 ? 's' : ''} de ${peer}.`}
           </AppText>
         </Animated.View>
+        {paul ? (
+          <Animated.View entering={FadeInDown.delay(250)} style={{ alignSelf: 'stretch', marginTop: 18 }}>
+            <TutoBubble text="Ton premier échange est fait !" sub="Paul n’échange qu’une fois. Avec tes vrais amis, échange autant que tu veux." />
+          </Animated.View>
+        ) : null}
         <View style={styles.doneGrid}>
           {received.map((c, i) => (
             <Animated.View key={c.id} entering={FlipInEasyY.delay(350 + i * 140).duration(520)} style={{ alignItems: 'center' }}>
@@ -458,6 +486,7 @@ const styles = StyleSheet.create({
   swapBadge: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, backgroundColor: colors.bgElevated, alignItems: 'center', justifyContent: 'center' },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, height: 22, borderRadius: 11 },
   badgeText: { fontFamily: fonts.semibold, fontSize: 11 },
+  tuto: { paddingHorizontal: 16, paddingTop: 12 },
   pickHeader: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 10 },
   selected: {
     position: 'absolute',

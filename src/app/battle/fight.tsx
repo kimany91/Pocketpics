@@ -89,6 +89,7 @@ import { Burst, Confetti, Flash, Glow, ImpactLines, Rays, Shockwave } from '../.
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import { TutoArrow, TutoBubble } from '../../components/tuto/TutoArrow';
+import { phase2Todo } from '../../game/tutorial';
 import type { Card } from '../../storage/model';
 import { CARD_RATIO, colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
@@ -170,8 +171,9 @@ export default function FightScreen() {
         name: m.opp.name,
         tint: ONLINE_TINT,
         mmr: m.opp.mmr,
-        label: 'Combat classé',
-        art: bot && m.oppDeck?.[0] ? botArt(m.oppDeck[0].ref) : undefined,
+        // Paul : combat amical, sans rang
+        label: bot?.friendly ? 'Combat amical' : 'Combat classé',
+        art: bot?.portrait ? botArt(bot.portrait) : bot && m.oppDeck?.[0] ? botArt(m.oppDeck[0].ref) : undefined,
         image: (ref) => (bot ? { imageSource: botArt(ref) } : { imageUri: useMatch.getState().oppArt[ref] || undefined }),
       };
       return { deck, foe, battle: m.start, controller: m.controller };
@@ -192,6 +194,13 @@ export default function FightScreen() {
     const mine = deck.map(toFighter);
     const hidden = hiddenAdjust(level, mine);
     return { deck, foe, battle: createBattle(mine, levelFighters(level, hidden.mult), { catchUp: 1 }), controller: new BotController(level.botLevel, hidden.edge) as BattleController };
+  });
+  /** Combat amical (Paul) : ni rang, ni quêtes. */
+  const [friendly] = useState(() => online && useMatch.getState().bot?.friendly === true);
+  /** Tuto, phase 2 : le premier combat amical contre Paul. */
+  const [paulFirst] = useState(() => {
+    const save = useGame.getState().save;
+    return friendly && !!save && phase2Todo(save.tutorial).fight;
   });
   /** Tuto : premier combat solo, guidé par des bulles. Sa fin (gagné ou perdu) termine la phase 1. */
   const [tuto] = useState(() => !online && !!level && useGame.getState().save?.tutorial.step === 'battle');
@@ -577,7 +586,8 @@ export default function FightScreen() {
       const card = best && (best.dealt ?? 0) > 0 ? deck.find((c) => c.id === best.ref) : undefined;
       setMvp(card ? { card, dealt: best.dealt } : null);
     }
-    if (online) setRankChange(finishRanked(winner === 0));
+    if (friendly) useGame.getState().patchTuto({ fightDone: true });
+    else if (online) setRankChange(finishRanked(winner === 0));
     else if (winner === 0 && level && battle) {
       // étoiles : 3 sans perdre de carte, 2 en en perdant une, 1 sinon
       const stars = starsFor(battle.sides[0].fighters.filter((f) => f.hp <= 0).length);
@@ -1100,7 +1110,9 @@ export default function FightScreen() {
       {soundOpen ? <SoundSheet onClose={() => setSoundOpen(false)} /> : null}
 
       {result !== null ? (
-        online ? (
+        friendly ? (
+          <FriendlyResult outcome={cancelled ? 'cancel' : result === 0 ? 'win' : 'loss'} opp={foeInfo.name} mvp={cancelled ? null : mvp} first={paulFirst} />
+        ) : online ? (
           <OnlineResult outcome={cancelled ? 'cancel' : result === 0 ? 'win' : 'loss'} change={rankChange} opp={foeInfo.name} reason={endReason} mvp={cancelled ? null : mvp} />
         ) : level ? (
           <ResultOverlay
@@ -1125,7 +1137,7 @@ export default function FightScreen() {
               Abandonner ?
             </AppText>
             <AppText variant="caption" style={{ textAlign: 'center', marginTop: 6 }}>
-              {online ? 'Le combat sera perdu, avec ses points de rang. Tes cartes ne risquent rien.' : 'Le combat sera perdu. Tes cartes ne risquent rien.'}
+              {online && !friendly ? 'Le combat sera perdu, avec ses points de rang. Tes cartes ne risquent rien.' : 'Le combat sera perdu. Tes cartes ne risquent rien.'}
             </AppText>
             <View style={[styles.twoButtons, { marginTop: 18 }]}>
               <Button label="Continuer" kind="secondary" style={{ flex: 1 }} onPress={() => setQuitting(false)} />
@@ -1136,7 +1148,9 @@ export default function FightScreen() {
                 onPress={() => {
                   if (online) {
                     useMatch.getState().quit();
-                    finishRanked(false);
+                    // combat amical : il compte comme fait (perdu), sans toucher au rang
+                    if (friendly) useGame.getState().patchTuto({ fightDone: true });
+                    else finishRanked(false);
                   }
                   router.back();
                 }}
@@ -1660,9 +1674,9 @@ function ResultOverlay({
         </Animated.View>
       ) : null}
       {tutoDone ? (
-        // Phase 2 du tuto : le menu « tuto terminé » prendra la suite
+        // Phase 2 du tuto : en sortant, le menu « Tu as fini le tuto ! » prend la suite
         <Animated.View entering={FadeInDown.delay(won ? coinsAt : 600)} style={{ alignSelf: 'stretch', paddingHorizontal: 24, marginTop: 16 }}>
-          <TutoBubble text="Premier combat terminé ! Tout le jeu est débloqué." sub="Multijoueur, collection, échanges, quêtes : à toi de jouer." />
+          <TutoBubble text="Premier combat terminé ! Tout le jeu est débloqué." sub="Touche Continuer pour découvrir la suite." />
         </Animated.View>
       ) : null}
       {mvp ? (
@@ -1672,11 +1686,12 @@ function ResultOverlay({
       ) : null}
       <Animated.View entering={FadeInDown.delay(won ? 900 : 650).springify().damping(16)} style={{ alignSelf: 'stretch', gap: 10, marginTop: mvp ? 20 : 30, paddingHorizontal: 32 }}>
         {canReveal ? <RevealGalaxyButton /> : null}
-        {won && next ? (
+        {tutoDone ? <Button label="Continuer" size="lg" icon="arrow-forward" onPress={() => router.back()} /> : null}
+        {won && next && !tutoDone ? (
           <Button label={`Niveau ${next.n}`} size="lg" icon="arrow-forward" onPress={() => router.replace({ pathname: '/battle/deck', params: { level: String(next.n) } })} />
         ) : null}
-        {!won && onRevive ? <ReviveButton onRevive={onRevive} /> : null}
-        {!won ? (
+        {!won && onRevive && !tutoDone ? <ReviveButton onRevive={onRevive} /> : null}
+        {!won && !tutoDone ? (
           <Button
             label={challenge ? 'Retenter le défi' : 'Réessayer'}
             size="lg"
@@ -1685,7 +1700,7 @@ function ResultOverlay({
             onPress={() => router.replace({ pathname: '/battle/fight', params: { level: String(levelN), deck, ...(challenge ? { challenge: '1' } : null) } })}
           />
         ) : null}
-        <Button label="Retour à la carte" kind="secondary" onPress={() => router.back()} />
+        {!tutoDone ? <Button label="Retour à la carte" kind="secondary" onPress={() => router.back()} /> : null}
       </Animated.View>
     </Animated.View>
   );
@@ -1743,6 +1758,47 @@ function RevealGalaxyButton() {
  * se vide), promotion éventuelle. `cancel` : l'adversaire est parti, rien ne
  * bouge pour celui qui reste.
  */
+/** Fin d'un combat amical (Paul) : pas de rang en jeu, juste le résultat. */
+function FriendlyResult({ outcome, opp, mvp, first }: { outcome: 'win' | 'loss' | 'cancel'; opp: string; mvp: { card: Card; dealt: number } | null; /** Tuto : le premier combat contre Paul. */ first: boolean }) {
+  const won = outcome === 'win';
+  const cancelled = outcome === 'cancel';
+  const { width, height } = useWindowDimensions();
+  return (
+    <Animated.View entering={FadeIn.duration(won ? 300 : 500)} style={[StyleSheet.absoluteFill, styles.overlay, !won && styles.overlayLost]}>
+      {won ? <Confetti width={width} height={height} colors={CONFETTI} count={30} /> : null}
+      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+        {won ? (
+          <View style={{ position: 'absolute' }}>
+            <Burst trigger={1} colors={[colors.gold, '#FFF3C2', colors.success]} count={26} radius={150} />
+          </View>
+        ) : null}
+        <Animated.View entering={won ? ZoomIn.springify().damping(10) : FadeInDown.duration(700)} style={[styles.medal, { backgroundColor: won ? colors.gold : colors.surface2 }, won ? styles.medalWon : styles.medalLost]}>
+          <Ionicons name={won ? 'trophy' : cancelled ? 'close' : 'refresh'} size={40} color={won ? '#141414' : colors.textDim} />
+        </Animated.View>
+      </View>
+      <Animated.View entering={FadeInDown.delay(200)} style={{ alignItems: 'center', marginTop: 22, paddingHorizontal: 32, gap: 6 }}>
+        <AppText variant="display" style={cancelled ? styles.cancelTitle : won ? styles.winTitle : styles.loseTitle}>
+          {cancelled ? 'Combat annulé' : won ? 'Victoire !' : 'Défaite'}
+        </AppText>
+        <AppText variant="caption" style={{ textAlign: 'center' }}>{`Combat amical contre ${opp} : ton rang ne bouge pas.`}</AppText>
+      </Animated.View>
+      {first ? (
+        <Animated.View entering={FadeInDown.delay(450)} style={{ alignSelf: 'stretch', paddingHorizontal: 24, marginTop: 18 }}>
+          <TutoBubble text="Premier combat amical terminé !" sub={`${opp} accepte toujours tes défis : affronte-le quand tu veux depuis ton profil.`} />
+        </Animated.View>
+      ) : null}
+      {mvp ? (
+        <View style={{ marginTop: 18, alignSelf: 'stretch' }}>
+          <MvpBadge card={mvp.card} dealt={mvp.dealt} delay={700} />
+        </View>
+      ) : null}
+      <Animated.View entering={FadeInDown.delay(350)} style={{ alignSelf: 'stretch', gap: 10, marginTop: 28, paddingHorizontal: 32 }}>
+        <Button label="Retour" size="lg" onPress={() => router.back()} />
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 function OnlineResult({
   outcome,
   change,

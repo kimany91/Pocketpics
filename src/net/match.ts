@@ -71,8 +71,12 @@ interface MatchStore {
   bot: BotOpponent | null;
 
   host(opts?: { code?: string; friend?: { code: string; name: string } }): Promise<void>;
-  /** Combat classé contre un adversaire du jeu (voir `botMatch.ts`). */
-  startBotMatch(opp: BotOpponent): void;
+  /**
+   * Combat contre un adversaire du jeu (voir `botMatch.ts`) : classé, ou amical
+   * avec Paul. `friend` + `acceptAfterMs` : un défi envoyé à Paul, qu'il accepte
+   * au bout d'un moment.
+   */
+  startBotMatch(opp: BotOpponent, opts?: { friend?: { code: string; name: string }; acceptAfterMs?: number }): void;
   join(code: string, opts?: { friend?: { code: string; name: string } }): Promise<void>;
   setDeck(cards: Card[]): void;
   /** Abandon en plein combat : l'adversaire gagne. */
@@ -161,7 +165,8 @@ export const useMatch = create<MatchStore>((set, get) => {
 
   const started = (battle: Battle, controller: BattleController) => {
     const opp = get().opp;
-    useGame.getState().startRanked(opp?.mmr ?? 0, opp?.name ?? '');
+    // combat amical (Paul) : le rang et les quêtes ne bougent pas
+    if (!get().bot?.friendly) useGame.getState().startRanked(opp?.mmr ?? 0, opp?.name ?? '');
     set({ start: battle, controller, phase: 'fighting' });
   };
 
@@ -246,10 +251,12 @@ export const useMatch = create<MatchStore>((set, get) => {
       }
     },
 
-    startBotMatch(opp) {
+    startBotMatch(opp, opts = {}) {
       get().leave();
-      session++;
-      set({ ...initial, phase: 'lobby', role: 'host', bot: opp, opp: { name: opp.name, mmr: opp.mmr, friend: null } });
+      const token = ++session;
+      const wait = opts.acceptAfterMs ?? 0;
+      set({ ...initial, phase: wait > 0 ? 'waiting' : 'lobby', role: 'host', bot: opp, friend: opts.friend ?? null, opp: { name: opp.name, mmr: opp.mmr, friend: opts.friend?.code ?? null } });
+      if (wait > 0) setTimeout(() => token === session && get().phase === 'waiting' && set({ phase: 'lobby' }), wait);
     },
 
     async join(code, opts = {}) {

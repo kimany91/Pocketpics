@@ -27,6 +27,10 @@ export interface TutorialState {
   skipped: boolean;
   /** Date d'arrivée en phase 2 (`null` avant). */
   phase2At: number | null;
+  /** Phase 2 : le menu « tuto terminé » a été vu. */
+  menuSeen?: boolean;
+  /** Dernier jour (« 2026-10-21 ») où Paul a proposé un combat de lui-même. */
+  paulAskDay?: string;
   [extra: string]: unknown;
 }
 
@@ -81,6 +85,24 @@ export function finish(t: TutorialState, skipped = false, now = Date.now()): Tut
   return { ...t, step: 'done', skipped: t.skipped || skipped, phase2At: t.phase2At ?? now };
 }
 
+/** Ce que la phase 2 note au fil du jeu. */
+export type TutoPatch = Partial<Pick<TutorialState, 'tradeDone' | 'fightDone' | 'menuSeen' | 'paulAskDay'>>;
+
+/**
+ * Note un échange, un combat avec Paul, le menu vu… En phase 2, l'échange et
+ * le combat faits tous les deux terminent le tuto.
+ */
+export function patchTutorial(t: TutorialState, patch: TutoPatch, now = Date.now()): TutorialState {
+  const next = { ...t, ...patch };
+  return next.step === 'phase2' && next.tradeDone && next.fightDone ? finish(next, false, now) : next;
+}
+
+/** Phase 2 : ce qu'il reste à faire avec Paul (rien après le tuto). */
+export function phase2Todo(t: TutorialState): { trade: boolean; fight: boolean } {
+  const on = t.step === 'phase2';
+  return { trade: on && !t.tradeDone, fight: on && !t.fightDone };
+}
+
 /** Tirages qu'il faut encore avoir en réserve pour les paquets de la phase 1. */
 export const drawsNeeded = (step: TutoStep) => (step === 'pack1' ? 2 : step === 'pack2' ? 1 : 0);
 
@@ -114,6 +136,8 @@ export function migrateTutorial(raw: unknown, save: Record<string, unknown>): Tu
     fightDone: r.fightDone === true,
     skipped: r.skipped === true,
     phase2At: typeof r.phase2At === 'number' && Number.isFinite(r.phase2At) ? r.phase2At : null,
+    menuSeen: r.menuSeen === true || undefined,
+    paulAskDay: typeof r.paulAskDay === 'string' ? r.paulAskDay : undefined,
   };
 }
 

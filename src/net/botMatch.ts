@@ -35,6 +35,10 @@ export interface BotOpponent {
   mult: number;
   /** La série du joueur repart de zéro après ce combat. */
   resetStreak: boolean;
+  /** Combat amical (Paul) : ni rang, ni quêtes, ni série. */
+  friendly?: boolean;
+  /** Illustration de son portrait (sinon, celle de sa première carte). */
+  portrait?: string;
 }
 
 /** Réglages du rang de l'adversaire, par rapport à celui du joueur. */

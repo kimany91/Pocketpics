@@ -26,7 +26,20 @@ export interface Player {
   mmr: number;
 }
 
-export function MatchFound({ me, opp, oppFallback = 'Adversaire', subtitle = 'Place au choix des cartes' }: { me: Player; opp: Player | null; oppFallback?: string; subtitle?: string }) {
+export function MatchFound({
+  me,
+  opp,
+  oppFallback = 'Adversaire',
+  subtitle = 'Place au choix des cartes',
+  kicker = 'Combat classé',
+}: {
+  me: Player;
+  opp: Player | null;
+  oppFallback?: string;
+  subtitle?: string;
+  /** Au-dessus du titre (« Combat amical » contre Paul). */
+  kicker?: string;
+}) {
   const { width } = useWindowDimensions();
   const plateW = Math.min(160, (width - 72) / 2);
   const back = useSharedValue(0);
@@ -77,7 +90,7 @@ export function MatchFound({ me, opp, oppFallback = 'Adversaire', subtitle = 'Pl
       <Flash trigger={1} color="#FFF6D8" peak={0.55} />
       <View style={styles.center}>
         <Animated.View style={titleStyle}>
-          <AppText style={styles.kicker}>Combat classé</AppText>
+          <AppText style={styles.kicker}>{kicker}</AppText>
           <AppText style={styles.title}>Adversaire trouvé !</AppText>
         </Animated.View>
 

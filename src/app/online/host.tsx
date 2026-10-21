@@ -34,6 +34,8 @@ export default function HostBattleScreen() {
   const error = useMatch((s) => s.error);
   const friend = useMatch((s) => s.friend);
   const opp = useMatch((s) => s.opp);
+  // Paul : combat amical (sans rang)
+  const friendly = useMatch((s) => s.bot?.friendly === true);
   const outgoing = useSocial((s) => s.outgoing);
   const myName = useGame((s) => s.save?.playerName ?? 'Toi');
   const myMmr = useGame((s) => (s.save ? shownMmr(s.save.rank) : 0));
@@ -165,7 +167,7 @@ export default function HostBattleScreen() {
           </View>
         )}
       </View>
-      {found && phase === 'lobby' ? <MatchFound me={{ name: myName, mmr: myMmr }} opp={opp ? { name: opp.name, mmr: opp.mmr } : null} oppFallback={friend?.name} /> : null}
+      {found && phase === 'lobby' ? <MatchFound me={{ name: myName, mmr: myMmr }} opp={opp ? { name: opp.name, mmr: opp.mmr } : null} oppFallback={friend?.name} kicker={friendly ? 'Combat amical' : undefined} /> : null}
     </Screen>
   );
 }

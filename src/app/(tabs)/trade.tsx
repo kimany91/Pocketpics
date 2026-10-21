@@ -25,6 +25,9 @@ import { TabHeader } from '../../components/TabHeader';
 import { rankOf } from '../../game/rank';
 import { groupFriends } from '../../net/friends';
 import { isPaul } from '../../game/paul';
+import { phase2Todo } from '../../game/tutorial';
+import { TutoArrow } from '../../components/tuto/TutoArrow';
+import { tradeWithPaul } from '../../components/tuto/paul';
 import { useSocial } from '../../net/social';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
@@ -140,6 +143,8 @@ function FriendsToTrade({ active }: { active: boolean }) {
   const isOnline = useSocial((s) => s.isOnline);
   const people = groupFriends(friends, isOnline);
   const online = people.filter((p) => p.online);
+  // tuto, phase 2 : flèche sur « Échanger » de Paul tant que l'échange reste à faire
+  const todoTrade = useGame((s) => (s.save ? phase2Todo(s.save.tutorial).trade : false));
 
   return (
     <View style={{ gap: 10 }}>
@@ -181,16 +186,19 @@ function FriendsToTrade({ active }: { active: boolean }) {
                   </AppText>
                 </View>
               </View>
-              <Button
-                label="Échanger"
-                icon="swap-horizontal"
-                // Paul (tuto) : pas d'échange par le réseau (phase 2 : version simulée)
-                disabled={isPaul(friend.code)}
-                onPress={() => {
-                  haptic.medium();
-                  router.push({ pathname: '/trade/host', params: { friend: friend.code } });
-                }}
-              />
+              <View>
+                <Button
+                  label="Échanger"
+                  icon="swap-horizontal"
+                  onPress={() => {
+                    // Paul (bot du tuto) : l'échange se joue sur place, sans réseau
+                    if (isPaul(friend.code)) return tradeWithPaul();
+                    haptic.medium();
+                    router.push({ pathname: '/trade/host', params: { friend: friend.code } });
+                  }}
+                />
+                {todoTrade && isPaul(friend.code) ? <TutoArrow text="Nouveau ! Échange une carte avec Paul" sub="Touche Échanger" ring={12} gap={6} /> : null}
+              </View>
             </View>
           );
         })

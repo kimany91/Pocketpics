@@ -16,6 +16,7 @@ import { cardExists, readCardImagesBase64, readThumbBase64Sync, writeNewCard } f
 import { type Card, migrateCard } from '../storage/model';
 import type { TradeTarget } from './code';
 import { hostOnline, joinOnline } from './online';
+import { paulTradeLink } from './paulPeer';
 import { MAX_OFFER, type OfferCard, PROTOCOL_VERSION, type TradeMessage, mirrorKey, offerKey, offerTag } from './protocol';
 import { type HostHandle, type TradeLink, hostTrade, joinTrade } from './transport';
 
@@ -41,11 +42,17 @@ interface TradeStore {
   peerConfirmed: boolean;
   received: Card[];
   givenCount: number;
+  /** Nombre de cartes qu'on peut offrir (une seule avec Paul). */
+  maxOffer: number;
+  /** Échange du tuto avec Paul (sur ce téléphone, sans réseau). */
+  paul: boolean;
 
   /** `online` (par défaut) : n'importe où via Internet · `lan` : même Wi-Fi, sans Internet. */
   mode: TradeMode;
   host(mode?: TradeMode): Promise<void>;
   join(target: TradeTarget): Promise<void>;
+  /** Tuto : l'échange d'une carte avec Paul (voir paulPeer.ts). */
+  withPaul(): void;
   toggleCard(id: string): void;
   /** Pose ou retire le cadenas d'une carte de mon offre (annule les validations, comme un changement d'offre). */
   toggleCardLock(id: string): void;
@@ -69,6 +76,8 @@ const initial = {
   peerConfirmed: false,
   received: [] as Card[],
   givenCount: 0,
+  maxOffer: MAX_OFFER,
+  paul: false,
 };
 
 /** Message d'erreur compréhensible, avec la piste de secours adaptée au mode. */
@@ -134,6 +143,8 @@ export const useTrade = create<TradeStore>((set, get) => {
   const maybeDone = () => {
     if (!sentAcked || !gotCards) return;
     set({ phase: 'done' });
+    // Paul n'échange qu'une fois : ensuite, il refuse toujours
+    if (get().paul) useGame.getState().patchTuto({ tradeDone: true });
     send({ t: 'bye' });
     const gen = generation;
     setTimeout(() => gen === generation && teardown(), 600);
@@ -310,15 +321,23 @@ export const useTrade = create<TradeStore>((set, get) => {
       }
     },
 
+    withPaul() {
+      teardown();
+      set({ ...initial, phase: 'connecting', maxOffer: 1, paul: true });
+      attach(paulTradeLink());
+    },
+
     toggleCard(id) {
       const s = get();
       if (s.phase !== 'room') return;
       const has = s.myOffer.includes(id);
-      if (!has && s.myOffer.length >= MAX_OFFER) return;
+      // une seule carte possible (Paul) : la nouvelle remplace l'ancienne
+      const swap = !has && s.maxOffer === 1 && s.myOffer.length === 1;
+      if (!has && !swap && s.myOffer.length >= s.maxOffer) return;
       set({
         ...unlocked,
-        myOffer: has ? s.myOffer.filter((x) => x !== id) : [...s.myOffer, id],
-        myLocks: has ? s.myLocks.filter((x) => x !== id) : s.myLocks,
+        myOffer: has ? s.myOffer.filter((x) => x !== id) : swap ? [id] : [...s.myOffer, id],
+        myLocks: has ? s.myLocks.filter((x) => x !== id) : swap ? [] : s.myLocks,
       });
       sendOffer();
     },
@@ -337,6 +356,8 @@ export const useTrade = create<TradeStore>((set, get) => {
       const s = get();
       if (s.phase !== 'room') return;
       if (locked && s.myOffer.length + s.peerOffer.length === 0) return;
+      // Paul : une carte contre une, rien d'autre
+      if (locked && s.paul && s.myOffer.length !== 1) return;
       set(locked ? { myLocked: true } : { myLocked: false, myConfirmed: false, peerConfirmed: false });
       send({ t: 'lock', locked, key: currentKey() });
     },

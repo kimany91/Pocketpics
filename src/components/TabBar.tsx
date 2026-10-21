@@ -13,7 +13,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { type TabName, isUnlocked, tabTarget } from '../game/tutorial';
+import { type TabName, isUnlocked, phase2Todo, tabTarget } from '../game/tutorial';
+import { useGame } from '../state/game';
 import { useTutoStep } from '../state/useTuto';
 import { colors, fonts } from '../theme';
 import { springs } from '../theme/motion';
@@ -49,6 +50,9 @@ export function TabBar({ state, navigation, insets, descriptors }: BottomTabBarP
   // Tuto : onglets fermés, et flèche vers celui où se joue l'étape
   const step = useTutoStep();
   const hintTab = tabTarget(step);
+  // Phase 2 : « Nouveau » sur Échange (échange avec Paul) et sur Profil (combat contre Paul) tant qu'ils restent à faire
+  const todoTrade = useGame((s) => (s.save ? phase2Todo(s.save.tutorial).trade : false));
+  const todoFight = useGame((s) => (s.save ? phase2Todo(s.save.tutorial).fight : false));
   const [toast, setToast] = useState<{ text: string; n: number } | null>(null);
   useEffect(() => {
     if (!toast) return;
@@ -94,6 +98,7 @@ export function TabBar({ state, navigation, insets, descriptors }: BottomTabBarP
               focused={focused}
               badge={badge}
               locked={locked}
+              fresh={(route.name === 'trade' && todoTrade) || (route.name === 'profile' && todoFight)}
               hint={hintTab === route.name && !focused ? TAB_HINT[hintTab] : undefined}
               onPress={() => {
                 if (locked) {
@@ -127,6 +132,7 @@ function TabItem({
   focused,
   badge,
   locked = false,
+  fresh = false,
   hint,
   onPress,
 }: {
@@ -136,6 +142,8 @@ function TabItem({
   badge?: string | number;
   /** Tuto : onglet pas encore débloqué (grisé, un cadenas). */
   locked?: boolean;
+  /** Tuto, phase 2 : petite pastille « Nouveau » (quelque chose à essayer ici). */
+  fresh?: boolean;
   /** Tuto : consigne et flèche au-dessus de l'onglet. */
   hint?: string;
   onPress(): void;
@@ -211,6 +219,11 @@ function TabItem({
       <Animated.Text numberOfLines={1} style={[styles.label, labelStyle, locked && { opacity: 0.35 }]}>
         {label}
       </Animated.Text>
+      {fresh ? (
+        <Animated.View entering={FadeIn.duration(250)} pointerEvents="none" style={styles.fresh}>
+          <Animated.Text style={styles.freshText}>NOUVEAU</Animated.Text>
+        </Animated.View>
+      ) : null}
       {hint ? <TutoArrow text={hint} gap={6} /> : null}
     </Pressable>
   );
@@ -277,6 +290,18 @@ const styles = StyleSheet.create({
     borderColor: colors.bgElevated,
   },
   badgeText: { fontFamily: fonts.bold, fontSize: 10, color: '#111' },
+  fresh: {
+    position: 'absolute',
+    top: -13,
+    alignSelf: 'center',
+    paddingHorizontal: 5,
+    height: 15,
+    borderRadius: 8,
+    justifyContent: 'center',
+    backgroundColor: colors.gold,
+    boxShadow: '0px 0px 8px rgba(247,201,72,0.7)',
+  },
+  freshText: { fontFamily: fonts.bold, fontSize: 8.5, letterSpacing: 0.6, color: '#141414' },
   lock: {
     position: 'absolute',
     bottom: -3,
