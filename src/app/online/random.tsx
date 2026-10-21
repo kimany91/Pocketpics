@@ -5,7 +5,7 @@
  */
 import { router, useIsFocused } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { BackHandler, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 
 import { AppText } from '../../components/AppText';
@@ -21,6 +21,7 @@ import { useMatch } from '../../net/match';
 import { useMatchmaking } from '../../net/matchmaking';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
+import { goBack, useHardwareBack } from '../../utils/nav';
 
 /** Ce qui s'affiche au fil de la recherche (le joueur ne sait pas ce qui se passe dessous). */
 const STEPS = [
@@ -68,15 +69,10 @@ export default function RandomBattleScreen() {
 
   const exit = () => {
     useMatchmaking.getState().cancel();
-    router.back();
+    goBack('/multi');
   };
-  useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      exit();
-      return true;
-    });
-    return () => sub.remove();
-  });
+  // retour d'Android : même sortie que la flèche
+  useHardwareBack(exit);
 
   const step = [...STEPS].reverse().find((s) => elapsed >= s.at) ?? STEPS[0];
 

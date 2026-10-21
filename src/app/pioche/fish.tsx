@@ -33,6 +33,7 @@ import { useSocial } from '../../net/social';
 import { useGame } from '../../state/game';
 import { colors } from '../../theme';
 import { haptic } from '../../utils/haptics';
+import { goBack } from '../../utils/nav';
 import { Ionicons } from '@expo/vector-icons';
 
 /** L'ami a ce délai pour accepter la demande : sinon la ligne casse (rien n'est payé). */
@@ -201,7 +202,7 @@ export default function PiocheFish() {
             </View>
             <AppText variant="caption">{error ?? 'La pioche n’a pas abouti. Rien n’a été payé.'}</AppText>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
-              <Button label="Retour" kind="secondary" style={{ flex: 1 }} onPress={() => router.back()} />
+              <Button label="Retour" kind="secondary" style={{ flex: 1 }} onPress={() => goBack()} />
               <Button label="Relancer" icon="refresh" style={{ flex: 1.3 }} onPress={recast} />
             </View>
           </Animated.View>
@@ -210,7 +211,7 @@ export default function PiocheFish() {
             <AppText variant="caption" style={{ textAlign: 'center' }}>
               {payment ? `${paymentLabel(payment)} payé seulement quand tu commenceras à ouvrir le paquet.` : 'Rien n’est payé tant que tu n’ouvres pas le paquet.'}
             </AppText>
-            {stage === 'pull' ? <Button label="Lâcher la ligne" kind="ghost" onPress={() => router.back()} /> : null}
+            {stage === 'pull' ? <Button label="Lâcher la ligne" kind="ghost" onPress={() => goBack()} /> : null}
           </View>
         ) : payment ? (
           <View style={styles.row}>

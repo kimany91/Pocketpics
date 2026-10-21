@@ -47,6 +47,7 @@ import { TutoArrow } from '../components/tuto/TutoArrow';
 import { colors, fonts } from '../theme';
 import { springs, useScreenFocus } from '../theme/motion';
 import { haptic } from '../utils/haptics';
+import { goBack } from '../utils/nav';
 
 export default function SoloScreen() {
   const insets = useSafeAreaInsets();
@@ -163,7 +164,7 @@ function RoundBack() {
       onPressOut={() => (press.value = withSpring(0, springs.release))}
       onPress={() => {
         haptic.tick();
-        router.back();
+        goBack('/battle');
       }}
       hitSlop={10}
       accessibilityLabel="Retour"

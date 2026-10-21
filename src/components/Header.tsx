@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -7,12 +6,13 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-na
 import { colors } from '../theme';
 import { springs } from '../theme/motion';
 import { haptic } from '../utils/haptics';
+import { goBack } from '../utils/nav';
 import { AppText } from './AppText';
 
 export function Header({ title, onBack, right }: { title: string; onBack?: () => void; right?: ReactNode }) {
   return (
     <View style={styles.row}>
-      <BackButton onPress={onBack ?? (() => router.back())} />
+      <BackButton onPress={onBack ?? (() => goBack())} />
       <AppText variant="heading" numberOfLines={1} style={styles.title}>
         {title}
       </AppText>

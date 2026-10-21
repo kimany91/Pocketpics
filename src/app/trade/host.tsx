@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
+import { useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Share, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -19,6 +19,7 @@ import { useGoToRoomWhenConnected } from '../../state/useTradeNavigation';
 import { tradeQrValue } from '../../trade/code';
 import { type TradeMode, useTrade } from '../../trade/session';
 import { colors } from '../../theme';
+import { goBack } from '../../utils/nav';
 
 export default function HostScreen() {
   const host = useTrade((s) => s.host);
@@ -58,7 +59,7 @@ export default function HostScreen() {
       <Header title="Héberger un échange" />
       <View style={styles.body}>
         {error && phase === 'idle' ? (
-          <Message icon="cloud-offline-outline" title="Impossible d’héberger" text={error} onBack={() => router.back()} onRetry={() => void host(mode)}>
+          <Message icon="cloud-offline-outline" title="Impossible d’héberger" text={error} onBack={() => goBack()} onRetry={() => void host(mode)}>
             <Button label={switchLabel(other)} kind="secondary" onPress={() => setMode(other)} />
           </Message>
         ) : !code ? (

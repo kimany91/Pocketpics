@@ -96,6 +96,7 @@ import { phase2Todo } from '../../game/tutorial';
 import type { Card } from '../../storage/model';
 import { CARD_RATIO, colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
+import { goBack, useHardwareBack } from '../../utils/nav';
 
 type Mode = 'idle' | 'menu' | 'timing' | 'confirmSwitch' | 'replace';
 
@@ -299,6 +300,11 @@ export default function FightScreen() {
   const [switchTo, setSwitchTo] = useState<number | null>(null);
   const [result, setResult] = useState<SideId | null>(null);
   const [quitting, setQuitting] = useState(false);
+  // bouton retour d'Android : pendant le combat, il ouvre « Abandonner ? » ; après, il quitte
+  useHardwareBack(() => {
+    if (result === null) setQuitting((q) => !q);
+    else goBack();
+  });
   const [soundOpen, setSoundOpen] = useState(false);
   /** Carte affichée en grand (3D + stats). */
   const [inspect, setInspect] = useState<{ side: SideId; index: number } | null>(null);
@@ -779,7 +785,7 @@ export default function FightScreen() {
     return (
       <View style={[styles.root, styles.center, { paddingTop: insets.top }]}>
         <AppText variant="heading">Combat introuvable</AppText>
-        <Button label="Retour" kind="secondary" style={{ marginTop: 16 }} onPress={() => router.back()} />
+        <Button label="Retour" kind="secondary" style={{ marginTop: 16 }} onPress={() => goBack()} />
       </View>
     );
   }
@@ -1181,7 +1187,7 @@ export default function FightScreen() {
                     if (friendly) useGame.getState().patchTuto({ fightDone: true });
                     else finishRanked(false);
                   }
-                  router.back();
+                  goBack();
                 }}
               />
             </View>
@@ -1715,7 +1721,7 @@ function ResultOverlay({
       ) : null}
       <Animated.View entering={FadeInDown.delay(won ? 900 : 650).springify().damping(16)} style={{ alignSelf: 'stretch', gap: 10, marginTop: mvp ? 20 : 30, paddingHorizontal: 32 }}>
         {canReveal ? <RevealGalaxyButton /> : null}
-        {tutoDone ? <Button label="Continuer" size="lg" icon="arrow-forward" onPress={() => router.back()} /> : null}
+        {tutoDone ? <Button label="Continuer" size="lg" icon="arrow-forward" onPress={() => goBack()} /> : null}
         {won && next && !tutoDone ? (
           <Button label={`Niveau ${next.n}`} size="lg" icon="arrow-forward" onPress={() => router.replace({ pathname: '/battle/deck', params: { level: String(next.n) } })} />
         ) : null}
@@ -1729,7 +1735,7 @@ function ResultOverlay({
             onPress={() => router.replace({ pathname: '/battle/fight', params: { level: String(levelN), deck, ...(challenge ? { challenge: '1' } : null) } })}
           />
         ) : null}
-        {!tutoDone ? <Button label="Retour à la carte" kind="secondary" onPress={() => router.back()} /> : null}
+        {!tutoDone ? <Button label="Retour à la carte" kind="secondary" onPress={() => goBack()} /> : null}
       </Animated.View>
     </Animated.View>
   );
@@ -1822,7 +1828,7 @@ function FriendlyResult({ outcome, opp, mvp, first }: { outcome: 'win' | 'loss' 
         </View>
       ) : null}
       <Animated.View entering={FadeInDown.delay(350)} style={{ alignSelf: 'stretch', gap: 10, marginTop: 28, paddingHorizontal: 32 }}>
-        <Button label="Retour" size="lg" onPress={() => router.back()} />
+        <Button label="Retour" size="lg" onPress={() => goBack()} />
       </Animated.View>
     </Animated.View>
   );
@@ -1926,7 +1932,7 @@ function OnlineResult({
           size="lg"
           onPress={() => {
             useSocial.getState().announce();
-            router.back();
+            goBack();
           }}
         />
       </Animated.View>

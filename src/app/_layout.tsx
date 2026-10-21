@@ -16,6 +16,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initSfx } from '../audio/sfx';
 import { AppText } from '../components/AppText';
 import { ChallengeOverlay } from '../components/ChallengeOverlay';
+import { ConfirmHost } from '../components/ConfirmHost';
 import { NoticeToast } from '../components/Notice';
 import { PaulWatcher } from '../components/tuto/PaulWatcher';
 import { TutoDoneMenu } from '../components/tuto/TutoDoneMenu';
@@ -99,6 +100,7 @@ export default function RootLayout() {
       <NoticeToast />
       <PiocheWatcher />
       <AdHost />
+      <ConfirmHost />
       <NotificationsSetup />
     </GestureHandlerRootView>
   );

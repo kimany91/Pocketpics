@@ -4,7 +4,7 @@
  */
 import { router, useIsFocused } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { BackHandler, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { AppText } from '../../components/AppText';
@@ -25,6 +25,7 @@ import { useGame } from '../../state/game';
 import { colors } from '../../theme';
 import { formatCodeInput } from '../../trade/code';
 import { haptic } from '../../utils/haptics';
+import { goBack, useHardwareBack } from '../../utils/nav';
 
 export default function JoinBattleScreen() {
   const phase = useMatch((s) => s.phase);
@@ -54,15 +55,10 @@ export default function JoinBattleScreen() {
 
   const exit = () => {
     useMatch.getState().leave();
-    router.back();
+    goBack('/multi');
   };
-  useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      exit();
-      return true;
-    });
-    return () => sub.remove();
-  });
+  // retour d'Android : même sortie que la flèche
+  useHardwareBack(exit);
 
   const submit = () => {
     const c = parseBattleCode(code);

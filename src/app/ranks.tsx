@@ -6,7 +6,7 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
+import { useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
@@ -20,6 +20,7 @@ import { DIVISIONS, DIVISION_POINTS, LAST_INDEX, TIERS, rankOf, shownMmr } from 
 import { useGame } from '../state/game';
 import { colors, fonts } from '../theme';
 import { haptic } from '../utils/haptics';
+import { goBack } from '../utils/nav';
 
 /** Hauteur d'une division sur la barre. */
 const STEP = 168;
@@ -197,7 +198,7 @@ export default function RanksScreen() {
 
       {/* en-tête fixe */}
       <LinearGradient colors={[colors.bg, `${colors.bg}EE`, 'transparent']} style={[styles.header, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.round} accessibilityLabel="Retour">
+        <Pressable onPress={() => goBack()} hitSlop={10} style={styles.round} accessibilityLabel="Retour">
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
         <AppText style={styles.title}>Rangs</AppText>

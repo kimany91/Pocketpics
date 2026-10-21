@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useIsFocused } from 'expo-router';
+import { useIsFocused } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, FlatList, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
   FadeInDown,
@@ -35,6 +35,7 @@ import { useTrade } from '../../trade/session';
 import { colors, fonts } from '../../theme';
 import { confirmAction } from '../../utils/confirm';
 import { haptic } from '../../utils/haptics';
+import { backToTabs, useHardwareBack } from '../../utils/nav';
 
 const cardOut = ZoomOut.duration(180);
 
@@ -51,7 +52,7 @@ export default function RoomScreen() {
 
   const exit = () => {
     t.leave();
-    router.dismissAll();
+    backToTabs('/trade');
   };
   const askExit = () => {
     if (t.phase === 'done' || t.phase === 'ended') return exit();
@@ -59,13 +60,8 @@ export default function RoomScreen() {
     confirmAction("Quitter l'échange ?", "L'échange sera annulé pour vous deux.", 'Quitter', exit, 'Rester');
   };
 
-  useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      askExit();
-      return true;
-    });
-    return () => sub.remove();
-  });
+  // retour d'Android : même sortie que la flèche
+  useHardwareBack(askExit);
 
   useEffect(() => {
     if (t.phase === 'ended') haptic.warning();

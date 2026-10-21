@@ -5,7 +5,7 @@
  */
 import { router, useIsFocused } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { BackHandler, Share, StyleSheet, View } from 'react-native';
+import { Share, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 
 import { AppText } from '../../components/AppText';
@@ -27,6 +27,7 @@ import { useSocial } from '../../net/social';
 import { CHALLENGE_TTL_MS } from '../../net/socialCore';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
+import { goBack, useHardwareBack } from '../../utils/nav';
 
 export default function HostBattleScreen() {
   const phase = useMatch((s) => s.phase);
@@ -72,15 +73,10 @@ export default function HostBattleScreen() {
   const exit = () => {
     if (useSocial.getState().outgoing) useSocial.getState().cancelChallenge();
     useMatch.getState().leave();
-    router.back();
+    goBack('/multi');
   };
-  useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      exit();
-      return true;
-    });
-    return () => sub.remove();
-  });
+  // retour d'Android : même sortie que la flèche
+  useHardwareBack(exit);
 
   const declined = outgoing?.state === 'declined';
   const expired = !!outgoing && left <= 0;

@@ -1,6 +1,6 @@
 /** Scanner un QR code : code ami (ajout) ou code de combat (rejoindre). */
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
+import { useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Linking, StyleSheet, View } from 'react-native';
@@ -15,6 +15,7 @@ import { useMatch } from '../../net/match';
 import { useSocial } from '../../net/social';
 import { parseFriendCode } from '../../net/socialCore';
 import { haptic } from '../../utils/haptics';
+import { goBack as navBack } from '../../utils/nav';
 
 export default function OnlineScanScreen() {
   const { for: target } = useLocalSearchParams<{ for?: string }>();
@@ -31,7 +32,7 @@ export default function OnlineScanScreen() {
     if (leaving.current) clearTimeout(leaving.current);
   }, []);
   const goBack = () => {
-    leaving.current = setTimeout(() => router.back(), 350);
+    leaving.current = setTimeout(() => navBack(friend ? '/profile' : '/multi'), 350);
   };
 
   const onScan = ({ data }: { data: string }) => {

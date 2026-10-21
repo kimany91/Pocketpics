@@ -9,7 +9,7 @@
  * On arrive ici par l'appui long sur une carte de la bibliothèque.
  */
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image as RNImage, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -27,6 +27,7 @@ import { cardImageUri } from '../../storage/disk';
 import { CARD_RATIO, colors } from '../../theme';
 import { useScreenFocus } from '../../theme/motion';
 import { haptic } from '../../utils/haptics';
+import { goBack } from '../../utils/nav';
 
 /** Marge entre la fenêtre de recadrage et les bords de la scène. */
 const PAD = 18;
@@ -119,7 +120,7 @@ export default function CropScreen() {
     }
     haptic.success();
     playSfx('up2', { volume: 0.4 });
-    router.back();
+    goBack();
   };
 
   // carte verrouillée lors d'un échange : son cadrage ne change plus
@@ -181,7 +182,7 @@ export default function CropScreen() {
           {missing ? null : (
             <Button label="Tout afficher" kind="secondary" icon="scan-outline" disabled={busy || !ready} style={{ flex: 1 }} onPress={showAll} />
           )}
-          <Button label={missing ? 'Retour' : 'Annuler'} kind="ghost" disabled={busy} style={{ flex: 1 }} onPress={() => router.back()} />
+          <Button label={missing ? 'Retour' : 'Annuler'} kind="ghost" disabled={busy} style={{ flex: 1 }} onPress={() => goBack()} />
         </View>
       </View>
     </Screen>

@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, FlatList, Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -57,6 +57,7 @@ import type { Card } from '../../storage/model';
 import { colors, fonts } from '../../theme';
 import { confirmAction } from '../../utils/confirm';
 import { haptic } from '../../utils/haptics';
+import { goBack, useHardwareBack } from '../../utils/nav';
 
 const DECK_SIZE = 4;
 
@@ -115,18 +116,15 @@ export default function DeckScreen() {
   const leaveOnline = () => {
     const go = () => {
       match.leave();
-      router.back();
+      goBack('/multi');
     };
     if (match.phase !== 'lobby') return go();
     confirmAction('Quitter le combat ?', 'Le combat n’a pas commencé : ça ne compte pas pour ton rang.', 'Quitter', go, 'Rester');
   };
-  useEffect(() => {
-    if (!online) return;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      leaveOnline();
-      return true;
-    });
-    return () => sub.remove();
+  // retour d'Android : en ligne, même sortie que la flèche ; sinon retour normal
+  useHardwareBack(() => {
+    if (!online) return false;
+    leaveOnline();
   });
 
   if (online && (match.phase === 'over' || match.phase === 'idle' || match.oppGone)) {
@@ -138,7 +136,7 @@ export default function DeckScreen() {
           text={match.oppGone ? `${match.opp?.name ?? 'Ton adversaire'} est parti.` : (match.error ?? 'La connexion a été perdue.')}
           onBack={() => {
             match.leave();
-            router.back();
+            goBack('/multi');
           }}
         />
       </View>

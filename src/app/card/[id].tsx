@@ -49,6 +49,7 @@ import { useGame } from '../../state/game';
 import { MAX_PINNED, type Card } from '../../storage/model';
 import { CARD_RATIO, colors, fonts } from '../../theme';
 import { haptic, revealHaptics } from '../../utils/haptics';
+import { goBack } from '../../utils/nav';
 import { useMotionTilt } from '../../utils/motionTilt';
 
 const AnimatedBlur = Animated.createAnimatedComponent(BlurView);
@@ -214,10 +215,13 @@ export default function CardScreen() {
   };
 
   /* ------------------------------ Sortie ------------------------------ */
+  // une seule sortie, même si l'animation et le filet de sécurité arrivent tous les deux
+  const closed = useRef(false);
   const finishClose = () => {
+    if (closed.current) return;
+    closed.current = true;
     useCollectionView.getState().setOpenId(null);
-    if (router.canGoBack()) router.back();
-    else router.replace('/collection');
+    goBack('/collection');
   };
   const close = async () => {
     if (closing) return;
@@ -231,6 +235,8 @@ export default function CardScreen() {
     rotX.value = withTiming(0, { duration: 220 });
     rotY.value = withTiming(Math.round(rotY.value / 360) * 360, { duration: 240, easing: Easing.out(Easing.cubic) });
     bg.value = withTiming(0, { duration: 300, easing: Easing.in(Easing.quad) });
+    // filet de sécurité : si l'animation est interrompue, on sort quand même
+    setTimeout(finishClose, 700);
     if (onScreen && rect && stage) {
       // Retour dans la grille, à la place de sa miniature.
       const to = { duration: 300, easing: Easing.inOut(Easing.cubic) };

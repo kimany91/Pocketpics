@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +10,7 @@ import { PACK_RARITIES, RARITIES, formatChance } from '../game/rarity';
 import { useGame } from '../state/game';
 import { GAME_VERSION, platformLabel } from '../game/version';
 import { resetWebSave } from '../storage/disk';
+import { goBack } from '../utils/nav';
 import { colors } from '../theme';
 
 export default function RatesScreen() {
@@ -19,7 +19,7 @@ export default function RatesScreen() {
     <View style={styles.root}>
       <View style={styles.header}>
         <AppText variant="title">Taux d'obtention</AppText>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Fermer">
+        <Pressable onPress={() => goBack('/')} hitSlop={12} accessibilityLabel="Fermer">
           <Ionicons name="close" size={24} color={colors.textDim} />
         </Pressable>
       </View>
