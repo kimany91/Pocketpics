@@ -37,6 +37,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { type AdResult, showRewardedAd } from '../../ads/rewarded';
 import { ONLINE_TRACK, startBattleMusic, stopBattleMusic } from '../../audio/music';
 import { type Sfx, playSfx } from '../../audio/sfx';
 import { type Level, TOTAL_LEVELS, getLevel, hiddenAdjust, levelFighters, levelMmr, starsFor } from '../../battle/levels';
@@ -59,6 +60,7 @@ import {
   isEnraged,
   other,
   replace,
+  reviveSide,
   resolveAttack,
 } from '../../battle/engine';
 import { ATTACK_KIND_LABEL, type Attack, type AttackKind, BATTLE, STATUS_KINDS, kindOf } from '../../battle/stats';
@@ -211,6 +213,8 @@ export default function FightScreen() {
   const [endReason, setEndReason] = useState<'gone' | 'lost' | null>(null);
   /** L'adversaire est parti : le combat ne compte pour personne. */
   const [cancelled, setCancelled] = useState(false);
+  /** Solo : déjà revenu une fois grâce à une pub (une seule fois par combat). */
+  const [revived, setRevived] = useState(false);
   const [turnLeft, setTurnLeft] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<Mode>('idle');
@@ -582,6 +586,27 @@ export default function FightScreen() {
       playSfx('lose');
       haptic.warning();
     }
+  };
+
+  /**
+   * Solo, après une défaite : une pub regardée jusqu'au bout fait revenir la plus
+   * forte des cartes tombées (moitié de ses PV) et le combat reprend.
+   */
+  const revive = async (): Promise<AdResult> => {
+    const r = await showRewardedAd();
+    if (r !== 'rewarded' || !battle || !alive.current) return r;
+    const back = reviveSide(battle, 0);
+    asked.current = null;
+    setRevived(true);
+    setMvp(null);
+    setShown(back);
+    setBattle(back);
+    setEndReason(null);
+    setResult(null);
+    music.current = startBattleMusic(level?.world.id ?? 1);
+    playSfx('heal');
+    haptic.success();
+    return r;
   };
 
   // Ses images arrivent une par une pendant le combat : la première sert de décor.
@@ -1040,6 +1065,7 @@ export default function FightScreen() {
             mvp={mvp}
             challenge={params.challenge === '1'}
             challengeWon={challengeWon}
+            onRevive={!revived && params.challenge !== '1' && result === 1 ? revive : undefined}
           />
         ) : null
       ) : null}
@@ -1458,6 +1484,7 @@ function ResultOverlay({
   mvp,
   challenge = false,
   challengeWon = false,
+  onRevive,
 }: {
   won: boolean;
   levelN: number;
@@ -1470,6 +1497,8 @@ function ResultOverlay({
   challengeWon?: boolean;
   /** Victoire contre le Grand Portrait, carte Galaxy pas encore gagnée : célébration cosmique et bouton de révélation. */
   galaxy?: boolean;
+  /** Défaite en solo : revivre en regardant une pub (absent si déjà fait, ou pendant le défi du jour). */
+  onRevive?: () => Promise<AdResult>;
 }) {
   const { width, height } = useWindowDimensions();
   // suivi en direct : une fois la carte révélée (retour de l'écran d'ouverture), le bouton disparaît
@@ -1584,17 +1613,48 @@ function ResultOverlay({
         {won && next ? (
           <Button label={`Niveau ${next.n}`} size="lg" icon="arrow-forward" onPress={() => router.replace({ pathname: '/battle/deck', params: { level: String(next.n) } })} />
         ) : null}
+        {!won && onRevive ? <ReviveButton onRevive={onRevive} /> : null}
         {!won ? (
           <Button
             label={challenge ? 'Retenter le défi' : 'Réessayer'}
             size="lg"
             icon="refresh"
+            kind={onRevive ? 'secondary' : 'primary'}
             onPress={() => router.replace({ pathname: '/battle/fight', params: { level: String(levelN), deck, ...(challenge ? { challenge: '1' } : null) } })}
           />
         ) : null}
         <Button label="Retour à la carte" kind="secondary" onPress={() => router.back()} />
       </Animated.View>
     </Animated.View>
+  );
+}
+
+/** « Revivre » : une pub, et la plus forte des cartes tombées revient au combat (une fois par combat). */
+function ReviveButton({ onRevive }: { onRevive(): Promise<AdResult> }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  return (
+    <View style={{ gap: 6 }}>
+      <Button
+        label="Revivre · regarder une pub"
+        icon="heart"
+        size="lg"
+        shimmer
+        loading={busy}
+        onPress={async () => {
+          if (busy) return;
+          setBusy(true);
+          setNote(null);
+          const r = await onRevive();
+          setBusy(false);
+          if (r === 'unavailable') setNote('Aucune pub disponible pour le moment.');
+          else if (r === 'skipped') setNote('Pub fermée avant la fin : pas de deuxième chance.');
+        }}
+      />
+      <AppText variant="caption" style={{ textAlign: 'center' }}>
+        {note ?? 'Ta meilleure carte tombée revient avec la moitié de ses PV. Une fois par combat.'}
+      </AppText>
+    </View>
   );
 }
 

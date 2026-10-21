@@ -498,6 +498,29 @@ export function act(input: Battle, action: Action, rng: Rng = Math.random): { ba
 }
 
 /** Envoie une nouvelle carte après un K.O. (ne coûte pas de tour). */
+/**
+ * Revivre (mode solo, après une pub) : la plus forte des cartes tombées de ce
+ * camp revient avec une part de ses PV, sans effets en cours, et c'est à elle
+ * de jouer. Le combat reprend là où il s'était arrêté.
+ */
+export function reviveSide(input: Battle, side: SideId, fraction = 0.5): Battle {
+  const fallen = input.sides[side].fighters
+    .map((f, i) => ({ f, i }))
+    .filter(({ f }) => f.hp <= 0)
+    .sort((a, b) => cardStrength(b.f) - cardStrength(a.f))[0];
+  if (!fallen) return input;
+  const b = clone(input);
+  const s = b.sides[side];
+  const f = s.fighters[fallen.i];
+  f.hp = Math.max(1, Math.round(f.maxHp * fraction));
+  Object.assign(f, { stun: 0, guard: 0, dodge: 0, focus: false, marked: false, weak: false, jammed: 0, poison: 0, poisonDmg: 0, chain: 0 });
+  s.active = fallen.i;
+  b.winner = null;
+  b.mustReplace = null;
+  b.turn = side;
+  return b;
+}
+
 export function replace(input: Battle, side: SideId, to: number): { battle: Battle; events: BattleEvent[] } {
   if (input.mustReplace !== side) throw new Error('Aucun remplacement attendu');
   const target = input.sides[side].fighters[to];

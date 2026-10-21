@@ -28,6 +28,8 @@ import { QuestPill } from '../../components/QuestEntry';
 import { PIOCHE_COLOR, startFriendDraw, useFriendDraw } from '../../components/pioche/entry';
 import { Screen } from '../../components/Screen';
 import { DRAW_INTERVAL_MS, MAX_STORED_DRAWS, formatCountdown } from '../../game/draws';
+import { showRewardedAd } from '../../ads/rewarded';
+import { ADS_PER_PACK, adPacksLeft, rollAds } from '../../game/ads';
 import { DRAW_PRICE } from '../../game/economy';
 import { galleryPhotoCount, isDesktopBrowser, openLimitedPicker } from '../../game/gallery';
 import { RARITIES, getRarity } from '../../game/rarity';
@@ -212,13 +214,16 @@ export default function DrawScreen() {
         ) : (
           <>
             {available === 0 ? (
-              <BuyDraw
-                coins={coins}
-                onBuy={() => {
-                  if (!buyDraw()) return;
-                  haptic.success();
-                }}
-              />
+              <>
+                <BuyDraw
+                  coins={coins}
+                  onBuy={() => {
+                    if (!buyDraw()) return;
+                    haptic.success();
+                  }}
+                />
+                <AdPack />
+              </>
             ) : (
               <Button label="Ouvrir un paquet" icon="sparkles" size="lg" disabled={!canOpen} onPress={open} />
             )}
@@ -316,6 +321,52 @@ function PiocheBadge({ active, count, style, onPress }: { active: boolean; count
           <AppText style={styles.piocheMark}>!</AppText>
         </Animated.View>
       </Pressable>
+    </View>
+  );
+}
+
+/**
+ * Plus de tirage : 2 pubs regardées jusqu'au bout = 1 paquet, 2 fois par jour.
+ * La deuxième pub ouvre directement le paquet gagné.
+ */
+function AdPack() {
+  const ads = useGame((s) => s.save?.ads);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  if (!ads) return null;
+  const state = rollAds(ads, Date.now());
+  const left = adPacksLeft(state, Date.now());
+  const watch = async () => {
+    if (busy) return;
+    setBusy(true);
+    setNote(null);
+    haptic.light();
+    const r = await showRewardedAd();
+    setBusy(false);
+    if (r === 'unavailable') return setNote('Aucune pub disponible pour le moment. Réessaie un peu plus tard.');
+    if (r === 'skipped') return setNote('Pub fermée avant la fin : pas de récompense.');
+    const got = useGame.getState().rewardAdForPack();
+    if (got === 'pack') {
+      haptic.success();
+      router.push('/open');
+    } else if (got === 'progress') {
+      haptic.medium();
+      setNote('Encore une pub et le paquet est à toi !');
+    }
+  };
+  const label = left === 0 ? 'Plus de paquet pub aujourd’hui' : state.watched > 0 ? 'Regarder la 2ᵉ pub · 1 paquet' : 'Regarder 2 pubs · 1 paquet';
+  return (
+    <View style={{ gap: 6, marginTop: 4 }}>
+      <Button label={label} icon="play-circle" kind="secondary" size="lg" loading={busy} disabled={left === 0} onPress={() => void watch()} />
+      <View style={styles.adMeta}>
+        {Array.from({ length: ADS_PER_PACK }).map((_, i) => (
+          <View key={i} style={[styles.adDot, i < state.watched && styles.adDotOn]} />
+        ))}
+        {/* un message (pub fermée trop tôt, encore une pub…) prend la place du compteur, pour ne pas pousser le paquet */}
+        <AppText variant="caption" style={note ? { color: colors.text } : undefined}>
+          {note ?? `${left} paquet${left > 1 ? 's' : ''} pub restant${left > 1 ? 's' : ''} aujourd’hui`}
+        </AppText>
+      </View>
     </View>
   );
 }
@@ -424,6 +475,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   stage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  adMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  adDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.borderStrong },
+  adDotOn: { backgroundColor: colors.gold, borderColor: colors.gold },
   piocheWrap: { position: 'absolute', width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   piocheRing: { position: 'absolute', width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: PIOCHE_COLOR },
   piocheBadge: {

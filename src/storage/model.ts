@@ -7,6 +7,7 @@
  *  - les champs inconnus (venant d'une version plus récente) sont conservés tels quels ;
  *  - une carte n'est jamais supprimée par une migration, seulement complétée.
  */
+import { type AdState, initialAds, migrateAds } from '../game/ads';
 import { type BattleStats, normalizeStats } from '../battle/stats';
 import type { DrawState } from '../game/draws';
 import { initialDrawState } from '../game/draws';
@@ -127,6 +128,8 @@ export interface SaveState {
   quests: QuestState;
   /** La page qui explique la Pioche amicale a été lue (elle ne s'affiche qu'une fois). */
   friendDrawIntro: boolean;
+  /** Paquets gagnés avec des pubs aujourd'hui (ajouté après : à zéro si absent). */
+  ads: AdState;
   [extra: string]: unknown;
 }
 
@@ -219,6 +222,7 @@ export function createInitialState(now = Date.now()): SaveState {
     pinned: [],
     quests: initialQuests(now),
     friendDrawIntro: false,
+    ads: initialAds(now),
   };
 }
 
@@ -317,5 +321,6 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     pinned: Array.isArray(s.pinned) ? s.pinned.filter((x): x is string => typeof x === 'string').slice(0, MAX_PINNED) : [],
     quests: migrateQuests(s.quests, now),
     friendDrawIntro: s.friendDrawIntro === true,
+    ads: migrateAds(s.ads, now),
   };
 }

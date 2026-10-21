@@ -4,6 +4,7 @@ import { MAX_STORED_DRAWS, computeDraws, consumeDraw, type DrawStatus } from '..
 import { setMusicVolume } from '../audio/music';
 import { setSfxVolume } from '../audio/sfx';
 import { ATTACK_NAME_MAX } from '../battle/stats';
+import { watchedAd } from '../game/ads';
 import { DRAW_PRICE, type SoloReward, soloReward } from '../game/economy';
 import { DIVINE_GATE, TOTAL_LEVELS, needsDivine } from '../battle/levels';
 import { planPack, rollLucky } from '../game/luck';
@@ -71,6 +72,11 @@ interface GameStore {
   claimGalaxy(): Promise<Card | null>;
   /** Achète un tirage avec des pièces (seulement quand il n'en reste plus). */
   buyDraw(): boolean;
+  /**
+   * Une pub regardée jusqu'au bout pour un paquet : à la deuxième, un tirage
+   * est ajouté (`'pack'`). `null` si la limite du jour est atteinte.
+   */
+  rewardAdForPack(): 'pack' | 'progress' | null;
   /** Début d'un combat en ligne classé : la défaite est comptée d'avance. */
   startRanked(oppMmr: number, opp: string): void;
   /** Fin d'un combat en ligne classé. */
@@ -434,6 +440,17 @@ export const useGame = create<GameStore>((set, get) => ({
     persistState(next);
     set({ save: next });
     return true;
+  },
+
+  rewardAdForPack() {
+    const save = get().save;
+    if (!save) return null;
+    const res = watchedAd(save.ads, Date.now());
+    if (!res) return null;
+    const next: SaveState = { ...save, ads: res.ads, bonusDraws: save.bonusDraws + (res.pack ? 1 : 0) };
+    persistState(next);
+    set({ save: next });
+    return res.pack ? 'pack' : 'progress';
   },
 
   startRanked(oppMmr, opp) {
