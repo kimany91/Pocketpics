@@ -20,7 +20,7 @@ export function startFriendDraw(code?: string) {
     router.push(code ? { pathname: '/pioche/intro', params: { friend: code } } : '/pioche/intro');
     return;
   }
-  router.push(code ? { pathname: '/pioche/ask', params: { friend: code } } : '/pioche/pick');
+  router.push(code ? { pathname: '/pioche/fish', params: { friend: code } } : '/pioche/fish');
 }
 
 /**

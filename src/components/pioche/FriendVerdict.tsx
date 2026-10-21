@@ -129,7 +129,7 @@ export function RepiocheButton() {
       size="lg"
       onPress={() => {
         haptic.medium();
-        router.replace({ pathname: '/pioche/ask', params: { friend: friend.code, again: '1' } });
+        router.replace({ pathname: '/pioche/fish', params: { friend: friend.code, again: '1' } });
       }}
     />
   );

@@ -37,7 +37,7 @@ export default function PiocheIntro() {
   const go = () => {
     haptic.success();
     useGame.getState().seeFriendDrawIntro();
-    router.replace(friend ? { pathname: '/pioche/ask', params: { friend } } : '/pioche/pick');
+    router.replace(friend ? { pathname: '/pioche/fish', params: { friend } } : '/pioche/fish');
   };
   return (
     <Screen edges={['top', 'bottom']}>

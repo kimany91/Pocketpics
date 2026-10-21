@@ -11,4 +11,4 @@ export const setCurrentPath = (path: string) => {
 
 /** Le joueur est en plein combat, échange, ouverture de paquet ou autre pioche. */
 // (l'écran de la Pioche amicale de l'ami, une fois la pioche finie, accepte la suivante)
-export const inBusyScreen = () => /^\/(open|battle|trade|online|pioche\/(ask|intro|pick)|card\/crop)/.test(current);
+export const inBusyScreen = () => /^\/(open|battle|trade|online|pioche\/(fish|intro)|card\/crop)/.test(current);

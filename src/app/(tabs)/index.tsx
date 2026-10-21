@@ -169,7 +169,8 @@ export default function DrawScreen() {
             active={focused}
             count={friendDraw.ready.length}
             style={{ transform: [{ translateX: packW * 0.5 - 4 }, { translateY: -packW * PACK_RATIO * 0.5 + 4 }] }}
-            onPress={() => startFriendDraw(friendDraw.ready.length === 1 ? friendDraw.ready[0].code : undefined)}
+            // la canne remonte la liste de tous les amis : on choisit dans l'eau
+            onPress={() => startFriendDraw()}
           />
         ) : null}
       </Rise>
