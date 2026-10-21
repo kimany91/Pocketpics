@@ -2,6 +2,11 @@
  * Ajouter un ami : son pseudo et ses 4 caractères (« Léo#7F3K », « Léo #7F3K »
  * ou « Léo7F3K », peu importe), ou son QR code. Le jeu cherche le joueur dans
  * l'annuaire du relais, puis l'ajoute. Même bloc sur l'onglet Profil et sur l'écran Amis.
+ *
+ * La démo ouverte sur claude.ai ne peut joindre que le canal de claude.ai (les
+ * relais publics y sont bloqués), alors que l'app et le fichier HTML ouvert
+ * ailleurs passent par les relais publics : ces deux versions ne se voient pas.
+ * On le dit clairement plutôt que « joueur introuvable ».
  */
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -13,6 +18,7 @@ import { playSfx } from '../../audio/sfx';
 import { PAUL_CODE, PAUL_HANDLE, isPaulInput } from '../../game/paul';
 import { useSocial } from '../../net/social';
 import { parseFriendInput } from '../../net/socialCore';
+import { inClaudeViewer } from '../../trade/roomRelay';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
@@ -26,6 +32,7 @@ export function FriendAdd({ onAdded, hint }: { onAdded(code: string): void; /** 
   const addFriend = useSocial((s) => s.addFriend);
   const [draft, setDraft] = useState('');
   const [searching, setSearching] = useState(false);
+  const viewer = inClaudeViewer();
   const [note, setNote] = useState<{ text: string; ok: boolean; n: number } | null>(null);
   const [shakes, setShakes] = useState(0);
   const shake = useShake(shakes);
@@ -62,7 +69,13 @@ export function FriendAdd({ onAdded, hint }: { onAdded(code: string): void; /** 
       setSearching(true);
       const found = await useSocial.getState().findPlayer(parsed.key);
       setSearching(false);
-      if (!found) return fail(`Aucun joueur « ${raw.trim()} ». Vérifie son pseudo et ses 4 caractères (il doit avoir ouvert le jeu depuis la dernière mise à jour).`);
+      if (!found)
+        return fail(
+          `Aucun joueur « ${raw.trim()} ». Vérifie son pseudo et ses 4 caractères, et qu'il a le jeu ouvert. ` +
+            (inClaudeViewer()
+              ? 'Ici (lien claude.ai), tu ne trouves que les joueurs qui ont ouvert ce même lien : pas ceux de l’app ni du fichier HTML.'
+              : 'S’il joue sur le lien claude.ai, vous ne pouvez pas vous voir : ouvrez tous les deux la même version (l’app ou le fichier HTML).'),
+        );
       code = found.code;
       hint = { name: found.name, tag: found.tag, push: found.pt };
     }
@@ -111,6 +124,14 @@ export function FriendAdd({ onAdded, hint }: { onAdded(code: string): void; /** 
           </Pressable>
         ) : null}
       </Animated.View>
+      {viewer ? (
+        <View style={styles.viewer}>
+          <Ionicons name="information-circle-outline" size={15} color={colors.textDim} />
+          <AppText variant="caption" style={{ flex: 1 }}>
+            Version claude.ai : seuls les joueurs qui ont ouvert ce même lien peuvent te trouver. Ceux de l’app ou du fichier HTML ne sont pas visibles ici.
+          </AppText>
+        </View>
+      ) : null}
       {party ? (
         <View pointerEvents="none" style={styles.party}>
           <Burst trigger={party} colors={[colors.success, colors.gold, '#FFFFFF']} count={22} radius={120} />
@@ -146,6 +167,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   note: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  viewer: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 8 },
   party: { position: 'absolute', left: '40%', bottom: 30, width: 0, height: 0, alignItems: 'center', justifyContent: 'center' },
   scan: { width: 50, height: 50, borderRadius: 14, backgroundColor: colors.surface2, alignItems: 'center', justifyContent: 'center' },
 });
