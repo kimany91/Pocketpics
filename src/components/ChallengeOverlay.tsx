@@ -1,5 +1,5 @@
 /**
- * Défi (ou invitation à échanger) reçu d'un ami : une carte qui tombe du haut
+ * Défi (ou invitation à échanger, ou demande de Pioche amicale) reçu d'un ami : une carte qui tombe du haut
  * de l'écran, où qu'on soit dans l'app, avec son rang. Elle se pose, tremble,
  * et sa bordure s'allume ; un anneau autour de l'emblème montre le temps
  * restant. Accepter rejoint son combat (ou son échange) ; sans réponse,
@@ -134,6 +134,11 @@ export function ChallengeOverlay() {
               </AppText>
             </View>
           </View>
+          {draw ? (
+            <AppText variant="caption" style={{ lineHeight: 17 }}>
+              5 photos de ta galerie au hasard deviennent son paquet. Tu regardes l’ouverture en direct et tu valides ou refuses ses cartes à la fin.
+            </AppText>
+          ) : null}
           <View style={styles.buttons}>
             <Button label="Refuser" kind="secondary" style={{ flex: 1 }} onPress={decline} />
             <Button
@@ -142,7 +147,8 @@ export function ChallengeOverlay() {
               style={{ flex: 1.3 }}
               onPress={() => {
                 const c = accept();
-                if (c) router.push(c.kind === 'trade' ? '/trade/join' : c.kind === 'draw' ? '/pioche/give' : '/online/join');
+                // la pioche : son écran s'ouvre dès que le téléphone rejoint (PiocheWatcher)
+                if (c && c.kind !== 'draw') router.push(c.kind === 'trade' ? '/trade/join' : '/online/join');
               }}
             />
           </View>

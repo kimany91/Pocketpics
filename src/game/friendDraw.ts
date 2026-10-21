@@ -23,7 +23,7 @@ import type { SaveState } from '../storage/model';
 
 /** Espace de noms des salons de pioche sur le relais. */
 export const PIOCHE_NS = 'pioche/';
-export const PIOCHE_VERSION = 2;
+export const PIOCHE_VERSION = 3;
 /** Temps laissé à l'ami pour valider ou refuser, une fois le paquet ouvert. */
 export const VERDICT_TTL_MS = 60_000;
 /** Prix d'une pioche quand il ne reste aucun tirage : celui d'un paquet. */

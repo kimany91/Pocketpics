@@ -1,8 +1,9 @@
 /**
  * Pioche amicale, côté celui qui pioche : une partie de pêche (voir
  * FishingScene). On lance la ligne, ses amis remontent à la surface, on touche
- * celui chez qui piocher, la ligne tire pendant que son téléphone prépare les
- * photos, puis elle casse (refus, pas de réponse) ou ramène un paquet. Ensuite,
+ * celui chez qui piocher : il reçoit une demande (accepter ou refuser). La
+ * ligne tire pendant qu'il répond puis prépare ses photos ; elle casse s'il
+ * refuse (ou ne répond pas), sinon elle ramène un paquet. Ensuite,
  * l'ouverture continue comme avant (payée au premier coup de déchirure,
  * l'ami regarde en direct et décide à la fin).
  *
@@ -30,7 +31,7 @@ import { colors } from '../../theme';
 import { haptic } from '../../utils/haptics';
 import { Ionicons } from '@expo/vector-icons';
 
-/** Le téléphone de l'ami rejoint tout seul : sans nouvelles au bout de ce délai, la ligne casse (rien n'est payé). */
+/** L'ami a ce délai pour accepter la demande : sinon la ligne casse (rien n'est payé). */
 const JOIN_TIMEOUT_MS = 60_000;
 /** On voit la ligne tirer au moins ce temps-là, même si l'ami répond tout de suite. */
 const MIN_PULL_MS = 2600;
@@ -131,8 +132,8 @@ export default function PiocheFish() {
       ? `Prise ! Le paquet de ${name}`
       : phase === 'waiting'
         ? chosen && !isOnline(chosen.code)
-          ? `Notification envoyée à ${name}…`
-          : `Ça tire… ${name} va mordre`
+          ? `Notification envoyée à ${name}… il doit accepter`
+          : `Ça tire… ${name} doit accepter`
         : phase === 'preparing'
           ? `${name} mord ! Il prépare ses photos`
           : phase === 'sending'

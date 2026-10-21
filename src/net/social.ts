@@ -305,20 +305,16 @@ export const useSocial = create<SocialStore>((set, get) => {
           // on n'écarte que ceux d'une horloge vraiment fantaisiste)
           if (!friend || Math.abs(now() - m.at) > PRESENCE_MAX_SKEW_MS || get().challenge?.room === m.room || handledRooms.has(m.room)) return;
           const kind = m.kind === 'trade' ? 'trade' : m.kind === 'draw' ? 'draw' : 'fight';
-          if (kind === 'draw') {
-            // Pioche amicale : pas de oui/non au début, le téléphone rejoint tout seul
-            // (l'ami regarde l'ouverture en direct et ne décide qu'à la fin).
-            // Seulement s'il n'est pas en plein combat, échange ou ouverture.
-            const occupied = piocheBusy() || useTrade.getState().phase !== 'idle' || useMatch.getState().phase !== 'idle' || inBusyScreen();
-            handledRooms.add(m.room);
-            if (occupied) sendTo(m.from, { k: 'decline', from: mine, room: m.room, at: now() });
-            else void usePioche.getState().give(m.room, { code: m.from, name: friend.name || m.name });
-            return;
-          }
-          // déjà en combat (ou déjà en échange) : on refuse tout de suite
-          const busy = kind === 'trade' ? useTrade.getState().phase !== 'idle' : useMatch.getState().phase !== 'idle';
+          // déjà en combat (ou déjà en échange, ou en pleine pioche) : on refuse tout de suite
+          const busy =
+            kind === 'trade'
+              ? useTrade.getState().phase !== 'idle'
+              : kind === 'draw'
+                ? piocheBusy() || useTrade.getState().phase !== 'idle' || useMatch.getState().phase !== 'idle' || inBusyScreen()
+                : useMatch.getState().phase !== 'idle';
           if (busy) {
-            sendTo(m.from, { k: 'decline', from: mine, room: m.room, at: now() });
+            handledRooms.add(m.room);
+            sendTo(m.from, { k: 'decline', from: mine, room: m.room, at: now(), busy: true });
             return;
           }
           set({ challenge: { kind, from: m.from, name: friend.name || m.name, mmr: m.mmr, room: m.room, at: now() } });
@@ -328,7 +324,7 @@ export const useSocial = create<SocialStore>((set, get) => {
           const out = get().outgoing;
           if (out && out.room === m.room && out.to === m.from) {
             set({ outgoing: { ...out, state: 'declined' } });
-            if (out.kind === 'draw') usePioche.getState().declined();
+            if (out.kind === 'draw') usePioche.getState().declined(m.busy === true);
           }
           return;
         }
@@ -507,6 +503,7 @@ export const useSocial = create<SocialStore>((set, get) => {
       if (c) handledRooms.add(c.room);
       if (!c || now() - c.at > CHALLENGE_TTL_MS) return null;
       if (c.kind === 'trade') void useTrade.getState().join({ kind: 'online', code: c.room });
+      else if (c.kind === 'draw') void usePioche.getState().give(c.room, { code: c.from, name: c.name });
       else void useMatch.getState().join(c.room, { friend: { code: c.from, name: c.name } });
       return c;
     },

@@ -22,7 +22,7 @@ import { colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
 
 const STEPS: { icon: keyof typeof Ionicons.glyphMap; title: string; text: string }[] = [
-  { icon: 'people', title: 'Demande à un ami en ligne', text: 'Il doit avoir le jeu ouvert. Son téléphone tire 5 photos au hasard dans sa galerie : elles deviennent ton paquet.' },
+  { icon: 'people', title: 'Demande à un ami en ligne', text: 'Il reçoit ta demande et l’accepte ou la refuse. S’il accepte, son téléphone tire 5 photos au hasard dans sa galerie : elles deviennent ton paquet.' },
   {
     icon: 'wallet',
     title: 'Payé quand tu ouvres',

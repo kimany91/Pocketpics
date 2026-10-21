@@ -157,7 +157,7 @@ export type SocialMsg =
    * ou demande de Pioche amicale (`kind: 'draw'` : `room` est le salon de la pioche).
    */
   | { k: 'challenge'; from: string; name: string; mmr: number; room: string; at: number; kind?: 'trade' | 'draw' }
-  | { k: 'decline'; from: string; room: string; at: number }
+  | { k: 'decline'; from: string; room: string; at: number; busy?: boolean }
   | { k: 'cancel'; from: string; room: string; at: number }
   /** « Montre-moi les cartes épinglées sur ton profil. » */
   | { k: 'pins?'; from: string; at: number }

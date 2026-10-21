@@ -1,6 +1,5 @@
 /**
- * Pioche amicale, côté l'ami : l'écran s'ouvre tout seul quand la demande
- * arrive. Son téléphone envoie des photos tirées au hasard, puis il regarde
+ * Pioche amicale, côté l'ami : l'écran s'ouvre quand il accepte la demande. Son téléphone envoie des photos tirées au hasard, puis il regarde
  * en direct son ami ouvrir le paquet, carte par carte. Seulement à la fin, il
  * valide (son ami garde les cartes) ou refuse (elles lui sont retirées, sans
  * remboursement). Ses photos restent à lui dans tous les cas.

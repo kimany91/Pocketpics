@@ -5,9 +5,9 @@
  *  - `asker` : celui qui pioche. Il ouvre un salon (l'écran envoie l'invitation),
  *    reçoit les photos, puis ouvre le paquet : c'est payé dès qu'il commence à
  *    déchirer. Ses révélations partent en direct chez l'ami.
- *  - `giver` : l'ami. Son téléphone rejoint la pioche tout seul (pas de oui/non
- *    au début), envoie des photos tirées au hasard, montre l'ouverture en
- *    direct, et seulement à la fin il valide ou refuse.
+ *  - `giver` : l'ami. Il reçoit une demande (accepter ou refuser, comme un
+ *    échange). S'il accepte, son téléphone envoie des photos tirées au hasard,
+ *    montre l'ouverture en direct, et à la fin il valide ou refuse les cartes.
  */
 import { create } from 'zustand';
 
@@ -83,7 +83,8 @@ interface PiocheStore {
   /** Ouvre le salon d'une pioche chez cet ami. Rend le code du salon, ou `null`. */
   ask(friend: { code: string; name: string }): Promise<string | null>;
   /** L'ami n'a pas pu recevoir la demande (occupé). */
-  declined(): void;
+  /** L'ami a dit non à la demande (`busy` : il était occupé). */
+  declined(busy: boolean): void;
   /** Personne n'a rejoint à temps. */
   expired(): void;
   /** asker : il commence à déchirer le paquet → paiement et cartes. `null` s'il ne peut plus payer. */
@@ -353,16 +354,21 @@ export const usePioche = create<PiocheStore>((set, get) => {
       }
     },
 
-    declined() {
+    declined(busy) {
       const s = get();
       if (s.role !== 'asker' || s.phase !== 'waiting') return;
-      end(`${s.friend?.name ?? 'Ton ami'} est occupé (combat, échange ou ouverture en cours). Réessaie dans un moment. Rien n’a été payé.`);
+      const name = s.friend?.name ?? 'Ton ami';
+      end(
+        busy
+          ? `${name} est occupé (combat, échange ou ouverture en cours). Réessaie dans un moment. Rien n’a été payé.`
+          : `${name} a refusé la pioche. Rien n’a été payé.`,
+      );
     },
 
     expired() {
       const s = get();
       if (s.role !== 'asker' || s.phase !== 'waiting') return;
-      end(`Le téléphone de ${s.friend?.name ?? 'ton ami'} n’a pas répondu. Rien n’a été payé.`);
+      end(`${s.friend?.name ?? 'Ton ami'} n’a pas répondu à ta demande. Rien n’a été payé.`);
     },
 
     open() {
