@@ -252,8 +252,6 @@ Ces coups de pouce restent invisibles pour le joueur : pas de compteur affiché,
 
 Une carte tirée sur cent (`CHROMATIC_ODDS` dans `src/game/rarity.ts`), **à n'importe quelle rareté**, est **chromatique** : sa photo est traversée d'un voile arc-en-ciel qui se déplace quand on tourne la carte au doigt (ou qu'on bouge le téléphone). C'est un champ de la carte (`chromatic` dans `src/storage/model.ts`), décidé au tirage et conservé par les échanges. L'effet est dessiné par `src/components/card/Chromatic.tsx`, dans le même esprit que les reflets des cartes rares (`Foil.tsx`).
 
-**Bouton d'essai retiré de l'accueil** : le bloc « Essai » de `src/state/game.ts` (paquet suivant tout chromatique) n'a plus de bouton ; il peut être supprimé.
-
 ## Recadrer une carte
 
 Le format d'une carte rogne souvent la photo au mauvais endroit. Depuis le menu d'appui long de la bibliothèque, « Recadrer la carte » ouvre un écran (`src/app/card/crop.tsx`) où l'on déplace la photo au doigt et où on l'agrandit à deux doigts, dans une fenêtre au format de la carte. En validant, `cropCard(id, rect)` (dans `src/state/game.ts`) recoupe la photo et la miniature et les réécrit à la place des anciennes (`cropImage` dans `src/game/gallery.ts`, et la version canvas dans `gallery.web.ts`). Le recadrage est définitif : la carte garde la partie choisie.

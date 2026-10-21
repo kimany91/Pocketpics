@@ -45,8 +45,6 @@ export async function generatePack(opts: {
    * (démarrage, malchance, paquet brillant). Par défaut : tirage indépendant.
    */
   rarities?: (cards: number) => RarityId[];
-  /** Toutes les cartes du paquet sont chromatiques (bouton d'essai). */
-  allChromatic?: boolean;
 }): Promise<PackResult> {
   const count = opts.count ?? CARDS_PER_PACK;
   const now = opts.now ?? Date.now();
@@ -76,9 +74,7 @@ export async function generatePack(opts: {
   const rarities = opts.rarities ? opts.rarities(photos.length) : photos.map(() => rollRarity());
   const cards: GeneratedCard[] = photos.map((photo, i) => ({
     photo,
-    card: makeCard({ hash: photo.hash, width: photo.width, height: photo.height, sourceId: photo.assetId }, rarities[i] ?? rollRarity(), now, {
-      chromatic: opts.allChromatic === true || undefined,
-    }),
+    card: makeCard({ hash: photo.hash, width: photo.width, height: photo.height, sourceId: photo.assetId }, rarities[i] ?? rollRarity(), now),
   }));
   // La plus rare est révélée en dernier : le suspense monte.
   cards.sort((a, b) => getRarity(a.card.rarity).rank - getRarity(b.card.rarity).rank);

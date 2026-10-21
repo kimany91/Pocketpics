@@ -141,9 +141,6 @@ interface GameStore {
   completeChallenge(level: number, deckIds: string[]): boolean;
   /** Démo navigateur uniquement : remet la réserve de tirages au maximum. */
   refillDrawsForDemo(): void;
-  /** Essai : le prochain paquet sort tout chromatique (voir le bloc d'essai plus haut). */
-  chromaticNext: boolean;
-  toggleChromaticNext(): void;
 
   /* ---------------------------------- Tuto ---------------------------------- */
   /** Passe à l'étape suivante si on est bien à `from` (sans effet sinon : on peut appeler deux fois). */
@@ -205,13 +202,6 @@ function countBy(values: string[]): Record<string, number> {
   for (const v of values) out[v] = (out[v] ?? 0) + 1;
   return out;
 }
-
-/* ------------------------- Essai : paquet chromatique -------------------------
- * Ce réglage (et le bouton « Prochain paquet chromatique (test) » de l'accueil)
- * ne sert qu'aux essais : il suffit de retirer `chromaticNext` du magasin, les
- * deux lignes qui s'en servent dans `openPack`, et le bouton de l'accueil, pour
- * que le jeu retrouve son tirage normal. Rien d'autre n'en dépend.
- */
 
 export const useGame = create<GameStore>((set, get) => ({
   ready: false,
@@ -292,10 +282,7 @@ export const useGame = create<GameStore>((set, get) => ({
         luckAfter = plan.state;
         return plan.rarities;
       },
-      allChromatic: get().chromaticNext,
     });
-    // l'essai ne vaut que pour un paquet
-    if (get().chromaticNext) set({ chromaticNext: false });
 
     // 1) les cartes d'abord (si l'app est tuée ici, le joueur garde ses cartes ET son tirage)
     const written: Card[] = [];
@@ -788,12 +775,6 @@ export const useGame = create<GameStore>((set, get) => ({
     persistState(next);
     set({ save: next });
     return true;
-  },
-
-  chromaticNext: false,
-
-  toggleChromaticNext() {
-    set({ chromaticNext: !get().chromaticNext });
   },
 
   refillDrawsForDemo() {
