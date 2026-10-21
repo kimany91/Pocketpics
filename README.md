@@ -252,7 +252,7 @@ Ces coups de pouce restent invisibles pour le joueur : pas de compteur affiché,
 
 Une carte tirée sur cent (`CHROMATIC_ODDS` dans `src/game/rarity.ts`), **à n'importe quelle rareté**, est **chromatique** : sa photo est traversée d'un voile arc-en-ciel qui se déplace quand on tourne la carte au doigt (ou qu'on bouge le téléphone). C'est un champ de la carte (`chromatic` dans `src/storage/model.ts`), décidé au tirage et conservé par les échanges. L'effet est dessiné par `src/components/card/Chromatic.tsx`, dans le même esprit que les reflets des cartes rares (`Foil.tsx`).
 
-**Bouton d'essai** (à retirer quand il n'aura plus d'utilité) : sur l'accueil de la version navigateur, « Prochain paquet chromatique (test) » rend chromatiques toutes les cartes du paquet suivant. Tout tient dans un bloc marqué « Essai » de `src/state/game.ts` et le bouton correspondant dans `src/app/(tabs)/index.tsx` : supprimer les deux suffit.
+**Bouton d'essai retiré de l'accueil** : le bloc « Essai » de `src/state/game.ts` (paquet suivant tout chromatique) n'a plus de bouton ; il peut être supprimé.
 
 ## Recadrer une carte
 
@@ -287,11 +287,11 @@ npm start                     # puis ouvrir l'app de dev sur le téléphone
 ```
 
 Version navigateur de test (l'échange en ligne y fonctionne aussi, sauf dans une fenêtre qui bloque les WebSockets) : `npm run web`, ou `node scripts/build-web-demo.mjs` pour obtenir `dist-demo/pocketpics.html` (images et polices intégrées) et, à côté, le dossier `dist-demo/music/` des 20 musiques de combat (en `.mp4`, servi par tous les hébergeurs) : à héberger ensemble n'importe où (sans le dossier, le jeu marche mais sans musique).
-- **Fenêtre d'import** : à chaque arrivée sur la version navigateur, une fenêtre propose d'ajouter tes photos. Sur ordinateur (Chrome, Edge, Safari, Firefox), on importe un dossier entier, sous-dossiers compris, sans choisir les photos une par une. Sur téléphone, le navigateur ne donne pas accès à la galerie entière : on sélectionne les photos avec le sélecteur. « Rouvrir la fenêtre d'import » sur l'accueil la fait revenir.
+- **Fenêtre d'import** : à chaque arrivée sur la version navigateur, une fenêtre propose d'ajouter tes photos. Sur ordinateur (Chrome, Edge, Safari, Firefox), on importe un dossier entier, sous-dossiers compris, sans choisir les photos une par une. Sur téléphone, le navigateur ne donne pas accès à la galerie entière : on sélectionne les photos avec le sélecteur. Elle revient en rechargeant la page.
 - **Limite** : une page web ne peut pas lire la galerie seule. La version navigateur reste donc un test ; le jeu complet sur téléphone (`expo run`, ou build de développement EAS) lit toute la galerie automatiquement, sans choix.
 - **Galerie** : un navigateur ne laisse aucun site lire la galerie tout seul. « Ouvrir ma galerie » ouvre le sélecteur de photos de l'appareil, où l'on peut tout sélectionner. Sur ordinateur, « Importer un dossier » ajoute un dossier entier. Des photos de démo générées sont aussi disponibles. Si le sélecteur est bloqué (fenêtre intégrée, webview), on peut aussi coller des photos (Ctrl+V) ou les glisser sur la page.
 - **Sauvegarde** : les photos importées, la collection et les tirages restent dans le navigateur (IndexedDB) d'une visite à l'autre. L'écran des taux d'obtention permet de tout effacer.
-- **Tests** : un lien « Recharger les tirages (test) » évite d'attendre 12 h.
+- **Tests** : sur la version navigateur seulement, un petit bouton rond flottant (flèche circulaire, en haut à gauche du paquet de l'accueil) recharge les tirages pour ne pas attendre 12 h. Il n'existe pas sur Android ni iOS.
 
 Vérifications :
 
