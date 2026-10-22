@@ -28,15 +28,16 @@ import { migrateState } from '../src/storage/model';
 
 /* ------------------------------- Catalogue ------------------------------- */
 
-test('emotes : 10 émotions et 5 emotes « photo », 4 de départ, des ids uniques', () => {
-  assert.equal(EMOTES.length, 15);
-  assert.equal(new Set(EMOTES.map((e) => e.id)).size, 15);
+test('emotes : 10 émotions et 4 emotes « photo », 4 de départ, des ids uniques, 5 équipées au plus', () => {
+  assert.equal(MAX_EQUIPPED, 5);
+  assert.equal(EMOTES.length, 14);
+  assert.equal(new Set(EMOTES.map((e) => e.id)).size, 14);
   const feelings = EMOTES.filter((e) => !e.pack);
   const pack = EMOTES.filter((e) => e.pack);
   assert.equal(feelings.length, 10);
   assert.deepEqual(
     pack.map((e) => e.id),
-    ['selfie', 'eiffel', 'dog', 'cat', 'mirror'],
+    ['selfie', 'eiffel', 'dog', 'cat'],
   );
   // de départ : pleure de rire, pleure, énervé, vomit
   assert.deepEqual(STARTER_EMOTES, ['lol', 'cry', 'angry', 'puke']);
@@ -69,7 +70,7 @@ test('emotes « photo » : ce que reconnaît la carte débloque la bonne emote',
   assert.deepEqual(by('a lion'), [], 'un lion n’est pas un chat');
   assert.deepEqual(by('a selfie'), ['selfie']);
   assert.deepEqual(by('Selfie canard'), ['selfie']);
-  assert.deepEqual(by('a mirror selfie'), ['selfie', 'mirror']);
+  assert.deepEqual(by('a mirror selfie'), ['selfie'], 'le selfie miroir ne débloque que le selfie');
   assert.deepEqual(by('Portrait'), [], 'un portrait n’est pas un selfie');
   assert.deepEqual(by('Tour métallique'), ['eiffel']);
   assert.deepEqual(by('Monument'), ['eiffel']);
@@ -84,13 +85,16 @@ test('emotes « photo » : ce que reconnaît la carte débloque la bonne emote',
 
 test('boutique : acheter coûte des pièces et équipe s’il reste une place', () => {
   const start = initialEmotes();
-  assert.equal(start.equipped.length, MAX_EQUIPPED, 'les 4 de départ sont équipées');
+  assert.equal(start.equipped.length, 4, 'les 4 de départ sont équipées, la 5e place est libre');
   assert.deepEqual(buyEmote(start, 100, 'disgust'), { ok: false, why: 'coins' });
   const bought = buyEmote(start, 1000, 'disgust');
   assert.ok(bought.ok);
   assert.equal(bought.coins, 850);
   assert.ok(bought.state.owned.includes('disgust'));
-  assert.ok(!bought.state.equipped.includes('disgust'), 'déjà 4 équipées : achetée sans être équipée');
+  assert.ok(bought.state.equipped.includes('disgust'), 'une place libre : équipée tout de suite');
+  const five = { ...start, equipped: ['lol', 'cry', 'angry', 'puke', 'cool'] };
+  const b3 = buyEmote(five, 1000, 'disgust');
+  assert.ok(b3.ok && !b3.state.equipped.includes('disgust') && b3.state.equipped.length === 5, 'déjà 5 équipées : achetée sans être équipée');
   assert.deepEqual(buyEmote(bought.state, 1000, 'disgust'), { ok: false, why: 'owned' });
   assert.deepEqual(buyEmote(start, 9999, 'dog'), { ok: false, why: 'not-for-sale' });
   assert.deepEqual(buyEmote(start, 9999, 'lol'), { ok: false, why: 'owned' });
@@ -101,19 +105,23 @@ test('boutique : acheter coûte des pièces et équipe s’il reste une place', 
   assert.ok(b2.ok && b2.state.equipped.includes('scared') && b2.coins === 100);
 });
 
-test('boutique : 4 emotes équipées au plus, seulement celles qu’on possède', () => {
+test('boutique : 5 emotes équipées au plus, seulement celles qu’on possède', () => {
   const s = initialEmotes();
   assert.deepEqual(toggleEquip(s, 'love'), { ok: false, why: 'locked' });
-  const owned = { ...s, owned: [...s.owned, 'love'] };
-  assert.deepEqual(toggleEquip(owned, 'love'), { ok: false, why: 'full' });
-  const off = toggleEquip(owned, 'cry');
-  assert.ok(off.ok && !off.state.equipped.includes('cry') && off.state.equipped.length === 3);
-  const on = toggleEquip(off.ok ? off.state : owned, 'love');
-  assert.ok(on.ok && on.state.equipped.length === 4 && on.state.equipped.includes('love'));
+  const owned = { ...s, owned: [...s.owned, 'love', 'scared'] };
+  // la 5e place est libre : équipée
+  const on = toggleEquip(owned, 'love');
+  assert.ok(on.ok && on.state.equipped.length === 5 && on.state.equipped.includes('love'));
+  const five = on.ok ? on.state : owned;
+  // plus de place : refusé
+  assert.deepEqual(toggleEquip(five, 'scared'), { ok: false, why: 'full' });
+  // retirer une emote libère une place
+  const off = toggleEquip(five, 'cry');
+  assert.ok(off.ok && !off.state.equipped.includes('cry') && off.state.equipped.length === 4);
   // remplacer une place
-  const swap = equipAt(owned, 1, 'love');
+  const swap = equipAt(five, 1, 'scared');
   assert.ok(swap.ok);
-  assert.deepEqual(swap.state.equipped, ['lol', 'love', 'angry', 'puke']);
+  assert.deepEqual(swap.state.equipped, ['lol', 'scared', 'angry', 'puke', 'love']);
   assert.deepEqual(equipAt(s, 0, 'love'), { ok: false, why: 'locked' });
 });
 
@@ -135,14 +143,18 @@ test('déblocage : une carte tirée débloque son emote une seule fois, et elle 
   const again = unlockFromCards(a.state, [card('c2', 'a puppy')]);
   assert.equal(again.state, a.state);
   assert.equal(again.unlocked.length, 0);
-  // un selfie miroir : deux emotes d'un coup
+  // un selfie miroir : le selfie seulement (l'emote « miroir » n'existe plus)
   const two = unlockFromCards(a.state, [card('c3', 'a mirror selfie')]);
-  assert.deepEqual(two.unlocked.map((u) => u.id), ['selfie', 'mirror']);
-  assert.deepEqual(two.state.equipped, ['lol', 'cry', 'dog', 'selfie'], '4 au plus');
+  assert.deepEqual(two.unlocked.map((u) => u.id), ['selfie']);
+  assert.deepEqual(two.state.equipped, ['lol', 'cry', 'dog', 'selfie'], 'équipée s’il reste une place');
   // vue : retirée de la file, une seule fois
   const seen = seeUnlock(two.state, 'selfie');
-  assert.deepEqual(seen.unseen.map((u) => u.id), ['dog', 'mirror']);
+  assert.deepEqual(seen.unseen.map((u) => u.id), ['dog']);
   assert.equal(seeUnlock(seen, 'selfie'), seen);
+  // 5 équipées : débloquée, mais pas équipée
+  const full = unlockFromCards({ ...initialEmotes(), equipped: ['lol', 'cry', 'angry', 'puke', 'cool'] }, [card('c4', 'a cat')]);
+  assert.ok(full.state.owned.includes('cat'));
+  assert.deepEqual(full.state.equipped, ['lol', 'cry', 'angry', 'puke', 'cool'], '5 au plus');
 });
 
 test('déblocage : pas avec une carte reçue (échange, Pioche amicale) ni sans reconnaissance', () => {
@@ -154,21 +166,21 @@ test('déblocage : pas avec une carte reçue (échange, Pioche amicale) ni sans 
 
 /* ------------------------------ Sauvegarde ------------------------------ */
 
-test('sauvegarde : sans emotes, les 4 de départ ; rien n’est perdu ; 4 équipées au plus', () => {
+test('sauvegarde : sans emotes, les 4 de départ ; rien n’est perdu ; 5 équipées au plus', () => {
   assert.deepEqual(migrateEmotes(undefined), initialEmotes());
   const old = migrateState({ coins: 50 }, 100);
   assert.deepEqual(old.emotes.owned, STARTER_EMOTES);
   assert.deepEqual(old.emotes.equipped, STARTER_EMOTES);
   const m = migrateEmotes({
     owned: ['dog', 'future-emote', 'dog', 7],
-    equipped: ['dog', 'love', 'future-emote', 'lol', 'cry', 'angry'],
+    equipped: ['dog', 'love', 'future-emote', 'lol', 'cry', 'angry', 'puke'],
     unseen: [{ id: 'dog', cardId: 'c1', cardName: 'Rex' }, { id: 'dog' }, { id: 'zzz' }, 'x'],
     sparkle: true,
   });
   // les emotes de départ reviennent toujours ; un id inconnu (version plus récente) est gardé
   assert.deepEqual(m.owned, ['lol', 'cry', 'angry', 'puke', 'dog', 'future-emote']);
-  // équipée = possédée, 4 au plus
-  assert.deepEqual(m.equipped, ['dog', 'future-emote', 'lol', 'cry']);
+  // équipée = possédée, 5 au plus
+  assert.deepEqual(m.equipped, ['dog', 'future-emote', 'lol', 'cry', 'angry']);
   assert.deepEqual(m.unseen, [{ id: 'dog', cardId: 'c1', cardName: 'Rex' }]);
   assert.equal(m.sparkle, true, 'champ inconnu gardé');
   // aucune emote équipée : c'est un choix, gardé
@@ -180,6 +192,24 @@ test('sauvegarde : sans emotes, les 4 de départ ; rien n’est perdu ; 4 équip
 
 /* --------------------------------- Réseau --------------------------------- */
 
+test('sauvegarde : une emote retirée du jeu (« mirror ») disparaît, sans erreur', () => {
+  const m = migrateEmotes({
+    owned: ['mirror', 'dog'],
+    equipped: ['mirror', 'dog'],
+    unseen: [{ id: 'mirror', cardId: 'c9', cardName: 'Miroir' }, { id: 'dog', cardId: 'c1', cardName: 'Rex' }],
+  });
+  assert.deepEqual(m.owned, ['lol', 'cry', 'angry', 'puke', 'dog']);
+  assert.deepEqual(m.equipped, ['dog']);
+  assert.deepEqual(m.unseen.map((u) => u.id), ['dog']);
+  // seule emote équipée : elle part, rien d'équipé (choix gardé)
+  const only = migrateEmotes({ owned: ['mirror'], equipped: ['mirror'] });
+  assert.deepEqual(only.owned, STARTER_EMOTES);
+  assert.deepEqual(only.equipped, []);
+  // la sauvegarde complète aussi
+  const s = migrateState({ emotes: { owned: ['mirror', 'cat'], equipped: ['mirror', 'cat'] } }, 100);
+  assert.ok(!s.emotes.owned.includes('mirror') && s.emotes.equipped.join() === 'cat');
+});
+
 test('réseau : un message d’emote est lu ; un id inconnu ou un message abîmé est ignoré', () => {
   assert.equal(readEmoteMessage({ t: 'emote', id: 'lol' }), 'lol');
   assert.equal(readEmoteMessage({ t: 'emote', id: 'cat', from: 'x', extra: 1 }), 'cat');
@@ -189,7 +219,7 @@ test('réseau : un message d’emote est lu ; un id inconnu ou un message abîm�
   assert.equal(readEmoteMessage({ t: 'step', id: 'lol' }), null);
   assert.equal(readEmoteMessage('emote'), null);
   assert.equal(readEmoteMessage(null), null);
-  assert.ok(isEmoteId('mirror') && !isEmoteId('toString') && !isEmoteId('__proto__'));
+  assert.ok(isEmoteId('selfie') && !isEmoteId('mirror') && !isEmoteId('toString') && !isEmoteId('__proto__'));
 });
 
 test('anti-spam : une emote toutes les 2 s', () => {

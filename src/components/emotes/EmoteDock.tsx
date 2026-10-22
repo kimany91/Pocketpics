@@ -5,7 +5,7 @@
  */
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type ViewStyle, useWindowDimensions } from 'react-native';
 import Animated, { FadeOut, ZoomIn, ZoomOut, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
 import { preloadEmoteSounds } from '../../audio/emoteSfx';
@@ -109,6 +109,9 @@ export function EmoteOverlay({
 
 function EmotePanel({ style, equipped, onPick }: { style: ViewStyle; equipped: EmoteId[]; onPick(id: EmoteId): void }) {
   const muted = useEmoteLive((s) => s.muted);
+  const { width } = useWindowDimensions();
+  // les 5 vignettes (et leur écart) tiennent dans l'écran, même sur 360 px
+  const tile = Math.max(52, Math.min(68, Math.floor((width - 24 - 20 - 8 * (MAX_EQUIPPED - 1)) / MAX_EQUIPPED)));
   return (
     <Animated.View entering={ZoomIn.springify().damping(16).stiffness(260)} exiting={FadeOut.duration(120)} style={[styles.panel, style]}>
       {equipped.length === 0 ? (
@@ -118,7 +121,7 @@ function EmotePanel({ style, equipped, onPick }: { style: ViewStyle; equipped: E
       ) : (
         <View style={styles.row}>
           {equipped.map((id) => (
-            <PanelTile key={id} id={id} onPick={onPick} />
+            <PanelTile key={id} id={id} size={tile} onPick={onPick} />
           ))}
         </View>
       )}
@@ -138,7 +141,7 @@ function EmotePanel({ style, equipped, onPick }: { style: ViewStyle; equipped: E
   );
 }
 
-function PanelTile({ id, onPick }: { id: EmoteId; onPick(id: EmoteId): void }) {
+function PanelTile({ id, size, onPick }: { id: EmoteId; size: number; onPick(id: EmoteId): void }) {
   const def = getEmote(id);
   const shake = useSharedValue(0);
   const style = useAnimatedStyle(() => ({ transform: [{ translateX: shake.value }] }));
@@ -153,10 +156,10 @@ function PanelTile({ id, onPick }: { id: EmoteId; onPick(id: EmoteId): void }) {
         onPick(id);
       }}
       accessibilityLabel={`Envoyer l’emote ${def?.name ?? id}`}
-      style={({ pressed }) => [styles.tile, { borderColor: `${def?.color ?? '#FFFFFF'}66` }, pressed && { transform: [{ scale: 0.92 }] }]}
+      style={({ pressed }) => [styles.tile, { width: size, height: size, borderColor: `${def?.color ?? '#FFFFFF'}66` }, pressed && { transform: [{ scale: 0.92 }] }]}
     >
       <Animated.View style={style}>
-        <EmoteArt id={id} size={58} />
+        <EmoteArt id={id} size={size - 10} />
       </Animated.View>
     </Pressable>
   );
@@ -211,7 +214,7 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   row: { flexDirection: 'row', gap: 8 },
-  tile: { width: 68, height: 68, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1.5 },
+  tile: { borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1.5 },
   mute: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 2 },
   muteText: { fontFamily: fonts.semibold, fontSize: 11, color: colors.textDim },
   bubbleWrap: { position: 'absolute', zIndex: 35, alignItems: 'center' },

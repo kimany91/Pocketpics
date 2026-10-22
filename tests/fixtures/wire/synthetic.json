@@ -46,7 +46,7 @@
     "relayUnknownEnvelope": { "f": "a1b2c3d4e5f60718", "t": "0f1e2d3c4b5a6978", "k": "zz", "x": 1 },
     "battleEmote": { "t": "emote", "id": "lol" },
     "tradeEmote": { "t": "emote", "id": "cat" },
-    "piocheEmote": { "t": "emote", "id": "mirror" },
+    "piocheEmote": { "t": "emote", "id": "dog" },
     "emoteUnknownId": { "t": "emote", "id": "moonwalk", "loop": 3 },
     "emoteExtraFields": { "t": "emote", "id": "angry", "loud": true, "skin": "or" }
   }

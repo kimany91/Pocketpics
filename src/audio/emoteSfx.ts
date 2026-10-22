@@ -23,7 +23,6 @@ const SOURCES: Record<EmoteId, number> = {
   eiffel: require('../../assets/sfx/emote/eiffel.wav'),
   dog: require('../../assets/sfx/emote/dog.wav'),
   cat: require('../../assets/sfx/emote/cat.wav'),
-  mirror: require('../../assets/sfx/emote/mirror.wav'),
 };
 
 const players = new Map<EmoteId, AudioPlayer>();

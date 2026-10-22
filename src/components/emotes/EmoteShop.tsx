@@ -1,5 +1,5 @@
 /**
- * La boutique des emotes, en bas de l'écran des quêtes : les 4 emotes
+ * La boutique des emotes, en bas de l'écran des quêtes : les emotes
  * équipées, puis toutes les emotes avec leur état (équipée, à équiper, prix en
  * pièces, ou verrouillée avec la carte à tirer pour l'avoir). Toucher une
  * vignette la joue, avec son son.
@@ -158,7 +158,7 @@ function ShopTile({
       {locked ? (
         <View style={styles.hintBox}>
           <Ionicons name="images-outline" size={12} color={colors.textDim} />
-          <AppText style={styles.hint} numberOfLines={2}>
+          <AppText style={styles.hint}>
             {def.pack?.hint}
           </AppText>
         </View>
@@ -188,8 +188,9 @@ const styles = StyleSheet.create({
   lockBadge: { position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
   equippedBadge: { position: 'absolute', top: 6, right: 6, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.gold },
   name: { fontFamily: fonts.bold, fontSize: 13, color: colors.text },
-  hintBox: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 30, paddingHorizontal: 2 },
-  hint: { fontFamily: fonts.semibold, fontSize: 10.5, lineHeight: 13, color: colors.textDim, textAlign: 'center', flexShrink: 1 },
+  // pas de hauteur fixe ni de troncature : la tuile grandit avec le texte (2 ou 3 lignes)
+  hintBox: { alignSelf: 'stretch', alignItems: 'center', gap: 3, minHeight: 42, paddingHorizontal: 2 },
+  hint: { alignSelf: 'stretch', fontFamily: fonts.semibold, fontSize: 10.5, lineHeight: 13, color: colors.textDim, textAlign: 'center' },
   action: { alignSelf: 'stretch', height: 30, borderRadius: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   actionEquip: { backgroundColor: colors.text },
   actionOn: { backgroundColor: 'rgba(247,201,72,0.12)', borderWidth: 1, borderColor: 'rgba(247,201,72,0.5)' },

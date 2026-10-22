@@ -179,7 +179,7 @@ export interface SaveState {
    */
   avatar: Avatar | null;
   /**
-   * Emotes possédées, équipées (4 au plus) et débloquées par une carte pas
+   * Emotes possédées, équipées (5 au plus) et débloquées par une carte pas
    * encore fêtées (voir src/game/emotes.ts). Ajouté après : les 4 de départ si absent.
    */
   emotes: EmoteState;

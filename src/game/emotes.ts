@@ -3,15 +3,15 @@
  * ou une Pioche amicale (les deux joueurs la voient et l'entendent).
  *
  *  - 10 émotions : 4 de départ, les autres s'achètent avec des pièces (écran des quêtes) ;
- *  - 5 emotes « photo » : jamais en vente, débloquées en tirant une carte dont
- *    la photo est reconnue (selfie, monument, chien, chat, miroir).
- * On en équipe 4 au plus : ce sont elles qui sont proposées pendant une partie.
+ *  - 4 emotes « photo » : jamais en vente, débloquées en tirant une carte dont
+ *    la photo est reconnue (selfie, monument, chien, chat).
+ * On en équipe 5 au plus : ce sont elles qui sont proposées pendant une partie.
  *
  * Pur (testable sous Node).
  */
 
 /** Les emotes que cette version connaît (un id inconnu, d'une version plus récente, est ignoré). */
-export const EMOTE_IDS = ['lol', 'cry', 'angry', 'puke', 'disgust', 'scared', 'shock', 'sleep', 'love', 'cool', 'selfie', 'eiffel', 'dog', 'cat', 'mirror'] as const;
+export const EMOTE_IDS = ['lol', 'cry', 'angry', 'puke', 'disgust', 'scared', 'shock', 'sleep', 'love', 'cool', 'selfie', 'eiffel', 'dog', 'cat'] as const;
 export type EmoteId = (typeof EMOTE_IDS)[number];
 
 /** Ce que reconnaît une carte, de quoi débloquer une emote « photo ». */
@@ -69,13 +69,14 @@ export const EMOTES: readonly EmoteDef[] = [
   },
   { id: 'dog', name: 'Léchouille', feeling: 'te lèche l’écran', color: '#C98A4B', price: null, pack: { groups: ['dog'], hint: 'Tire une carte chien' } },
   { id: 'cat', name: 'Miaou', feeling: 'fait le chat', color: '#FF8C42', price: null, pack: { groups: ['cat'], hint: 'Tire une carte chat' } },
-  { id: 'mirror', name: 'Miroir', feeling: 'brille de mille feux', color: '#9FE8FF', price: null, pack: { labels: ['a mirror selfie'], hint: 'Tire une carte avec un miroir' } },
 ];
 
 /** Emotes équipées au plus (proposées pendant une partie). */
-export const MAX_EQUIPPED = 4;
+export const MAX_EQUIPPED = 5;
 /** Possédées et équipées au départ. */
 export const STARTER_EMOTES: EmoteId[] = EMOTES.filter((e) => e.starter).map((e) => e.id);
+/** Emotes retirées du jeu : une ancienne sauvegarde les perd, sans erreur. */
+export const REMOVED_EMOTES: readonly string[] = ['mirror'];
 
 const BY_ID = new Map<string, EmoteDef>(EMOTES.map((e) => [e.id, e]));
 
@@ -95,7 +96,7 @@ export interface EmoteUnlock {
 export interface EmoteState {
   /** Emotes possédées (un id inconnu, d'une version plus récente, est gardé tel quel). */
   owned: string[];
-  /** Emotes proposées pendant une partie, dans l'ordre (4 au plus). */
+  /** Emotes proposées pendant une partie, dans l'ordre (5 au plus). */
   equipped: string[];
   /** Débloquées par une carte, à fêter (dans l'ordre). */
   unseen: EmoteUnlock[];
@@ -108,13 +109,13 @@ const strList = (v: unknown, max = 60) => (Array.isArray(v) ? [...new Set(v.filt
 
 /**
  * Lit `emotes` d'une sauvegarde : les emotes de départ sont toujours là, une
- * emote équipée doit être possédée, 4 au plus. Rien n'est jamais retiré de ce
- * qui est possédé (même un id inconnu ici).
+ * emote équipée doit être possédée, 5 au plus. Rien n'est retiré de ce qui est
+ * possédé (même un id inconnu ici), sauf les emotes retirées du jeu.
  */
 export function migrateEmotes(raw: unknown): EmoteState {
   if (!raw || typeof raw !== 'object') return initialEmotes();
   const r = raw as Record<string, unknown>;
-  const owned = [...new Set([...STARTER_EMOTES, ...(strList(r.owned) ?? [])])];
+  const owned = [...new Set([...STARTER_EMOTES, ...(strList(r.owned) ?? [])])].filter((id) => !REMOVED_EMOTES.includes(id));
   const equippedRaw = strList(r.equipped);
   const equipped = equippedRaw === null ? [...STARTER_EMOTES] : equippedRaw.filter((id) => owned.includes(id)).slice(0, MAX_EQUIPPED);
   const unseen: EmoteUnlock[] = [];
@@ -145,7 +146,7 @@ export function buyEmote(state: EmoteState, coins: number, id: string): BuyResul
 
 export type EquipResult = { ok: true; state: EmoteState } | { ok: false; why: 'unknown' | 'locked' | 'full' };
 
-/** Équipe (ou retire) une emote possédée. Au-delà de 4, rien ne se passe : `full`. */
+/** Équipe (ou retire) une emote possédée. Au-delà de 5, rien ne se passe : `full`. */
 export function toggleEquip(state: EmoteState, id: string): EquipResult {
   if (!getEmote(id)) return { ok: false, why: 'unknown' };
   if (!state.owned.includes(id)) return { ok: false, why: 'locked' };

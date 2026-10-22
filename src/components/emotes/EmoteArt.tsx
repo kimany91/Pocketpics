@@ -67,7 +67,6 @@ const DURATION: Record<string, number> = {
   eiffel: 2400,
   dog: 2200,
   cat: 2200,
-  mirror: 2200,
 };
 /** Pose figée la plus parlante (vignettes immobiles). */
 const POSE: Record<string, number> = {
@@ -85,7 +84,6 @@ const POSE: Record<string, number> = {
   eiffel: 0.3,
   dog: 0.3,
   cat: 0.25,
-  mirror: 0.4,
 };
 
 export const emoteDuration = (id: string) => DURATION[id] ?? 2000;
@@ -986,82 +984,6 @@ function Cat({ s, t }: { s: number; t: T }) {
   );
 }
 
-/* --------------------------------- Miroir ---------------------------------- */
-
-function Mirror({ s, t }: { s: number; t: T }) {
-  const GOLD = '#8A5A10';
-  const body = useAnimatedStyle(() => ({ transform: [{ rotate: `${osc(t.value, 1) * 5}deg` }, { scale: 1 + bump(t.value, 0.3, 0.5) * 0.05 }] }));
-  const sweep = useAnimatedStyle(() => ({ transform: [{ translateX: (-40 + seg(t.value, 0.2, 0.55) * 80) * s }, { rotate: '25deg' }] }));
-  const halo = useAnimatedStyle(() => ({ opacity: 0.35 + bump(t.value, 0.25, 0.65) * 0.5, transform: [{ scale: 0.9 + bump(t.value, 0.25, 0.65) * 0.15 }] }));
-  return (
-    <>
-      <Part s={s} box={[0, 0, 100, 100]} style={halo}>
-        <Defs>
-          <RadialGradient id="g-mirror-halo" cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor="#CFF4FF" stopOpacity={0.9} />
-            <Stop offset="1" stopColor="#9FE8FF" stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Circle cx={50} cy={48} r={48} fill="url(#g-mirror-halo)" />
-      </Part>
-      <Group s={s} style={body}>
-        <Part s={s} box={[14, 4, 72, 94]}>
-          <Defs>
-            <LinearGradient id="g-mirror-gold" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor="#FFE79A" />
-              <Stop offset="0.5" stopColor="#E3A93A" />
-              <Stop offset="1" stopColor="#B37A1A" />
-            </LinearGradient>
-            <LinearGradient id="g-mirror-glass" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor="#E9FBFF" />
-              <Stop offset="0.5" stopColor="#9FDDF5" />
-              <Stop offset="1" stopColor="#B9B2F2" />
-            </LinearGradient>
-          </Defs>
-          <Path d="M44 90 L56 90 L58 96 L42 96Z" fill="url(#g-mirror-gold)" stroke={GOLD} strokeWidth={2} strokeLinejoin="round" />
-          <Ellipse cx={50} cy={48} rx={30} ry={39} fill="url(#g-mirror-gold)" stroke={GOLD} strokeWidth={2.4} />
-          <Ellipse cx={50} cy={48} rx={23.5} ry={32.5} fill="url(#g-mirror-glass)" stroke={GOLD} strokeWidth={2} />
-          <Circle cx={50} cy={8} r={4.5} fill="url(#g-mirror-gold)" stroke={GOLD} strokeWidth={1.8} />
-          <Circle cx={21} cy={48} r={2.5} fill="#FFF3C2" />
-          <Circle cx={79} cy={48} r={2.5} fill="#FFF3C2" />
-          <Path d="M36 30 Q40 22 48 20" stroke="#FFFFFF" strokeWidth={3} fill="none" strokeLinecap="round" opacity={0.9} />
-          <Path d="M34 38 Q35 35 37 33" stroke="#FFFFFF" strokeWidth={2.4} fill="none" strokeLinecap="round" opacity={0.8} />
-        </Part>
-        {/* le reflet qui traverse le verre */}
-        <Animated.View pointerEvents="none" style={[styles.glass, { left: 27 * s, top: 16 * s, width: 46 * s, height: 64 * s, borderRadius: 23 * s }]}>
-          <Animated.View style={[{ position: 'absolute', left: 14 * s, top: -10 * s, width: 12 * s, height: 90 * s, backgroundColor: 'rgba(255,255,255,0.75)' }, sweep]} />
-        </Animated.View>
-      </Group>
-      {[0, 1, 2, 3].map((k) => (
-        <Spark key={k} s={s} t={t} k={k} />
-      ))}
-    </>
-  );
-}
-
-const SPARKS: [number, number, number][] = [
-  [16, 20, 9],
-  [86, 30, 7],
-  [82, 76, 10],
-  [14, 70, 7],
-];
-
-/** Éclat qui apparaît autour du miroir. */
-function Spark({ s, t, k }: { s: number; t: T; k: number }) {
-  const [x, y, r] = SPARKS[k];
-  const style = useAnimatedStyle(() => {
-    const p = frac(t.value * 1.5 + k * 0.27);
-    const b = bump(p, 0, 0.45);
-    return { opacity: b, transform: [{ scale: b * 1.1 }, { rotate: `${p * 120}deg` }] };
-  });
-  return (
-    <Part s={s} box={[x - r, y - r, r * 2, r * 2]} style={style}>
-      <Path d={starPath(x, y, r)} fill="#FFFFFF" />
-      <Circle cx={x} cy={y} r={r * 0.25} fill="#BFF1FF" />
-    </Part>
-  );
-}
-
 /* --------------------------------- Inconnue -------------------------------- */
 
 function Unknown({ s }: { s: number; t: T }) {
@@ -1089,7 +1011,6 @@ const ART: Record<string, (p: { s: number; t: T }) => ReactNode> = {
   eiffel: Eiffel,
   dog: Dog,
   cat: Cat,
-  mirror: Mirror,
 };
 
 /**

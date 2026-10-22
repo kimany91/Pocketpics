@@ -1,6 +1,6 @@
 /**
  * « Emote débloquée ! » : quand une carte tirée débloque une emote « photo »
- * (selfie, monument, chien, chat, miroir), l'emote surgit en grand, avec son
+ * (selfie, monument, chien, chat), l'emote surgit en grand, avec son
  * son, des rayons et des confettis, et le nom de la carte qui l'a débloquée.
  *
  * `EmoteUnlockHost` (mise en page racine) l'affiche dès que le joueur est sur

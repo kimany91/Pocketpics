@@ -167,7 +167,7 @@ interface GameStore {
   /* --------------------------------- Emotes --------------------------------- */
   /** Achète une emote avec des pièces (équipée tout de suite s'il reste une place). */
   buyEmote(id: string): 'ok' | Extract<BuyResult, { ok: false }>['why'];
-  /** Équipe ou retire une emote possédée (4 au plus : `full`). */
+  /** Équipe ou retire une emote possédée (5 au plus : `full`). */
   toggleEmote(id: string): 'ok' | 'full' | 'locked' | 'unknown';
   /** Met l'emote `id` à la place `slot` des emotes équipées. */
   equipEmoteAt(slot: number, id: string): void;
@@ -1134,7 +1134,7 @@ useGame.subscribe((s, prev) => {
   if (!avatarStillValid(s.save.avatar, s.cards)) s.clearAvatar();
 });
 
-// emotes « photo » : une carte tirée reconnue (selfie, monument, chien, chat, miroir) débloque son emote, une seule fois
+// emotes « photo » : une carte tirée reconnue (selfie, monument, chien, chat) débloque son emote, une seule fois
 useGame.subscribe((s, prev) => {
   if (s.cards === prev.cards || !s.ready || !s.save) return;
   const before = new Set(prev.cards);

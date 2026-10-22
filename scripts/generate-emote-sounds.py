@@ -366,19 +366,6 @@ def make_cat():
     return finish(buf, dur, peak=0.8)
 
 
-def make_mirror():
-    """Miroir : un éclat de verre très doux, puis une cascade d'étincelles qui monte."""
-    dur = 1.2
-    buf = np.zeros(int(SR * dur))
-    place(buf, burst(0.25, "hp", 5200, 0.8, 16) * 0.2, 0.0)
-    scale = (1568, 1760, 2093, 2349, 2637, 3136, 3520, 4186)
-    for i, f in enumerate(scale):
-        place(buf, bell(f, 0.45, 0.3, bright=0.5), 0.05 + i * 0.07)
-    for i in range(8):
-        place(buf, bell(rng.uniform(3000, 5500), 0.25, 0.1, bright=0.2), 0.6 + rng.uniform(0, 0.45))
-    return finish(buf, dur, peak=0.75)
-
-
 SOUNDS = (
     ("lol", make_lol),
     ("cry", make_cry),
@@ -394,7 +381,6 @@ SOUNDS = (
     ("eiffel", make_eiffel),
     ("dog", make_dog),
     ("cat", make_cat),
-    ("mirror", make_mirror),
 )
 
 

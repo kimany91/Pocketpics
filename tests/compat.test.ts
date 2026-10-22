@@ -397,7 +397,7 @@ test('emotes : message facultatif, le même dans les trois protocoles, sans chan
   const n = synthetic.newer;
   assert.equal(readEmoteMessage(n.battleEmote), 'lol');
   assert.equal(readEmoteMessage(n.tradeEmote), 'cat');
-  assert.equal(readEmoteMessage(n.piocheEmote), 'mirror');
+  assert.equal(readEmoteMessage(n.piocheEmote), 'dog');
   assert.equal(readEmoteMessage(n.emoteExtraFields), 'angry', 'champs en plus : ignorés');
   // emote d'une version plus récente : ignorée ; et l'ancien message inventé (« e ») aussi
   assert.equal(readEmoteMessage(n.emoteUnknownId), null);
