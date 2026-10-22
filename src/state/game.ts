@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { create } from 'zustand';
 
 import { CARDS_PER_PACK, computeDraws, consumeDraw, type DrawStatus } from '../game/draws';
@@ -32,7 +33,10 @@ import { type CropRect, cropAvatar, cropImage } from '../game/gallery';
 import { AVATAR_SIZE, AVATAR_TARGET_B64, avatarBlock, avatarDataUri, avatarStillValid } from '../game/avatar';
 import { type FriendDrawPayment, type FriendPhoto, payFriendDraw } from '../game/friendDraw';
 import { NSFW_SCAN_VERSION, type PhotoMark, photoMark, scanFields, scanOrder, withScan } from '../game/nsfw';
-import { forgetPhoto, nsfwReady, preloadNsfw, scanPhoto, scanWithin } from '../game/nsfwScan';
+import { within } from '../game/nsfwQueue';
+import { forgetPhoto, nsfwPending, nsfwReady, preloadNsfw, scanPhoto, scanWithin } from '../game/nsfwScan';
+import { type Decision, needsRecognition, noRecognition, recognitionOrder, withRecognition } from '../game/recognize/recognize';
+import { forgetRecognition, notePackWait, preloadRecognizer, recognizePhoto, recognizerGaveUp, recognizerLoaded, recognizerReady } from '../game/recognize/recognizeScan';
 import { NoPhotosLeftError, generatePack, makeCard } from '../game/pack';
 import { PAUL_NAME, paulFriend, paulHash } from '../game/paul';
 import { loadPaulPhotos } from '../game/paulPack';
@@ -269,6 +273,12 @@ export const useGame = create<GameStore>((set, get) => ({
       // filtre de contenu adulte : le détecteur se prépare, puis les cartes pas encore vérifiées passent une à une
       preloadNsfw();
       setTimeout(() => void scanBacklog(), BACKLOG_DELAY_MS);
+      // reconnaissance de la photo : le modèle se prépare un peu après, puis les cartes pas encore regardées
+      setTimeout(() => {
+        recogStarted = true;
+        preloadRecognizer();
+        void recognizeBacklog();
+      }, RECOG_DELAY_MS);
       disk
         .verifyCardsAgainstSidecars(cards)
         .then((fixed) => fixed && set({ cards: fixed }))
@@ -296,6 +306,8 @@ export const useGame = create<GameStore>((set, get) => ({
     const lucky = rollLucky(save.luck, packIndex);
     set({ openingLucky: lucky });
     let luckAfter = save.luck;
+    const seen = new Set<string>();
+    const startedAt = Date.now();
     const pack = await generatePack({
       drawnAssetIds: new Set(save.drawnAssetIds),
       drawnHashes: new Set(save.drawnHashes),
@@ -308,13 +320,15 @@ export const useGame = create<GameStore>((set, get) => ({
       // Filtre de contenu adulte : chaque photo passe au détecteur pendant la déchirure ;
       // une photo censurée n'est jamais tirée, une autre prend sa place. Sans réponse
       // à temps, la carte est floutée et vérifiée juste après.
-      screen: (photo) => scanWithin(photo.imageUri, PACK_SCAN_MS),
+      // Une photo jugée propre est ensuite reconnue (nom de la carte et des attaques).
+      screen: (photo) => scanWithin(photo.imageUri, PACK_SCAN_MS).then(noteClean(photo.imageUri, seen)),
     }).catch(rememberSkipped);
+    const named = await recognitionsOf(pack.cards.map((c) => c.photo.imageUri), seen, startedAt);
 
     // 1) les cartes d'abord (si l'app est tuée ici, le joueur garde ses cartes ET son tirage)
     const written: Card[] = [];
     pack.cards.forEach(({ card: made, photo, verdict }) => {
-      const card: Card = { ...made, ...scanFields(verdict) };
+      const card = named.apply({ ...made, ...scanFields(verdict) }, photo.imageUri);
       disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri } });
       written.push(card);
     });
@@ -339,6 +353,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const tuto = latest.tutorial.step === 'pack1' || latest.tutorial.step === 'pack2' ? withTutoStep(next, latest.tutorial.step) : next;
     persistState(tuto);
     set({ cards, save: tuto, pendingPack: written });
+    named.later(written);
     void scanBacklog();
     return written;
   },
@@ -478,15 +493,18 @@ export const useGame = create<GameStore>((set, get) => ({
   async claimGalaxy() {
     const save = get().save;
     if (!save || save.galaxyClaimed || !((save.soloStars[TOTAL_LEVELS - 1] ?? 0) > 0)) return null;
+    const seen = new Set<string>();
+    const startedAt = Date.now();
     const pack = await generatePack({
       drawnAssetIds: new Set(save.drawnAssetIds),
       drawnHashes: new Set(save.drawnHashes),
       count: 1,
       rarities: () => ['galaxy'],
-      screen: (photo) => scanWithin(photo.imageUri, PACK_SCAN_MS),
+      screen: (photo) => scanWithin(photo.imageUri, PACK_SCAN_MS).then(noteClean(photo.imageUri, seen)),
     }).catch(rememberSkipped);
     const { card: made, photo, verdict } = pack.cards[0];
-    const card: Card = { ...made, ...scanFields(verdict) };
+    const named = await recognitionsOf([photo.imageUri], seen, startedAt);
+    const card = named.apply({ ...made, ...scanFields(verdict) }, photo.imageUri);
     disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri } });
     const cards = [...get().cards, card];
     disk.saveIndex(cards);
@@ -499,6 +517,7 @@ export const useGame = create<GameStore>((set, get) => ({
     };
     persistState(next);
     set({ cards, save: next, pendingPack: [card] });
+    named.later([card]);
     void scanBacklog();
     return card;
   },
@@ -667,6 +686,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const verdict = await scanWithin(out.imageUri, PACK_SCAN_MS);
     disk.writeCardImage(id, { image: { uri: out.imageUri }, thumb: { uri: out.thumbUri } });
     forgetPhoto(disk.cardImageUri(id));
+    forgetRecognition(disk.cardImageUri(id));
     // l'écran doit redessiner la carte : on change son objet (l'adresse, elle, ne bouge pas)
     const cards = get().cards.map((c) => (c.id === id ? (verdict === null ? { ...c, nsfwScan: 'pending' as const } : withScan(c, verdict)) : c));
     const cropped = cards.find((c) => c.id === id);
@@ -879,12 +899,14 @@ export const useGame = create<GameStore>((set, get) => ({
     // que des communes, jamais chromatiques : elles sont là pour montrer la pioche
     const written = photos.map((p) => {
       // illustrations du jeu : rien à vérifier
-      const card = makeCard({ hash: paulHash(p.ref), width: p.width, height: p.height, sourceId: null }, 'common', now, {
+      const made = makeCard({ hash: paulHash(p.ref), width: p.width, height: p.height, sourceId: null }, 'common', now, {
         origin: 'friend',
         giver: PAUL_NAME,
         chromatic: false,
         scan: { censored: false, nsfwScan: NSFW_SCAN_VERSION },
       });
+      // illustrations du jeu, reçues de Paul : pas de reconnaissance (elles gardent leurs noms de départ)
+      const card: Card = { ...made, recognition: noRecognition() };
       disk.writeNewCard(card, { image: { base64: p.image }, thumb: { base64: p.image } });
       return card;
     });
@@ -1024,6 +1046,8 @@ async function scanBacklog(): Promise<void> {
     backlogRunning = false;
   }
   if (retry && !backlogTimer) backlogTimer = setTimeout(() => void scanBacklog(), BACKLOG_RETRY_MS);
+  // les cartes tout juste vérifiées peuvent maintenant être reconnues
+  void recognizeBacklog();
 }
 
 function marksOf(cards: Card[]): Record<string, PhotoMark> {
@@ -1052,3 +1076,192 @@ useGame.subscribe((s, prev) => {
 
 /** Ce qu'on montre de la photo d'une de mes cartes (`undefined` si ce n'est pas une de mes cartes). */
 export const usePhotoMark = (id: string): PhotoMark | undefined => useGame((s) => s.marks[id]);
+
+/* ----------------------- Reconnaissance de la photo ----------------------- */
+
+/**
+ * Temps laissé aux noms pendant l'ouverture d'un paquet, compté depuis le
+ * début de l'ouverture (le joueur déchire le sachet pendant ce temps) : au-delà,
+ * les cartes sortent avec leurs noms de départ et sont nommées juste après
+ * (la carte se met à jour pendant la révélation).
+ */
+const RECOG_PACK_MS = 2500;
+/** Le modèle se prépare un peu après le démarrage, pour ne pas le ralentir. */
+const RECOG_DELAY_MS = 8000;
+/** Pause entre deux anciennes cartes reconnues en fond (quelques-unes par minute). */
+const RECOG_PAUSE_MS = 12_000;
+/** Une carte obtenue il y a moins de 2 minutes passe avant tout, sans pause. */
+const RECOG_FRESH_MS = 120_000;
+/** Le modèle ne s'est pas chargé : on réessaie plus tard. */
+const RECOG_RETRY_MS = 60_000;
+/** Tuto, étape « renommer » : les noms attendent qu'elle soit finie. */
+const RECOG_HOLD_MS = 10_000;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Vrai une fois passé RECOG_DELAY_MS après le démarrage (avant, rien ne charge le modèle). */
+let recogStarted = false;
+
+/**
+ * Tuto, étape « renommer » : le joueur renomme sa carte la plus forte et ses
+ * attaques. Aucun nom n'est donné pendant ce temps (rien ne bouge sous ses doigts).
+ */
+const namesOnHold = () => useGame.getState().save?.tutorial.step === 'rename';
+
+/**
+ * Après le filtre de contenu adulte : seule une photo jugée propre sera
+ * reconnue, une fois toutes les photos du paquet vérifiées (les deux modèles
+ * ne calculent jamais en même temps).
+ */
+const noteClean = (uri: string, clean: Set<string>) => (verdict: boolean | null) => {
+  if (verdict === false) clean.add(uri);
+  return verdict;
+};
+
+/** Cartes dont le nom arrive après l'ouverture (la file de fond les laisse). */
+const lateIds = new Set<string>();
+
+/**
+ * Les noms d'un paquet. La reconnaissance part une fois les photos vérifiées,
+ * seulement si le modèle est déjà chargé (un paquet n'attend jamais son
+ * chargement), et attend au plus jusqu'à `startedAt + RECOG_PACK_MS`.
+ * `apply` nomme une carte si sa reconnaissance est là ; `later` nomme les
+ * autres à l'arrivée de la leur (sinon, la file de fond s'en charge).
+ */
+async function recognitionsOf(uris: string[], clean: Set<string>, startedAt: number) {
+  const seen = new Map<string, Promise<Decision>>();
+  if (recognizerLoaded() && !namesOnHold()) {
+    for (const u of uris) {
+      if (!clean.has(u)) continue;
+      const p = recognizePhoto(u, 'high');
+      p.catch(() => {});
+      seen.set(u, p);
+    }
+  }
+  const ready = new Map<string, Decision>();
+  const t0 = Date.now();
+  const deadline = startedAt + RECOG_PACK_MS;
+  await Promise.all(
+    uris.map(async (u) => {
+      const p = seen.get(u);
+      const d = p ? await within(p, Math.max(0, deadline - Date.now())) : null;
+      if (d) ready.set(u, d);
+    }),
+  );
+  if (seen.size) notePackWait(Date.now() - t0);
+  const late = new Map<string, Promise<Decision>>();
+  return {
+    apply(card: Card, uri: string): Card {
+      const d = ready.get(uri);
+      if (d) return needsRecognition(card) ? withRecognition(card, d) : card;
+      const p = seen.get(uri);
+      if (p) late.set(card.id, p);
+      return card;
+    },
+    later(cards: Card[]) {
+      for (const c of cards) {
+        const p = late.get(c.id);
+        if (!p) continue;
+        lateIds.add(c.id);
+        p.then(
+          (d) => applyRecognition(c.id, d),
+          () => {},
+        ).finally(() => {
+          lateIds.delete(c.id);
+          void recognizeBacklog();
+        });
+      }
+    },
+  };
+}
+
+/**
+ * Note ce que montre la photo d'une carte, sans toucher à ce que le joueur a
+ * renommé (la carte est relue au dernier moment). `false` si rien n'est fait.
+ */
+function applyRecognition(id: string, d: Decision): boolean {
+  if (namesOnHold()) return false;
+  const s = useGame.getState();
+  const old = s.cards.find((c) => c.id === id);
+  // la carte a pu partir, être censurée ou verrouillée entre-temps
+  if (!old || !needsRecognition(old)) return false;
+  const card = withRecognition(old, d);
+  const cards = s.cards.map((c) => (c.id === id ? card : c));
+  disk.updateCardSidecar(card);
+  saveIndexSoon();
+  useGame.setState({ cards, pendingPack: s.pendingPack.map((c) => (c.id === id ? card : c)) });
+  return true;
+}
+
+let recogRunning = false;
+let recogTimer: ReturnType<typeof setTimeout> | null = null;
+const recogFails = new Map<string, number>();
+
+/** Relance la file de fond dans `ms` (une seule relance en attente). */
+function recognizeLater(ms: number) {
+  if (!recogTimer) recogTimer = setTimeout(() => void recognizeBacklog(), ms);
+}
+
+/**
+ * Reconnaît, une à une, les cartes qui ne l'ont pas encore été : d'abord les
+ * nouvelles (sans pause), puis les anciennes, quelques-unes par minute, une
+ * fois le filtre de contenu adulte au repos. Jamais une carte censurée, pas
+ * encore vérifiée, ou reçue d'un autre joueur.
+ */
+async function recognizeBacklog(): Promise<void> {
+  if (recogRunning || !recogStarted || recognizerGaveUp() || !useGame.getState().ready) return;
+  recogRunning = true;
+  if (recogTimer) clearTimeout(recogTimer);
+  recogTimer = null;
+  let retry = 0;
+  try {
+    for (;;) {
+      if (namesOnHold()) {
+        retry = RECOG_HOLD_MS;
+        break;
+      }
+      const next = recognitionOrder(useGame.getState().cards).find((c) => (recogFails.get(c.id) ?? 0) < MAX_CARD_FAILS && !lateIds.has(c.id));
+      if (!next) break;
+      const fresh = Date.now() - next.obtainedAt < RECOG_FRESH_MS;
+      if (!fresh && nsfwPending() > 0) {
+        await sleep(2000);
+        continue;
+      }
+      try {
+        await recognizerReady();
+      } catch {
+        // le modèle n'a pas pu se charger : les cartes gardent leurs noms (nouvel essai plus tard, 3 au plus)
+        if (!recognizerGaveUp()) retry = RECOG_RETRY_MS;
+        break;
+      }
+      try {
+        const d = await recognizePhoto(disk.cardImageUri(next.id), fresh ? 'high' : 'low');
+        // pas appliquée (tuto) : la boucle repasse par l'attente ci-dessus
+        if (!applyRecognition(next.id, d) && !namesOnHold()) recogFails.set(next.id, MAX_CARD_FAILS);
+      } catch {
+        recogFails.set(next.id, (recogFails.get(next.id) ?? 0) + 1);
+        retry = RECOG_RETRY_MS;
+      }
+      if (!fresh) await sleep(RECOG_PAUSE_MS);
+    }
+  } finally {
+    recogRunning = false;
+  }
+  if (retry) recognizeLater(retry);
+}
+
+/**
+ * Les cartes d'un écran qui en garde une copie (ouverture d'un paquet), à
+ * jour avec la collection : un nom donné juste après l'ouverture s'affiche.
+ * Le tableau ne change que si une carte a changé.
+ */
+export function useLiveCards(cards: Card[] | null): Card[] | null {
+  const all = useGame((s) => s.cards);
+  const last = useRef<Card[] | null>(cards);
+  if (!cards) return (last.current = cards);
+  const byId = new Map(all.map((c) => [c.id, c]));
+  const next = cards.map((c) => byId.get(c.id) ?? c);
+  const prev = last.current;
+  if (prev && prev.length === next.length && prev.every((c, i) => c === next[i])) return prev;
+  return (last.current = next);
+}

@@ -1,14 +1,18 @@
 /**
  * Construit la version navigateur de test : un fichier HTML autonome (JS +
  * images + polices intégrés), facile à héberger ou à partager, et à côté de
- * lui le dossier `music/` (les 20 musiques de combat, trop lourdes pour tenir
- * dans la page). Héberger les deux ensemble ; sans le dossier, le jeu marche
- * mais sans musique.
+ * lui les fichiers trop lourds pour tenir dans la page :
+ *  - `music/` : les 20 musiques de combat ;
+ *  - `clip/` : le modèle de reconnaissance de la photo (morceaux de moins de 14 Mo).
+ * `files.json` liste ces fichiers (chemin relatif, taille, type) : c'est ce
+ * qu'il faut publier à côté de `pocketpics.html`, aux mêmes chemins relatifs.
+ * Sans eux, le jeu marche, mais sans musique et les cartes gardent leurs noms
+ * de départ.
  *
  *   node scripts/build-web-demo.mjs [dossier-de-sortie]
  */
 import { execSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, extname, join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
@@ -31,7 +35,11 @@ const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.mp3': 'audio/mpeg', 
 const keepFont = (p) => !p.includes('react-native-vector-icons/Fonts/') || p.includes('/Ionicons.');
 let inlined = 0;
 const music = [];
+/** Fichiers publiés à côté de la page (chemin relatif → taille). */
+const side = new Map();
 mkdirSync(join(outDir, 'music'), { recursive: true });
+rmSync(join(outDir, 'clip'), { recursive: true, force: true });
+mkdirSync(join(outDir, 'clip'), { recursive: true });
 js = js.replace(/"(\/assets\/[^"]+)"/g, (m, path) => {
   const file = join(exportDir, path);
   if (!existsSync(file)) return m;
@@ -42,7 +50,15 @@ js = js.replace(/"(\/assets\/[^"]+)"/g, (m, path) => {
     const name = `${basename(path).split('.')[0]}.mp4`;
     copyFileSync(file, join(outDir, 'music', name));
     music.push(name);
+    side.set(`music/${name}`, statSync(file).size);
     return `(self.__ppBase+"music/${name}")`;
+  }
+  if (path.includes('/assets/clip/')) {
+    // modèle de reconnaissance : jamais dans la page (tinyclip-web.0.<empreinte>.bin → clip/tinyclip-web.0.bin)
+    const name = basename(path).replace(/\.[0-9a-f]{32}(\.[^.]+)$/, '$1');
+    copyFileSync(file, join(outDir, 'clip', name));
+    side.set(`clip/${name}`, statSync(file).size);
+    return `(self.__ppBase+"clip/${name}")`;
   }
   inlined++;
   return `"data:${MIME[extname(path)] ?? 'application/octet-stream'};base64,${readFileSync(file).toString('base64')}"`;
@@ -61,7 +77,7 @@ const page = `<title>PocketPics</title>
 </style>
 <div id="root"></div>
 <script>
-  // Dossier de la page, retenu avant de changer l'adresse : les musiques sont à côté (music/).
+  // Dossier de la page, retenu avant de changer l'adresse : musiques (music/) et modèle (clip/) sont à côté.
   self.__ppBase = new URL('.', location.href).href;
   // Le jeu démarre toujours sur l'accueil, quelle que soit l'adresse d'hébergement.
   try { if (location.pathname !== '/') history.replaceState(null, '', '/'); } catch (e) {}
@@ -71,4 +87,11 @@ const page = `<title>PocketPics</title>
 mkdirSync(outDir, { recursive: true });
 const target = join(outDir, 'pocketpics.html');
 writeFileSync(target, page);
-console.log(`\n${inlined} ressources intégrées → ${target} (${(Buffer.byteLength(page) / 1e6).toFixed(1)} Mo), ${music.length} musiques dans ${join(outDir, 'music')}`);
+// type de chaque fichier publié (le jeu lit les morceaux du modèle en octets bruts, quel que soit le type annoncé)
+const TYPE = { '.mp4': 'video/mp4', '.bin': 'application/octet-stream' };
+const files = [...side].sort(([a], [b]) => a.localeCompare(b)).map(([path, bytes]) => ({ path, bytes, contentType: TYPE[extname(path)] ?? 'application/octet-stream' }));
+writeFileSync(join(outDir, 'files.json'), JSON.stringify({ page: { path: 'pocketpics.html', bytes: Buffer.byteLength(page) }, files }, null, 1));
+const big = files.filter((f) => f.bytes > 15e6);
+if (big.length) throw new Error(`Fichiers trop lourds pour être publiés : ${big.map((f) => f.path).join(', ')}`);
+if (Buffer.byteLength(page) > 16e6) throw new Error('La page dépasse 16 Mo');
+console.log(`\n${inlined} ressources intégrées → ${target} (${(Buffer.byteLength(page) / 1e6).toFixed(1)} Mo), ${music.length} musiques dans ${join(outDir, 'music')}, ${files.length - music.length} fichiers du modèle dans ${join(outDir, 'clip')} ; liste : files.json`);

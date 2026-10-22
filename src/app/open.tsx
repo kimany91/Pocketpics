@@ -40,7 +40,7 @@ import { NoPhotosLeftError } from '../game/pack';
 import { getRarity } from '../game/rarity';
 import { FriendRefused, FriendVerdictBanner, RepiocheButton } from '../components/pioche/FriendVerdict';
 import { usePioche } from '../net/pioche';
-import { useGame } from '../state/game';
+import { useGame, useLiveCards } from '../state/game';
 import { useDrawStatus } from '../state/useDrawStatus';
 import { useTutoStep } from '../state/useTuto';
 import { isUnlocked } from '../game/tutorial';
@@ -72,7 +72,9 @@ function PackSession({ onNext, friend = false, paul = false }: { onNext(): void;
   /** Vrai une fois ce paquet-ci lancé (avant, `openingLucky` vaut encore celui du paquet précédent). */
   const [luckKnown, setLuckKnown] = useState(false);
   const lucky = luckKnown && openingLucky;
-  const [cards, setCards] = useState<Card[] | null>(null);
+  const [made, setCards] = useState<Card[] | null>(null);
+  // à jour avec la collection : un nom reconnu juste après l'ouverture s'affiche
+  const cards = useLiveCards(made);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>('pack');
   const [boom, setBoom] = useState(0);
@@ -497,13 +499,14 @@ function GalaxySession() {
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const playing = state.kind === 'loading' || state.kind === 'ready';
+  const galaxyCards = useLiveCards(state.kind === 'ready' ? [state.card] : null);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <GalaxySpace width={width} height={height} tilt={tilt} />
       {playing && phase === 'vortex' ? <Vortex waiting={landed && state.kind === 'loading'} onLanded={() => setLanded(true)} /> : null}
-      {state.kind === 'ready' && phase === 'reveal' ? (
-        <RevealStack cards={[state.card]} firsts={new Set(['galaxy'])} onDone={() => router.replace(`/card/${state.card.id}`)} />
+      {state.kind === 'ready' && phase === 'reveal' && galaxyCards ? (
+        <RevealStack cards={galaxyCards} firsts={new Set(['galaxy'])} onDone={() => router.replace(`/card/${state.card.id}`)} />
       ) : null}
       {state.kind === 'already' ? (
         <GalaxyNotice

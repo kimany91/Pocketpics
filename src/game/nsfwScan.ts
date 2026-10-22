@@ -36,6 +36,9 @@ export const forgetPhoto = (uri: string) => queue.forget(uri);
 /** Vérifie une photo en attendant au plus `ms` : `null` si le détecteur n'a pas répondu à temps. */
 export const scanWithin = (uri: string, ms: number) => within(scanPhoto(uri), ms);
 
+/** Photos en attente du détecteur (la reconnaissance de fond attend qu'il ait fini). */
+export const nsfwPending = () => queue.pending;
+
 /** Prépare le détecteur en avance (au démarrage), sans bloquer. */
 export function preloadNsfw() {
   const t0 = Date.now();

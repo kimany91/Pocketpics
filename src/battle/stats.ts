@@ -141,6 +141,12 @@ const SPECIAL_NAMES: Record<AttackKind, string[]> = {
   mirror: ['Miroir', 'Copier-coller', 'Effet miroir', 'Capture d’écran'],
 };
 
+/** Nom d'attaque donné par le jeu à la création de la carte (pas choisi par le joueur). */
+export function isStockAttackName(slot: 0 | 1, kind: string, name: string): boolean {
+  if (slot === 0) return CLASSIC_NAMES.includes(name);
+  return (SPECIAL_NAMES[kind as AttackKind] ?? SPECIAL_NAMES.basic).includes(name);
+}
+
 /** Ce que fait chaque attaque, affiché dans les stats et en combat. */
 export const ATTACK_EFFECT: Record<AttackKind, string> = {
   basic: 'Un coup simple.',

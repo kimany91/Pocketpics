@@ -18,6 +18,7 @@ import { type LuckState, initialLuck } from '../game/luck';
 import { type QuestState, initialQuests, migrateQuests } from '../game/quests';
 import { type RankState, initialRank, migrateRank } from '../game/rank';
 import { type NsfwScan, readScan } from '../game/nsfw';
+import { type Recognition, readRecognition } from '../game/recognize/recognize';
 import { getRarity } from '../game/rarity';
 import { type TutorialState, initialTutorial, migrateTutorial } from '../game/tutorial';
 
@@ -85,6 +86,12 @@ export interface Card {
    * d'avant le filtre, pas encore vérifiée). Ajouté après : `null` si absent.
    */
   nsfwScan: NsfwScan;
+  /**
+   * Ce que montre la photo, reconnu sur le téléphone (src/game/recognize) : label,
+   * catégorie, et les noms donnés par le jeu. `null` : pas encore regardée (ou
+   * carte reçue d'un autre joueur, jamais renommée ici). Ajouté après : `null` si absent.
+   */
+  recognition: Recognition | null;
   /**
    * PV et attaques pour les combats (ajouté après : générés à partir de l'id si
    * absents, donc identiques à chaque chargement). Les noms d'attaque sont modifiables.
@@ -222,6 +229,7 @@ export function migrateCard(input: unknown, now = Date.now()): Card | null {
     locked: c.locked === true,
     censored: c.censored === true,
     nsfwScan: readScan(c.nsfwScan),
+    recognition: readRecognition(c.recognition),
     giver: typeof c.giver === 'string' && c.giver ? c.giver.slice(0, 24) : undefined,
     battle: normalizeStats(c.battle, c.id as string, getRarity(rarity).rank),
   };

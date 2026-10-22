@@ -1,11 +1,13 @@
-// Config Metro d'Expo, plus le détecteur de contenu adulte (src/game/nsfw*.ts, assets/nsfw).
+// Config Metro d'Expo, plus le détecteur de contenu adulte (src/game/nsfw*.ts, assets/nsfw)
+// et la reconnaissance de la photo (src/game/recognize, assets/clip).
 const path = require('path');
 const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-// Le modèle TFLite (.tflite, Android/iOS) et les poids TensorFlow.js (.bin.gz, navigateur).
-config.resolver.assetExts.push('tflite', 'gz');
+// Les modèles TFLite (.tflite, Android/iOS) et les poids TensorFlow.js (.bin.gz et .bin,
+// navigateur), dont la reconnaissance de la photo (assets/clip).
+config.resolver.assetExts.push('tflite', 'gz', 'bin');
 
 // Navigateur : TensorFlow.js est pris dans ses fichiers déjà réduits (deux fois plus
 // légers que ses sources, la version en un seul fichier doit rester petite). Leurs

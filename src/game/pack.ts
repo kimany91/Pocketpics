@@ -129,6 +129,7 @@ export function makeCard(
     locked: false,
     censored: opts.scan?.censored === true,
     nsfwScan: opts.scan?.nsfwScan ?? 'pending',
+    recognition: null,
     ...(opts.giver ? { giver: opts.giver } : {}),
     battle: generateStats(id, getRarity(rarity).rank),
   };
