@@ -88,7 +88,7 @@ export async function generatePack(opts: {
   const cards: GeneratedCard[] = photos.map(({ photo, verdict }, k) => ({
     photo,
     verdict,
-    card: makeCard({ hash: photo.hash, width: photo.width, height: photo.height, sourceId: photo.assetId }, rarities[k] ?? rollRarity(), now),
+    card: makeCard({ hash: photo.hash, width: photo.width, height: photo.height, sourceId: photo.assetId, screenshot: photo.screenshot, screenshotApp: photo.screenshotApp }, rarities[k] ?? rollRarity(), now),
   }));
   // La plus rare est révélée en dernier : le suspense monte.
   cards.sort((a, b) => getRarity(a.card.rarity).rank - getRarity(b.card.rarity).rank);
@@ -100,7 +100,7 @@ export async function generatePack(opts: {
  * et chance d'être chromatique. Sert au tirage normal et à la Pioche amicale.
  */
 export function makeCard(
-  photo: { hash: string; width: number; height: number; sourceId: string | null },
+  photo: { hash: string; width: number; height: number; sourceId: string | null; screenshot?: boolean | null; screenshotApp?: string | null },
   rarity: RarityId,
   now: number,
   opts: {
@@ -131,6 +131,7 @@ export function makeCard(
     nsfwScan: opts.scan?.nsfwScan ?? 'pending',
     recognition: null,
     ...(opts.giver ? { giver: opts.giver } : {}),
+    ...(photo.screenshot === true ? { screenshot: true as const, ...(photo.screenshotApp ? { screenshotApp: photo.screenshotApp } : {}) } : {}),
     battle: generateStats(id, getRarity(rarity).rank),
   };
 }

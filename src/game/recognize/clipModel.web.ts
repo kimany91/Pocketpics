@@ -15,8 +15,8 @@ import { Asset } from 'expo-asset';
 
 import { base64ToBytes, toModelInput } from '../nsfw';
 import { type WebManifest, joinParts, makeEncoder, readWeights } from './clipEncoder';
-import { CLIP_INPUT, decodeHalfTable } from './recognize';
-import type { ClipModel, LabelMeta } from './clipModel';
+import { CLIP_INPUT, decodeHalfTable, fitInside } from './recognize';
+import type { ClipModel, LabelMeta, PhotoLook, ViewChoice } from './clipModel';
 
 const MANIFEST = require('../../../assets/clip/tinyclip-web.json') as WebManifest;
 /** Les morceaux de poids, dans l'ordre du manifeste. */
@@ -61,11 +61,17 @@ function loadImage(uri: string): Promise<HTMLImageElement> {
   });
 }
 
-/** Carré du centre de la photo, en 224 × 224, RGB 0..1. */
-async function pixelsOf(uri: string): Promise<Float32Array> {
+/**
+ * Vues voulues de la photo, en 224 × 224, RGB 0..1 : le carré du centre et/ou
+ * l'image entière à bandes noires (captures d'écran, voir recognize.ts).
+ */
+async function pixelsOf(uri: string, views: ViewChoice): Promise<{ aspect: number; center: Float32Array | null; full: Float32Array | null }> {
   const img = await loadImage(uri);
-  const side = Math.min(img.naturalWidth, img.naturalHeight);
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  const side = Math.min(w, h);
   if (!side) throw new Error('Image vide');
+  const want = views(h / w);
   const canvas = document.createElement('canvas');
   canvas.width = CLIP_INPUT;
   canvas.height = CLIP_INPUT;
@@ -73,8 +79,21 @@ async function pixelsOf(uri: string): Promise<Float32Array> {
   if (!ctx) throw new Error('Canvas indisponible');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, CLIP_INPUT, CLIP_INPUT);
-  return toModelInput(ctx.getImageData(0, 0, CLIP_INPUT, CLIP_INPUT).data, CLIP_INPUT, CLIP_INPUT, 4);
+  const read = () => toModelInput(ctx.getImageData(0, 0, CLIP_INPUT, CLIP_INPUT).data, CLIP_INPUT, CLIP_INPUT, 4);
+  let center: Float32Array | null = null;
+  let full: Float32Array | null = null;
+  if (want.center) {
+    ctx.drawImage(img, (w - side) / 2, (h - side) / 2, side, side, 0, 0, CLIP_INPUT, CLIP_INPUT);
+    center = read();
+  }
+  if (want.full) {
+    const fit = fitInside(w, h);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, CLIP_INPUT, CLIP_INPUT);
+    ctx.drawImage(img, 0, 0, w, h, Math.floor((CLIP_INPUT - fit.width) / 2), Math.floor((CLIP_INPUT - fit.height) / 2), fit.width, fit.height);
+    full = read();
+  }
+  return { aspect: h / w, center, full };
 }
 
 let loading: Promise<ClipModel> | null = null;
@@ -98,7 +117,11 @@ export function loadClipModel(): Promise<ClipModel> {
         }
       };
       await embedTensor(new Float32Array(CLIP_INPUT * CLIP_INPUT * 3));
-      return { meta: META, table, embed: async (uri: string) => embedTensor(await pixelsOf(uri)) };
+      const embed = async (uri: string, views: ViewChoice): Promise<PhotoLook> => {
+        const px = await pixelsOf(uri, views);
+        return { aspect: px.aspect, center: px.center && (await embedTensor(px.center)), full: px.full && (await embedTensor(px.full)) };
+      };
+      return { meta: META, table, embed };
     })().catch((e) => {
       loading = null;
       throw e;

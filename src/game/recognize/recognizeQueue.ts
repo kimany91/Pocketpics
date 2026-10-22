@@ -4,10 +4,11 @@
  * de fond (anciennes cartes). Les résultats sont gardés : la même image n'est
  * jamais regardée deux fois.
  *
- * Tests (navigateur) : `globalThis.__pocketpicsForceLabel = 'dog'` fait
- * répondre ce label à toutes les reconnaissances suivantes (un tableau
- * `['dog', 'tower']` : un label par reconnaissance, dans l'ordre, puis le
- * modèle reprend). Un label hors du vocabulaire donne « inconnu ».
+ * Tests (navigateur) : `globalThis.__pocketpicsForceLabel = 'a dog'` fait
+ * répondre ce label (phrase anglaise ou nom français) à toutes les
+ * reconnaissances suivantes (un tableau `['a dog', 'Phare']` : un label par
+ * reconnaissance, dans l'ordre, puis le modèle reprend). Un label hors du
+ * vocabulaire donne « inconnu ».
  */
 
 export type RecogPriority = 'high' | 'low';
@@ -60,6 +61,11 @@ export class JobQueue<T> {
   /** Oublie le résultat d'une image (son contenu a changé). */
   forget(key: string) {
     this.cache.delete(key);
+  }
+
+  /** Oublie les résultats dont la clé convient (une image vue avec plusieurs indices). */
+  forgetWhere(match: (key: string) => boolean) {
+    for (const k of [...this.cache.keys()]) if (match(k)) this.cache.delete(k);
   }
 
   /** Nombre de photos en attente (celle en cours comprise). */

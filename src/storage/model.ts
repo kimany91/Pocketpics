@@ -75,6 +75,14 @@ export interface Card {
   /** Pioche amicale : pseudo de l'ami dans la galerie duquel la carte a été piochée. */
   giver?: string;
   /**
+   * Les métadonnées de la photo disent que c'est une capture d'écran (sous-type
+   * iOS, dossier ou nom du fichier). Sert à la reconnaissance (ajouté après :
+   * absent si non ou inconnu).
+   */
+  screenshot?: true;
+  /** Appli de la capture, d'après le nom du fichier (« instagram »…), si connue. */
+  screenshotApp?: string;
+  /**
    * Photo jugée pornographique par le détecteur de contenu adulte (src/game/nsfw.ts) :
    * elle est floutée et marquée « Censuré » partout. Définitif : ne repasse jamais
    * à `false` (ajouté après : `false` si absent).
@@ -231,6 +239,8 @@ export function migrateCard(input: unknown, now = Date.now()): Card | null {
     nsfwScan: readScan(c.nsfwScan),
     recognition: readRecognition(c.recognition),
     giver: typeof c.giver === 'string' && c.giver ? c.giver.slice(0, 24) : undefined,
+    screenshot: c.screenshot === true ? true : undefined,
+    screenshotApp: c.screenshot === true && typeof c.screenshotApp === 'string' && c.screenshotApp ? c.screenshotApp.slice(0, 24) : undefined,
     battle: normalizeStats(c.battle, c.id as string, getRarity(rarity).rank),
   };
 }

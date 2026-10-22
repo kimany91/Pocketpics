@@ -6,6 +6,7 @@
  * L'app mobile, elle, lit directement la galerie (gallery.ts).
  */
 import { idbEntries, idbPut } from '../storage/webdb';
+import { isScreenshotName, screenshotApp } from './recognize/screenshotHint';
 
 export type GalleryAccess = 'granted' | 'limited' | 'denied' | 'undetermined';
 export type GallerySource = 'photos' | 'folder';
@@ -17,6 +18,10 @@ export interface ProcessedPhoto {
   thumbUri: string;
   width: number;
   height: number;
+  /** Capture d'écran d'après le nom du fichier (`null` : on ne sait pas). */
+  screenshot: boolean | null;
+  /** Appli de la capture d'après le nom du fichier, si connue. */
+  screenshotApp: string | null;
 }
 
 export type PhotoCheck = (hash: string) => boolean;
@@ -357,7 +362,7 @@ export async function processPhoto(assetId: string, isKnownHash: PhotoCheck): Pr
     const index = Number(assetId.split('-')[1] ?? 0);
     if (isKnownHash(assetId)) return { duplicate: true };
     await new Promise((r) => setTimeout(r, 60));
-    return { assetId, hash: assetId, imageUri: paintDemo(index, 600, 840), thumbUri: paintDemo(index, 240, 336), width: 600, height: 840 };
+    return { assetId, hash: assetId, imageUri: paintDemo(index, 600, 840), thumbUri: paintDemo(index, 240, 336), width: 600, height: 840, screenshot: false, screenshotApp: null };
   }
   const hash = await blobHash(assetId, blob);
   if (isKnownHash(hash)) return { duplicate: true };
@@ -365,7 +370,9 @@ export async function processPhoto(assetId: string, isKnownHash: PhotoCheck): Pr
   try {
     const image = resized(img, 1080, 0.86);
     const thumb = resized(img, 360, 0.72);
-    return { assetId, hash, imageUri: image.uri, thumbUri: thumb.uri, width: image.width, height: image.height };
+    // le nom du fichier importé (« Screenshot_…_Instagram.png », « Capture d’écran … ») ; l'id commence par lui
+    const name = blob instanceof File ? blob.name : assetId;
+    return { assetId, hash, imageUri: image.uri, thumbUri: thumb.uri, width: image.width, height: image.height, screenshot: isScreenshotName(name) ? true : null, screenshotApp: screenshotApp(name) };
   } finally {
     URL.revokeObjectURL(img.src);
   }

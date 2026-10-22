@@ -2,12 +2,13 @@
  * Reconnaissance des photos (voir recognize.ts) : la file partagée par tout le
  * jeu, après le filtre de contenu adulte. Une photo qui n'a pas pu être
  * regardée (modèle absent, image illisible) lève une erreur : la carte garde
- * ses noms de départ.
+ * ses noms de départ. L'indice des métadonnées (capture d'écran, appli) fait
+ * partie de la clé : la même image avec un autre indice est revue.
  */
 import { within } from '../nsfwQueue';
 import { nsfwPending } from '../nsfwScan';
 import { type ClipModel, loadClipModel } from './clipModel';
-import { type Decision, alignVocab, decide, forcedDecision, labelProbs } from './recognize';
+import { type Decision, type PhotoHint, alignVocab, decidePhoto, forcedDecision, labelProbs, viewsFor } from './recognize';
 import { JobQueue, type RecogPriority, takeForcedLabel } from './recognizeQueue';
 
 /**
@@ -55,17 +56,27 @@ function model(): Promise<ClipModel> {
   return loading;
 }
 
-const queue = new JobQueue<Decision>(async (uri) => {
+/** Clé de la file : l'indice puis l'adresse de l'image. */
+const keyOf = (uri: string, hint: PhotoHint) => `${hint.screenshot === true ? `s:${hint.app ?? ''}` : '-'}|${uri}`;
+const parseKey = (key: string): { uri: string; hint: PhotoHint } => {
+  const at = key.indexOf('|');
+  const h = key.slice(0, at);
+  return { uri: key.slice(at + 1), hint: h.startsWith('s:') ? { screenshot: true, app: h.slice(2) || null } : { screenshot: null } };
+};
+
+const queue = new JobQueue<Decision>(async (key) => {
+  const { uri, hint } = parseKey(key);
   const forced = takeForcedLabel();
   let d: Decision;
   try {
     const m = await model();
     const t1 = Date.now();
-    const embedding = await m.embed(uri);
+    const look = await m.embed(uri, (aspect) => viewsFor(hint.screenshot, aspect));
     stats.lastMs = Date.now() - t1;
     stats.totalMs += stats.lastMs;
     stats.scans++;
-    d = decide(labelProbs(embedding, m.table, m.meta.dim, m.meta.logitScale), alignVocab(m.meta.labels));
+    const probs = (e: Float32Array | null) => e && labelProbs(e, m.table, m.meta.dim, m.meta.logitScale);
+    d = decidePhoto({ ...hint, aspect: look.aspect, center: probs(look.center), full: probs(look.full) }, alignVocab(m.meta.labels));
   } catch (e) {
     if (!forced) {
       stats.failed++;
@@ -82,14 +93,14 @@ const queue = new JobQueue<Decision>(async (uri) => {
   // le filtre de contenu adulte d'abord : jamais les deux modèles en même temps
 }, () => nsfwPending() === 0);
 
-/** Regarde une photo (déjà vérifiée par le filtre de contenu adulte). */
-export const recognizePhoto = (uri: string, priority: RecogPriority = 'high') => queue.run(uri, priority);
+/** Regarde une photo (déjà vérifiée par le filtre de contenu adulte), avec ce que ses métadonnées en disent. */
+export const recognizePhoto = (uri: string, priority: RecogPriority = 'high', hint: PhotoHint = { screenshot: null }) => queue.run(keyOf(uri, hint), priority);
 
 /** Pareil, en attendant au plus `ms` : `null` si pas de réponse à temps. */
-export const recognizeWithin = (uri: string, ms: number) => within(recognizePhoto(uri), ms);
+export const recognizeWithin = (uri: string, ms: number, hint?: PhotoHint) => within(recognizePhoto(uri, 'high', hint), ms);
 
 /** Oublie le résultat d'une image dont le contenu a changé (recadrage). */
-export const forgetRecognition = (uri: string) => queue.forget(uri);
+export const forgetRecognition = (uri: string) => queue.forgetWhere((key) => parseKey(key).uri === uri);
 
 /** Note l'attente ajoutée à une ouverture de paquet. */
 export const notePackWait = (ms: number) => void (stats.packWaitMs = ms);

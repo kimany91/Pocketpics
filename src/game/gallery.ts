@@ -11,6 +11,8 @@ import {
 } from 'expo-media-library';
 import { Platform } from 'react-native';
 
+import { isScreenshotName, screenshotApp } from './recognize/screenshotHint';
+
 export type GalleryAccess = 'granted' | 'limited' | 'denied' | 'undetermined';
 /** Utilisé par la version navigateur (sélecteur de photos ou de dossier). */
 export type GallerySource = 'photos' | 'folder';
@@ -54,6 +56,10 @@ export interface ProcessedPhoto {
   thumbUri: string;
   width: number;
   height: number;
+  /** Capture d'écran d'après les métadonnées (`null` : on ne sait pas). */
+  screenshot: boolean | null;
+  /** Appli de la capture d'après le nom du fichier (« instagram »…), si connue. */
+  screenshotApp: string | null;
 }
 
 const IMAGE_SHORT_SIDE = 1080;
@@ -93,6 +99,7 @@ export async function processPhoto(
     } catch {}
   }
   const uri = await asset.getUri();
+  const shot = await screenshotOf(asset, uri);
   let hash = md5Of(uri);
   if (hash && isKnownHash(hash)) return { duplicate: true };
 
@@ -112,7 +119,28 @@ export async function processPhoto(
     if (isKnownHash(hash)) return { duplicate: true };
   }
   const thumb = await resizeTo(image.uri, image.width, image.height, THUMB_SHORT_SIDE, 0.72);
-  return { assetId, hash, imageUri: image.uri, thumbUri: thumb.uri, width: image.width, height: image.height };
+  return { assetId, hash, imageUri: image.uri, thumbUri: thumb.uri, width: image.width, height: image.height, ...shot };
+}
+
+/**
+ * Capture d'écran ou non, d'après les métadonnées (lecture rapide) :
+ *  - iOS : le sous-type « screenshot » de la photothèque (sûr) ;
+ *  - Android : le chemin (Pictures/Screenshots) ou le nom du fichier
+ *    (Screenshot_…_Instagram.jpg), qui donne parfois l'appli.
+ */
+async function screenshotOf(asset: Asset, uri: string): Promise<{ screenshot: boolean | null; screenshotApp: string | null }> {
+  let name = uri;
+  try {
+    name = `${uri}/${await asset.getFilename()}`;
+  } catch {}
+  const app = screenshotApp(name);
+  if (Platform.OS === 'ios') {
+    try {
+      const subtypes: string[] = await asset.getMediaSubtypes();
+      return { screenshot: subtypes.includes('screenshot'), screenshotApp: app };
+    } catch {}
+  }
+  return { screenshot: isScreenshotName(name) ? true : null, screenshotApp: app };
 }
 
 /* -------------------------------- Recadrage -------------------------------- */

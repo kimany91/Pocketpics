@@ -35,7 +35,7 @@ import { type FriendDrawPayment, type FriendPhoto, payFriendDraw } from '../game
 import { NSFW_SCAN_VERSION, type PhotoMark, photoMark, scanFields, scanOrder, withScan } from '../game/nsfw';
 import { within } from '../game/nsfwQueue';
 import { forgetPhoto, nsfwPending, nsfwReady, preloadNsfw, scanPhoto, scanWithin } from '../game/nsfwScan';
-import { type Decision, needsRecognition, noRecognition, recognitionOrder, withRecognition } from '../game/recognize/recognize';
+import { type Decision, type PhotoHint, needsRecognition, noRecognition, recognitionOrder, withRecognition } from '../game/recognize/recognize';
 import { forgetRecognition, notePackWait, preloadRecognizer, recognizePhoto, recognizerGaveUp, recognizerLoaded, recognizerReady } from '../game/recognize/recognizeScan';
 import { NoPhotosLeftError, generatePack, makeCard } from '../game/pack';
 import { PAUL_NAME, paulFriend, paulHash } from '../game/paul';
@@ -323,7 +323,7 @@ export const useGame = create<GameStore>((set, get) => ({
       // Une photo jugée propre est ensuite reconnue (nom de la carte et des attaques).
       screen: (photo) => scanWithin(photo.imageUri, PACK_SCAN_MS).then(noteClean(photo.imageUri, seen)),
     }).catch(rememberSkipped);
-    const named = await recognitionsOf(pack.cards.map((c) => c.photo.imageUri), seen, startedAt);
+    const named = await recognitionsOf(pack.cards.map((c) => ({ uri: c.photo.imageUri, hint: hintOf(c.card) })), seen, startedAt);
 
     // 1) les cartes d'abord (si l'app est tuée ici, le joueur garde ses cartes ET son tirage)
     const written: Card[] = [];
@@ -503,7 +503,7 @@ export const useGame = create<GameStore>((set, get) => ({
       screen: (photo) => scanWithin(photo.imageUri, PACK_SCAN_MS).then(noteClean(photo.imageUri, seen)),
     }).catch(rememberSkipped);
     const { card: made, photo, verdict } = pack.cards[0];
-    const named = await recognitionsOf([photo.imageUri], seen, startedAt);
+    const named = await recognitionsOf([{ uri: photo.imageUri, hint: hintOf(made) }], seen, startedAt);
     const card = named.apply({ ...made, ...scanFields(verdict) }, photo.imageUri);
     disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri } });
     const cards = [...get().cards, card];
@@ -1128,12 +1128,13 @@ const lateIds = new Set<string>();
  * `apply` nomme une carte si sa reconnaissance est là ; `later` nomme les
  * autres à l'arrivée de la leur (sinon, la file de fond s'en charge).
  */
-async function recognitionsOf(uris: string[], clean: Set<string>, startedAt: number) {
+async function recognitionsOf(photos: { uri: string; hint: PhotoHint }[], clean: Set<string>, startedAt: number) {
+  const uris = photos.map((p) => p.uri);
   const seen = new Map<string, Promise<Decision>>();
   if (recognizerLoaded() && !namesOnHold()) {
-    for (const u of uris) {
+    for (const { uri: u, hint } of photos) {
       if (!clean.has(u)) continue;
-      const p = recognizePhoto(u, 'high');
+      const p = recognizePhoto(u, 'high', hint);
       p.catch(() => {});
       seen.set(u, p);
     }
@@ -1174,6 +1175,9 @@ async function recognitionsOf(uris: string[], clean: Set<string>, startedAt: num
     },
   };
 }
+
+/** Ce que les métadonnées de la photo d'une carte disent pour la reconnaissance (capture d'écran, appli). */
+const hintOf = (c: Card): PhotoHint => ({ screenshot: c.screenshot === true ? true : null, app: c.screenshotApp ?? null });
 
 /**
  * Note ce que montre la photo d'une carte, sans toucher à ce que le joueur a
@@ -1235,7 +1239,7 @@ async function recognizeBacklog(): Promise<void> {
         break;
       }
       try {
-        const d = await recognizePhoto(disk.cardImageUri(next.id), fresh ? 'high' : 'low');
+        const d = await recognizePhoto(disk.cardImageUri(next.id), fresh ? 'high' : 'low', hintOf(next));
         // pas appliquée (tuto) : la boucle repasse par l'attente ci-dessus
         if (!applyRecognition(next.id, d) && !namesOnHold()) recogFails.set(next.id, MAX_CARD_FAILS);
       } catch {

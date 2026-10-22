@@ -1,6 +1,6 @@
 """
 Reconnaissance de la photo : prépare le modèle TinyCLIP (encodeur d'images
-seulement) et la table des textes du vocabulaire (src/game/recognize/vocab.ts).
+seulement) et la table des textes du vocabulaire (src/game/recognize/vocabV2.ts).
 
 Modèle : TinyCLIP ViT-40M/32 Text-19M, entraîné sur LAION-400M (Microsoft,
 licence MIT, https://github.com/microsoft/Cream/tree/main/TinyCLIP). C'est un
@@ -14,7 +14,12 @@ Ce que le script écrit dans assets/clip/ :
   - tinyclip-web.json + tinyclip-web.N.bin : les mêmes poids pour le navigateur
     (int8 par canal de sortie + échelles), coupés en morceaux de moins de 14 Mo ;
   - clip-labels.bin + clip-labels.json : le vecteur de chaque label (float16),
-    moyenne de plusieurs phrases (« a photo of a dog. », …), dans l'ordre de VOCAB.
+    dans l'ordre de VOCAB : moyenne des vecteurs (normés) de ses phrases
+    anglaises (« a dog », « a small bird perched on a branch »…) et, sauf
+    pour les captures d'écran, des mêmes phrases dans « a photo of {}. » et
+    « a phone photo of {}. ». Chaque label y est nommé par sa première phrase.
+    (Mesuré sur 300 photos de galerie : ces deux modèles de phrase en plus
+    font +3 points de catégorie juste ; voir le README.)
 
 Puis il compare, sur des images sans risque, le modèle d'origine (PyTorch,
 float32) aux versions TFLite et navigateur : même label en tête. Mesuré sur 320
@@ -23,7 +28,11 @@ int8 304/320 (même catégorie : 225/230 hors illustrations), navigateur 313/320
 En float16, tout concorde, mais chaque fichier pèserait 80 Mo au lieu de 40.
 
     python3 -m venv /tmp/venv && /tmp/venv/bin/pip install torch open_clip_torch tensorflow pillow
-    /tmp/venv/bin/python scripts/convert-clip-model.py [dossier-d-images-de-test]
+    /tmp/venv/bin/python scripts/convert-clip-model.py [--labels-only] [--out DOSSIER] [dossier-d-images-de-test]
+
+--labels-only : seulement la table des labels (après un changement du
+vocabulaire ; le modèle ne change pas, TensorFlow n'est pas nécessaire).
+--out : écrit ailleurs que dans assets/clip (pour comparer).
 
 Le poids d'origine (168 Mo) est téléchargé une fois dans /tmp/clip-cache.
 """
@@ -37,21 +46,29 @@ import urllib.request
 
 import numpy as np
 
+args = sys.argv[1:]
+LABELS_ONLY = '--labels-only' in args
+OUT_ARG = args[args.index('--out') + 1] if '--out' in args else None
+TEST_DIRS = [a for i, a in enumerate(args) if not a.startswith('--') and (i == 0 or args[i - 1] != '--out')]
+
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '2')
 import open_clip  # noqa: E402
-import tensorflow as tf  # noqa: E402
 import torch  # noqa: E402
+if not LABELS_ONLY:
+    import tensorflow as tf  # noqa: E402
 from open_clip.model import CLIP  # noqa: E402
 from PIL import Image  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, 'assets', 'clip')
+OUT = os.path.abspath(OUT_ARG) if OUT_ARG else os.path.join(ROOT, 'assets', 'clip')
 CACHE = '/tmp/clip-cache'
 NAME = 'TinyCLIP-ViT-40M-32-Text-19M-LAION400M.pt'
 URL = f'https://github.com/wkcn/TinyCLIP-model-zoo/releases/download/checkpoints/{NAME}'
 SHA256 = 'af5042c3e3662c43573c16113d4a72014cf3aa19267a7a50c4b94be3c4e8366a'
 CHUNK = 14_000_000
-TEMPLATES = ['a photo of a {}.', 'a photo of the {}.', 'a close-up photo of a {}.', 'a bright photo of a {}.', 'a cropped photo of a {}.', 'a photo of my {}.']
+# phrases ajoutées à celles du vocabulaire (pas pour les captures d'écran, qui ne sont pas des photos)
+TEMPLATES = ['{}', 'a photo of {}.', 'a phone photo of {}.']
+NOT_PHOTOS = ('screenshot',)
 MEAN = [0.48145466, 0.4578275, 0.40821073]
 STD = [0.26862954, 0.26130258, 0.27577711]
 WIDTH, LAYERS, HEADS, PATCH = 512, 12, 8, 32
@@ -83,24 +100,29 @@ logit_scale = float(model.logit_scale.exp())
 W = {k[len('visual.'):]: v.detach().numpy().astype(np.float32) for k, v in model.state_dict().items() if k.startswith('visual.')}
 
 # --- Table des labels -------------------------------------------------------
-dump = "import('./src/game/recognize/vocab.ts').then((m) => console.log(JSON.stringify((m.VOCAB ?? m.default.VOCAB).map((v) => v.en))))"
-labels = json.loads(subprocess.check_output(['node', '--import', 'tsx', '-e', dump], cwd=ROOT))
+dump = "import('./src/game/recognize/vocabV2.ts').then((m) => console.log(JSON.stringify((m.VOCAB ?? m.default.VOCAB).map((v) => [v.en, v.category]))))"
+vocab = json.loads(subprocess.check_output(['node', '--import', 'tsx', '-e', dump], cwd=ROOT))
+labels = [en[0] for en, _ in vocab]
+assert len(set(labels)) == len(labels), 'première phrase en double dans le vocabulaire'
 tok = open_clip.get_tokenizer('ViT-B-32')
 rows = []
 with torch.no_grad():
-    for en in labels:
-        e = model.encode_text(tok([t.format(en) for t in TEMPLATES])).float()
+    for en, category in vocab:
+        texts = list(en) if category in NOT_PHOTOS else [t.format(p) for t in TEMPLATES for p in en]
+        e = model.encode_text(tok(texts)).float()
         e = (e / e.norm(dim=-1, keepdim=True)).mean(0)
         rows.append((e / e.norm()).numpy())
 table = np.stack(rows).astype(np.float16)
 open(os.path.join(OUT, 'clip-labels.bin'), 'wb').write(table.tobytes())
 json.dump(
-    {'model': NAME, 'labels': labels, 'dim': 512, 'logitScale': round(logit_scale, 4), 'templates': TEMPLATES},
+    {'model': NAME, 'labels': labels, 'dim': 512, 'logitScale': round(logit_scale, 4), 'templates': TEMPLATES, 'notPhotos': list(NOT_PHOTOS)},
     open(os.path.join(OUT, 'clip-labels.json'), 'w'),
     ensure_ascii=False,
     indent=1,
 )
 print(len(labels), 'labels, échelle', logit_scale)
+if LABELS_ONLY:
+    sys.exit(0)
 
 
 # --- Encodeur d'images en TensorFlow (même calcul que open_clip) -----------
@@ -193,7 +215,7 @@ print('navigateur :', len(blob), 'octets en', len(parts), 'morceaux')
 
 # --- Vérification -------------------------------------------------------------
 tests = sorted(glob.glob(os.path.join(ROOT, 'assets', 'bots', '*.jpg')))
-for d in sys.argv[1:]:
+for d in TEST_DIRS:
     tests += sorted(glob.glob(os.path.join(d, '**', '*.[jJ][pP]*[gG]'), recursive=True))
 it = tf.lite.Interpreter(model_path=tfl_path)
 it.allocate_tensors()
