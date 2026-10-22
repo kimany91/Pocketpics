@@ -90,3 +90,12 @@ test('photo de profil : le message passe chiffré, la présence donne sa date', 
   const p = openFor(code, sealFor(code, { k: 'presence', from: code, name: 'Léo', mmr: 0, online: true, at: 1, av: 4 }));
   assert.equal(p && p.k === 'presence' ? p.av : null, 4);
 });
+
+test('effets de la photo de profil : de plus en plus forts avec la rareté', async () => {
+  const { avatarAura } = await import('../src/game/avatarAura');
+  assert.equal(avatarAura(2).glow, 0, 'Super Rare : rien');
+  assert.ok(avatarAura(3).glow > 0 && !avatarAura(3).pulse, 'Épique : un léger halo');
+  assert.ok(avatarAura(4).glow > avatarAura(3).glow && avatarAura(4).pulse, 'Mythique : plus');
+  assert.ok(avatarAura(5).spin && avatarAura(6).spin && !avatarAura(6).sheen, 'Légendaire / Ultra : anneau qui tourne');
+  assert.ok(avatarAura(7).sheen && avatarAura(8).sheen, 'Divine (et Galaxy) : reflet');
+});

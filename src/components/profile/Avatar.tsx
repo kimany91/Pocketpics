@@ -3,6 +3,11 @@
  * rareté de la carte d'où vient la photo (en dégradé pour les raretés à
  * reflets : Légendaire, Ultra Légendaire, Divine, Galaxy).
  *
+ * Le tour de la photo s'anime selon la rareté (voir `avatarAura`) : rien
+ * jusqu'à Super Rare, un léger halo pour Épique, un halo qui respire pour
+ * Mythique, en plus un anneau qui tourne pour Légendaire et Ultra Légendaire,
+ * et pour Divine (et Galaxy) la photo brille avec un reflet qui la traverse.
+ *
  * Une photo reçue d'un ami passe au filtre de contenu adulte sur ce téléphone
  * avant d'être montrée : floutée en attendant, remplacée par `fallback` si
  * elle est censurée. Sans photo, on montre aussi `fallback` (l'emblème de rang).
@@ -11,9 +16,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { type ReactNode, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { ZoomIn } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  ZoomIn,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { botArt } from '../../battle/botArt';
+import { avatarAura } from '../../game/avatarAura';
+import { Glow } from '../fx';
 import { avatarDataUri } from '../../game/avatar';
 import { usePhotoVerdict } from '../../game/nsfwScan';
 import { PAUL_PORTRAIT, isPaul } from '../../game/paul';
@@ -63,9 +80,19 @@ export function Avatar({ photo, size, fallback }: { photo: AvatarPhoto | null; s
   const rarity = getRarity(photo.rarity);
   const dot = Math.max(12, Math.round(size * 0.3));
   const ring = Math.max(2, Math.round(size * 0.035));
+  const aura = avatarAura(rarity.rank);
   return (
     <Animated.View key={photo.at} entering={ZoomIn.springify().damping(12)} style={{ width: size, height: size }}>
-      <View style={[styles.round, { width: size, height: size, borderRadius: size / 2, borderWidth: ring, borderColor: rarity.color }]}>
+      {aura.glow > 0 ? <AuraGlow color={rarity.color} size={size} strength={aura.glow} pulse={aura.pulse} /> : null}
+      {aura.spin ? <SpinRing colors={rarity.frame.length > 1 ? rarity.frame : [rarity.color, '#FFFFFF']} size={size} width={ring * 2.2} /> : null}
+      <View
+        style={[
+          styles.round,
+          { width: size, height: size, borderRadius: size / 2, borderWidth: ring, borderColor: rarity.color },
+          // lueur collée au tour, plus forte avec la rareté
+          aura.halo > 0 ? { boxShadow: `0px 0px ${Math.round((aura.halo * size) / 100)}px ${rarity.color}` } : null,
+        ]}
+      >
         <Image
           // image du jeu (nombre sur téléphone, objet sur le web) : telle quelle ; sinon une adresse
           source={typeof photo.source === 'string' ? { uri: photo.source } : photo.source}
@@ -73,9 +100,54 @@ export function Avatar({ photo, size, fallback }: { photo: AvatarPhoto | null; s
           contentFit="cover"
           transition={0}
         />
+        {aura.sheen && verdict !== 'pending' ? <Sheen size={size} /> : null}
         {verdict === 'pending' ? <HiddenPhoto source={{ uri: foreignUri }} width={size - ring * 2} height={size - ring * 2} mark="pending" /> : null}
       </View>
       <RarityDot rarity={photo.rarity} size={dot} style={{ right: -dot * 0.08, bottom: -dot * 0.08 }} />
+    </Animated.View>
+  );
+}
+
+/** Halo de la couleur de la rareté derrière la photo ; il respire doucement pour les plus rares. */
+function AuraGlow({ color, size, strength, pulse }: { color: string; size: number; strength: number; pulse: boolean }) {
+  const o = useSharedValue(strength);
+  useEffect(() => {
+    if (!pulse) return;
+    o.value = withRepeat(withSequence(withTiming(strength, { duration: 1300, easing: Easing.inOut(Easing.sin) }), withTiming(strength * 0.55, { duration: 1300, easing: Easing.inOut(Easing.sin) })), -1, false);
+    return () => cancelAnimation(o);
+  }, [pulse, strength, o]);
+  const g = size * (1.35 + strength * 0.6);
+  return <Glow color={color} size={g} opacity={o} style={{ left: (size - g) / 2, top: (size - g) / 2 }} />;
+}
+
+/** Anneau aux couleurs du cadre de la rareté, qui tourne autour de la photo. */
+function SpinRing({ colors: c, size, width }: { colors: string[]; size: number; width: number }) {
+  const rot = useSharedValue(0);
+  useEffect(() => {
+    rot.value = withRepeat(withTiming(360, { duration: 4200, easing: Easing.linear }), -1, false);
+    return () => cancelAnimation(rot);
+  }, [rot]);
+  const d = size + width * 2;
+  const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot.value}deg` }] }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: -width, top: -width, width: d, height: d, borderRadius: d / 2, overflow: 'hidden' }, style]}>
+      <LinearGradient colors={[...c, c[0]] as unknown as [string, string, ...string[]]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+    </Animated.View>
+  );
+}
+
+/** Divine et Galaxy : un reflet traverse la photo depuis le côté, de temps en temps. */
+function Sheen({ size }: { size: number }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    p.value = withDelay(500, withRepeat(withSequence(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.quad) }), withTiming(1, { duration: 1300 }), withTiming(0, { duration: 0 })), -1, false));
+    return () => cancelAnimation(p);
+  }, [p]);
+  const band = size * 0.42;
+  const style = useAnimatedStyle(() => ({ transform: [{ translateX: -band * 1.5 + p.value * (size + band * 2) }, { skewX: '-22deg' }] }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: -size * 0.2, bottom: -size * 0.2, left: 0, width: band }, style]}>
+      <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.6)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
     </Animated.View>
   );
 }
