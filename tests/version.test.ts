@@ -13,5 +13,5 @@ test('support affiché', () => {
   assert.equal(platformName('android', false), 'Android');
   assert.equal(platformName('ios', false), 'Apple (iOS)');
   assert.equal(platformName('web', false), 'Web (index.html)');
-  assert.equal(platformName('web', true), 'Web (lien claude.ai)');
+  assert.equal(platformName('web', true), 'Web (lien)');
 });

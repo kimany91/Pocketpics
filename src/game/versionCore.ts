@@ -5,9 +5,9 @@ export function shortVersion(v: string): string {
   return v.replace(/^(\d+\.\d+)\.0$/, '$1');
 }
 
-/** Sur quoi le jeu tourne : Android, Apple (iOS), ou la version web (lien claude.ai ou fichier index.html). */
+/** Sur quoi le jeu tourne : Android, Apple (iOS), ou la version web (lien de la démo ou fichier index.html). */
 export function platformName(os: string, viewer: boolean): string {
   if (os === 'android') return 'Android';
   if (os === 'ios') return 'Apple (iOS)';
-  return viewer ? 'Web (lien claude.ai)' : 'Web (index.html)';
+  return viewer ? 'Web (lien)' : 'Web (index.html)';
 }

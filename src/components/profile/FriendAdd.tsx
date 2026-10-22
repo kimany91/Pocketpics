@@ -73,8 +73,8 @@ export function FriendAdd({ onAdded, hint }: { onAdded(code: string): void; /** 
         return fail(
           `Aucun joueur « ${raw.trim()} ». Vérifie son pseudo et ses 4 caractères, et qu'il a le jeu ouvert. ` +
             (inClaudeViewer()
-              ? 'Ici (lien claude.ai), tu ne trouves que les joueurs qui ont ouvert ce même lien : pas ceux de l’app ni du fichier HTML.'
-              : 'S’il joue sur le lien claude.ai, vous ne pouvez pas vous voir : ouvrez tous les deux la même version (l’app ou le fichier HTML).'),
+              ? 'Ici (version lien), tu ne trouves que les joueurs qui ont ouvert ce même lien : pas ceux de l’app ni du fichier HTML.'
+              : 'S’il joue sur la version lien, vous ne pouvez pas vous voir : ouvrez tous les deux la même version (l’app ou le fichier HTML).'),
         );
       code = found.code;
       hint = { name: found.name, tag: found.tag, push: found.pt };
@@ -128,7 +128,7 @@ export function FriendAdd({ onAdded, hint }: { onAdded(code: string): void; /** 
         <View style={styles.viewer}>
           <Ionicons name="information-circle-outline" size={15} color={colors.textDim} />
           <AppText variant="caption" style={{ flex: 1 }}>
-            Version claude.ai : seuls les joueurs qui ont ouvert ce même lien peuvent te trouver. Ceux de l’app ou du fichier HTML ne sont pas visibles ici.
+            Version lien : seuls les joueurs qui ont ouvert ce même lien peuvent te trouver. Ceux de l’app ou du fichier HTML ne sont pas visibles ici.
           </AppText>
         </View>
       ) : null}
