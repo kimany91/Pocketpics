@@ -1,0 +1,414 @@
+{
+  "description": "Combat (niveau 1 de la 1.0), messages du canal fiable et leurs enveloppes.",
+  "messages": {
+    "hello": {
+      "t": "hello",
+      "v": 1,
+      "name": "Léo",
+      "mmr": 1240,
+      "friend": "K7F4QM2XHB"
+    },
+    "helloStranger": {
+      "t": "hello",
+      "v": 1,
+      "name": "Joueur",
+      "mmr": 0,
+      "friend": null
+    },
+    "deck": {
+      "t": "deck",
+      "fighters": [
+        {
+          "ref": "h0",
+          "name": "Carte h0",
+          "rarity": "common",
+          "battle": {
+            "hp": 50,
+            "attacks": [
+              {
+                "kind": "basic",
+                "name": "Pichenette",
+                "power": 12
+              },
+              {
+                "kind": "slap",
+                "name": "Mandale",
+                "power": 13
+              }
+            ],
+            "uses": 3
+          },
+          "thumb": ""
+        },
+        {
+          "ref": "h1",
+          "name": "Carte h1",
+          "rarity": "rare",
+          "battle": {
+            "hp": 55,
+            "attacks": [
+              {
+                "kind": "basic",
+                "name": "Pichenette",
+                "power": 14
+              },
+              {
+                "kind": "basic",
+                "name": "Gros plan",
+                "power": 22
+              }
+            ],
+            "uses": 3
+          },
+          "thumb": ""
+        }
+      ]
+    },
+    "deckOldWithThumbs": {
+      "t": "deck",
+      "fighters": [
+        {
+          "ref": "h0",
+          "name": "Carte h0",
+          "rarity": "common",
+          "battle": {
+            "hp": 50,
+            "attacks": [
+              {
+                "kind": "basic",
+                "name": "Pichenette",
+                "power": 12
+              },
+              {
+                "kind": "slap",
+                "name": "Mandale",
+                "power": 13
+              }
+            ],
+            "uses": 3
+          },
+          "thumb": "/9j/4AAQSkZJRgABAQAAAQABAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        }
+      ]
+    },
+    "art": {
+      "t": "art",
+      "ref": "h0",
+      "thumb": "/9j/4AAQSkZJRgABAQAAAQABAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    },
+    "start": {
+      "t": "start",
+      "battle": {
+        "sides": [
+          {
+            "fighters": [
+              {
+                "ref": "h0",
+                "name": "Carte h0",
+                "rarity": "common",
+                "maxHp": 50,
+                "hp": 50,
+                "attacks": [
+                  {
+                    "kind": "basic",
+                    "name": "Pichenette",
+                    "power": 12
+                  },
+                  {
+                    "kind": "slap",
+                    "name": "Mandale",
+                    "power": 13
+                  }
+                ],
+                "usesLeft": 3,
+                "maxUses": 3,
+                "stun": 0,
+                "guard": 0,
+                "dodge": 0,
+                "focus": false,
+                "marked": false,
+                "weak": false,
+                "jammed": 0,
+                "poison": 0,
+                "poisonDmg": 0,
+                "chain": 0,
+                "hurtAt": -10,
+                "dealt": 0
+              },
+              {
+                "ref": "h1",
+                "name": "Carte h1",
+                "rarity": "rare",
+                "maxHp": 55,
+                "hp": 55,
+                "attacks": [
+                  {
+                    "kind": "basic",
+                    "name": "Pichenette",
+                    "power": 14
+                  },
+                  {
+                    "kind": "basic",
+                    "name": "Gros plan",
+                    "power": 22
+                  }
+                ],
+                "usesLeft": 3,
+                "maxUses": 3,
+                "stun": 0,
+                "guard": 0,
+                "dodge": 0,
+                "focus": false,
+                "marked": false,
+                "weak": false,
+                "jammed": 0,
+                "poison": 0,
+                "poisonDmg": 0,
+                "chain": 0,
+                "hurtAt": -10,
+                "dealt": 0
+              }
+            ],
+            "active": 0,
+            "last": null
+          },
+          {
+            "fighters": [
+              {
+                "ref": "g0",
+                "name": "Carte g0",
+                "rarity": "epic",
+                "maxHp": 68,
+                "hp": 68,
+                "attacks": [
+                  {
+                    "kind": "basic",
+                    "name": "Clic-clac",
+                    "power": 19
+                  },
+                  {
+                    "kind": "double",
+                    "name": "Double clic",
+                    "power": 15
+                  }
+                ],
+                "usesLeft": 3,
+                "maxUses": 3,
+                "stun": 0,
+                "guard": 0,
+                "dodge": 0,
+                "focus": false,
+                "marked": false,
+                "weak": false,
+                "jammed": 0,
+                "poison": 0,
+                "poisonDmg": 0,
+                "chain": 0,
+                "hurtAt": -10,
+                "dealt": 0
+              }
+            ],
+            "active": 0,
+            "last": null
+          }
+        ],
+        "turn": 0,
+        "mustReplace": null,
+        "winner": null,
+        "turnCount": 0
+      }
+    },
+    "act": {
+      "t": "act",
+      "action": {
+        "type": "attack",
+        "slot": 1,
+        "timings": [
+          0.9,
+          1.2
+        ]
+      }
+    },
+    "actSwitch": {
+      "t": "act",
+      "action": {
+        "type": "switch",
+        "to": 1
+      }
+    },
+    "actPass": {
+      "t": "act",
+      "action": {
+        "type": "pass"
+      }
+    },
+    "replace": {
+      "t": "replace",
+      "to": 1
+    },
+    "step": {
+      "t": "step",
+      "events": [
+        {
+          "t": "use",
+          "side": 0,
+          "fighter": "Carte h0",
+          "attack": {
+            "kind": "basic",
+            "name": "Pichenette",
+            "power": 12
+          },
+          "copied": false,
+          "special": false
+        },
+        {
+          "t": "hit",
+          "side": 1,
+          "damage": 11,
+          "quality": "good",
+          "hp": 57,
+          "maxHp": 68,
+          "hitIndex": 0,
+          "kind": "basic"
+        }
+      ],
+      "battle": {
+        "sides": [
+          {
+            "fighters": [
+              {
+                "ref": "h0",
+                "name": "Carte h0",
+                "rarity": "common",
+                "maxHp": 50,
+                "hp": 50,
+                "attacks": [
+                  {
+                    "kind": "basic",
+                    "name": "Pichenette",
+                    "power": 12
+                  },
+                  {
+                    "kind": "slap",
+                    "name": "Mandale",
+                    "power": 13
+                  }
+                ],
+                "usesLeft": 3,
+                "maxUses": 3,
+                "stun": 0,
+                "guard": 0,
+                "dodge": 0,
+                "focus": false,
+                "marked": false,
+                "weak": false,
+                "jammed": 0,
+                "poison": 0,
+                "poisonDmg": 0,
+                "chain": 0,
+                "hurtAt": -10,
+                "dealt": 11
+              },
+              {
+                "ref": "h1",
+                "name": "Carte h1",
+                "rarity": "rare",
+                "maxHp": 55,
+                "hp": 55,
+                "attacks": [
+                  {
+                    "kind": "basic",
+                    "name": "Pichenette",
+                    "power": 14
+                  },
+                  {
+                    "kind": "basic",
+                    "name": "Gros plan",
+                    "power": 22
+                  }
+                ],
+                "usesLeft": 3,
+                "maxUses": 3,
+                "stun": 0,
+                "guard": 0,
+                "dodge": 0,
+                "focus": false,
+                "marked": false,
+                "weak": false,
+                "jammed": 0,
+                "poison": 0,
+                "poisonDmg": 0,
+                "chain": 0,
+                "hurtAt": -10,
+                "dealt": 0
+              }
+            ],
+            "active": 0,
+            "last": {
+              "kind": "basic",
+              "name": "Pichenette",
+              "power": 12
+            }
+          },
+          {
+            "fighters": [
+              {
+                "ref": "g0",
+                "name": "Carte g0",
+                "rarity": "epic",
+                "maxHp": 68,
+                "hp": 57,
+                "attacks": [
+                  {
+                    "kind": "basic",
+                    "name": "Clic-clac",
+                    "power": 19
+                  },
+                  {
+                    "kind": "double",
+                    "name": "Double clic",
+                    "power": 15
+                  }
+                ],
+                "usesLeft": 3,
+                "maxUses": 3,
+                "stun": 0,
+                "guard": 0,
+                "dodge": 0,
+                "focus": false,
+                "marked": false,
+                "weak": false,
+                "jammed": 0,
+                "poison": 0,
+                "poisonDmg": 0,
+                "chain": 0,
+                "hurtAt": 0,
+                "dealt": 0
+              }
+            ],
+            "active": 0,
+            "last": null
+          }
+        ],
+        "turn": 1,
+        "mustReplace": null,
+        "winner": null,
+        "turnCount": 1
+      }
+    },
+    "quit": {
+      "t": "quit"
+    },
+    "wireReliable": {
+      "t": "r",
+      "s": 1,
+      "m": {
+        "t": "quit"
+      }
+    },
+    "wireAck": {
+      "t": "a",
+      "s": 1
+    }
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "description": "Pioche amicale (niveau 3 de la 1.0 ; les messages du salon sont les mêmes au niveau 2).",
+  "messages": {
+    "hello": {
+      "t": "hello",
+      "v": 3,
+      "name": "Léo"
+    },
+    "helloV2": {
+      "t": "hello",
+      "v": 2,
+      "name": "Léo"
+    },
+    "hashes": {
+      "t": "hashes",
+      "hashes": [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6"
+      ]
+    },
+    "want": {
+      "t": "want",
+      "hashes": [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5"
+      ]
+    },
+    "photo": {
+      "t": "photo",
+      "i": 0,
+      "n": 5,
+      "hash": "h1",
+      "image": "/9j/4AAQSkZJRgABAQAAAQABAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "thumb": "/9j/4AAQSkZJRgABAQAAAQABAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "width": 1080,
+      "height": 1440
+    },
+    "ready": {
+      "t": "ready"
+    },
+    "opening": {
+      "t": "opening",
+      "cards": [
+        {
+          "hash": "h1",
+          "rarity": "rare",
+          "chromatic": false
+        },
+        {
+          "hash": "h2",
+          "rarity": "common",
+          "chromatic": true
+        }
+      ]
+    },
+    "reveal": {
+      "t": "reveal",
+      "i": 0
+    },
+    "end": {
+      "t": "end"
+    },
+    "verdictOk": {
+      "t": "verdict",
+      "ok": true
+    },
+    "verdictNo": {
+      "t": "verdict",
+      "ok": false
+    },
+    "bye": {
+      "t": "bye"
+    },
+    "byeReason": {
+      "t": "bye",
+      "reason": "aucune photo disponible dans sa galerie."
+    }
+  }
+}

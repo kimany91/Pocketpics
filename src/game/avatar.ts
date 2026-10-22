@@ -83,7 +83,8 @@ export function sanitizeFriendAvatar(raw: unknown): FriendAvatar | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
   const at = r.at;
-  const img = r.img;
+  // sauts de ligne tolérés (un encodeur base64 peut couper ses lignes)
+  const img = typeof r.img === 'string' ? r.img.replace(/\s+/g, '') : r.img;
   if (typeof at !== 'number' || !Number.isFinite(at) || at <= 0) return null;
   if (typeof img !== 'string' || img.length < 16 || img.length > MAX_AVATAR_B64 || img.length % 4 !== 0 || !BASE64.test(img)) return null;
   // une image JPEG commence par FF D8 FF, soit « /9j/ » en base64

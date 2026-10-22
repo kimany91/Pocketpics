@@ -1,12 +1,14 @@
 /**
  * Protocole d'échange (JSON, un message par ligne).
- * Incrémenter PROTOCOL_VERSION si un message change de forme de façon incompatible.
+ * Les niveaux (1 : échange simple, 2 : cartes verrouillées) sont dans
+ * `src/net/compat.ts` : deux versions différentes du jeu s'accordent sur le
+ * plus récent qu'elles parlent toutes les deux.
  */
 import type { Card } from '../storage/model';
 
-// 2 : cartes verrouillées (le cadenas fait partie de l'accord)
-export const PROTOCOL_VERSION = 2;
 export const MAX_OFFER = 10;
+/** Niveau à partir duquel le cadenas des cartes fait partie de l'accord. */
+export const TRADE_LOCKS = 2;
 
 export interface OfferCard {
   id: string;
@@ -31,7 +33,8 @@ export interface TransferCard {
 }
 
 export type TradeMessage =
-  | { t: 'hello'; v: number; name: string }
+  /** `min` / `max` : niveaux parlés (absents chez les versions d'avant la négociation). */
+  | { t: 'hello'; v: number; min?: number; max?: number; name: string }
   | { t: 'offer'; cards: OfferCard[] }
   | { t: 'lock'; locked: boolean; key: string }
   | { t: 'confirm'; key: string }
@@ -41,6 +44,9 @@ export type TradeMessage =
 
 /** Une carte dans la clé d'accord : son id, marqué s'il est verrouillé (changer un cadenas change l'accord). */
 export const offerTag = (id: string, locked: boolean) => (locked ? `${id}#lock` : id);
+
+/** Une carte dans la clé d'accord, selon le niveau convenu (avant le niveau 2, pas de cadenas). */
+export const offerTagAt = (level: number, id: string, locked: boolean) => offerTag(id, level >= TRADE_LOCKS && locked);
 
 /** Clé qui identifie un accord : mes cartes | ses cartes (triées). */
 export function offerKey(mine: string[], theirs: string[]): string {
@@ -74,3 +80,30 @@ export class LineDecoder {
     return out;
   }
 }
+
+/**
+ * L'offre de l'autre, vérifiée : 10 cartes au plus, jamais de Galaxy (unique à
+ * chaque joueur), champs inconnus ignorés, champs absents remplis. `null` : pas une offre.
+ */
+export function sanitizeOffer(raw: unknown): OfferCard[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: OfferCard[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const c = item as Record<string, unknown>;
+    if ((typeof c.id !== 'string' && typeof c.id !== 'number') || String(c.id) === '' || String(c.rarity) === 'galaxy') continue;
+    out.push({
+      id: String(c.id),
+      name: typeof c.name === 'string' ? c.name.slice(0, 28) : null,
+      rarity: typeof c.rarity === 'string' ? c.rarity : 'common',
+      thumb: typeof c.thumb === 'string' ? c.thumb : '',
+      locked: c.locked === true,
+      censored: c.censored === true,
+    });
+    if (out.length >= MAX_OFFER) break;
+  }
+  return out;
+}
+
+/** Liste d'identifiants reçue (accusé de réception), ou `null`. */
+export const sanitizeIds = (raw: unknown): string[] | null => (Array.isArray(raw) && raw.every((x) => typeof x === 'string') ? (raw as string[]) : null);

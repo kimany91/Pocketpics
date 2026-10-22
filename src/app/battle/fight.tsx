@@ -387,10 +387,12 @@ export default function FightScreen() {
     setBusy(true);
     setMode('idle');
     let view = shown ?? final;
-    try {
-      for (const e of events) {
-        if (!alive.current) return;
-        const before = view;
+    for (const e of events) {
+      if (!alive.current) return;
+      const before = view;
+      // Chaque évènement à part : un évènement qui échoue (ou inconnu, venu d'une
+      // version plus récente de l'hôte) est sauté, la suite est jouée quand même.
+      try {
         view = applyEvent(view, e);
         switch (e.t) {
           case 'use': {
@@ -442,7 +444,7 @@ export default function FightScreen() {
             if (e.guarded) playSfx('shield', { volume: 0.6 });
             if (e.damage > 0) (strong ? haptic.heavy : haptic.medium)();
             if (hitstop) await sleep(hitstop);
-            const q = QUALITY_LABEL[e.quality];
+            const q = QUALITY_LABEL[e.quality] ?? QUALITY_LABEL.good;
             const tag = hitTag(e);
             popup(
               e.side,
@@ -463,7 +465,7 @@ export default function FightScreen() {
           }
           case 'status': {
             setShown(view);
-            const look = STATUS_TEXT[e.status];
+            const look = STATUS_TEXT[e.status] ?? { text: ' change de posture !', sound: 'swipe' as Sfx };
             say([nameParts(e.fighter, e.side), { text: look.text }], e.side);
             playSfx(look.sound, { volume: 0.8 });
             if (e.status === 'guard') doAct(e.side, 'guard');
@@ -566,11 +568,14 @@ export default function FightScreen() {
             break;
           case 'win':
             break;
+          default:
+            // évènement inconnu de cette version : rien à montrer
+            break;
         }
+      } catch (err) {
+        // Une mise en scène qui échoue ne doit jamais bloquer le combat : on passe à la suite.
+        console.warn('Mise en scène du combat interrompue', err);
       }
-    } catch (err) {
-      // Une mise en scène qui échoue ne doit jamais bloquer le combat : on passe directement à la suite.
-      console.warn('Mise en scène du combat interrompue', err);
     }
     if (!alive.current) return;
     setShown(final);

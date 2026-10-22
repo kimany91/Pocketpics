@@ -18,7 +18,6 @@ import {
   type FriendPhoto,
   type OpenedCard,
   PIOCHE_NS,
-  PIOCHE_VERSION,
   type PiocheMsg,
   VERDICT_TTL_MS,
   friendDrawPayment,
@@ -35,6 +34,7 @@ import { readUriBase64 } from '../storage/disk';
 import type { Card } from '../storage/model';
 import type { HostHandle, TradeLink } from '../trade/link';
 import { hostRoom, joinRoom } from '../trade/online';
+import { Handshake, type Range, updateMessage } from './compat';
 
 export type PiochePhase =
   | 'idle'
@@ -83,11 +83,13 @@ interface PiocheStore {
   /** asker : cartes créées. */
   cards: Card[];
 
-  /** Ouvre le salon d'une pioche chez cet ami. Rend le code du salon, ou `null`. */
-  ask(friend: { code: string; name: string }): Promise<string | null>;
-  /** L'ami n'a pas pu recevoir la demande (occupé). */
-  /** L'ami a dit non à la demande (`busy` : il était occupé). */
-  declined(busy: boolean): void;
+  /**
+   * Ouvre le salon d'une pioche chez cet ami. Rend le code du salon, ou `null`.
+   * `peer` : les niveaux de pioche que sa présence annonce (pour lui parler dans le sien).
+   */
+  ask(friend: { code: string; name: string }, peer?: Range | null): Promise<string | null>;
+  /** L'ami a dit non à la demande : `busy` il était occupé, `old` son jeu doit être mis à jour. */
+  declined(reason: 'no' | 'busy' | 'old'): void;
   /** Personne n'a rejoint à temps. */
   expired(): void;
   /** asker : il commence à déchirer le paquet → paiement et cartes. `null` s'il ne peut plus payer. */
@@ -96,8 +98,8 @@ interface PiocheStore {
   reveal(i: number): void;
   /** asker : toutes les cartes sont révélées. */
   finish(): void;
-  /** giver : rejoint la pioche de son ami (automatique, quand la demande arrive). */
-  give(room: string, friend: { code: string; name: string }): Promise<void>;
+  /** giver : rejoint la pioche de son ami (quand il accepte la demande). `peer` : comme pour `ask`. */
+  give(room: string, friend: { code: string; name: string }, peer?: Range | null): Promise<void>;
   /** giver : valide ou refuse, seulement à la fin. */
   judge(ok: boolean): void;
   leave(): void;
@@ -120,6 +122,8 @@ const initial = {
 };
 
 let link: TradeLink<PiocheMsg> | null = null;
+/** Bonjour de la pioche en cours (niveau convenu avec l'ami). */
+let shake: Handshake | null = null;
 let hostHandle: HostHandle | null = null;
 let generation = 0;
 /** asker : empreintes acceptées et photos reçues. */
@@ -138,6 +142,8 @@ function teardown() {
     link?.close();
   } catch {}
   link = null;
+  shake?.stop();
+  shake = null;
   hostHandle?.stop();
   hostHandle = null;
   wanted = new Set();
@@ -185,7 +191,13 @@ async function preparePhotos(): Promise<ProcessedPhoto[]> {
 }
 
 export const usePioche = create<PiocheStore>((set, get) => {
-  const send = (m: PiocheMsg) => link?.send(m);
+  const send = (m: PiocheMsg) => {
+    // le bonjour part toujours en premier
+    if (m.t !== 'hello') shake?.flush();
+    link?.send(m);
+  };
+  /** Raison d'un départ, lisible (un texte venu d'ailleurs reste court). */
+  const reasonOf = (r: unknown) => (typeof r === 'string' && r.trim() ? r.trim().slice(0, 140) : null);
   /** giver : photos préparées, dans l'ordre du hasard. */
   let preparedList: ProcessedPhoto[] = [];
 
@@ -217,10 +229,14 @@ export const usePioche = create<PiocheStore>((set, get) => {
   const askerHandle = (m: PiocheMsg) => {
     const s = get();
     switch (m.t) {
-      case 'hello':
-        if (m.v !== PIOCHE_VERSION) return end('Vos versions de PocketPics sont différentes. Mettez l’app à jour tous les deux.');
+      case 'hello': {
+        const a = shake?.receive(m);
+        if (!a) return; // doublon
+        // aucun niveau commun : on dit qui doit mettre le jeu à jour
+        if (!a.ok) return end(`${updateMessage(a.update, s.friend?.name)} Rien n’a été payé.`);
         if (s.phase === 'waiting') set({ phase: 'preparing' });
         return;
+      }
       case 'hashes': {
         if (s.phase !== 'preparing') return;
         const owned = new Set(useGame.getState().save?.drawnHashes ?? []);
@@ -265,9 +281,12 @@ export const usePioche = create<PiocheStore>((set, get) => {
       }
       case 'verdict':
         return settle(m.ok === true);
-      case 'bye':
-        return end(m.reason ? `${s.friend?.name ?? 'Ton ami'} a arrêté la pioche : ${m.reason}` : `${s.friend?.name ?? 'Ton ami'} a quitté la pioche. Rien n’a été payé.`);
+      case 'bye': {
+        const reason = reasonOf(m.reason);
+        return end(reason ? `${s.friend?.name ?? 'Ton ami'} a arrêté la pioche : ${reason}` : `${s.friend?.name ?? 'Ton ami'} a quitté la pioche. Rien n’a été payé.`);
+      }
       default:
+        // message d'une version plus récente : ignoré
         return;
     }
   };
@@ -276,12 +295,13 @@ export const usePioche = create<PiocheStore>((set, get) => {
   const giverHandle = (m: PiocheMsg) => {
     const s = get();
     switch (m.t) {
-      case 'hello':
-        if (m.v !== PIOCHE_VERSION) {
-          send({ t: 'bye', reason: 'versions différentes' });
-          return end('Vos versions de PocketPics sont différentes. Mettez l’app à jour tous les deux.');
-        }
-        return;
+      case 'hello': {
+        const a = shake?.receive(m);
+        if (!a || a.ok) return;
+        // aucun niveau commun : chacun sait qui doit mettre le jeu à jour (une version d'avant lit la raison)
+        send({ t: 'bye', reason: a.update === 'peer' ? 'ton jeu est trop ancien, mets-le à jour.' : 'son jeu est trop ancien pour toi.' });
+        return end(updateMessage(a.update, s.friend?.name));
+      }
       case 'want': {
         if (s.phase !== 'preparing') return;
         const ok = new Set(Array.isArray(m.hashes) ? m.hashes : []);
@@ -306,9 +326,12 @@ export const usePioche = create<PiocheStore>((set, get) => {
       case 'end':
         if (s.phase === 'opening') set({ phase: 'judging', revealed: s.opened.length, verdictBy: Date.now() + VERDICT_TTL_MS });
         return;
-      case 'bye':
-        return end(m.reason ? `La pioche est annulée : ${m.reason}` : `${s.friend?.name ?? 'Ton ami'} a quitté la pioche.`);
+      case 'bye': {
+        const reason = reasonOf(m.reason);
+        return end(reason ? `La pioche est annulée : ${reason}` : `${s.friend?.name ?? 'Ton ami'} a quitté la pioche.`);
+      }
       default:
+        // message d'une version plus récente : ignoré
         return;
     }
   };
@@ -335,25 +358,32 @@ export const usePioche = create<PiocheStore>((set, get) => {
     }
   };
 
-  const attach = (l: TradeLink<PiocheMsg>, role: 'asker' | 'giver') => {
+  const attach = (l: TradeLink<PiocheMsg>, role: 'asker' | 'giver', peer: Range | null) => {
     link = l;
     const gen = generation;
     l.onMessage((m) => {
       if (gen !== generation || !m || typeof m !== 'object') return;
-      if (role === 'asker') askerHandle(m);
-      else giverHandle(m);
+      try {
+        if (role === 'asker') askerHandle(m);
+        else giverHandle(m);
+      } catch (e) {
+        // un message inattendu ne doit jamais casser la pioche
+        console.warn('Message de pioche ignoré', e);
+      }
     });
     l.onClose(() => {
       if (gen !== generation) return;
       end('La connexion avec ton ami a été perdue.');
     });
-    l.send({ t: 'hello', v: PIOCHE_VERSION, name: myName() });
+    // sa présence dit déjà quel niveau il parle : le bonjour part tout de suite, dans le sien
+    shake = new Handshake('pioche', role === 'asker' ? 'host' : 'guest', (f) => l.send({ t: 'hello', ...f, name: myName() }), peer);
+    shake.start();
   };
 
   return {
     ...initial,
 
-    async ask(friend) {
+    async ask(friend, peer = null) {
       teardown();
       if (!friendDrawPayment(useGame.getState().save, Date.now())) {
         set({ ...initial, role: 'asker', phase: 'ended', friend, error: 'Il te faut un tirage disponible ou 200 pièces pour piocher.' });
@@ -366,7 +396,7 @@ export const usePioche = create<PiocheStore>((set, get) => {
           (l) => {
             if (gen !== generation) return l.close();
             hostHandle?.stop(); // personne d'autre ne peut rejoindre
-            attach(l, 'asker');
+            attach(l, 'asker', peer);
           },
           { ns: PIOCHE_NS, what: 'pioche' },
         );
@@ -383,14 +413,16 @@ export const usePioche = create<PiocheStore>((set, get) => {
       }
     },
 
-    declined(busy) {
+    declined(reason) {
       const s = get();
       if (s.role !== 'asker' || s.phase !== 'waiting') return;
       const name = s.friend?.name ?? 'Ton ami';
       end(
-        busy
+        reason === 'busy'
           ? `${name} est occupé (combat, échange ou ouverture en cours). Réessaie dans un moment. Rien n’a été payé.`
-          : `${name} a refusé la pioche. Rien n’a été payé.`,
+          : reason === 'old'
+            ? `${name} doit mettre le jeu à jour pour la Pioche amicale. Rien n’a été payé.`
+            : `${name} a refusé la pioche. Rien n’a été payé.`,
       );
     },
 
@@ -433,14 +465,14 @@ export const usePioche = create<PiocheStore>((set, get) => {
       verdictTimer = setTimeout(() => gen === generation && settle(true), VERDICT_TTL_MS + 3000);
     },
 
-    async give(room, friend) {
+    async give(room, friend, peer = null) {
       teardown();
       set({ ...initial, role: 'giver', phase: 'connecting', friend });
       const gen = generation;
       try {
         const l = await joinRoom<PiocheMsg>(room, { ns: PIOCHE_NS, what: 'pioche' });
         if (gen !== generation) return l.close();
-        attach(l, 'giver');
+        attach(l, 'giver', peer);
         set({ phase: 'preparing' });
         preparedList = await preparePhotos();
         if (gen !== generation) return;

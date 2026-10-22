@@ -1,0 +1,182 @@
+{
+  "description": "Boîte aux lettres et présence des amis, tels que la 1.0 les envoie (chiffrés avec sealFor).",
+  "messages": {
+    "presence": {
+      "k": "presence",
+      "from": "K7F4QM2XHB",
+      "name": "Léo",
+      "mmr": 1240,
+      "online": true,
+      "at": 1793000000000,
+      "pv": 3,
+      "tag": "7F3K",
+      "pt": "ExponentPushToken[abcdefghijklmnop]",
+      "av": 1792999995000
+    },
+    "presenceOffline": {
+      "k": "presence",
+      "from": "K7F4QM2XHB",
+      "name": "Léo",
+      "mmr": 1240,
+      "online": false,
+      "at": 1793000000000,
+      "pv": 3,
+      "tag": "7F3K"
+    },
+    "req": {
+      "k": "req",
+      "from": "K7F4QM2XHB",
+      "name": "Léo",
+      "mmr": 1240,
+      "at": 1793000000000,
+      "tag": "7F3K",
+      "pt": "ExponentPushToken[abcdefghijklmnop]"
+    },
+    "ok": {
+      "k": "ok",
+      "from": "K7F4QM2XHB",
+      "name": "Léo",
+      "mmr": 1240,
+      "at": 1793000000000,
+      "tag": "7F3K"
+    },
+    "challengeFight": {
+      "k": "challenge",
+      "from": "K7F4QM2XHB",
+      "name": "Léo",
+      "mmr": 1240,
+      "room": "Q8W3E5R7T",
+      "at": 1793000000000
+    },
+    "challengeTrade": {
+      "k": "challenge",
+      "kind": "trade",
+      "from": "K7F4QM2XHB",
+      "name": "Léo",
+      "mmr": 1240,
+      "room": "Q8W-3E5-R7T",
+      "at": 1793000000000
+    },
+    "challengeDraw": {
+      "k": "challenge",
+      "kind": "draw",
+      "from": "K7F4QM2XHB",
+      "name": "Léo",
+      "mmr": 1240,
+      "room": "Q8W-3E5-R7T",
+      "at": 1793000000000
+    },
+    "decline": {
+      "k": "decline",
+      "from": "Z9P3MN8TQR",
+      "room": "Q8W3E5R7T",
+      "at": 1793000000000
+    },
+    "declineBusy": {
+      "k": "decline",
+      "from": "Z9P3MN8TQR",
+      "room": "Q8W3E5R7T",
+      "at": 1793000000000,
+      "busy": true
+    },
+    "cancel": {
+      "k": "cancel",
+      "from": "K7F4QM2XHB",
+      "room": "Q8W3E5R7T",
+      "at": 1793000000000
+    },
+    "pinsAsk": {
+      "k": "pins?",
+      "from": "K7F4QM2XHB",
+      "at": 1793000000000
+    },
+    "pinNone": {
+      "k": "pin",
+      "from": "Z9P3MN8TQR",
+      "at": 1793000000000,
+      "i": 0,
+      "n": 0,
+      "card": null
+    },
+    "pin": {
+      "k": "pin",
+      "from": "Z9P3MN8TQR",
+      "at": 1793000000000,
+      "i": 0,
+      "n": 2,
+      "card": {
+        "ref": "card-1",
+        "name": "Carte card-1",
+        "rarity": "epic",
+        "battle": {
+          "hp": 73,
+          "attacks": [
+            {
+              "kind": "basic",
+              "name": "Coup de coin",
+              "power": 17
+            },
+            {
+              "kind": "mark",
+              "name": "Cible",
+              "power": 15
+            }
+          ],
+          "uses": 3
+        },
+        "thumb": "/9j/4AAQSkZJRgABAQAAAQABAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      }
+    },
+    "pinCensored": {
+      "k": "pin",
+      "from": "Z9P3MN8TQR",
+      "at": 1793000000000,
+      "i": 1,
+      "n": 2,
+      "card": {
+        "ref": "card-2",
+        "name": "Carte card-2",
+        "rarity": "rare",
+        "battle": {
+          "hp": 53,
+          "attacks": [
+            {
+              "kind": "basic",
+              "name": "Clic-clac",
+              "power": 15
+            },
+            {
+              "kind": "double",
+              "name": "Rafale",
+              "power": 12
+            }
+          ],
+          "uses": 3
+        },
+        "thumb": "",
+        "censored": true
+      }
+    },
+    "avatarAsk": {
+      "k": "av?",
+      "from": "K7F4QM2XHB",
+      "at": 1793000000000
+    },
+    "avatar": {
+      "k": "av",
+      "from": "Z9P3MN8TQR",
+      "at": 1793000000000,
+      "av": {
+        "at": 1792999995000,
+        "rarity": "mythic",
+        "img": "/9j/4AAQSkZJRgABAQAAAQABAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      }
+    },
+    "avatarNone": {
+      "k": "av",
+      "from": "Z9P3MN8TQR",
+      "at": 1793000000000,
+      "av": null
+    }
+  }
+}

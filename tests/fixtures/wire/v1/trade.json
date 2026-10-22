@@ -1,0 +1,96 @@
+{
+  "description": "Échange (niveau 2 de la 1.0 : cartes verrouillées).",
+  "messages": {
+    "hello": {
+      "t": "hello",
+      "v": 2,
+      "name": "Léo"
+    },
+    "offer": {
+      "t": "offer",
+      "cards": [
+        {
+          "id": "card-1",
+          "name": "Mon chat",
+          "rarity": "epic",
+          "thumb": "/9j/4AAQSkZJRgABAQAAAQABAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+          "locked": true
+        },
+        {
+          "id": "card-2",
+          "name": null,
+          "rarity": "rare",
+          "thumb": "/9j/4AAQSkZJRgABAQAAAQABAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+          "locked": false,
+          "censored": true
+        }
+      ]
+    },
+    "offerEmpty": {
+      "t": "offer",
+      "cards": []
+    },
+    "lock": {
+      "t": "lock",
+      "locked": true,
+      "key": "card-1#lock,card-2|card-9"
+    },
+    "unlock": {
+      "t": "lock",
+      "locked": false,
+      "key": "card-1#lock,card-2|card-9"
+    },
+    "confirm": {
+      "t": "confirm",
+      "key": "card-1#lock,card-2|card-9"
+    },
+    "cards": {
+      "t": "cards",
+      "cards": [
+        {
+          "card": {
+            "id": "card-1",
+            "hash": "h1",
+            "rarity": "epic",
+            "chromatic": false,
+            "obtainedAt": 1793000000000,
+            "origin": "pack",
+            "sourceId": null,
+            "favorite": false,
+            "name": "Mon chat",
+            "width": 600,
+            "height": 840,
+            "battle": {
+              "hp": 73,
+              "attacks": [
+                {
+                  "kind": "basic",
+                  "name": "Coup de coin",
+                  "power": 17
+                },
+                {
+                  "kind": "mark",
+                  "name": "Cible",
+                  "power": 15
+                }
+              ],
+              "uses": 3
+            },
+            "locked": true
+          },
+          "image": "/9j/4AAQSkZJRgABAQAAAQABAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+          "thumb": "/9j/4AAQSkZJRgABAQAAAQABAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+        }
+      ]
+    },
+    "ack": {
+      "t": "ack",
+      "ids": [
+        "card-9"
+      ]
+    },
+    "bye": {
+      "t": "bye"
+    }
+  }
+}

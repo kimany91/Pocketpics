@@ -68,7 +68,7 @@ export class Reliable<M> {
   }
 
   private receive(w: Wire<M>) {
-    if (!w || typeof w.s !== 'number') return;
+    if (!w || typeof w !== 'object' || typeof w.s !== 'number' || !Number.isInteger(w.s)) return;
     if (w.t === 'a') {
       this.out = this.out.filter((o) => o.s > w.s);
       return;
@@ -79,8 +79,15 @@ export class Reliable<M> {
       const m = this.buffer.get(this.nextIn) as M;
       this.buffer.delete(this.nextIn);
       this.nextIn++;
-      if (this.cb) this.cb(m);
-      else this.queue.push(m);
+      if (!this.cb) this.queue.push(m);
+      else {
+        try {
+          this.cb(m);
+        } catch (e) {
+          // un message que cette version ne comprend pas ne bloque pas le canal (l'accusé part quand même)
+          console.warn('Message ignoré', e);
+        }
+      }
     }
     // Accusé cumulatif : tout jusqu'à nextIn - 1 est bien arrivé (renvoyé aussi pour un doublon).
     this.link.send({ t: 'a', s: this.nextIn - 1 });

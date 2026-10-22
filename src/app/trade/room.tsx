@@ -135,7 +135,13 @@ export default function RoomScreen() {
           locked={t.myLocked}
           confirmed={t.myConfirmed}
           empty="Choisis des cartes ci-dessous"
-          footer={mine.length > 0 && !t.myLocked && !t.paul ? 'Touche un cadenas pour verrouiller la carte : ton ami ne pourra plus la modifier.' : null}
+          footer={
+            mine.length > 0 && !t.myLocked && !t.paul && t.canLock
+              ? 'Touche un cadenas pour verrouiller la carte : ton ami ne pourra plus la modifier.'
+              : !t.canLock
+                ? 'Son jeu est plus ancien : pas de cadenas, et les cartes verrouillées restent chez toi.'
+                : null
+          }
         >
           {mine.map((c) => {
             // déjà verrouillée (reçue ainsi) : elle le reste, le cadenas ne s'ouvre pas
@@ -144,16 +150,18 @@ export default function RoomScreen() {
             return (
               <OfferThumb key={c.id} from={1}>
                 <CardFace card={{ ...c, locked }} width={58} quality="thumb" animated={false} />
-                <LockToggle
-                  locked={locked}
-                  disabled={forced || t.myLocked}
-                  onPress={() => {
-                    if (forced) return;
-                    haptic.medium();
-                    playSfx(locked ? 'tick' : 'lockon', { volume: 0.5 });
-                    t.toggleCardLock(c.id);
-                  }}
-                />
+                {t.canLock ? (
+                  <LockToggle
+                    locked={locked}
+                    disabled={forced || t.myLocked}
+                    onPress={() => {
+                      if (forced) return;
+                      haptic.medium();
+                      playSfx(locked ? 'tick' : 'lockon', { volume: 0.5 });
+                      t.toggleCardLock(c.id);
+                    }}
+                  />
+                ) : null}
               </OfferThumb>
             );
           })}
@@ -194,7 +202,7 @@ export default function RoomScreen() {
               card={item}
               width={pickW}
               selected={selected}
-              disabled={t.myLocked || t.phase !== 'room'}
+              disabled={t.myLocked || t.phase !== 'room' || (!t.canLock && !!item.locked && !selected)}
               onPress={() => {
                 haptic.tick();
                 t.toggleCard(item.id);

@@ -145,11 +145,18 @@ const keyOf = (code: string) => roomKey(code, 'friend/');
 /** Une carte épinglée, telle qu'un ami la reçoit (même forme qu'une carte de combat). */
 export type PinnedCard = NetFighter;
 
+/**
+ * Messages des amis. Règles de compatibilité (voir src/net/compat.ts et le
+ * README) : on n'ajoute que des champs facultatifs, on ne change jamais le
+ * sens d'un champ, on ne retire jamais un type de message ; un type inconnu
+ * est ignoré, un champ inconnu aussi.
+ */
 export type SocialMsg =
   /** `pv` : version de la Pioche amicale de son app (absente : app trop ancienne pour piocher chez lui). */
   /** `pt` : son jeton de notification, pour le prévenir quand son app est fermée. */
   /** `av` : date de sa photo de profil (0 : pas de photo ; absente : app trop ancienne). */
-  | { k: 'presence'; from: string; name: string; mmr: number; online: boolean; at: number; pv?: number; tag?: string; pt?: string; av?: number }
+  /** `lv` : niveaux de chaque protocole qu'il parle, `{ s: [min, max], t: …, b: …, p: … }` (absent : 1.0, voir compat.ts). */
+  | { k: 'presence'; from: string; name: string; mmr: number; online: boolean; at: number; pv?: number; tag?: string; pt?: string; av?: number; lv?: unknown }
   /** Demande d'ami (ou « je t'ai ajouté »). */
   | { k: 'req'; from: string; name: string; mmr: number; at: number; tag?: string; pt?: string }
   /** Réponse : « moi aussi, je t'ai ajouté ». */
@@ -157,9 +164,14 @@ export type SocialMsg =
   /**
    * Défi, invitation à échanger (`kind: 'trade'` : `room` est le code de l'échange)
    * ou demande de Pioche amicale (`kind: 'draw'` : `room` est le salon de la pioche).
+   * Absent : un combat. Un autre `kind` (version plus récente) est refusé avec `old`.
+   * Attention : les versions 1.0 prennent un `kind` inconnu pour un combat. Un
+   * nouveau `kind` ne s'envoie donc qu'à un ami dont la présence annonce un
+   * niveau `social` qui le connaît.
    */
-  | { k: 'challenge'; from: string; name: string; mmr: number; room: string; at: number; kind?: 'trade' | 'draw' }
-  | { k: 'decline'; from: string; room: string; at: number; busy?: boolean }
+  | { k: 'challenge'; from: string; name: string; mmr: number; room: string; at: number; kind?: string }
+  /** `busy` : il était occupé · `old` : son jeu ne connaît pas cette invitation (il doit le mettre à jour). */
+  | { k: 'decline'; from: string; room: string; at: number; busy?: boolean; old?: boolean }
   | { k: 'cancel'; from: string; room: string; at: number }
   /** « Montre-moi les cartes épinglées sur ton profil. » */
   | { k: 'pins?'; from: string; at: number }
@@ -191,10 +203,60 @@ export function openFor(owner: string, bytes: Uint8Array): SocialMsg | null {
   const plain = nacl.secretbox.open(bytes.slice(n), bytes.slice(0, n), keyOf(owner));
   if (!plain) return null;
   try {
-    const m = JSON.parse(utf8Decode(plain));
-    return m && typeof m.k === 'string' && typeof m.from === 'string' && typeof m.at === 'number' ? (m as SocialMsg) : null;
+    return readSocial(JSON.parse(utf8Decode(plain)));
   } catch {
     return null;
+  }
+}
+
+/**
+ * Un message reçu, vérifié champ par champ : les champs absents prennent une
+ * valeur par défaut, les champs inconnus sont laissés de côté, un type de
+ * message inconnu (version plus récente) donne `null` (ignoré). Les contenus
+ * (carte épinglée, photo) restent bruts : ils sont vérifiés à leur usage.
+ */
+export function readSocial(raw: unknown): SocialMsg | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const m = raw as Record<string, unknown>;
+  if (typeof m.k !== 'string' || typeof m.from !== 'string' || !m.from || typeof m.at !== 'number' || !Number.isFinite(m.at)) return null;
+  const base = { from: m.from, at: m.at };
+  const name = typeof m.name === 'string' ? m.name.slice(0, 24) : '';
+  const mmr = typeof m.mmr === 'number' && Number.isFinite(m.mmr) ? Math.max(0, Math.floor(m.mmr)) : 0;
+  const opt = <K extends string>(key: K, ok: boolean) => (ok ? ({ [key]: m[key] } as Record<K, never>) : {});
+  const room = typeof m.room === 'string' && m.room ? m.room : null;
+  const finite = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+  switch (m.k) {
+    case 'presence':
+      return {
+        k: 'presence',
+        ...base,
+        name,
+        mmr,
+        online: m.online === true,
+        ...opt('pv', finite(m.pv)),
+        ...opt('tag', typeof m.tag === 'string'),
+        ...opt('pt', typeof m.pt === 'string'),
+        ...opt('av', finite(m.av)),
+        ...opt('lv', !!m.lv && typeof m.lv === 'object'),
+      };
+    case 'req':
+    case 'ok':
+      return { k: m.k, ...base, name, mmr, ...opt('tag', typeof m.tag === 'string'), ...opt('pt', typeof m.pt === 'string') };
+    case 'challenge':
+      return room ? { k: 'challenge', ...base, name, mmr, room, ...opt('kind', typeof m.kind === 'string') } : null;
+    case 'decline':
+      return room ? { k: 'decline', ...base, room, ...opt('busy', typeof m.busy === 'boolean'), ...opt('old', typeof m.old === 'boolean') } : null;
+    case 'cancel':
+      return room ? { k: 'cancel', ...base, room } : null;
+    case 'pins?':
+    case 'av?':
+      return { k: m.k, ...base };
+    case 'pin':
+      return { k: 'pin', ...base, i: finite(m.i) ? (m.i as number) : 0, n: finite(m.n) ? (m.n as number) : 0, card: (m.card ?? null) as PinnedCard | null };
+    case 'av':
+      return { k: 'av', ...base, av: (m.av && typeof m.av === 'object' ? m.av : null) as FriendAvatar | null };
+    default:
+      return null;
   }
 }
 

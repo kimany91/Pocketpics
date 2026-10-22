@@ -94,7 +94,7 @@ export default function HostScreen() {
             </Animated.View>
             {declined ? (
               <Animated.View entering={FadeInDown.springify().damping(14)} style={{ marginTop: 10 }}>
-                <AppText variant="caption" style={{ color: colors.danger, textAlign: 'center' }}>{`${friendName} a refusé l’échange.`}</AppText>
+                <AppText variant="caption" style={{ color: colors.danger, textAlign: 'center' }}>{outgoing?.reason === 'old' ? `${friendName} doit mettre le jeu à jour pour échanger.` : `${friendName} a refusé l’échange.`}</AppText>
               </Animated.View>
             ) : null}
             <Animated.View entering={FadeIn.delay(500)} style={{ alignItems: 'center' }}>

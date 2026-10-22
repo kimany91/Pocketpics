@@ -26,7 +26,7 @@ import { Header } from '../../components/Header';
 import { useFriendDraw } from '../../components/pioche/entry';
 import { type FishFriend, FishingScene, type FishingStage } from '../../components/pioche/FishingScene';
 import { Screen } from '../../components/Screen';
-import { FRIEND_DRAW_PRICE, paymentLabel } from '../../game/friendDraw';
+import { FRIEND_DRAW_PRICE, PIOCHE_ASK, paymentLabel } from '../../game/friendDraw';
 import { PAUL_NAME, isPaul } from '../../game/paul';
 import { usePioche } from '../../net/pioche';
 import { useSocial } from '../../net/social';
@@ -46,7 +46,7 @@ export default function PiocheFish() {
   const friendsSaved = useGame((s) => s.save?.friends ?? []);
   const presence = useSocial((s) => s.presence);
   const isOnline = useSocial((s) => s.isOnline);
-  const { payment, adsLeft, upToDate } = useFriendDraw();
+  const { payment, adsLeft, upToDate, needsUpdate } = useFriendDraw();
   const phase = usePioche((s) => s.phase);
   const role = usePioche((s) => s.role);
   const error = usePioche((s) => s.error);
@@ -73,7 +73,7 @@ export default function PiocheFish() {
       const reachable = live || !!f.push;
       const fresh = upToDate(f.code);
       const selectable = !!payment && reachable && fresh;
-      const note = !reachable ? 'hors ligne' : !fresh ? 'à mettre à jour' : !live ? 'notification' : 'en ligne';
+      const note = !reachable ? 'hors ligne' : !fresh ? (needsUpdate(f.code) === 'me' ? 'mets ton jeu à jour' : 'à mettre à jour') : !live ? 'notification' : 'en ligne';
       return { code: f.code, name: f.name, tag: f.tag, mmr: presence[f.code]?.mmr ?? f.mmr, selectable, note, live };
     });
     return list.sort((a, b) => Number(b.selectable) - Number(a.selectable) || Number(b.live) - Number(a.live));
@@ -102,7 +102,7 @@ export default function PiocheFish() {
     }
     void usePioche
       .getState()
-      .ask({ code: f.code, name: f.name })
+      .ask({ code: f.code, name: f.name }, useSocial.getState().presence[f.code]?.lv.pioche ?? null)
       .then((room) => room && useSocial.getState().inviteDraw(f.code, room));
   };
 
@@ -152,6 +152,9 @@ export default function PiocheFish() {
   };
 
   const name = chosen?.name ?? 'ton ami';
+  // un ami au jeu plus ancien (pioche niveau 2) ne reçoit pas de demande : son téléphone rejoint tout seul
+  const oldPioche = chosen ? (presence[chosen.code]?.lv.pioche?.max ?? PIOCHE_ASK) < PIOCHE_ASK : false;
+  const asks = oldPioche ? 'va mordre' : 'doit accepter';
   const status = tuto
     ? stage === 'catch'
       ? `Prise ! Le paquet de ${name}`
@@ -160,8 +163,8 @@ export default function PiocheFish() {
       ? `Prise ! Le paquet de ${name}`
       : phase === 'waiting'
         ? chosen && !isOnline(chosen.code)
-          ? `Notification envoyée à ${name}… il doit accepter`
-          : `Ça tire… ${name} doit accepter`
+          ? `Notification envoyée à ${name}… il ${asks}`
+          : `Ça tire… ${name} ${asks}`
         : phase === 'preparing'
           ? `${name} mord ! Il prépare ses photos`
           : phase === 'sending'

@@ -16,6 +16,7 @@ import nacl from 'tweetnacl';
 
 import { utf8Decode, utf8Encode } from '../trade/mqtt';
 import { roomKey, roomTopic } from '../trade/relayCore';
+import { LEGACY, type Range, agree, legacyMode, myRange } from './compat';
 
 /** Code fixe du salon d'attente : tout le monde dérive le même sujet et la même clé. */
 const LOBBY_CODE = 'ALEATOIRE';
@@ -35,8 +36,11 @@ export const ANNOUNCE_MS = 1100;
 export const SEARCH_MS = 20_000;
 
 export type LobbyMsg =
-  /** « Je cherche un combat, voici mon salon. » */
-  | { k: 'open'; id: string; code: string; mmr: number; at: number }
+  /**
+   * « Je cherche un combat, voici mon salon. » `b` : niveaux du combat que je
+   * parle, `[min, max]` (absent : version 1.0, voir compat.ts).
+   */
+  | { k: 'open'; id: string; code: string; mmr: number; at: number; b?: [number, number] }
   /** « J'arrête de chercher. » */
   | { k: 'gone'; id: string; at: number };
 
@@ -45,6 +49,8 @@ export interface Seeker {
   code: string;
   mmr: number;
   at: number;
+  /** Niveaux du combat qu'il parle (absent : ceux de la 1.0). */
+  b?: Range;
 }
 
 export function sealLobby(msg: LobbyMsg): Uint8Array {
@@ -66,16 +72,21 @@ export function openLobby(bytes: Uint8Array): LobbyMsg | null {
     if (!m || typeof m.id !== 'string' || !m.id || typeof m.at !== 'number') return null;
     if (m.k === 'gone') return { k: 'gone', id: m.id, at: m.at };
     if (m.k !== 'open' || typeof m.code !== 'string' || !/^[0-9A-Z]{9}$/.test(m.code)) return null;
-    return { k: 'open', id: m.id, code: m.code, mmr: Math.max(0, Math.min(5000, Math.floor(Number(m.mmr) || 0))), at: m.at };
+    const b = Array.isArray(m.b) && Number.isInteger(m.b[0]) && Number.isInteger(m.b[1]) && m.b[0] <= m.b[1] ? { b: [m.b[0], m.b[1]] as [number, number] } : {};
+    return { k: 'open', id: m.id, code: m.code, mmr: Math.max(0, Math.min(5000, Math.floor(Number(m.mmr) || 0))), at: m.at, ...b };
   } catch {
     return null;
   }
 }
 
+/** Peut-on se battre avec lui (un niveau de combat en commun) ? */
+export const battleCompatible = (b: Range | undefined) => agree(myRange('battle'), b ?? { min: LEGACY.battle, max: LEGACY.battle }).ok;
+
 /**
  * Qui rejoindre, parmi les annonces entendues : seulement ceux dont
- * l'identifiant est plus grand que le mien (eux m'attendent), en commençant par
- * le rang le plus proche du mien. `null` : je reste hôte et j'attends.
+ * l'identifiant est plus grand que le mien (eux m'attendent), et avec qui un
+ * combat est possible (versions compatibles), en commençant par le rang le
+ * plus proche du mien. `null` : je reste hôte et j'attends.
  */
 export function pickOpponent(
   me: { id: string; mmr: number },
@@ -84,7 +95,7 @@ export function pickOpponent(
   skip: Iterable<string> = [],
 ): Seeker | null {
   const ignored = new Set(skip);
-  const ok = [...seekers].filter((s) => s.id > me.id && !ignored.has(s.id) && now - s.at < ANNOUNCE_TTL_MS);
+  const ok = [...seekers].filter((s) => s.id > me.id && !ignored.has(s.id) && now - s.at < ANNOUNCE_TTL_MS && battleCompatible(s.b));
   if (ok.length === 0) return null;
   return ok.reduce((best, s) => {
     const d = Math.abs(s.mmr - me.mmr);
@@ -167,7 +178,10 @@ export function startSearch(deps: SearchDeps): Search {
   };
 
   const announce = () => {
-    if (!done && myCode) publish({ k: 'open', id: deps.id, code: myCode, mmr: deps.mmr(), at: now() });
+    if (!done && myCode) {
+      const r = myRange('battle');
+      publish({ k: 'open', id: deps.id, code: myCode, mmr: deps.mmr(), at: now(), ...(legacyMode() ? {} : { b: [r.min, r.max] as [number, number] }) });
+    }
   };
 
   /** Rejoindre quelqu'un : je ferme mon salon, donc je préviens avant de partir. */
@@ -199,7 +213,7 @@ export function startSearch(deps: SearchDeps): Search {
     const m = openLobby(payload);
     if (!m || m.id === deps.id || done) return;
     if (m.k === 'gone') seekers.delete(m.id);
-    else seekers.set(m.id, { id: m.id, code: m.code, mmr: m.mmr, at: now() });
+    else seekers.set(m.id, { id: m.id, code: m.code, mmr: m.mmr, at: now(), ...(m.b ? { b: { min: m.b[0], max: m.b[1] } } : {}) });
   };
 
   for (const c of deps.conns) c.onMessage(onMessage);

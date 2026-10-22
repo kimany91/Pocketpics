@@ -16,7 +16,8 @@ import { makeCard } from '../game/pack';
 import { PAUL_NAME, paulHash, pickPaulArt } from '../game/paul';
 import { readUriBase64 } from '../storage/disk';
 import type { TradeLink } from './link';
-import { type OfferCard, PROTOCOL_VERSION, type TradeMessage, type TransferCard, mirrorKey, offerKey, offerTag } from './protocol';
+import { helloFields, peerRange } from '../net/compat';
+import { type OfferCard, type TradeMessage, type TransferCard, mirrorKey, offerKey, offerTag } from './protocol';
 
 /** Sa carte : une illustration au hasard, devenue une vraie carte commune. */
 async function paulCard(): Promise<TransferCard | null> {
@@ -66,7 +67,7 @@ export function paulTradeLink(): TradeLink {
   const fromPlayer = (m: TradeMessage) => {
     switch (m.t) {
       case 'hello':
-        say({ t: 'hello', v: PROTOCOL_VERSION, name: PAUL_NAME }, 350);
+        say({ t: 'hello', ...helloFields('trade', peerRange(m)), name: PAUL_NAME }, 350);
         void paulCard().then((c) => {
           if (closed) return;
           if (!c) {

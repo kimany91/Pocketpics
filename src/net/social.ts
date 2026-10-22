@@ -19,8 +19,9 @@ import { connectRelay, deps } from '../trade/online';
 import { newOnlineCode } from '../trade/relayCore';
 import { useTrade } from '../trade/session';
 import { inBusyScreen } from '../state/route';
-import { PIOCHE_VERSION } from '../game/friendDraw';
+import { type Agreement, type Levels, type Proto, friendAgreement, legacyMode, myRange, presenceLevels, readLevels } from './compat';
 import { isPaul, paulOpponent } from '../game/paul';
+import { PIOCHE_ASK } from '../game/friendDraw';
 import { piocheBusy, usePioche } from './pioche';
 import { useMatch } from './match';
 import { sanitizeFighter } from './battleNet';
@@ -51,6 +52,8 @@ export interface Presence {
   at: number;
   /** Version de la Pioche amicale de son app (0 : trop ancienne). */
   pv: number;
+  /** Niveaux de chaque protocole que son app parle (voir compat.ts). */
+  lv: Levels;
 }
 
 export interface Challenge {
@@ -71,7 +74,16 @@ interface SocialStore {
   /** Défi reçu, en attente de réponse. */
   challenge: Challenge | null;
   /** Défi envoyé. */
-  outgoing: { kind: 'fight' | 'trade' | 'draw'; to: string; name: string; room: string; at: number; state: 'waiting' | 'declined' } | null;
+  outgoing: {
+    kind: 'fight' | 'trade' | 'draw';
+    to: string;
+    name: string;
+    room: string;
+    at: number;
+    state: 'waiting' | 'declined';
+    /** Pourquoi il a refusé : occupé, ou son jeu ne connaît pas cette invitation (à mettre à jour). */
+    reason?: 'busy' | 'old';
+  } | null;
   /**
    * Cartes épinglées des amis, telles qu'ils nous les ont envoyées. `cards` est
    * incomplet tant que `n` cartes ne sont pas arrivées.
@@ -117,6 +129,11 @@ interface SocialStore {
   /** Republie ma présence (pseudo ou rang changé). */
   announce(): void;
   isOnline(code: string): boolean;
+  /**
+   * Peut-on jouer à ça avec cet ami, d'après les niveaux que sa présence
+   * annonce ? `null` : on ne sait pas encore (la rencontre le dira).
+   */
+  compat(code: string, proto: Proto): Agreement | null;
 }
 
 let conns: MqttConnection[] = [];
@@ -213,7 +230,10 @@ export const useSocial = create<SocialStore>((set, get) => {
     ...profile(),
     online,
     at: now(),
-    pv: PIOCHE_VERSION,
+    // Pioche amicale : le niveau le plus récent (les versions 1.0 vérifient pv >= le leur)
+    pv: myRange('pioche').max,
+    // tous mes niveaux (une version d'avant, imitée en test, ne les donne pas)
+    ...(legacyMode() ? {} : { lv: presenceLevels() }),
     tag: myTag(),
     ...(myPush ? { pt: myPush } : {}),
     ...(withAvatar ? { av: save()?.avatar?.at ?? 0 } : {}),
@@ -360,16 +380,16 @@ export const useSocial = create<SocialStore>((set, get) => {
       switch (m.k) {
         case 'req':
           if (friend) {
-            useGame.getState().upsertFriend({ code: m.from, name: m.name, mmr: m.mmr, mutual: true, tag: tagOf(m.tag), push: pushOf(m.pt) });
+            useGame.getState().upsertFriend({ code: m.from, name: m.name || friend.name, mmr: m.mmr, mutual: true, tag: tagOf(m.tag), push: pushOf(m.pt) });
             sendRequest(m.from, 'ok');
             askAvatarAgain(m.from);
           } else if (!get().requests.some((r) => r.from === m.from)) {
-            set({ requests: [...get().requests, { from: m.from, name: String(m.name).slice(0, 24), mmr: m.mmr, tag: tagOf(m.tag), push: pushOf(m.pt) }] });
+            set({ requests: [...get().requests, { from: m.from, name: m.name || 'Joueur', mmr: m.mmr, tag: tagOf(m.tag), push: pushOf(m.pt) }] });
           }
           return;
         case 'ok':
           if (friend) {
-            useGame.getState().upsertFriend({ code: m.from, name: m.name, mmr: m.mmr, mutual: true, tag: tagOf(m.tag), push: pushOf(m.pt) });
+            useGame.getState().upsertFriend({ code: m.from, name: m.name || friend.name, mmr: m.mmr, mutual: true, tag: tagOf(m.tag), push: pushOf(m.pt) });
             askAvatarAgain(m.from);
           }
           return;
@@ -378,6 +398,12 @@ export const useSocial = create<SocialStore>((set, get) => {
           // (les messages d'invitation ne sont pas gardés par le relais : ils arrivent en direct ;
           // on n'écarte que ceux d'une horloge vraiment fantaisiste)
           if (!friend || Math.abs(now() - m.at) > PRESENCE_MAX_SKEW_MS || get().challenge?.room === m.room || handledRooms.has(m.room)) return;
+          // invitation d'une version plus récente, que ce jeu ne connaît pas : refusée, en le disant
+          if (m.kind !== undefined && m.kind !== 'trade' && m.kind !== 'draw' && m.kind !== 'fight') {
+            handledRooms.add(m.room);
+            sendTo(m.from, { k: 'decline', from: mine, room: m.room, at: now(), old: true });
+            return;
+          }
           const kind = m.kind === 'trade' ? 'trade' : m.kind === 'draw' ? 'draw' : 'fight';
           // déjà en combat (ou déjà en échange, ou en pleine pioche) : on refuse tout de suite
           const busy =
@@ -397,8 +423,12 @@ export const useSocial = create<SocialStore>((set, get) => {
         case 'decline': {
           const out = get().outgoing;
           if (out && out.room === m.room && out.to === m.from) {
-            set({ outgoing: { ...out, state: 'declined' } });
-            if (out.kind === 'draw') usePioche.getState().declined(m.busy === true);
+            // avant la Pioche niveau 3, l'ami ne pouvait pas refuser : un refus voulait dire « occupé »
+            const pioche = get().presence[m.from]?.lv.pioche;
+            const busy = m.busy === true || (out.kind === 'draw' && !!pioche && pioche.max < PIOCHE_ASK);
+            const reason = m.old === true ? 'old' : busy ? 'busy' : undefined;
+            set({ outgoing: { ...out, state: 'declined', ...(reason ? { reason } : {}) } });
+            if (out.kind === 'draw') usePioche.getState().declined(reason ?? 'no');
           }
           return;
         }
@@ -457,7 +487,8 @@ export const useSocial = create<SocialStore>((set, get) => {
     // écarte seulement une présence vraiment ancienne (gardée par le relais).
     const recent = Math.abs(now() - m.at) < PRESENCE_MAX_SKEW_MS;
     const pv = typeof m.pv === 'number' && Number.isFinite(m.pv) ? m.pv : 0;
-    set({ presence: { ...get().presence, [code]: { name: m.name, mmr: m.mmr, online: m.online && recent, at: now(), pv } } });
+    const lv = readLevels(m.lv, m.pv);
+    set({ presence: { ...get().presence, [code]: { name: m.name, mmr: m.mmr, online: m.online && recent, at: now(), pv, lv } } });
     const friend = save()?.friends.find((f) => f.code === code);
     if (friend) useGame.getState().upsertFriend({ code, name: m.name || friend.name, mmr: m.mmr, tag: tagOf(m.tag), push: pushOf(m.pt) });
     // sa photo de profil (absente : app trop ancienne, on ne sait pas)
@@ -617,7 +648,7 @@ export const useSocial = create<SocialStore>((set, get) => {
         return { ...c, kind: 'fight' };
       }
       if (c.kind === 'trade') void useTrade.getState().join({ kind: 'online', code: c.room });
-      else if (c.kind === 'draw') void usePioche.getState().give(c.room, { code: c.from, name: c.name });
+      else if (c.kind === 'draw') void usePioche.getState().give(c.room, { code: c.from, name: c.name }, get().presence[c.from]?.lv.pioche ?? null);
       else void useMatch.getState().join(c.room, { friend: { code: c.from, name: c.name } });
       return c;
     },
@@ -695,6 +726,11 @@ export const useSocial = create<SocialStore>((set, get) => {
     isOnline(code) {
       // Paul est toujours là
       return isPaul(code) || isOnline(get().presence[code], now());
+    },
+
+    compat(code, proto) {
+      if (isPaul(code)) return { ok: true, level: myRange(proto).max };
+      return friendAgreement(proto, get().presence[code]?.lv);
     },
   };
 });

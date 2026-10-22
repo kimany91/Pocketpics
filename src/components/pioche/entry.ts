@@ -5,7 +5,7 @@
 import { router } from 'expo-router';
 
 import { adPacksLeft } from '../../game/ads';
-import { PIOCHE_VERSION, friendDrawPayment } from '../../game/friendDraw';
+import { friendDrawPayment } from '../../game/friendDraw';
 import { isPaul } from '../../game/paul';
 import { inPhase1 } from '../../game/tutorial';
 import { useSocial } from '../../net/social';
@@ -29,8 +29,10 @@ export function startFriendDraw(code?: string) {
 
 /**
  * Où en est le joueur : comment il peut payer (tirage, pièces, ou à défaut
- * 2 pubs s'il lui en reste aujourd'hui), quels amis sont en ligne, et
- * lesquels ont une app assez récente pour la Pioche amicale.
+ * 2 pubs s'il lui en reste aujourd'hui), quels amis sont en ligne, et avec
+ * lesquels la Pioche amicale est possible. Deux versions différentes du jeu
+ * piochent ensemble dès qu'elles ont un niveau de pioche en commun (voir
+ * src/net/compat.ts) ; sinon, on dit qui doit mettre le jeu à jour.
  */
 export function useFriendDraw() {
   // relu à chaque seconde : un tirage qui revient débloque la pioche
@@ -38,6 +40,7 @@ export function useFriendDraw() {
   const save = useGame((s) => s.save);
   const presence = useSocial((s) => s.presence);
   const isOnline = useSocial((s) => s.isOnline);
+  const compat = useSocial((s) => s.compat);
   const payment = friendDrawPayment(save, now);
   const adsLeft = save ? adPacksLeft(save.ads, now) : 0;
   // `presence` est lu pour redessiner quand un ami arrive ou part
@@ -45,6 +48,12 @@ export function useFriendDraw() {
   const step = save?.tutorial.step ?? 'done';
   const paulTime = step === 'pioche';
   const online = presence ? (save?.friends ?? []).filter((f) => isOnline(f.code) && (paulTime ? isPaul(f.code) : !isPaul(f.code) && !inPhase1(step))) : [];
-  const upToDate = (code: string) => (isPaul(code) ? paulTime : !inPhase1(step) && (presence[code]?.pv ?? 0) >= PIOCHE_VERSION);
-  return { payment, adsLeft, canPay: !!payment || adsLeft > 0 || paulTime, online, ready: online.filter((f) => upToDate(f.code)), upToDate };
+  /** Qui doit mettre le jeu à jour pour piocher chez lui (`null` : rien ne bloque, ou on ne sait pas encore). */
+  const needsUpdate = (code: string): 'me' | 'peer' | null => {
+    if (isPaul(code)) return null;
+    const a = compat(code, 'pioche');
+    return a && !a.ok ? a.update : null;
+  };
+  const upToDate = (code: string) => (isPaul(code) ? paulTime : !inPhase1(step) && needsUpdate(code) === null);
+  return { payment, adsLeft, canPay: !!payment || adsLeft > 0 || paulTime, online, ready: online.filter((f) => upToDate(f.code)), upToDate, needsUpdate };
 }

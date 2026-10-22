@@ -1,0 +1,48 @@
+{
+  "description": "Messages inventés de versions plus anciennes (champs absents) et plus récentes (champs, types et évènements inconnus). Le jeu doit les accepter ou les ignorer sans casser la session.",
+  "older": {
+    "presenceBeforePioche": { "k": "presence", "from": "K7F4QM2XHB", "name": "Léo", "mmr": 900, "online": true, "at": 1793000000000 },
+    "presencePiocheV2": { "k": "presence", "from": "K7F4QM2XHB", "name": "Léo", "mmr": 900, "online": true, "at": 1793000000000, "pv": 2 },
+    "presencePiocheV1": { "k": "presence", "from": "K7F4QM2XHB", "name": "Léo", "mmr": 900, "online": true, "at": 1793000000000, "pv": 1 },
+    "reqNoTag": { "k": "req", "from": "K7F4QM2XHB", "name": "Léo", "mmr": 900, "at": 1793000000000 },
+    "declineNoBusy": { "k": "decline", "from": "K7F4QM2XHB", "room": "Q8W3E5R7T", "at": 1793000000000 },
+    "tradeHelloV1": { "t": "hello", "v": 1, "name": "Léo" },
+    "tradeOfferV1": { "t": "offer", "cards": [{ "id": "card-1", "name": "Mon chat", "rarity": "epic", "thumb": "" }] },
+    "piocheHelloV2": { "t": "hello", "v": 2, "name": "Léo" },
+    "piocheHelloV1": { "t": "hello", "v": 1, "name": "Léo" },
+    "battleHelloNoMin": { "t": "hello", "v": 1, "name": "Léo", "mmr": 900, "friend": null },
+    "lobbyOpenNoLevels": { "k": "open", "id": "a1b2c3d4e5f60718", "code": "Q8W3E5R7T", "mmr": 900, "at": 1793000000000 },
+    "fighterMissingFields": { "ref": "h0", "name": "Carte", "rarity": "rare", "maxHp": 80, "hp": 80, "attacks": [{ "kind": "basic", "name": "Coup", "power": 10 }, { "kind": "slap", "name": "Gifle", "power": 8 }] }
+  },
+  "newer": {
+    "presenceWithLevels": { "k": "presence", "from": "K7F4QM2XHB", "name": "Léo", "mmr": 900, "online": true, "at": 1793000000000, "pv": 5, "lv": { "s": [1, 3], "t": [2, 4], "b": [1, 2], "p": [2, 5], "z": [1, 1] }, "mood": "content" },
+    "presenceTooNew": { "k": "presence", "from": "K7F4QM2XHB", "name": "Léo", "mmr": 900, "online": true, "at": 1793000000000, "pv": 9, "lv": { "s": [4, 6], "t": [7, 9], "b": [5, 6], "p": [8, 9] } },
+    "socialUnknownKind": { "k": "gift", "from": "K7F4QM2XHB", "at": 1793000000000, "item": "pièces" },
+    "challengeUnknownKind": { "k": "challenge", "kind": "race", "from": "K7F4QM2XHB", "name": "Léo", "mmr": 900, "room": "Q8W3E5R7T", "at": 1793000000000 },
+    "reqExtraFields": { "k": "req", "from": "K7F4QM2XHB", "name": "Léo", "mmr": 900, "at": 1793000000000, "tag": "7F3K", "badge": "or", "nested": { "a": 1 } },
+    "declineOld": { "k": "decline", "from": "K7F4QM2XHB", "room": "Q8W3E5R7T", "at": 1793000000000, "old": true, "why": "inconnu" },
+    "tradeHelloRange": { "t": "hello", "v": 2, "min": 1, "max": 4, "name": "Léo", "emoji": "🙂" },
+    "tradeHelloTooNew": { "t": "hello", "v": 6, "min": 5, "max": 7, "name": "Léo" },
+    "tradeUnknown": { "t": "emote", "e": "👋" },
+    "tradeOfferExtra": { "t": "offer", "cards": [{ "id": "card-1", "name": "Mon chat", "rarity": "epic", "thumb": "", "locked": false, "foil": "or", "sticker": 3 }, null, 7, { "id": "g", "rarity": "galaxy" }] },
+    "battleHelloRange": { "t": "hello", "v": 1, "min": 1, "max": 3, "name": "Léo", "mmr": 900, "friend": null, "title": "Champion" },
+    "battleUnknown": { "t": "emote", "e": "😤" },
+    "battleStepUnknownEvent": {
+      "t": "step",
+      "events": [
+        { "t": "confetti", "side": 0, "colors": 3 },
+        { "t": "status", "side": 1, "fighter": "Carte", "status": "frozen" },
+        { "t": "hit", "side": 1, "damage": 4, "quality": "perfect", "hp": 76, "maxHp": 80, "hitIndex": 0, "kind": "laser" },
+        { "t": "weird", "side": 7 },
+        "pas un évènement",
+        null
+      ]
+    },
+    "piocheHelloRange": { "t": "hello", "v": 3, "min": 2, "max": 5, "name": "Léo" },
+    "piocheUnknown": { "t": "sticker", "id": 4 },
+    "piochePhotoExtra": { "t": "photo", "i": 0, "n": 5, "hash": "h1", "image": "/9j/AAAA", "thumb": "/9j/AAAA", "width": 1080, "height": 1440, "format": "jpeg", "exif": { "iso": 100 } },
+    "lobbyOpenLevels": { "k": "open", "id": "b1b2c3d4e5f60718", "code": "Q8W3E5R7T", "mmr": 900, "at": 1793000000000, "b": [1, 3], "region": "eu" },
+    "lobbyOpenTooNew": { "k": "open", "id": "c1b2c3d4e5f60718", "code": "Q8W3E5R7T", "mmr": 900, "at": 1793000000000, "b": [4, 6] },
+    "relayUnknownEnvelope": { "f": "a1b2c3d4e5f60718", "t": "0f1e2d3c4b5a6978", "k": "zz", "x": 1 }
+  }
+}

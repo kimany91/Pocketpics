@@ -51,8 +51,19 @@ export default function FriendProfileScreen() {
   const online = !!code && isOnline(code);
   // hors ligne mais joignable : il reçoit une notification et l'invitation l'attend une minute
   const reachable = online || !!friend?.push;
-  const { canPay, upToDate } = useFriendDraw();
+  const { canPay, upToDate, needsUpdate } = useFriendDraw();
   const fresh = !!code && upToDate(code);
+  // Deux versions différentes du jeu jouent ensemble dès qu'elles ont un niveau en commun (voir src/net/compat.ts).
+  // On ne bloque que si sa présence dit que c'est impossible, en disant qui doit mettre le jeu à jour.
+  const compat = useSocial((s) => s.compat);
+  const blockOf = (p: 'battle' | 'trade') => {
+    const a = code ? compat(code, p) : null;
+    return a && !a.ok ? a.update : null;
+  };
+  const fightBlock = blockOf('battle');
+  const tradeBlock = blockOf('trade');
+  const drawBlock = code ? needsUpdate(code) : null;
+  const block = fightBlock ?? tradeBlock ?? drawBlock;
   // Paul (bot du tuto) : ni défi ni échange avant la phase 2, puis joués sur place
   const paul = isPaul(code);
   const paulLocked = useGame((s) => paul && inPhase1(s.save?.tutorial.step ?? 'done'));
@@ -131,7 +142,7 @@ export default function FriendProfileScreen() {
             icon="flash"
             size="lg"
             style={{ flex: 1 }}
-            disabled={!reachable || paulLocked}
+            disabled={!reachable || paulLocked || !!fightBlock}
             onPress={async () => {
               if (paul) return void fightPaul();
               haptic.medium();
@@ -145,7 +156,7 @@ export default function FriendProfileScreen() {
             size="lg"
             kind="secondary"
             style={{ flex: 1 }}
-            disabled={!reachable || paulLocked}
+            disabled={!reachable || paulLocked || !!tradeBlock}
             onPress={() => {
               if (paul) return tradeWithPaul();
               haptic.medium();
@@ -163,6 +174,10 @@ export default function FriendProfileScreen() {
         ) : !online ? (
           <AppText variant="caption" style={{ textAlign: 'center', marginTop: 8 }}>
             Il n’a pas le jeu ouvert : il recevra une notification, et ton invitation l’attendra une minute.
+          </AppText>
+        ) : block ? (
+          <AppText variant="caption" style={{ textAlign: 'center', marginTop: 8 }}>
+            {`${fightBlock ? 'Combat' : tradeBlock ? 'Échange' : 'Pioche amicale'} : ${block === 'me' ? 'ta version du jeu est trop ancienne, mets-la à jour.' : 'il doit d’abord mettre à jour le jeu.'}`}
           </AppText>
         ) : !fresh ? (
           <AppText variant="caption" style={{ textAlign: 'center', marginTop: 8 }}>

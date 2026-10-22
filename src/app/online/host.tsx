@@ -104,8 +104,20 @@ export default function HostBattleScreen() {
           declined || expired ? (
             <Message
               icon={declined ? 'close-circle-outline' : 'time-outline'}
-              title={declined ? `${friend.name} a refusé` : `${friend.name} n’a pas répondu`}
-              text={declined ? 'Ce sera pour une prochaine fois.' : 'Son app est peut-être fermée : un défi n’arrive que si le jeu est ouvert.'}
+              title={
+                declined
+                  ? outgoing?.reason === 'old'
+                    ? `${friend.name} doit mettre le jeu à jour`
+                    : `${friend.name} a refusé`
+                  : `${friend.name} n’a pas répondu`
+              }
+              text={
+                declined
+                  ? outgoing?.reason === 'old'
+                    ? 'Son jeu est trop ancien pour ce défi.'
+                    : 'Ce sera pour une prochaine fois.'
+                  : 'Son app est peut-être fermée : un défi n’arrive que si le jeu est ouvert.'
+              }
               onBack={exit}
             />
           ) : (

@@ -1,0 +1,18 @@
+{
+  "description": "Fiche d'annuaire Pseudo#TAG (chiffrée avec sealDirectory).",
+  "messages": {
+    "entry": {
+      "code": "K7F4QM2XHB",
+      "name": "Léo",
+      "tag": "7F3K",
+      "at": 1793000000000,
+      "pt": "ExponentPushToken[abcdefghijklmnop]"
+    },
+    "entryNoPush": {
+      "code": "K7F4QM2XHB",
+      "name": "Léo",
+      "tag": "7F3K",
+      "at": 1793000000000
+    }
+  }
+}

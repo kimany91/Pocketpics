@@ -23,7 +23,13 @@ import type { SaveState } from '../storage/model';
 
 /** Espace de noms des salons de pioche sur le relais. */
 export const PIOCHE_NS = 'pioche/';
-export const PIOCHE_VERSION = 3;
+/**
+ * Niveau de pioche à partir duquel l'ami accepte ou refuse la demande (avant,
+ * son téléphone rejoignait tout seul, et un refus voulait dire « occupé »).
+ * Les messages du salon sont les mêmes aux niveaux 2 et 3. Les niveaux et la
+ * négociation entre versions sont dans `src/net/compat.ts`.
+ */
+export const PIOCHE_ASK = 3;
 /** Temps laissé à l'ami pour valider ou refuser, une fois le paquet ouvert. */
 export const VERDICT_TTL_MS = 60_000;
 /** Prix d'une pioche quand il ne reste aucun tirage : celui d'un paquet. */
@@ -92,7 +98,8 @@ export function receivedVerdict(verdicts: (boolean | null)[]): boolean | null {
 }
 
 export type PiocheMsg =
-  | { t: 'hello'; v: number; name: string }
+  /** `min` / `max` : niveaux parlés (absents chez les versions d'avant la négociation, voir compat.ts). */
+  | { t: 'hello'; v: number; min?: number; max?: number; name: string }
   /** L'ami → empreintes des photos préparées. */
   | { t: 'hashes'; hashes: string[] }
   /** Celui qui pioche → celles qu'il n'a pas encore. */

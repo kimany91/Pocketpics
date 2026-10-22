@@ -20,7 +20,6 @@ import { hostRoom, joinRoom } from '../trade/online';
 import { formatOnlineCode } from '../trade/relayCore';
 import {
   BATTLE_NS,
-  BATTLE_PROTOCOL,
   type BattleController,
   type BattleMsg,
   type Channel,
@@ -28,9 +27,11 @@ import {
   HostController,
   type NetFighter,
   mirrorBattle,
+  sanitizeBattleState,
   sanitizeDeck,
   startBattle,
 } from './battleNet';
+import { Handshake, updateMessage } from './compat';
 import { type BotOpponent, BotPeer, botFighters, botNetFighters } from './botMatch';
 import { Reliable, type Wire } from './reliable';
 
@@ -70,6 +71,8 @@ interface MatchStore {
    * montré comme tel : l'écran l'affiche comme n'importe quel adversaire.
    */
   bot: BotOpponent | null;
+  /** Niveau du protocole de combat convenu avec l'adversaire (voir compat.ts). */
+  level: number | null;
 
   host(opts?: { code?: string; friend?: { code: string; name: string } }): Promise<void>;
   /**
@@ -86,13 +89,19 @@ interface MatchStore {
 }
 
 let rel: Reliable<BattleMsg> | null = null;
+/** Bonjour du combat en cours (niveau convenu avec l'adversaire). */
+let shake: Handshake | null = null;
 let listeners: ((m: BattleMsg) => void)[] = [];
 let stopHost: (() => void) | null = null;
 let myNet: NetFighter[] = [];
 let session = 0;
 
 const channel: Channel<BattleMsg> = {
-  send: (m) => rel?.send(m),
+  send: (m) => {
+    // le bonjour part toujours en premier
+    if (m.t !== 'hello') shake?.flush();
+    rel?.send(m);
+  },
   onMessage: (cb) => listeners.push(cb),
 };
 
@@ -113,6 +122,7 @@ const initial = {
   oppGone: false,
   lostConnection: false,
   bot: null,
+  level: null as number | null,
 };
 
 /** Carte envoyée à l'adversaire (sans son image : elle part à part, voir `sendArt`). */
@@ -183,19 +193,25 @@ export const useMatch = create<MatchStore>((set, get) => {
   const handle = (m: BattleMsg) => {
     const s = get();
     switch (m.t) {
-      case 'hello':
-        if (m.v !== BATTLE_PROTOCOL) {
-          set({ error: 'Ton ami n’a pas la même version du jeu. Mettez-vous à jour tous les deux.', phase: 'over' });
+      case 'hello': {
+        const a = shake?.receive(m);
+        if (!a) return; // doublon
+        const name = typeof m.name === 'string' && m.name.trim() ? m.name.trim().slice(0, 24) : 'Adversaire';
+        if (!a.ok) {
+          // aucun niveau commun : on dit qui doit mettre le jeu à jour
+          set({ error: updateMessage(a.update, name === 'Adversaire' ? 'Ton adversaire' : name), phase: 'over' });
           return;
         }
         set({
+          level: a.level,
           opp: {
-            name: typeof m.name === 'string' && m.name.trim() ? m.name.trim().slice(0, 24) : 'Adversaire',
+            name,
             mmr: Math.max(0, Math.floor(Number(m.mmr) || 0)),
             friend: typeof m.friend === 'string' ? m.friend : null,
           },
         });
         return;
+      }
       case 'deck': {
         const deck = sanitizeDeck(m.fighters);
         if (!deck) return;
@@ -208,13 +224,18 @@ export const useMatch = create<MatchStore>((set, get) => {
       case 'art':
         if (typeof m.ref === 'string' && typeof m.thumb === 'string') gotArt(m.ref, m.thumb);
         return;
-      case 'start':
-        if (s.role !== 'guest' || s.phase === 'fighting' || !m.battle) return;
+      case 'start': {
+        const battle = sanitizeBattleState(m.battle);
+        if (s.role !== 'guest' || s.phase === 'fighting' || !battle) return;
         // créé tout de suite : les coups qui suivent ne doivent pas lui échapper
-        started(mirrorBattle(m.battle), new GuestController(channel));
+        started(mirrorBattle(battle), new GuestController(channel));
         return;
+      }
       case 'quit':
         set({ oppGone: true });
+        return;
+      default:
+        // message d'une version plus récente : ignoré
         return;
     }
   };
@@ -226,7 +247,17 @@ export const useMatch = create<MatchStore>((set, get) => {
     }
     rel = new Reliable<BattleMsg>(link);
     listeners = [handle];
-    rel.onMessage((m) => listeners.forEach((l) => l(m)));
+    rel.onMessage((m) => {
+      if (!m || typeof m !== 'object') return;
+      for (const l of listeners) {
+        try {
+          l(m);
+        } catch (e) {
+          // un message inattendu ne doit jamais bloquer le combat
+          console.warn('Message de combat ignoré', e);
+        }
+      }
+    });
     rel.onClose((error) => {
       if (token !== session) return;
       const mine = !!error && error.includes('relais');
@@ -234,7 +265,10 @@ export const useMatch = create<MatchStore>((set, get) => {
       else set({ phase: 'over', error: error ?? 'L’autre joueur est parti.' });
     });
     const hello = me();
-    channel.send({ t: 'hello', v: BATTLE_PROTOCOL, ...hello });
+    // l'hôte attend le bonjour de l'invité pour lui répondre dans son niveau (voir compat.ts)
+    shake?.stop();
+    shake = new Handshake('battle', get().role === 'host' ? 'host' : 'guest', (f) => rel?.send({ t: 'hello', ...f, ...hello }));
+    shake.start();
     set({ phase: 'lobby' });
   };
 
@@ -313,6 +347,8 @@ export const useMatch = create<MatchStore>((set, get) => {
 
     leave() {
       session++;
+      shake?.stop();
+      shake = null;
       stopHost?.();
       stopHost = null;
       rel?.close();

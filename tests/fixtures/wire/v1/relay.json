@@ -1,0 +1,47 @@
+{
+  "description": "Enveloppes des salons sur le relais (chiffrées avec seal), communes à échange, combat et pioche.",
+  "messages": {
+    "knock": {
+      "f": "a1b2c3d4e5f60718",
+      "k": "knock"
+    },
+    "welcome": {
+      "f": "0f1e2d3c4b5a6978",
+      "t": "a1b2c3d4e5f60718",
+      "k": "w"
+    },
+    "full": {
+      "f": "0f1e2d3c4b5a6978",
+      "t": "a1b2c3d4e5f60718",
+      "k": "full"
+    },
+    "chunk1": {
+      "f": "a1b2c3d4e5f60718",
+      "t": "0f1e2d3c4b5a6978",
+      "k": "m",
+      "id": "a1b2c30",
+      "i": 0,
+      "n": 2,
+      "d": "{\"t\":\"hello\",\"v\":2,"
+    },
+    "chunk2": {
+      "f": "a1b2c3d4e5f60718",
+      "t": "0f1e2d3c4b5a6978",
+      "k": "m",
+      "id": "a1b2c30",
+      "i": 1,
+      "n": 2,
+      "d": "\"name\":\"Léo\"}"
+    },
+    "ping": {
+      "f": "a1b2c3d4e5f60718",
+      "t": "0f1e2d3c4b5a6978",
+      "k": "p"
+    },
+    "bye": {
+      "f": "a1b2c3d4e5f60718",
+      "t": "0f1e2d3c4b5a6978",
+      "k": "b"
+    }
+  }
+}

@@ -1,6 +1,7 @@
 /**
  * Déroulé d'un échange :
- *  1. hello   — on se présente (pseudo + version du protocole)
+ *  1. hello   — on se présente (pseudo + niveaux du protocole, voir src/net/compat.ts :
+ *               deux versions différentes du jeu prennent le niveau commun)
  *  2. offer   — chacun choisit ses cartes (les miniatures sont envoyées pour l'aperçu)
  *  3. lock    — chacun valide l'offre ; toute modification annule les validations
  *  4. confirm — double confirmation
@@ -18,7 +19,8 @@ import { type Card, migrateCard } from '../storage/model';
 import type { TradeTarget } from './code';
 import { hostOnline, joinOnline } from './online';
 import { paulTradeLink } from './paulPeer';
-import { MAX_OFFER, type OfferCard, PROTOCOL_VERSION, type TradeMessage, mirrorKey, offerKey, offerTag } from './protocol';
+import { Handshake, myRange, updateMessage } from '../net/compat';
+import { MAX_OFFER, type OfferCard, TRADE_LOCKS, type TradeMessage, mirrorKey, offerKey, offerTagAt, sanitizeIds, sanitizeOffer } from './protocol';
 import { type HostHandle, type TradeLink, hostTrade, joinTrade } from './transport';
 
 export type TradeMode = 'online' | 'lan';
@@ -47,6 +49,14 @@ interface TradeStore {
   maxOffer: number;
   /** Échange du tuto avec Paul (sur ce téléphone, sans réseau). */
   paul: boolean;
+  /**
+   * Niveau du protocole convenu avec l'autre joueur (voir src/net/compat.ts).
+   * Avec une version d'avant le cadenas (niveau 1), on ne peut ni verrouiller
+   * ni offrir une carte déjà verrouillée (elle perdrait son cadenas chez lui).
+   */
+  level: number | null;
+  /** Le cadenas fait-il partie de l'accord avec cet autre joueur ? */
+  canLock: boolean;
 
   /** `online` (par défaut) : n'importe où via Internet · `lan` : même Wi-Fi, sans Internet. */
   mode: TradeMode;
@@ -79,6 +89,8 @@ const initial = {
   givenCount: 0,
   maxOffer: MAX_OFFER,
   paul: false,
+  level: null as number | null,
+  canLock: true,
 };
 
 /** Message d'erreur compréhensible, avec la piste de secours adaptée au mode. */
@@ -91,6 +103,8 @@ function describe(e: unknown, mode: TradeMode): string {
 }
 
 let link: TradeLink | null = null;
+/** Bonjour de la session en cours (niveau convenu avec l'autre). */
+let shake: Handshake | null = null;
 let hostHandle: HostHandle | null = null;
 let sentAcked = false;
 let gotCards = false;
@@ -109,6 +123,8 @@ function teardown() {
     link?.close();
   } catch {}
   link = null;
+  shake?.stop();
+  shake = null;
   hostHandle?.stop();
   hostHandle = null;
   sentAcked = false;
@@ -116,15 +132,21 @@ function teardown() {
 }
 
 export const useTrade = create<TradeStore>((set, get) => {
-  const send = (m: TradeMessage) => link?.send(m);
+  const send = (m: TradeMessage) => {
+    // le bonjour part toujours en premier
+    if (m.t !== 'hello') shake?.flush();
+    link?.send(m);
+  };
   const unlocked = { myLocked: false, peerLocked: false, myConfirmed: false, peerConfirmed: false };
   /** Ma carte partira-t-elle verrouillée ? (déjà verrouillée, ou cadenas posé pour cet échange) */
-  const willLock = (id: string) => get().myLocks.includes(id) || useGame.getState().cards.some((c) => c.id === id && c.locked);
-  const currentKey = () =>
-    offerKey(
-      get().myOffer.map((id) => offerTag(id, willLock(id))),
-      get().peerOffer.map((c) => offerTag(c.id, c.locked === true)),
+  const willLock = (id: string) => get().canLock && (get().myLocks.includes(id) || useGame.getState().cards.some((c) => c.id === id && c.locked));
+  const currentKey = () => {
+    const level = get().level ?? TRADE_LOCKS;
+    return offerKey(
+      get().myOffer.map((id) => offerTagAt(level, id, willLock(id))),
+      get().peerOffer.map((c) => offerTagAt(level, c.id, c.locked === true)),
     );
+  };
 
   const sendOffer = () => {
     const cards = useGame.getState().cards;
@@ -184,6 +206,7 @@ export const useTrade = create<TradeStore>((set, get) => {
     const now = Date.now();
     const stored: Card[] = [];
     for (const tc of msg.cards) {
+      if (!tc || typeof tc !== 'object') continue;
       const base = migrateCard(tc.card, now);
       if (!base || typeof tc.image !== 'string' || typeof tc.thumb !== 'string' || tc.image.length > MAX_IMAGE_B64) continue;
       if (base.rarity === 'galaxy') continue; // une Galaxy ne s'échange pas
@@ -211,30 +234,36 @@ export const useTrade = create<TradeStore>((set, get) => {
   const handle = (msg: TradeMessage) => {
     const s = get();
     switch (msg.t) {
-      case 'hello':
-        if (msg.v !== PROTOCOL_VERSION) {
-          set({ phase: 'ended', error: "Vos versions de PocketPics sont différentes. Mettez l'app à jour tous les deux." });
+      case 'hello': {
+        const a = shake?.receive(msg);
+        if (!a) return; // doublon
+        const peerName = typeof msg.name === 'string' && msg.name.trim() ? msg.name.trim().slice(0, 24) : 'Joueur';
+        if (!a.ok) {
+          // aucun niveau commun : on dit qui doit mettre le jeu à jour (mon bonjour est parti, il le saura aussi)
+          set({ phase: 'ended', error: updateMessage(a.update, peerName) });
           teardown();
           return;
         }
-        set({ phase: 'room', peerName: String(msg.name || 'Joueur').slice(0, 24) });
+        const canLock = a.level >= TRADE_LOCKS;
+        // cadenas impossible avec lui : on retire ceux posés et les cartes déjà verrouillées
+        const lockedIds = new Set(useGame.getState().cards.filter((c) => c.locked).map((c) => c.id));
+        set({
+          phase: 'room',
+          peerName,
+          level: a.level,
+          canLock,
+          ...(canLock ? {} : { myLocks: [], myOffer: s.myOffer.filter((id) => !lockedIds.has(id)) }),
+        });
         hostHandle?.stop(); // plus personne d'autre ne peut rejoindre
         return;
-      case 'offer':
-        if (s.phase !== 'room' || !Array.isArray(msg.cards)) return;
-        set({
-          ...unlocked,
-          // une Galaxy ne s'échange jamais (unique à chaque joueur) : on l'ignore si elle arrive quand même
-          peerOffer: msg.cards.filter((c) => String(c.rarity) !== 'galaxy').slice(0, MAX_OFFER).map((c) => ({
-            id: String(c.id),
-            name: typeof c.name === 'string' ? c.name.slice(0, 28) : null,
-            rarity: String(c.rarity),
-            thumb: typeof c.thumb === 'string' ? c.thumb : '',
-            locked: c.locked === true,
-            censored: c.censored === true,
-          })),
-        });
+      }
+      case 'offer': {
+        // une Galaxy ne s'échange jamais (unique à chaque joueur) : on l'ignore si elle arrive quand même
+        const peerOffer = sanitizeOffer(msg.cards);
+        if (s.phase !== 'room' || !peerOffer) return;
+        set({ ...unlocked, peerOffer });
         return;
+      }
       case 'lock':
         if (s.phase !== 'room' || msg.key !== mirrorKey(currentKey())) return;
         set(msg.locked ? { peerLocked: true } : { peerLocked: false, myConfirmed: false, peerConfirmed: false });
@@ -245,7 +274,7 @@ export const useTrade = create<TradeStore>((set, get) => {
         void startTransfer();
         return;
       case 'cards':
-        if (s.phase !== 'transferring' || gotCards) return;
+        if (s.phase !== 'transferring' || gotCards || !Array.isArray(msg.cards)) return;
         try {
           receiveCards(msg);
         } catch (e) {
@@ -256,7 +285,8 @@ export const useTrade = create<TradeStore>((set, get) => {
       case 'ack': {
         if (s.phase !== 'transferring' || sentAcked) return;
         const mine = new Set(s.myOffer);
-        if (msg.ids.length !== mine.size || !msg.ids.every((id) => mine.has(id))) return;
+        const ids = sanitizeIds(msg.ids);
+        if (!ids || ids.length !== mine.size || !ids.every((id) => mine.has(id))) return;
         // Le receveur a bien enregistré nos cartes : on peut les retirer.
         useGame.getState().removeCards(s.myOffer);
         sentAcked = true;
@@ -270,13 +300,25 @@ export const useTrade = create<TradeStore>((set, get) => {
           teardown();
         }
         return;
+      default:
+        // message d'une version plus récente : ignoré
+        return;
     }
   };
 
-  const attach = (l: TradeLink) => {
+  /** `role` : l'hôte attend le bonjour de l'invité pour lui répondre dans son niveau (voir compat.ts). */
+  const attach = (l: TradeLink, role: 'host' | 'guest', paul = false) => {
     link = l;
     const gen = generation;
-    l.onMessage((m) => gen === generation && handle(m));
+    l.onMessage((m) => {
+      if (gen !== generation || !m || typeof m !== 'object') return;
+      try {
+        handle(m);
+      } catch (e) {
+        // un message inattendu ne doit jamais casser l'échange
+        console.warn('Message d’échange ignoré', e);
+      }
+    });
     l.onClose(() => {
       if (gen !== generation) return;
       const phase = get().phase;
@@ -290,7 +332,9 @@ export const useTrade = create<TradeStore>((set, get) => {
       });
       teardown();
     });
-    l.send({ t: 'hello', v: PROTOCOL_VERSION, name: playerName() });
+    // Paul (sur ce téléphone) parle forcément la même version : pas d'attente
+    shake = new Handshake('trade', role, (f) => l.send({ t: 'hello', ...f, name: playerName() }), paul ? myRange('trade') : null);
+    shake.start();
   };
 
   return {
@@ -305,7 +349,7 @@ export const useTrade = create<TradeStore>((set, get) => {
         const h = await open((l) => {
           if (gen !== generation) return l.close();
           set({ phase: 'connecting' });
-          attach(l);
+          attach(l, 'host');
         });
         if (gen !== generation) return h.stop();
         hostHandle = h;
@@ -322,7 +366,7 @@ export const useTrade = create<TradeStore>((set, get) => {
       try {
         const l = target.kind === 'online' ? await joinOnline(target.code) : await joinTrade(target.addr);
         if (gen !== generation) return l.close();
-        attach(l);
+        attach(l, 'guest');
       } catch (e) {
         if (gen === generation) set({ phase: 'idle', error: describe(e, target.kind) });
       }
@@ -331,7 +375,7 @@ export const useTrade = create<TradeStore>((set, get) => {
     withPaul() {
       teardown();
       set({ ...initial, phase: 'connecting', maxOffer: 1, paul: true });
-      attach(paulTradeLink());
+      attach(paulTradeLink(), 'guest', true);
     },
 
     toggleCard(id) {
@@ -339,6 +383,8 @@ export const useTrade = create<TradeStore>((set, get) => {
       if (s.phase !== 'room') return;
       const has = s.myOffer.includes(id);
       // une seule carte possible (Paul) : la nouvelle remplace l'ancienne
+      // pas de cadenas avec lui (version d'avant) : une carte verrouillée ne part pas, elle le perdrait
+      if (!has && !s.canLock && useGame.getState().cards.some((c) => c.id === id && c.locked)) return;
       const swap = !has && s.maxOffer === 1 && s.myOffer.length === 1;
       if (!has && !swap && s.myOffer.length >= s.maxOffer) return;
       set({
@@ -351,7 +397,7 @@ export const useTrade = create<TradeStore>((set, get) => {
 
     toggleCardLock(id) {
       const s = get();
-      if (s.phase !== 'room' || s.myLocked || !s.myOffer.includes(id)) return;
+      if (s.phase !== 'room' || s.myLocked || !s.canLock || !s.myOffer.includes(id)) return;
       // une carte reçue verrouillée ne se déverrouille jamais
       if (useGame.getState().cards.some((c) => c.id === id && c.locked)) return;
       const has = s.myLocks.includes(id);

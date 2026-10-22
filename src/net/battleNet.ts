@@ -10,12 +10,12 @@
  * Chaque joueur se voit toujours comme le camp 0 : l'invité reçoit l'état
  * « en miroir ». Ce fichier est pur (testable sous Node).
  */
-import { type Action, type Battle, type BattleEvent, type FighterInput, type SideId, act, createBattle, other, replace } from '../battle/engine';
+import { type Action, type Battle, type BattleEvent, type Fighter, type FighterInput, type Side, type SideId, act, createBattle, other, replace } from '../battle/engine';
 import { type BattleStats, generateStats } from '../battle/stats';
 import { getRarity } from '../game/rarity';
 
 export const BATTLE_NS = 'battle/';
-export const BATTLE_PROTOCOL = 1;
+/** Les niveaux du combat (et la négociation entre versions) sont dans `compat.ts`. */
 export const DECK_SIZE = 4;
 const MAX_THUMB = 240_000;
 
@@ -36,7 +36,8 @@ export interface NetFighter {
 }
 
 export type BattleMsg =
-  | { t: 'hello'; v: number; name: string; mmr: number; friend: string | null }
+  /** `min` / `max` : niveaux parlés (absents chez les versions d'avant la négociation, voir compat.ts). */
+  | { t: 'hello'; v: number; min?: number; max?: number; name: string; mmr: number; friend: string | null }
   | { t: 'deck'; fighters: NetFighter[] }
   /**
    * Miniature d'une carte, envoyée carte par carte APRÈS le deck. Les images
@@ -78,6 +79,94 @@ export function mirrorEvent(e: BattleEvent): BattleEvent {
 }
 
 export const mirrorStep = (s: Step): Step => ({ events: s.events.map(mirrorEvent), battle: mirrorBattle(s.battle) });
+
+/* ------------------------- État reçu de l'hôte ------------------------- */
+
+const isSide = (v: unknown): v is SideId => v === 0 || v === 1;
+const num = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+
+/**
+ * Une carte de l'état reçu, avec ses champs absents remplis : un hôte d'une
+ * autre version peut avoir des champs en plus (gardés) ou en moins.
+ */
+function sanitizeNetFighter(raw: unknown): Fighter | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const f = raw as Record<string, unknown>;
+  if (typeof f.ref !== 'string' || !Array.isArray(f.attacks) || f.attacks.length < 2) return null;
+  const attack = (a: unknown) => {
+    const x = (a && typeof a === 'object' ? a : {}) as Record<string, unknown>;
+    return { ...x, kind: typeof x.kind === 'string' ? x.kind : 'basic', name: typeof x.name === 'string' ? x.name : '', power: num(x.power) } as Fighter['attacks'][0];
+  };
+  const maxHp = Math.max(1, num(f.maxHp, 1));
+  return {
+    ...(f as unknown as Fighter),
+    name: typeof f.name === 'string' ? f.name : '',
+    rarity: typeof f.rarity === 'string' ? f.rarity : 'common',
+    maxHp,
+    hp: Math.max(0, Math.min(maxHp, num(f.hp))),
+    attacks: [attack(f.attacks[0]), attack(f.attacks[1])],
+    usesLeft: num(f.usesLeft),
+    maxUses: num(f.maxUses),
+    stun: num(f.stun),
+    guard: num(f.guard),
+    dodge: num(f.dodge),
+    focus: f.focus === true,
+    marked: f.marked === true,
+    weak: f.weak === true,
+    jammed: num(f.jammed),
+    poison: num(f.poison),
+    poisonDmg: num(f.poisonDmg),
+    chain: num(f.chain),
+    hurtAt: num(f.hurtAt, -10),
+    dealt: num(f.dealt),
+  };
+}
+
+/** L'état d'un combat envoyé par l'hôte, vérifié (`null` s'il est illisible). */
+export function sanitizeBattleState(raw: unknown): Battle | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const b = raw as Record<string, unknown>;
+  if (!Array.isArray(b.sides) || b.sides.length !== 2 || !isSide(b.turn)) return null;
+  const sides: Side[] = [];
+  for (const rs of b.sides) {
+    if (!rs || typeof rs !== 'object') return null;
+    const s = rs as Record<string, unknown>;
+    if (!Array.isArray(s.fighters) || s.fighters.length === 0) return null;
+    const fighters = s.fighters.map(sanitizeNetFighter);
+    if (fighters.some((f) => !f)) return null;
+    const active = Math.floor(num(s.active));
+    if (active < 0 || active >= fighters.length) return null;
+    sides.push({ ...(s as unknown as Side), fighters: fighters as Fighter[], active, last: s.last && typeof s.last === 'object' ? (s.last as Side['last']) : null });
+  }
+  return {
+    ...(b as unknown as Battle),
+    sides: [sides[0], sides[1]],
+    turn: b.turn,
+    mustReplace: isSide(b.mustReplace) ? b.mustReplace : null,
+    winner: isSide(b.winner) ? b.winner : null,
+    turnCount: num(b.turnCount),
+  };
+}
+
+/** Le coup envoyé par l'invité, vérifié (`null` : pas un coup que cette version connaît). */
+export function sanitizeAction(raw: unknown): Action | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const a = raw as Record<string, unknown>;
+  if (a.type === 'pass') return { type: 'pass' };
+  if (a.type === 'switch') return Number.isInteger(a.to) ? { type: 'switch', to: a.to as number } : null;
+  if (a.type !== 'attack' || (a.slot !== 0 && a.slot !== 1)) return null;
+  const timings = (Array.isArray(a.timings) ? a.timings : []).slice(0, 8).map((t) => (typeof t === 'number' && Number.isFinite(t) ? t : 0));
+  return { type: 'attack', slot: a.slot, timings };
+}
+
+/**
+ * Les évènements à rejouer : ceux qui ne ressemblent à rien sont écartés.
+ * Un type inconnu (version plus récente de l'hôte) est gardé : l'écran le saute.
+ */
+export function sanitizeEvents(raw: unknown): BattleEvent[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((e): e is BattleEvent => !!e && typeof e === 'object' && typeof (e as { t?: unknown }).t === 'string' && (!('side' in e) || isSide((e as { side?: unknown }).side)));
+}
 
 /* ------------------------------ Cartes reçues ------------------------------ */
 
@@ -169,8 +258,9 @@ export class HostController implements BattleController {
   ) {
     this.battle = start;
     ch.onMessage((m) => {
-      if (m.t === 'act' && m.action && typeof m.action === 'object') this.moves.push({ type: 'act', action: m.action });
-      else if (m.t === 'replace' && typeof m.to === 'number') this.moves.push({ type: 'replace', to: m.to });
+      const action = m.t === 'act' ? sanitizeAction(m.action) : null;
+      if (action) this.moves.push({ type: 'act', action });
+      else if (m.t === 'replace' && Number.isInteger(m.to)) this.moves.push({ type: 'replace', to: m.to });
     });
   }
 
@@ -202,7 +292,10 @@ export class GuestController implements BattleController {
 
   constructor(private ch: Channel<BattleMsg>) {
     ch.onMessage((m) => {
-      if (m.t === 'step' && m.battle && Array.isArray(m.events)) this.steps.push(mirrorStep({ events: m.events, battle: m.battle }));
+      if (m.t !== 'step') return;
+      // l'état doit être lisible ; un évènement inconnu (hôte plus récent) n'empêche rien
+      const battle = sanitizeBattleState(m.battle);
+      if (battle) this.steps.push(mirrorStep({ events: sanitizeEvents(m.events), battle }));
     });
   }
 
