@@ -12,6 +12,7 @@
  */
 import { type Action, type Battle, type BattleEvent, type Fighter, type FighterInput, type Side, type SideId, act, createBattle, other, replace } from '../battle/engine';
 import { type BattleStats, generateStats } from '../battle/stats';
+import type { EmoteMsg } from '../game/emotes';
 import { getRarity } from '../game/rarity';
 
 export const BATTLE_NS = 'battle/';
@@ -53,6 +54,11 @@ export type BattleMsg =
   | { t: 'replace'; to: number }
   /** Hôte → invité : ce qui vient de se passer (vu par l'hôte). */
   | { t: 'step'; events: BattleEvent[]; battle: Battle }
+  /**
+   * Emote envoyée à l'autre joueur (ajouté après, facultatif) : une version
+   * d'avant l'ignore (type inconnu), un id inconnu est ignoré à la réception.
+   */
+  | EmoteMsg
   | { t: 'quit' };
 
 export type Move = { type: 'act'; action: Action } | { type: 'replace'; to: number };

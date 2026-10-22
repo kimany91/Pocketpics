@@ -25,7 +25,9 @@ import { PIOCHE_COLOR } from '../../components/pioche/entry';
 import { Screen } from '../../components/Screen';
 import { VERDICT_TTL_MS } from '../../game/friendDraw';
 import { getRarity } from '../../game/rarity';
-import { usePioche } from '../../net/pioche';
+import { emotePhases, usePioche } from '../../net/pioche';
+import { EmoteButton, EmoteOverlay } from '../../components/emotes/EmoteDock';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme';
 import { haptic } from '../../utils/haptics';
 
@@ -41,6 +43,7 @@ export default function PiocheGive() {
   const progress = usePioche((s) => s.progress);
   const active = useIsFocused();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [boom, setBoom] = useState(0);
   /** Panneau « Tu es sûr de vouloir refuser ? » ouvert. */
   const [askRefuse, setAskRefuse] = useState(false);
@@ -176,8 +179,15 @@ export default function PiocheGive() {
 
   return (
     <Screen edges={['top', 'bottom']}>
-      <Header title="Pioche amicale" onBack={close} />
+      <Header title="Pioche amicale" onBack={close} right={role === 'giver' && emotePhases.includes(phase) ? <EmoteButton /> : undefined} />
       <View style={styles.body}>{body}</View>
+      <EmoteOverlay
+        enabled={role === 'giver' && emotePhases.includes(phase)}
+        send={(id) => usePioche.getState().sendEmote(id)}
+        panel={{ top: insets.top + 54, right: 10 }}
+        theirs={{ top: insets.top + 58, left: 18 }}
+        mine={{ bottom: insets.bottom + 24, right: 18 }}
+      />
       {askRefuse && phase === 'judging' ? (
         <RefuseConfirm
           name={name}

@@ -32,6 +32,8 @@ import type { Card } from '../../storage/model';
 import { TutoArrow, TutoBubble } from '../../components/tuto/TutoArrow';
 import type { OfferCard } from '../../trade/protocol';
 import { useTrade } from '../../trade/session';
+import { EmoteButton, EmoteOverlay } from '../../components/emotes/EmoteDock';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '../../theme';
 import { confirmAction } from '../../utils/confirm';
 import { haptic } from '../../utils/haptics';
@@ -44,6 +46,7 @@ export default function RoomScreen() {
   const cards = useGame((s) => s.cards);
   const { width } = useWindowDimensions();
   const focused = useIsFocused();
+  const insets = useSafeAreaInsets();
   // le bilan ne remplace la mise en scène du transfert qu’une fois celle-ci jouée
   const [revealed, setRevealed] = useState(false);
   const cols = 4;
@@ -114,7 +117,7 @@ export default function RoomScreen() {
       <Header
         title={`Échange avec ${t.peerName ?? '…'}`}
         onBack={askExit}
-        right={<OnlineDot online active={focused} />}
+        right={<EmoteButton dot={<OnlineDot online active={focused} />} />}
       />
 
       <View style={styles.offers}>
@@ -235,6 +238,13 @@ export default function RoomScreen() {
           <Waiting text={`En attente de la confirmation de ${t.peerName ?? 'ton ami'}…`} />
         )}
       </View>
+      <EmoteOverlay
+        enabled={t.phase === 'room'}
+        send={(id) => useTrade.getState().sendEmote(id)}
+        panel={{ top: insets.top + 54, right: 10 }}
+        theirs={{ top: insets.top + 58, right: 18 }}
+        mine={{ bottom: insets.bottom + 92, left: 18 }}
+      />
     </Screen>
   );
 }

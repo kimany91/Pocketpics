@@ -7,6 +7,7 @@ import { setSfxVolume } from '../audio/sfx';
 import { ATTACK_NAME_MAX } from '../battle/stats';
 import { watchedAd } from '../game/ads';
 import { DRAW_PRICE, type SoloReward, soloReward } from '../game/economy';
+import { type BuyResult, buyEmote, equipAt, seeUnlock, toggleEquip, unlockFromCards } from '../game/emotes';
 import { DIVINE_GATE, TOTAL_LEVELS, needsDivine } from '../battle/levels';
 import { planPack, rollLucky } from '../game/luck';
 import {
@@ -163,10 +164,20 @@ interface GameStore {
    */
   completeChallenge(level: number, deckIds: string[]): boolean;
 
+  /* --------------------------------- Emotes --------------------------------- */
+  /** Achète une emote avec des pièces (équipée tout de suite s'il reste une place). */
+  buyEmote(id: string): 'ok' | Extract<BuyResult, { ok: false }>['why'];
+  /** Équipe ou retire une emote possédée (4 au plus : `full`). */
+  toggleEmote(id: string): 'ok' | 'full' | 'locked' | 'unknown';
+  /** Met l'emote `id` à la place `slot` des emotes équipées. */
+  equipEmoteAt(slot: number, id: string): void;
+  /** L'animation « Emote débloquée » de cette emote a été vue. */
+  seeEmoteUnlock(id: string): void;
+
   /* ---------------------------------- Tuto ---------------------------------- */
-  /** Passe à l'étape suivante si on est bien à `from` (sans effet sinon : on peut appeler deux fois). */
   /** Démo navigateur uniquement : remet la réserve de tirages au maximum. */
   refillDrawsForDemo(): void;
+  /** Passe à l'étape suivante si on est bien à `from` (sans effet sinon : on peut appeler deux fois). */
   advanceTuto(from: TutoStep): void;
   /** Tuto : ajoute Paul (sans réseau, il accepte tout de suite) et passe à la Pioche. */
   addPaul(): void;
@@ -875,6 +886,48 @@ export const useGame = create<GameStore>((set, get) => ({
     return true;
   },
 
+  buyEmote(id) {
+    const save = get().save;
+    if (!save) return 'unknown';
+    const res = buyEmote(save.emotes, save.coins, id);
+    if (!res.ok) return res.why;
+    const next: SaveState = { ...save, emotes: res.state, coins: res.coins };
+    persistState(next);
+    set({ save: next });
+    return 'ok';
+  },
+
+  toggleEmote(id) {
+    const save = get().save;
+    if (!save) return 'unknown';
+    const res = toggleEquip(save.emotes, id);
+    if (!res.ok) return res.why;
+    const next: SaveState = { ...save, emotes: res.state };
+    persistState(next);
+    set({ save: next });
+    return 'ok';
+  },
+
+  equipEmoteAt(slot, id) {
+    const save = get().save;
+    if (!save) return;
+    const res = equipAt(save.emotes, slot, id);
+    if (!res.ok) return;
+    const next: SaveState = { ...save, emotes: res.state };
+    persistState(next);
+    set({ save: next });
+  },
+
+  seeEmoteUnlock(id) {
+    const save = get().save;
+    if (!save) return;
+    const emotes = seeUnlock(save.emotes, id);
+    if (emotes === save.emotes) return;
+    const next: SaveState = { ...save, emotes };
+    persistState(next);
+    set({ save: next });
+  },
+
   refillDrawsForDemo() {
     const save = get().save;
     if (save) set({ save: { ...save, draws: { charges: MAX_STORED_DRAWS, anchor: Date.now() } } });
@@ -1079,6 +1132,19 @@ useGame.subscribe((s, prev) => {
 useGame.subscribe((s, prev) => {
   if (s.cards === prev.cards || !s.ready || !s.save?.avatar) return;
   if (!avatarStillValid(s.save.avatar, s.cards)) s.clearAvatar();
+});
+
+// emotes « photo » : une carte tirée reconnue (selfie, monument, chien, chat, miroir) débloque son emote, une seule fois
+useGame.subscribe((s, prev) => {
+  if (s.cards === prev.cards || !s.ready || !s.save) return;
+  const before = new Set(prev.cards);
+  const changed = s.cards.filter((c) => !before.has(c) && c.recognition);
+  if (changed.length === 0) return;
+  const res = unlockFromCards(s.save.emotes, changed);
+  if (res.unlocked.length === 0) return;
+  const next: SaveState = { ...s.save, emotes: res.state };
+  persistState(next);
+  useGame.setState({ save: next });
 });
 
 /** Ce qu'on montre de la photo d'une de mes cartes (`undefined` si ce n'est pas une de mes cartes). */

@@ -43,6 +43,11 @@
     "piochePhotoExtra": { "t": "photo", "i": 0, "n": 5, "hash": "h1", "image": "/9j/AAAA", "thumb": "/9j/AAAA", "width": 1080, "height": 1440, "format": "jpeg", "exif": { "iso": 100 } },
     "lobbyOpenLevels": { "k": "open", "id": "b1b2c3d4e5f60718", "code": "Q8W3E5R7T", "mmr": 900, "at": 1793000000000, "b": [1, 3], "region": "eu" },
     "lobbyOpenTooNew": { "k": "open", "id": "c1b2c3d4e5f60718", "code": "Q8W3E5R7T", "mmr": 900, "at": 1793000000000, "b": [4, 6] },
-    "relayUnknownEnvelope": { "f": "a1b2c3d4e5f60718", "t": "0f1e2d3c4b5a6978", "k": "zz", "x": 1 }
+    "relayUnknownEnvelope": { "f": "a1b2c3d4e5f60718", "t": "0f1e2d3c4b5a6978", "k": "zz", "x": 1 },
+    "battleEmote": { "t": "emote", "id": "lol" },
+    "tradeEmote": { "t": "emote", "id": "cat" },
+    "piocheEmote": { "t": "emote", "id": "mirror" },
+    "emoteUnknownId": { "t": "emote", "id": "moonwalk", "loop": 3 },
+    "emoteExtraFields": { "t": "emote", "id": "angry", "loud": true, "skin": "or" }
   }
 }

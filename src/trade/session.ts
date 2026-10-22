@@ -12,6 +12,8 @@
 import { randomUUID } from 'expo-crypto';
 import { create } from 'zustand';
 
+import { type EmoteId, readEmoteMessage } from '../game/emotes';
+import { receiveEmote } from '../state/emoteLive';
 import { useGame } from '../state/game';
 import { cardExists, readCardImagesBase64, readThumbBase64Sync, writeNewCard } from '../storage/disk';
 import { receivedCard, withScan } from '../game/nsfw';
@@ -69,6 +71,8 @@ interface TradeStore {
   toggleCardLock(id: string): void;
   setLocked(locked: boolean): void;
   confirm(): void;
+  /** Envoie une emote à l'autre joueur (dans le salon). */
+  sendEmote(id: EmoteId): void;
   leave(): void;
 }
 
@@ -294,6 +298,10 @@ export const useTrade = create<TradeStore>((set, get) => {
         maybeDone();
         return;
       }
+      case 'emote':
+        // un id inconnu (version plus récente) est ignoré
+        receiveEmote(readEmoteMessage(msg));
+        return;
       case 'bye':
         if (get().phase !== 'done') {
           set({ phase: 'ended', error: "L'autre joueur a quitté l'échange." });
@@ -421,6 +429,11 @@ export const useTrade = create<TradeStore>((set, get) => {
       set({ myConfirmed: true });
       send({ t: 'confirm', key: currentKey() });
       void startTransfer();
+    },
+
+    sendEmote(id) {
+      if (!link || get().phase !== 'room') return;
+      send({ t: 'emote', id });
     },
 
     leave() {

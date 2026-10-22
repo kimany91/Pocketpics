@@ -3,11 +3,12 @@
  * images + polices intégrés), facile à héberger ou à partager, et à côté de
  * lui les fichiers trop lourds pour tenir dans la page :
  *  - `music/` : les 20 musiques de combat ;
- *  - `clip/` : le modèle de reconnaissance de la photo (morceaux de moins de 14 Mo).
+ *  - `clip/` : le modèle de reconnaissance de la photo (morceaux de moins de 14 Mo) ;
+ *  - `emote/` : les sons des emotes (petits, mais la page est déjà près de 16 Mo).
  * `files.json` liste ces fichiers (chemin relatif, taille, type) : c'est ce
  * qu'il faut publier à côté de `pocketpics.html`, aux mêmes chemins relatifs.
- * Sans eux, le jeu marche, mais sans musique et les cartes gardent leurs noms
- * de départ.
+ * Sans eux, le jeu marche, mais sans musique ni sons d'emotes, et les cartes
+ * gardent leurs noms de départ.
  *
  *   node scripts/build-web-demo.mjs [dossier-de-sortie]
  */
@@ -40,6 +41,8 @@ const side = new Map();
 mkdirSync(join(outDir, 'music'), { recursive: true });
 rmSync(join(outDir, 'clip'), { recursive: true, force: true });
 mkdirSync(join(outDir, 'clip'), { recursive: true });
+rmSync(join(outDir, 'emote'), { recursive: true, force: true });
+mkdirSync(join(outDir, 'emote'), { recursive: true });
 js = js.replace(/"(\/assets\/[^"]+)"/g, (m, path) => {
   const file = join(exportDir, path);
   if (!existsSync(file)) return m;
@@ -59,6 +62,13 @@ js = js.replace(/"(\/assets\/[^"]+)"/g, (m, path) => {
     copyFileSync(file, join(outDir, 'clip', name));
     side.set(`clip/${name}`, statSync(file).size);
     return `(self.__ppBase+"clip/${name}")`;
+  }
+  if (path.includes('/assets/sfx/emote/')) {
+    // sons des emotes : à côté de la page (lol.<empreinte>.wav → emote/lol.wav)
+    const name = basename(path).replace(/\.[0-9a-f]{32}(\.[^.]+)$/, '$1');
+    copyFileSync(file, join(outDir, 'emote', name));
+    side.set(`emote/${name}`, statSync(file).size);
+    return `(self.__ppBase+"emote/${name}")`;
   }
   inlined++;
   return `"data:${MIME[extname(path)] ?? 'application/octet-stream'};base64,${readFileSync(file).toString('base64')}"`;
@@ -88,10 +98,10 @@ mkdirSync(outDir, { recursive: true });
 const target = join(outDir, 'pocketpics.html');
 writeFileSync(target, page);
 // type de chaque fichier publié (le jeu lit les morceaux du modèle en octets bruts, quel que soit le type annoncé)
-const TYPE = { '.mp4': 'video/mp4', '.bin': 'application/octet-stream' };
+const TYPE = { '.mp4': 'video/mp4', '.bin': 'application/octet-stream', '.wav': 'audio/wav' };
 const files = [...side].sort(([a], [b]) => a.localeCompare(b)).map(([path, bytes]) => ({ path, bytes, contentType: TYPE[extname(path)] ?? 'application/octet-stream' }));
 writeFileSync(join(outDir, 'files.json'), JSON.stringify({ page: { path: 'pocketpics.html', bytes: Buffer.byteLength(page) }, files }, null, 1));
 const big = files.filter((f) => f.bytes > 15e6);
 if (big.length) throw new Error(`Fichiers trop lourds pour être publiés : ${big.map((f) => f.path).join(', ')}`);
 if (Buffer.byteLength(page) > 16e6) throw new Error('La page dépasse 16 Mo');
-console.log(`\n${inlined} ressources intégrées → ${target} (${(Buffer.byteLength(page) / 1e6).toFixed(1)} Mo), ${music.length} musiques dans ${join(outDir, 'music')}, ${files.length - music.length} fichiers du modèle dans ${join(outDir, 'clip')} ; liste : files.json`);
+console.log(`\n${inlined} ressources intégrées → ${target} (${(Buffer.byteLength(page) / 1e6).toFixed(1)} Mo), ${music.length} musiques dans ${join(outDir, 'music')}, ${files.filter((f) => f.path.startsWith('clip/')).length} fichiers du modèle dans ${join(outDir, 'clip')}, ${files.filter((f) => f.path.startsWith('emote/')).length} sons d'emotes dans ${join(outDir, 'emote')} ; liste : files.json`);

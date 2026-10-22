@@ -41,6 +41,7 @@ import { sanitizeFriendAvatar } from '../src/game/avatar';
 import { sanitizeOpening, sanitizePhoto, wantedHashes } from '../src/game/friendDraw';
 import { chunkMessage, roomKey, seal, unseal, type Envelope } from '../src/trade/relayCore';
 import { isTradeMessage, mirrorKey, offerKey, offerTagAt, sanitizeIds, sanitizeOffer } from '../src/trade/protocol';
+import { readEmoteMessage } from '../src/game/emotes';
 
 const DIR = join(__dirname, 'fixtures', 'wire');
 type Fixture = { description: string; messages: Record<string, Record<string, unknown>> };
@@ -388,6 +389,36 @@ test('fixtures v1 : enveloppes du relais (chiffrées, morceaux recollés)', () =
   assert.ok(isTradeMessage(whole));
   assert.deepEqual(chunkMessage(JSON.stringify(whole), 16000).length, 1);
   assert.ok(unseal(seal(synthetic.newer.relayUnknownEnvelope, key), key), 'enveloppe inconnue : lue, puis ignorée par la liaison');
+});
+
+/* --------------------------------- Emotes --------------------------------- */
+
+test('emotes : message facultatif, le même dans les trois protocoles, sans changer de niveau', () => {
+  const n = synthetic.newer;
+  assert.equal(readEmoteMessage(n.battleEmote), 'lol');
+  assert.equal(readEmoteMessage(n.tradeEmote), 'cat');
+  assert.equal(readEmoteMessage(n.piocheEmote), 'mirror');
+  assert.equal(readEmoteMessage(n.emoteExtraFields), 'angry', 'champs en plus : ignorés');
+  // emote d'une version plus récente : ignorée ; et l'ancien message inventé (« e ») aussi
+  assert.equal(readEmoteMessage(n.emoteUnknownId), null);
+  assert.equal(readEmoteMessage(n.tradeUnknown), null);
+  assert.equal(readEmoteMessage(n.battleUnknown), null);
+  // un message de la 1.0 n'est jamais pris pour une emote
+  for (const name of ['battle', 'trade', 'pioche', 'social']) for (const m of Object.values(v1(name))) assert.equal(readEmoteMessage(m), null, name);
+  // l'échange garde un type qu'il ne connaît pas pour un message (il l'ignore) : pas besoin de monter de niveau
+  assert.ok(isTradeMessage(n.tradeEmote));
+});
+
+test('emotes : l’invité d’un combat (et une version qui ne les connaît pas) les ignore sans bloquer le combat', async () => {
+  const listeners: ((m: BattleMsg) => void)[] = [];
+  const ch: Channel<BattleMsg> = { send: () => {}, onMessage: (cb) => listeners.push(cb) };
+  const guest = new GuestController(ch);
+  const m = v1('battle');
+  listeners.forEach((l) => l(synthetic.newer.battleEmote as BattleMsg));
+  listeners.forEach((l) => l(synthetic.newer.emoteUnknownId as BattleMsg));
+  listeners.forEach((l) => l({ t: 'step', events: m.step.events, battle: m.step.battle } as unknown as BattleMsg));
+  const step = await guest.next();
+  assert.ok(step.battle);
 });
 
 test('fixtures : le dossier v1 couvre chaque protocole', () => {

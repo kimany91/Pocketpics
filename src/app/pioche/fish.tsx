@@ -28,7 +28,9 @@ import { type FishFriend, FishingScene, type FishingStage } from '../../componen
 import { Screen } from '../../components/Screen';
 import { FRIEND_DRAW_PRICE, PIOCHE_ASK, paymentLabel } from '../../game/friendDraw';
 import { PAUL_NAME, isPaul } from '../../game/paul';
-import { usePioche } from '../../net/pioche';
+import { emotePhases, usePioche } from '../../net/pioche';
+import { EmoteButton, EmoteOverlay } from '../../components/emotes/EmoteDock';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSocial } from '../../net/social';
 import { useGame } from '../../state/game';
 import { colors } from '../../theme';
@@ -49,6 +51,7 @@ export default function PiocheFish() {
   const { payment, adsLeft, upToDate, needsUpdate } = useFriendDraw();
   const phase = usePioche((s) => s.phase);
   const role = usePioche((s) => s.role);
+  const insets = useSafeAreaInsets();
   const error = usePioche((s) => s.error);
   const progress = usePioche((s) => s.progress);
   const [stage, setStage] = useState<FishingStage>('cast');
@@ -171,9 +174,11 @@ export default function PiocheFish() {
             ? `Tire ! Photos ${progress.done} / ${progress.total}`
             : null;
 
+  // l'ami a rejoint (il prépare ses photos) : on peut s'envoyer des emotes
+  const emotesLive = role === 'asker' && emotePhases.includes(phase);
   return (
     <Screen edges={['top', 'bottom']}>
-      <Header title="Pioche amicale" />
+      <Header title="Pioche amicale" right={emotesLive ? <EmoteButton /> : undefined} />
       <FishingScene
         key={round}
         stage={stage}
@@ -236,6 +241,13 @@ export default function PiocheFish() {
           </AppText>
         )}
       </View>
+      <EmoteOverlay
+        enabled={emotesLive}
+        send={(id) => usePioche.getState().sendEmote(id)}
+        panel={{ top: insets.top + 54, right: 10 }}
+        theirs={{ top: insets.top + 58, left: 18 }}
+        mine={{ bottom: insets.bottom + 120, right: 18 }}
+      />
     </Screen>
   );
 }

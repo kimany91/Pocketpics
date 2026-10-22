@@ -18,6 +18,7 @@
  * Pur (testable sous Node).
  */
 import { DRAW_PRICE } from './economy';
+import type { EmoteMsg } from './emotes';
 import { computeDraws, consumeDraw, CARDS_PER_PACK } from './draws';
 import type { SaveState } from '../storage/model';
 
@@ -116,6 +117,8 @@ export type PiocheMsg =
   | { t: 'end' }
   /** L'ami → validé ou refusé (seulement à la fin). */
   | { t: 'verdict'; ok: boolean }
+  /** Emote, dans les deux sens (ajouté après, facultatif : une version d'avant l'ignore). */
+  | EmoteMsg
   | { t: 'bye'; reason?: string };
 
 /** Ce que l'ami voit d'une carte : sa photo (par l'empreinte), sa rareté, si elle est chromatique. */

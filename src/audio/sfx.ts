@@ -63,6 +63,9 @@ export function initSfx() {
   }
 }
 
+/** Volume des effets réglé par le joueur (0 = muet). */
+export const sfxVolume = () => master;
+
 export function setSfxVolume(volume: number) {
   master = Math.max(0, Math.min(1, volume));
   if (master === 0) players.forEach((p) => stopPlayer(p));

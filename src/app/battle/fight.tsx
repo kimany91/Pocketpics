@@ -92,6 +92,9 @@ import { usePhotoVerdict } from '../../game/nsfwScan';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import { TutoArrow, TutoBubble } from '../../components/tuto/TutoArrow';
+import { EmoteButton, EmoteOverlay } from '../../components/emotes/EmoteDock';
+import { type EmoteId, botReaction, botReply } from '../../game/emotes';
+import { receiveEmote, useHoldUnlocks } from '../../state/emoteLive';
 import { phase2Todo } from '../../game/tutorial';
 import type { Card } from '../../storage/model';
 import { CARD_RATIO, colors, fonts } from '../../theme';
@@ -310,6 +313,17 @@ export default function FightScreen() {
   const [inspect, setInspect] = useState<{ side: SideId; index: number } | null>(null);
   /** D'où vient la confirmation d'envoi : un changement (coûte le tour) ou un remplacement après K.O. */
   const [confirmFrom, setConfirmFrom] = useState<'menu' | 'replace'>('menu');
+  /** Adversaire tenu par le jeu (solo, Paul, ou la file vide) : il répond lui-même aux emotes. */
+  const [botFoe] = useState(() => !online || !!useMatch.getState().bot);
+  /** Emotes : pas pendant le combat guidé du tuto. */
+  const emotesOn = !tuto;
+  // « Emote débloquée » attend qu'on ait quitté le combat
+  useHoldUnlocks();
+  /** Le bot envoie une emote (un peu plus tard, comme s'il réfléchissait). */
+  const botEmote = (id: EmoteId | null, delay = 900 + Math.random() * 900) => {
+    if (!id || !botFoe || !emotesOn) return;
+    setTimeout(() => alive.current && receiveEmote(id), delay);
+  };
   const music = useRef(0);
   useEffect(() => {
     music.current = startBattleMusic(online ? ONLINE_TRACK : (level?.world.id ?? 1));
@@ -541,6 +555,8 @@ export default function FightScreen() {
             flashScreen('#FFFFFF', 0.3);
             const last = view.sides[e.side].fighters.every((f) => f.hp <= 0);
             if (last) setKoStamp((k) => ({ n: k.n + 1, won: e.side === 1 }));
+            // le bot réagit parfois : il chambre, ou il rage
+            botEmote(botReaction(e.side === 0 ? (last ? 'won' : 'won-ko') : last ? 'lost' : 'lost-ko'), 700);
             await sleep(last ? 1500 : 1200);
             break;
           }
@@ -909,10 +925,13 @@ export default function FightScreen() {
           <Pressable onPress={() => setQuitting(true)} hitSlop={12} style={styles.round} accessibilityLabel="Abandonner le combat">
             <Ionicons name="close" size={20} color={colors.text} />
           </Pressable>
-          <AppText variant="label" style={{ color: colors.textDim }} numberOfLines={1}>{foeInfo.label}</AppText>
-          <Pressable onPress={() => setSoundOpen(true)} hitSlop={12} style={styles.round} accessibilityLabel="Régler le son">
-            <Ionicons name="musical-notes" size={17} color={colors.text} />
-          </Pressable>
+          <AppText variant="label" style={{ color: colors.textDim, flexShrink: 1 }} numberOfLines={1}>{foeInfo.label}</AppText>
+          <View style={styles.headerRight}>
+            {emotesOn ? <EmoteButton /> : null}
+            <Pressable onPress={() => setSoundOpen(true)} hitSlop={12} style={styles.round} accessibilityLabel="Régler le son">
+              <Ionicons name="musical-notes" size={17} color={colors.text} />
+            </Pressable>
+          </View>
         </View>
 
         <Animated.View style={stageStyle}>
@@ -1138,6 +1157,16 @@ export default function FightScreen() {
         />
       ) : null}
       <Flash trigger={flash.n} color={flash.color} peak={flash.peak} />
+      {emotesOn ? (
+        <EmoteOverlay
+          enabled={!intro}
+          send={online && !botFoe ? (id) => useMatch.getState().sendEmote(id) : undefined}
+          onSent={(id) => botEmote(botReply(id))}
+          panel={{ top: insets.top + 50, right: 12 }}
+          theirs={{ top: insets.top + 54, left: 14 }}
+          mine={{ top: insets.top + 48 + layout.foeW * CARD_RATIO + layout.msgH + 4, right: 14 }}
+        />
+      ) : null}
       {crit.n > 0 && result === null ? <CritStamp key={crit.n} width={width} short={crit.short} /> : null}
       {koStamp.n > 0 && result === null ? <KoStamp key={koStamp.n} won={koStamp.won} /> : null}
       {intro ? (
@@ -1971,7 +2000,8 @@ const styles = StyleSheet.create({
   rankFill: { height: 10, borderRadius: 5 },
   delta: { fontFamily: fonts.bold, fontSize: 16, marginTop: 4 },
   center: { alignItems: 'center', justifyContent: 'center' },
-  header: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
+  header: { height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, gap: 8 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   round: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },

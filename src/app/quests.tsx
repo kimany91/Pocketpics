@@ -44,6 +44,8 @@ import { useGame } from '../state/game';
 import { useQuests } from '../state/useQuests';
 import { QuestRow, sortQuests } from '../components/quests/QuestRow';
 import { ChallengeCelebration } from '../components/quests/ChallengeCelebration';
+import { EmoteShop } from '../components/emotes/EmoteShop';
+import { EMOTES } from '../game/emotes';
 import { colors, fonts } from '../theme';
 import { haptic } from '../utils/haptics';
 
@@ -86,6 +88,7 @@ export default function QuestsScreen() {
   const daily = useMemo(() => sortQuests(statuses.filter((s) => s.def.period === 'daily')), [statuses]);
   const weekly = useMemo(() => sortQuests(statuses.filter((s) => s.def.period === 'weekly')), [statuses]);
   const once = statuses.filter((s) => s.def.period === 'once');
+  const emotesOwned = useGame((s) => s.save?.emotes.owned.filter((id) => EMOTES.some((e) => e.id === id)).length ?? 0);
 
   return (
     <Screen edges={['top', 'bottom']}>
@@ -132,6 +135,11 @@ export default function QuestsScreen() {
               </View>
             );
           })}
+        </Section>
+
+        {/* Boutique des emotes : tout en bas */}
+        <Section title="Emotes" icon="happy" right={`${emotesOwned}/${EMOTES.length} débloquées`} delay={260}>
+          <EmoteShop active={focused} />
         </Section>
       </ScrollView>
 

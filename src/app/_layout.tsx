@@ -22,6 +22,7 @@ import { PaulWatcher } from '../components/tuto/PaulWatcher';
 import { TutoDoneMenu } from '../components/tuto/TutoDoneMenu';
 import { PiocheWatcher } from '../components/pioche/PiocheWatcher';
 import { AdHost } from '../components/ads/AdHost';
+import { EmoteUnlockHost } from '../components/emotes/EmoteUnlock';
 import { NotificationsSetup } from '../components/notify/NotificationsSetup';
 import { useSocial } from '../net/social';
 import { useGame } from '../state/game';
@@ -101,6 +102,7 @@ export default function RootLayout() {
       <NoticeToast />
       <PiocheWatcher />
       <AdHost />
+      <EmoteUnlockHost />
       <ConfirmHost />
       <NotificationsSetup />
     </GestureHandlerRootView>

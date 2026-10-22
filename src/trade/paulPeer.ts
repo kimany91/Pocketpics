@@ -12,6 +12,7 @@
 import { Asset } from 'expo-asset';
 
 import { botArt } from '../battle/botArt';
+import { botReply, readEmoteMessage } from '../game/emotes';
 import { makeCard } from '../game/pack';
 import { PAUL_NAME, paulHash, pickPaulArt } from '../game/paul';
 import { readUriBase64 } from '../storage/disk';
@@ -103,6 +104,13 @@ export function paulTradeLink(): TradeLink {
         say({ t: 'ack', ids: m.cards.map((c) => c?.card?.id) }, 250);
         say({ t: 'cards', cards: [mine] }, 450);
         return;
+      case 'emote': {
+        // Paul répond parfois à une emote, comme un vrai joueur
+        const got = readEmoteMessage(m);
+        const reply = got ? botReply(got, Math.random, 0.65) : null;
+        if (reply) say({ t: 'emote', id: reply }, 900 + Math.random() * 900);
+        return;
+      }
       default:
         return;
     }

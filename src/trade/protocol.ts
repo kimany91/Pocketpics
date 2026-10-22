@@ -4,6 +4,7 @@
  * `src/net/compat.ts` : deux versions différentes du jeu s'accordent sur le
  * plus récent qu'elles parlent toutes les deux.
  */
+import type { EmoteMsg } from '../game/emotes';
 import type { Card } from '../storage/model';
 
 export const MAX_OFFER = 10;
@@ -40,6 +41,8 @@ export type TradeMessage =
   | { t: 'confirm'; key: string }
   | { t: 'cards'; cards: TransferCard[] }
   | { t: 'ack'; ids: string[] }
+  /** Emote (ajouté après, facultatif : une version d'avant l'ignore). */
+  | EmoteMsg
   | { t: 'bye' };
 
 /** Une carte dans la clé d'accord : son id, marqué s'il est verrouillé (changer un cadenas change l'accord). */

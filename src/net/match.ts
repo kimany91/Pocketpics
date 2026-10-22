@@ -10,8 +10,10 @@ import { create } from 'zustand';
 
 import { type Battle, createBattle } from '../battle/engine';
 import { scanPhoto } from '../game/nsfwScan';
+import { type EmoteId, readEmoteMessage } from '../game/emotes';
 import { getRarity } from '../game/rarity';
 import { shownMmr } from '../game/rank';
+import { receiveEmote } from '../state/emoteLive';
 import { useGame } from '../state/game';
 import { readThumbBase64Sync } from '../storage/disk';
 import type { Card } from '../storage/model';
@@ -83,6 +85,8 @@ interface MatchStore {
   startBotMatch(opp: BotOpponent, opts?: { friend?: { code: string; name: string }; acceptAfterMs?: number }): void;
   join(code: string, opts?: { friend?: { code: string; name: string } }): Promise<void>;
   setDeck(cards: Card[]): void;
+  /** Envoie une emote à l'adversaire (rien contre un adversaire du jeu : l'écran le fait répondre). */
+  sendEmote(id: EmoteId): void;
   /** Abandon en plein combat : l'adversaire gagne. */
   quit(): void;
   leave(): void;
@@ -234,6 +238,10 @@ export const useMatch = create<MatchStore>((set, get) => {
       case 'quit':
         set({ oppGone: true });
         return;
+      case 'emote':
+        // un id inconnu (version plus récente) est ignoré
+        receiveEmote(readEmoteMessage(m));
+        return;
       default:
         // message d'une version plus récente : ignoré
         return;
@@ -332,6 +340,11 @@ export const useMatch = create<MatchStore>((set, get) => {
         },
         1200 + Math.random() * 2600,
       );
+    },
+
+    sendEmote(id) {
+      if (get().bot || !rel || (get().phase !== 'lobby' && get().phase !== 'fighting')) return;
+      channel.send({ t: 'emote', id });
     },
 
     quit() {

@@ -27,8 +27,10 @@ import {
   sanitizePhoto,
   wantedHashes,
 } from '../game/friendDraw';
+import { type EmoteId, readEmoteMessage } from '../game/emotes';
 import { listPhotoIds, processPhoto, type ProcessedPhoto } from '../game/gallery';
 import { scanWithin } from '../game/nsfwScan';
+import { receiveEmote } from '../state/emoteLive';
 import { useGame } from '../state/game';
 import { readUriBase64 } from '../storage/disk';
 import type { Card } from '../storage/model';
@@ -102,6 +104,8 @@ interface PiocheStore {
   give(room: string, friend: { code: string; name: string }, peer?: Range | null): Promise<void>;
   /** giver : valide ou refuse, seulement à la fin. */
   judge(ok: boolean): void;
+  /** Envoie une emote à l'ami (les deux rôles, une fois la liaison établie). */
+  sendEmote(id: EmoteId): void;
   leave(): void;
 }
 
@@ -155,6 +159,8 @@ function teardown() {
 
 const myName = () => useGame.getState().save?.playerName ?? 'Joueur';
 const busyPhases: PiochePhase[] = ['waiting', 'connecting', 'preparing', 'sending', 'ready', 'opening', 'judging'];
+/** Phases où les deux téléphones sont reliés : on peut s'envoyer des emotes. */
+export const emotePhases: PiochePhase[] = ['preparing', 'sending', 'ready', 'opening', 'judging'];
 /** Une pioche est en cours (on ne peut pas en commencer une autre). */
 export const piocheBusy = () => busyPhases.includes(usePioche.getState().phase);
 
@@ -281,6 +287,9 @@ export const usePioche = create<PiocheStore>((set, get) => {
       }
       case 'verdict':
         return settle(m.ok === true);
+      case 'emote':
+        // un id inconnu (version plus récente) est ignoré
+        return receiveEmote(readEmoteMessage(m));
       case 'bye': {
         const reason = reasonOf(m.reason);
         return end(reason ? `${s.friend?.name ?? 'Ton ami'} a arrêté la pioche : ${reason}` : `${s.friend?.name ?? 'Ton ami'} a quitté la pioche. Rien n’a été payé.`);
@@ -326,6 +335,8 @@ export const usePioche = create<PiocheStore>((set, get) => {
       case 'end':
         if (s.phase === 'opening') set({ phase: 'judging', revealed: s.opened.length, verdictBy: Date.now() + VERDICT_TTL_MS });
         return;
+      case 'emote':
+        return receiveEmote(readEmoteMessage(m));
       case 'bye': {
         const reason = reasonOf(m.reason);
         return end(reason ? `La pioche est annulée : ${reason}` : `${s.friend?.name ?? 'Ton ami'} a quitté la pioche.`);
@@ -493,6 +504,11 @@ export const usePioche = create<PiocheStore>((set, get) => {
       set({ phase: ok ? 'done' : 'refused', verdictBy: null });
       const gen = generation;
       setTimeout(() => gen === generation && teardown(), 800);
+    },
+
+    sendEmote(id) {
+      if (!link || !emotePhases.includes(get().phase)) return;
+      send({ t: 'emote', id });
     },
 
     leave() {

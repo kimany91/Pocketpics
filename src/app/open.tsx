@@ -40,6 +40,9 @@ import { NoPhotosLeftError } from '../game/pack';
 import { getRarity } from '../game/rarity';
 import { FriendRefused, FriendVerdictBanner, RepiocheButton } from '../components/pioche/FriendVerdict';
 import { usePioche } from '../net/pioche';
+import { EmoteButton, EmoteOverlay } from '../components/emotes/EmoteDock';
+import { EmoteUnlockHost } from '../components/emotes/EmoteUnlock';
+import { useHoldUnlocks } from '../state/emoteLive';
 import { useGame, useLiveCards } from '../state/game';
 import { useDrawStatus } from '../state/useDrawStatus';
 import { useTutoStep } from '../state/useTuto';
@@ -79,6 +82,11 @@ function PackSession({ onNext, friend = false, paul = false }: { onNext(): void;
   const [phase, setPhase] = useState<Phase>('pack');
   const [boom, setBoom] = useState(0);
   const started = useRef(false);
+  // « Emote débloquée » : pas pendant l'ouverture, seulement sur le récapitulatif (voir plus bas)
+  useHoldUnlocks();
+  // Pioche amicale : on peut s'envoyer des emotes tant que l'ami est relié
+  const piochePhase = usePioche((s) => s.phase);
+  const emotesLive = friend && ['ready', 'opening', 'judging'].includes(piochePhase);
   const packW = Math.min(width * 0.62, (height * 0.55) / PACK_RATIO, 300);
   const cardW = revealCardWidth(width, height);
   // Raretés déjà possédées avant ce paquet (pour fêter les premières fois).
@@ -253,6 +261,23 @@ function PackSession({ onNext, friend = false, paul = false }: { onNext(): void;
       ) : null}
 
       <Flash trigger={boom} color="#FFF4D6" peak={0.55} />
+      {friend ? (
+        <>
+          {emotesLive ? (
+            <View style={[styles.emote, { top: insets.top + 6 }]}>
+              <EmoteButton />
+            </View>
+          ) : null}
+          <EmoteOverlay
+            enabled={emotesLive}
+            send={(id) => usePioche.getState().sendEmote(id)}
+            panel={{ top: insets.top + 54, left: 12 }}
+            theirs={{ top: insets.top + 56, right: 16 }}
+            mine={{ bottom: insets.bottom + 150, left: 16 }}
+          />
+        </>
+      ) : null}
+      {phase === 'summary' ? <EmoteUnlockHost local /> : null}
     </View>
   );
 }
@@ -456,6 +481,7 @@ type GalaxyState = { kind: 'loading' } | { kind: 'ready'; card: Card } | { kind:
  */
 function GalaxySession() {
   const insets = useSafeAreaInsets();
+  useHoldUnlocks();
   const { width, height } = useWindowDimensions();
   const [state, setState] = useState<GalaxyState>(() => {
     const save = useGame.getState().save;
@@ -653,6 +679,7 @@ const styles = StyleSheet.create({
   centerAbs: { alignItems: 'center', justifyContent: 'center' },
   waiting: { position: 'absolute', bottom: 40, flexDirection: 'row', gap: 10, alignItems: 'center' },
   skip: { position: 'absolute', right: 20, padding: 6, zIndex: 10 },
+  emote: { position: 'absolute', left: 14, zIndex: 30 },
   summary: { paddingHorizontal: 20, paddingTop: 32, paddingBottom: 24 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
   summaryFooter: { paddingHorizontal: 20, paddingBottom: 12, gap: 4 },

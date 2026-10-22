@@ -14,6 +14,7 @@ import { type BattleStats, normalizeStats } from '../battle/stats';
 import type { DrawState } from '../game/draws';
 import { initialDrawState } from '../game/draws';
 import { type SoloDay } from '../game/economy';
+import { type EmoteState, initialEmotes, migrateEmotes } from '../game/emotes';
 import { type LuckState, initialLuck } from '../game/luck';
 import { type QuestState, initialQuests, migrateQuests } from '../game/quests';
 import { type RankState, initialRank, migrateRank } from '../game/rank';
@@ -177,6 +178,11 @@ export interface SaveState {
    * src/game/avatar.ts). Ajouté après : `null` (pas de photo) si absent.
    */
   avatar: Avatar | null;
+  /**
+   * Emotes possédées, équipées (4 au plus) et débloquées par une carte pas
+   * encore fêtées (voir src/game/emotes.ts). Ajouté après : les 4 de départ si absent.
+   */
+  emotes: EmoteState;
   [extra: string]: unknown;
 }
 
@@ -282,6 +288,7 @@ export function createInitialState(now = Date.now()): SaveState {
     ads: initialAds(now),
     tutorial: initialTutorial(),
     avatar: null,
+    emotes: initialEmotes(),
   };
 }
 
@@ -394,5 +401,6 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     ads: migrateAds(s.ads, now),
     tutorial: migrateTutorial(s.tutorial, s),
     avatar: migrateAvatar(s.avatar),
+    emotes: migrateEmotes(s.emotes),
   };
 }
