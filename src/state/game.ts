@@ -33,7 +33,7 @@ import { AVATAR_SIZE, AVATAR_TARGET_B64, avatarBlock, avatarDataUri, avatarStill
 import { type FriendDrawPayment, type FriendPhoto, payFriendDraw } from '../game/friendDraw';
 import { NSFW_SCAN_VERSION, type PhotoMark, photoMark, scanFields, scanOrder, withScan } from '../game/nsfw';
 import { forgetPhoto, nsfwReady, preloadNsfw, scanPhoto, scanWithin } from '../game/nsfwScan';
-import { generatePack, makeCard } from '../game/pack';
+import { NoPhotosLeftError, generatePack, makeCard } from '../game/pack';
 import { PAUL_NAME, paulFriend, paulHash } from '../game/paul';
 import { loadPaulPhotos } from '../game/paulPack';
 import { type RenameTask, type TutoPatch, type TutoStep, advance, noteRename, patchTutorial, drawsNeeded, finish as finishTuto, finishedTutorial, inPhase1, reached, skipTutorialForTests } from '../game/tutorial';
@@ -309,7 +309,7 @@ export const useGame = create<GameStore>((set, get) => ({
       // une photo censurée n'est jamais tirée, une autre prend sa place. Sans réponse
       // à temps, la carte est floutée et vérifiée juste après.
       screen: (photo) => scanWithin(photo.imageUri, PACK_SCAN_MS),
-    });
+    }).catch(rememberSkipped);
 
     // 1) les cartes d'abord (si l'app est tuée ici, le joueur garde ses cartes ET son tirage)
     const written: Card[] = [];
@@ -484,7 +484,7 @@ export const useGame = create<GameStore>((set, get) => ({
       count: 1,
       rarities: () => ['galaxy'],
       screen: (photo) => scanWithin(photo.imageUri, PACK_SCAN_MS),
-    });
+    }).catch(rememberSkipped);
     const { card: made, photo, verdict } = pack.cards[0];
     const card: Card = { ...made, ...scanFields(verdict) };
     disk.writeNewCard(card, { image: { uri: photo.imageUri }, thumb: { uri: photo.thumbUri } });
@@ -932,6 +932,25 @@ export const useGame = create<GameStore>((set, get) => ({
 }));
 
 /* ----------------------- Filtre de contenu adulte ----------------------- */
+
+/**
+ * Paquet impossible : les copies de cartes et les photos écartées par le filtre
+ * vues pendant l'essai sont quand même retenues (sinon chaque essai les
+ * revérifie toutes), puis l'erreur repart vers l'écran. Le tirage n'est pas consommé.
+ */
+function rememberSkipped(e: unknown): never {
+  const save = useGame.getState().save;
+  if (e instanceof NoPhotosLeftError && save && (e.consumedAssetIds.length || e.rejectedHashes.length)) {
+    const next: SaveState = {
+      ...save,
+      drawnAssetIds: [...new Set([...save.drawnAssetIds, ...e.consumedAssetIds])],
+      drawnHashes: [...new Set([...save.drawnHashes, ...e.rejectedHashes])],
+    };
+    persistState(next);
+    useGame.setState({ save: next });
+  }
+  throw e;
+}
 
 /** Attente maximale du détecteur pendant l'ouverture d'un paquet (sinon : floutée, vérifiée juste après). */
 const PACK_SCAN_MS = 8000;

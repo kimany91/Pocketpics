@@ -108,7 +108,9 @@ function PackSession({ onNext, friend = false, paul = false }: { onNext(): void;
       .catch((e) =>
         setError(
           e instanceof NoPhotosLeftError
-            ? 'Toutes les photos de ta galerie sont déjà des cartes. Prends de nouvelles photos !'
+            ? e.unreadable
+              ? 'Les photos qui restent dans ta galerie n’ont pas pu être lues (gardées seulement sur iCloud, format non pris en charge…). Ouvre-les une fois dans ta galerie, ou ajoute d’autres photos.'
+              : 'Toutes les photos de ta galerie sont déjà des cartes. Prends de nouvelles photos !'
             : e instanceof Error
               ? e.message
               : String(e),

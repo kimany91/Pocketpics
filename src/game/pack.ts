@@ -5,6 +5,7 @@ import { CARDS_PER_PACK } from './draws';
 import { listPhotoIds, processPhoto, type ProcessedPhoto } from './gallery';
 import { generateStats } from '../battle/stats';
 import { type NsfwScan } from './nsfw';
+import { pickPhotos } from './packPick';
 import { CHROMATIC_ODDS, type RarityId, getRarity, rollRarity } from './rarity';
 
 export interface GeneratedCard {
@@ -22,11 +23,23 @@ export interface PackResult {
   rejectedHashes: string[];
 }
 
+/**
+ * Aucune photo utilisable pour ce paquet. `unreadable` : il restait des photos
+ * jamais tirées, mais aucune n'a pu être lue (seulement sur iCloud, format non
+ * pris en charge…) — ce n'est pas que tout est déjà en carte. `consumedAssetIds`
+ * et `rejectedHashes` (copies de cartes, photos écartées par le filtre) sont à
+ * garder quand même, pour ne pas les revérifier à chaque essai.
+ */
 export class NoPhotosLeftError extends Error {
-  constructor() {
-    super('Plus aucune nouvelle photo dans ta galerie');
+  constructor(
+    readonly unreadable = false,
+    readonly consumedAssetIds: string[] = [],
+    readonly rejectedHashes: string[] = [],
+  ) {
+    super(unreadable ? 'Les photos qui restent n’ont pas pu être lues' : 'Plus aucune nouvelle photo dans ta galerie');
   }
 }
+
 
 function shuffle<T>(arr: T[]): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -62,38 +75,14 @@ export async function generatePack(opts: {
   const candidates = shuffle((await listPhotoIds()).filter((id) => !opts.drawnAssetIds.has(id)));
   if (candidates.length === 0) throw new NoPhotosLeftError();
 
-  const packHashes = new Set<string>();
-  const consumed: string[] = [];
-  const rejected: string[] = [];
-  const photos: { photo: ProcessedPhoto; verdict: boolean | null }[] = [];
-  const maxAttempts = count * 12;
-  let i = 0;
-
-  // Par tours : on prépare autant de photos qu'il en manque, le filtre les vérifie
-  // ensemble, et celles qu'il écarte sont remplacées au tour suivant.
-  while (photos.length < count && i < candidates.length && i < maxAttempts) {
-    const batch: ProcessedPhoto[] = [];
-    while (batch.length < count - photos.length && i < candidates.length && i < maxAttempts) {
-      const assetId = candidates[i++];
-      try {
-        const res = await processPhoto(assetId, (h) => opts.drawnHashes.has(h) || packHashes.has(h));
-        if (!res) continue;
-        consumed.push(assetId);
-        if ('duplicate' in res) continue;
-        packHashes.add(res.hash);
-        batch.push(res);
-      } catch {
-        // photo illisible (supprimée, corrompue…) : on passe à la suivante
-      }
-    }
-    if (batch.length === 0) break;
-    const verdicts = opts.screen ? await Promise.all(batch.map((p) => opts.screen!(p).catch(() => null))) : batch.map(() => false);
-    batch.forEach((photo, k) => {
-      if (verdicts[k] === true) rejected.push(photo.hash);
-      else photos.push({ photo, verdict: verdicts[k] });
-    });
-  }
-  if (photos.length === 0) throw new NoPhotosLeftError();
+  const { photos, consumed, rejected, unreadable } = await pickPhotos<ProcessedPhoto>({
+    candidates,
+    count,
+    process: processPhoto,
+    isKnownHash: (h) => opts.drawnHashes.has(h),
+    screen: opts.screen,
+  });
+  if (photos.length === 0) throw new NoPhotosLeftError(unreadable > 0, consumed, rejected);
 
   const rarities = opts.rarities ? opts.rarities(photos.length) : photos.map(() => rollRarity());
   const cards: GeneratedCard[] = photos.map(({ photo, verdict }, k) => ({

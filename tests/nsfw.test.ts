@@ -230,7 +230,7 @@ test('chaque entrée de photo passe par le détecteur', () => {
   // paquet et Galaxy : une photo censurée n'est pas tirée, une autre prend sa place
   assert.equal(game.match(/screen: \(photo\) => scanWithin\(photo\.imageUri, PACK_SCAN_MS\)/g)?.length, 2);
   assert.match(game, /\.\.\.pack\.rejectedHashes/);
-  assert.match(src('game/pack.ts'), /if \(verdicts\[k\] === true\) rejected\.push\(photo\.hash\);/);
+  assert.match(src('game/packPick.ts'), /if \(verdicts\[k\] === true\) rejected\.push\(photo\.hash\);/);
   assert.match(game, /scan: scanFields\(p\.censored \?\? null\)/);
   // Pioche amicale : l'ami vérifie avant d'offrir, celui qui pioche vérifie photo et miniature à la réception
   const pioche = src('net/pioche.ts');
