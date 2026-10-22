@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   TUTO_STEPS,
+  type TutorialState,
   advance,
   drawsNeeded,
   finish,
@@ -11,8 +12,12 @@ import {
   initialTutorial,
   isUnlocked,
   migrateTutorial,
+  noteRename,
+  renameTodo,
   tabTarget,
 } from '../src/game/tutorial';
+import { cardStrength, strongestCard } from '../src/game/heroCard';
+import type { Card } from '../src/storage/model';
 import { PAUL_ART_REFS, PAUL_CODE, isPaul, isPaulInput, paulFriend, paulHash, pickPaulArt } from '../src/game/paul';
 import { newFriendCode, parseFriendCode } from '../src/net/socialCore';
 import { createInitialState, migrateState } from '../src/storage/model';
@@ -23,11 +28,11 @@ test('tuto : les étapes de la phase 1 se suivent, une à la fois', () => {
   let t = initialTutorial();
   assert.equal(t.step, 'pack1');
   const seen = [t.step];
-  for (const from of ['pack1', 'pack2', 'pseudo', 'friend', 'pioche', 'battle'] as const) {
+  for (const from of ['pack1', 'pack2', 'pseudo', 'friend', 'pioche', 'rename', 'battle'] as const) {
     t = advance(t, from, T);
     seen.push(t.step);
   }
-  assert.deepEqual(seen, ['pack1', 'pack2', 'pseudo', 'friend', 'pioche', 'battle', 'phase2']);
+  assert.deepEqual(seen, ['pack1', 'pack2', 'pseudo', 'friend', 'pioche', 'rename', 'battle', 'phase2']);
   assert.equal(t.phase2At, T);
 });
 
@@ -48,7 +53,8 @@ test('tuto : ce qui est ouvert à chaque étape', () => {
   assert.deepEqual(open('pseudo'), ['index', 'profile'], 'le pseudo se choisit sur le Profil');
   assert.deepEqual(open('friend'), ['index', 'profile']);
   assert.deepEqual(open('pioche'), ['index', 'profile', 'pioche']);
-  assert.deepEqual(open('battle'), ['index', 'profile', 'battle', 'pioche']);
+  assert.deepEqual(open('rename'), ['index', 'profile', 'collection', 'pioche'], 'la Collection s’ouvre pour renommer sa carte');
+  assert.deepEqual(open('battle'), ['index', 'profile', 'battle', 'collection', 'pioche']);
   assert.deepEqual(open('phase2'), ['index', 'profile', 'battle', 'collection', 'trade', 'multi', 'quests', 'pioche']);
   assert.deepEqual(open('done'), open('phase2'));
   assert.equal(inPhase1('battle'), true);
@@ -59,6 +65,7 @@ test('tuto : flèche de la barre du bas et tirages garantis', () => {
   assert.equal(tabTarget('pack1'), null);
   assert.equal(tabTarget('friend'), 'profile');
   assert.equal(tabTarget('pioche'), 'index');
+  assert.equal(tabTarget('rename'), 'collection');
   assert.equal(tabTarget('battle'), 'battle');
   assert.equal(tabTarget('phase2'), null);
   assert.equal(drawsNeeded('pack1'), 2);
@@ -116,4 +123,96 @@ test('Paul : 5 illustrations différentes et des empreintes uniques', () => {
   assert.equal(pickPaulArt(3, Math.random, ['a', 'b']).length, 2);
   assert.match(paulHash('bot:1:0'), /^paul:bot:1:0:/);
   assert.notEqual(paulHash('bot:1:0'), paulHash('bot:1:0'));
+});
+
+/* ------------------------- Étape « rename » ------------------------- */
+
+let n = 0;
+function card(rarity: string, hp: number, power: number, extra: Partial<Card> = {}): Card {
+  n++;
+  return {
+    id: `c${n}`,
+    rarity,
+    name: null,
+    hash: `h${n}`,
+    obtainedAt: T + n,
+    locked: false,
+    censored: false,
+    battle: { hp, uses: 2, attacks: [{ kind: 'basic', name: 'Coup', power }, { kind: 'basic', name: 'Super coup', power: power * 2 }] },
+    ...extra,
+  } as unknown as Card;
+}
+
+test('carte du tuto : la plus rare, puis la plus forte, puis la plus récente', () => {
+  const commonStrong = card('common', 200, 40);
+  const rareWeak = card('rare', 50, 5);
+  const rareStrong = card('rare', 120, 20);
+  assert.equal(strongestCard([commonStrong, rareWeak, rareStrong])?.id, rareStrong.id);
+  assert.equal(strongestCard([commonStrong, rareWeak])?.id, rareWeak.id, 'la rareté passe avant la force');
+  // égalité parfaite : la plus récente
+  const a = card('epic', 100, 10);
+  const b = card('epic', 100, 10);
+  assert.equal(strongestCard([a, b])?.id, b.id);
+  assert.equal(strongestCard([b, a])?.id, b.id);
+  assert.equal(strongestCard([]), null);
+  assert.ok(cardStrength(rareStrong) > cardStrength(rareWeak));
+});
+
+test('carte du tuto : on évite les censurées, les verrouillées et celles de Paul', () => {
+  const mine = card('common', 60, 8);
+  const censored = card('legendary', 300, 50, { censored: true });
+  const locked = card('mythic', 300, 50, { locked: true });
+  const paul = card('common', 300, 50, { hash: 'paul:bot:1:0:abc' });
+  assert.equal(strongestCard([censored, locked, paul, mine])?.id, mine.id);
+  // rien d'autre : on prend quand même
+  assert.equal(strongestCard([paul])?.id, paul.id);
+  assert.equal(strongestCard([censored, paul])?.id, paul.id);
+});
+
+test('étape rename : le nom, puis les deux attaques, puis le combat', () => {
+  let t: TutorialState = { ...initialTutorial('rename'), heroCard: 'c1', renamed: [] };
+  assert.equal(renameTodo(t), 'card');
+  t = noteRename(t, 'c1', 'card');
+  assert.equal(renameTodo(t), 'attack1');
+  assert.equal(noteRename(t, 'c1', 'card'), t, 'déjà fait : rien ne change');
+  t = noteRename(t, 'c1', 'attack1');
+  assert.equal(renameTodo(t), 'attack2');
+  assert.equal(t.step, 'rename');
+  t = noteRename(t, 'c1', 'attack2');
+  assert.equal(t.step, 'battle');
+  assert.equal(t.heroCard, 'c1', 'gardée pour le premier combat');
+  assert.equal(renameTodo(t), null);
+  assert.equal(noteRename(t, 'c1', 'card'), t, 'hors de l’étape : rien ne change');
+});
+
+test('étape rename : le désordre compte, une autre carte repart de zéro', () => {
+  let t: TutorialState = { ...initialTutorial('rename'), heroCard: 'c1', renamed: [] };
+  t = noteRename(t, 'c1', 'attack2');
+  assert.equal(renameTodo(t), 'card', 'les flèches gardent l’ordre');
+  t = noteRename(t, 'c1', 'card');
+  assert.equal(renameTodo(t), 'attack1');
+  // la carte a disparu : on reprend avec une autre
+  const other = noteRename(t, 'c2', 'card');
+  assert.equal(other.heroCard, 'c2');
+  assert.deepEqual(other.renamed, ['card']);
+  // sans carte notée (ancienne sauvegarde) : la première renommée devient la carte du tuto
+  const fresh = noteRename(initialTutorial('rename'), 'c9', 'card');
+  assert.equal(fresh.heroCard, 'c9');
+});
+
+test('étape rename : sauvegardes relues sans risque', () => {
+  const kept = migrateTutorial({ step: 'rename', heroCard: 'abc', renamed: ['card', 'bidule', 3, 'attack2'] }, {});
+  assert.equal(kept.step, 'rename');
+  assert.equal(kept.heroCard, 'abc');
+  assert.deepEqual(kept.renamed, ['card', 'attack2'], 'les valeurs inconnues sont écartées');
+  assert.equal(renameTodo(kept), 'attack1');
+  const bad = migrateTutorial({ step: 'rename', heroCard: 5, renamed: 'card' }, {});
+  assert.equal(bad.heroCard, undefined);
+  assert.equal(bad.renamed, undefined);
+  assert.equal(renameTodo(bad), 'card');
+  // une partie arrêtée au combat (version d'avant) continue comme avant
+  const battle = migrateTutorial({ step: 'battle' }, {});
+  assert.equal(battle.step, 'battle');
+  assert.equal(battle.heroCard, undefined);
+  assert.equal(advance(battle, 'battle', T).step, 'phase2');
 });

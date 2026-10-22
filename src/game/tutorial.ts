@@ -7,7 +7,10 @@
  *  - `pseudo` : l'onglet Profil s'ouvre, choisir son pseudo ;
  *  - `friend` : ajouter Paul#1234 (un bot, voir paul.ts) ;
  *  - `pioche` : retour au menu, le « ! » de la Pioche amicale apparaît, piocher chez Paul (gratuit) ;
- *  - `battle` : l'onglet Combat s'ouvre, premier combat solo guidé.
+ *  - `rename` : l'onglet Collection s'ouvre, renommer sa carte la plus forte
+ *    puis ses deux attaques (voir `renameTodo`) ;
+ *  - `battle` : l'onglet Combat s'ouvre, premier combat solo guidé (la carte
+ *    renommée est déjà choisie et commence le combat).
  * Quand ce combat se termine (gagné ou perdu), tout le jeu est débloqué :
  *  - `phase2` : phase secondaire (menu « tuto terminé », échange et combat avec Paul…) ;
  *  - `done`   : tuto fini ou passé.
@@ -15,7 +18,7 @@
  * Pur (testable sous Node).
  */
 
-export const TUTO_STEPS = ['pack1', 'pack2', 'pseudo', 'friend', 'pioche', 'battle', 'phase2', 'done'] as const;
+export const TUTO_STEPS = ['pack1', 'pack2', 'pseudo', 'friend', 'pioche', 'rename', 'battle', 'phase2', 'done'] as const;
 export type TutoStep = (typeof TUTO_STEPS)[number];
 
 export interface TutorialState {
@@ -32,6 +35,10 @@ export interface TutorialState {
   menuSeen?: boolean;
   /** Dernier jour (« 2026-10-21 ») où Paul a proposé un combat de lui-même. */
   paulAskDay?: string;
+  /** Étape `rename` : id de la carte à renommer (sa plus forte), gardée pour le premier combat. */
+  heroCard?: string;
+  /** Étape `rename` : ce qui est déjà renommé sur cette carte. */
+  renamed?: RenameTask[];
   [extra: string]: unknown;
 }
 
@@ -46,13 +53,17 @@ const UNLOCK: Record<TutoFeature, TutoStep> = {
   profile: 'pseudo',
   pioche: 'pioche',
   battle: 'battle',
-  collection: 'phase2',
+  collection: 'rename',
   trade: 'phase2',
   multi: 'phase2',
   quests: 'phase2',
 };
 
 const order = (s: TutoStep) => TUTO_STEPS.indexOf(s);
+
+/** Étape `rename`, dans l'ordre : le nom de la carte, son attaque classique, puis la spéciale. */
+export const RENAME_TASKS = ['card', 'attack1', 'attack2'] as const;
+export type RenameTask = (typeof RENAME_TASKS)[number];
 
 export const initialTutorial = (step: TutoStep = 'pack1'): TutorialState => ({ step, tradeDone: false, fightDone: false, skipped: false, phase2At: null });
 
@@ -86,6 +97,27 @@ export function finish(t: TutorialState, skipped = false, now = Date.now()): Tut
   return { ...t, step: 'done', skipped: t.skipped || skipped, phase2At: t.phase2At ?? now };
 }
 
+/** Étape `rename` : le prochain renommage à faire (`null` hors de cette étape). */
+export function renameTodo(t: TutorialState): RenameTask | null {
+  if (t.step !== 'rename') return null;
+  const done = t.renamed ?? [];
+  return RENAME_TASKS.find((k) => !done.includes(k)) ?? null;
+}
+
+/**
+ * Étape `rename` : note un renommage fait sur `cardId`. Une autre carte que
+ * celle notée (l'ancienne a disparu) repart de zéro. Les trois faits : on
+ * passe au combat. Rien ne change hors de cette étape.
+ */
+export function noteRename(t: TutorialState, cardId: string, task: RenameTask): TutorialState {
+  if (t.step !== 'rename') return t;
+  const before = t.heroCard === cardId ? (t.renamed ?? []) : [];
+  if (t.heroCard === cardId && before.includes(task)) return t;
+  const renamed = before.includes(task) ? before : [...before, task];
+  const next = { ...t, heroCard: cardId, renamed };
+  return RENAME_TASKS.every((k) => renamed.includes(k)) ? advance(next, 'rename') : next;
+}
+
 /** Ce que la phase 2 note au fil du jeu. */
 export type TutoPatch = Partial<Pick<TutorialState, 'tradeDone' | 'fightDone' | 'menuSeen' | 'paulAskDay'>>;
 
@@ -111,6 +143,7 @@ export const drawsNeeded = (step: TutoStep) => (step === 'pack1' ? 2 : step === 
 export function tabTarget(step: TutoStep): TabName | null {
   if (step === 'pseudo' || step === 'friend') return 'profile';
   if (step === 'pioche') return 'index';
+  if (step === 'rename') return 'collection';
   if (step === 'battle') return 'battle';
   return null;
 }
@@ -139,6 +172,8 @@ export function migrateTutorial(raw: unknown, save: Record<string, unknown>): Tu
     phase2At: typeof r.phase2At === 'number' && Number.isFinite(r.phase2At) ? r.phase2At : null,
     menuSeen: r.menuSeen === true || undefined,
     paulAskDay: typeof r.paulAskDay === 'string' ? r.paulAskDay : undefined,
+    heroCard: typeof r.heroCard === 'string' && r.heroCard ? r.heroCard : undefined,
+    renamed: Array.isArray(r.renamed) ? RENAME_TASKS.filter((k) => (r.renamed as unknown[]).includes(k)) : undefined,
   };
 }
 

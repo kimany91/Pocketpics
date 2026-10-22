@@ -6,6 +6,9 @@
  *
  * Ouverte depuis la grille, la carte s'envole de sa miniature et y retourne quand
  * on ferme. Les cartes voisines attendent en retrait de chaque côté.
+ *
+ * Tuto (étape `rename`) : des flèches guident sur la carte la plus forte —
+ * son nom, puis « Stats de combat », puis ses deux attaques.
  */
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -50,6 +53,8 @@ import { MAX_PINNED, type Card } from '../../storage/model';
 import { CARD_RATIO, colors, fonts } from '../../theme';
 import { haptic, revealHaptics } from '../../utils/haptics';
 import { goBack } from '../../utils/nav';
+import { TutoArrow, TutoBubble } from '../../components/tuto/TutoArrow';
+import { useHeroCard, useRenameTodo, useTutoStep } from '../../state/useTuto';
 import { useMotionTilt } from '../../utils/motionTilt';
 
 const AnimatedBlur = Animated.createAnimatedComponent(BlurView);
@@ -77,6 +82,7 @@ export default function CardScreen() {
   const togglePin = useGame((s) => s.togglePin);
   const pinned = useGame((s) => s.save?.pinned);
   const renameAttack = useGame((s) => s.renameAttack);
+  const noteTutoRename = useGame((s) => s.noteTutoRename);
   const orderIds = useCollectionView((s) => s.ids);
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -114,6 +120,21 @@ export default function CardScreen() {
     );
   };
   const lastSpin = useRef(0);
+
+  // Tuto : la carte à renommer, ce qu'il reste à faire, et « Bravo » quand c'est fini
+  const step = useTutoStep();
+  const hero = useHeroCard();
+  const todo = useRenameTodo(hero?.id);
+  const tutoHere = step === 'rename' && hero?.id === currentId;
+  const [bravo, setBravo] = useState(false);
+  const wasRename = useRef(step === 'rename');
+  useEffect(() => {
+    if (wasRename.current && step === 'battle') {
+      setBravo(true);
+      haptic.success();
+    }
+    wasRename.current = step === 'rename';
+  }, [step]);
 
   // Ordre de défilement : celui de la grille si la carte y figure, sinon les plus récentes d'abord.
   const list = useMemo(() => {
@@ -408,8 +429,18 @@ export default function CardScreen() {
     if (changed && draft.trim()) {
       setRenamed((n) => n + 1);
       playSfx('up1', { volume: 0.35 });
+      if (tutoHere && !card.locked) noteTutoRename(card.id, 'card');
     }
   };
+  const onRenameAttack = (slot: 0 | 1, name: string) => {
+    const changed = name.trim() !== card.battle.attacks[slot].name;
+    renameAttack(card.id, slot, name);
+    if (tutoHere && changed && name.trim() && !card.locked) noteTutoRename(card.id, slot === 0 ? 'attack1' : 'attack2');
+  };
+  // Tuto : où poser la flèche
+  const tutoName = tutoHere && todo === 'card' && !statsOpen && !burning;
+  const tutoStats = tutoHere && (todo === 'attack1' || todo === 'attack2') && !statsOpen && !burning;
+  const tutoSlot = tutoHere && statsOpen ? (todo === 'attack1' ? 0 : todo === 'attack2' ? 1 : undefined) : undefined;
 
   const slots = [index - 1, index + 1, index].filter((i) => i >= 0 && i < list.length);
 
@@ -485,39 +516,52 @@ export default function CardScreen() {
         </View>
 
         <Animated.View style={[styles.meta, metaStyle]} pointerEvents="box-none">
-          <Animated.View key={`meta-${card.id}`} entering={FadeInDown.delay(120).duration(320)} style={{ alignItems: 'center' }} pointerEvents="box-none">
-            {editing ? (
-              <Animated.View entering={FadeIn.duration(160)} style={styles.editRow}>
-                <TextInput
-                  value={draft}
-                  onChangeText={setDraft}
-                  autoFocus
-                  maxLength={28}
-                  placeholder="Nom de la carte"
-                  placeholderTextColor={colors.textFaint}
-                  style={[styles.input, { borderColor: `${r.color}55` }]}
-                  returnKeyType="done"
-                  onSubmitEditing={save}
-                  selectionColor={r.color}
+          {/* tuto : les bulles passent par-dessus ce qui suit (l'astuce du bas) */}
+          <Animated.View key={`meta-${card.id}`} entering={FadeInDown.delay(120).duration(320)} style={{ alignItems: 'center', zIndex: 2 }} pointerEvents="box-none">
+            <View style={tutoName && { zIndex: 3 }}>
+              {editing ? (
+                <Animated.View entering={FadeIn.duration(160)} style={styles.editRow}>
+                  <TextInput
+                    value={draft}
+                    onChangeText={setDraft}
+                    autoFocus
+                    maxLength={28}
+                    placeholder="Nom de la carte"
+                    placeholderTextColor={colors.textFaint}
+                    style={[styles.input, { borderColor: `${r.color}55` }]}
+                    returnKeyType="done"
+                    onSubmitEditing={save}
+                    selectionColor={r.color}
+                  />
+                  <Pressable onPress={save} style={[styles.round, { backgroundColor: colors.text }]} accessibilityLabel="Valider le nom">
+                    <Ionicons name="checkmark" size={22} color="#0B0B0D" />
+                  </Pressable>
+                </Animated.View>
+              ) : (
+                <NameRow
+                  name={card.name}
+                  color={r.color}
+                  renamed={renamed}
+                  disabled={burning}
+                  locked={card.locked}
+                  onPress={() => {
+                    if (card.locked) return sayLocked();
+                    setDraft(card.name ?? '');
+                    setEditing(true);
+                  }}
                 />
-                <Pressable onPress={save} style={[styles.round, { backgroundColor: colors.text }]} accessibilityLabel="Valider le nom">
-                  <Ionicons name="checkmark" size={22} color="#0B0B0D" />
-                </Pressable>
-              </Animated.View>
-            ) : (
-              <NameRow
-                name={card.name}
-                color={r.color}
-                renamed={renamed}
-                disabled={burning}
-                locked={card.locked}
-                onPress={() => {
-                  if (card.locked) return sayLocked();
-                  setDraft(card.name ?? '');
-                  setEditing(true);
-                }}
-              />
-            )}
+              )}
+              {tutoName ? (
+                <TutoArrow
+                  key={editing ? 'edit' : 'name'}
+                  side="bottom"
+                  text={editing ? 'Écris son nouveau nom puis touche ✓' : 'Renomme ta carte'}
+                  sub={editing ? undefined : 'Touche son nom'}
+                  ring={14}
+                  gap={6}
+                />
+              ) : null}
+            </View>
             <View style={styles.rarityRow}>
               <AppText variant="label" style={{ color: r.color }}>
                 {r.label}
@@ -536,25 +580,34 @@ export default function CardScreen() {
                 </Pressable>
               ) : null}
             </View>
-            <Pressable
-              onPress={openStats}
-              disabled={burning}
-              style={({ pressed }) => [styles.statsPill, pressed && { transform: [{ scale: 0.96 }], backgroundColor: 'rgba(255,255,255,0.12)' }]}
-              accessibilityLabel="Stats de combat"
-              accessibilityRole="button"
-            >
-              <Ionicons name="chevron-up" size={16} color={colors.text} />
-              <AppText variant="label">Stats de combat</AppText>
-              <View style={styles.pillStats}>
-                <Ionicons name="heart" size={12} color={colors.danger} />
-                <AppText style={styles.pillValue}>{card.battle.hp}</AppText>
-                <Ionicons name="flash" size={12} color={colors.gold} />
-                <AppText style={styles.pillValue}>{powerLabel(card.battle.attacks[0])}</AppText>
+            <View style={[{ marginTop: 14 }, tutoStats && { zIndex: 3 }]}>
+              <Pressable
+                onPress={openStats}
+                disabled={burning}
+                style={({ pressed }) => [styles.statsPill, pressed && { transform: [{ scale: 0.96 }], backgroundColor: 'rgba(255,255,255,0.12)' }]}
+                accessibilityLabel="Stats de combat"
+                accessibilityRole="button"
+              >
+                <Ionicons name="chevron-up" size={16} color={colors.text} />
+                <AppText variant="label">Stats de combat</AppText>
+                <View style={styles.pillStats}>
+                  <Ionicons name="heart" size={12} color={colors.danger} />
+                  <AppText style={styles.pillValue}>{card.battle.hp}</AppText>
+                  <Ionicons name="flash" size={12} color={colors.gold} />
+                  <AppText style={styles.pillValue}>{powerLabel(card.battle.attacks[0])}</AppText>
+                </View>
+              </Pressable>
+              {tutoStats ? <TutoArrow side="bottom" text="Bien joué ! Ouvre ses attaques" sub="Touche Stats de combat" ring={19} gap={6} /> : null}
+            </View>
+            {step === 'rename' && hero && !tutoHere ? (
+              <View style={{ marginTop: 12, alignSelf: 'stretch' }}>
+                <TutoBubble text="Reviens sur ta carte la plus forte" sub="C’est elle qu’on renomme pour le tuto" />
               </View>
-            </Pressable>
+            ) : null}
           </Animated.View>
           <Animated.View entering={FadeIn.delay(900)}>
-            <AppText variant="caption" style={{ marginTop: 10, textAlign: 'center' }}>
+            {/* tuto : l'astuce s'efface, les bulles prennent la place */}
+            <AppText variant="caption" style={[{ marginTop: 10, textAlign: 'center' }, tutoHere && { opacity: 0 }]}>
               {list.length > 1
                 ? 'Tourne la carte au doigt · pince pour zoomer · glisse sur le côté pour changer de carte, vers le haut pour ses stats'
                 : 'Tourne la carte au doigt · pince pour zoomer · glisse vers le haut pour ses stats'}
@@ -583,7 +636,16 @@ export default function CardScreen() {
       {!burning ? (
         <Animated.View style={[styles.top, { paddingTop: insets.top + 8 }, chromeStyle]} pointerEvents="box-none">
           <View style={styles.topLeft}>
-            <Pressable onPress={() => setConfirming(true)} hitSlop={12} style={styles.round} accessibilityLabel="Brûler la carte" accessibilityRole="button">
+            <Pressable
+              onPress={() => {
+                // tuto : la carte renommée part au premier combat
+                if (hero?.id === card.id) {
+                  haptic.warning();
+                  return say({ icon: 'lock-closed', text: 'Garde cette carte : elle sert pour le tuto', warn: true });
+                }
+                setConfirming(true);
+              }}
+              hitSlop={12} style={styles.round} accessibilityLabel="Brûler la carte" accessibilityRole="button">
               <Ionicons name="trash-outline" size={19} color={colors.text} />
             </Pressable>
             <Pressable
@@ -628,16 +690,30 @@ export default function CardScreen() {
                 toggleFavorite(card.id);
               }}
             />
-            <Pressable onPress={close} hitSlop={12} style={styles.round} accessibilityLabel="Fermer" accessibilityRole="button">
-              <Ionicons name="close" size={22} color={colors.text} />
-            </Pressable>
+            <View>
+              <Pressable onPress={close} hitSlop={12} style={styles.round} accessibilityLabel="Fermer" accessibilityRole="button">
+                <Ionicons name="close" size={22} color={colors.text} />
+              </Pressable>
+              {bravo && !statsOpen ? <TutoArrow side="bottom" text="Bravo ! Maintenant, combats avec elle" sub="Ferme la carte, puis va dans Combat" ring={20} gap={6} /> : null}
+            </View>
           </View>
         </Animated.View>
       ) : null}
 
       <ActionToast toast={toast} top={insets.top + 58} />
 
-      {statsOpen ? <StatsSheet key={card.id} card={card} onClose={() => setStatsOpen(false)} locked={card.locked} onLocked={sayLocked} onRename={(slot, name) => renameAttack(card.id, slot, name)} /> : null}
+      {statsOpen ? (
+        <StatsSheet
+          key={card.id}
+          card={card}
+          onClose={() => setStatsOpen(false)}
+          locked={card.locked}
+          onLocked={sayLocked}
+          onRename={onRenameAttack}
+          tutoSlot={tutoSlot}
+          autoClose={bravo}
+        />
+      ) : null}
 
       {confirming ? (
         <ConfirmDelete
@@ -875,7 +951,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 14,
     paddingHorizontal: 14,
     height: 38,
     borderRadius: 19,

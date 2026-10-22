@@ -16,6 +16,10 @@ const images = new Map<string, { image: string; thumb: string }>();
 const savedPins = new Map<string, unknown>();
 const sidecars = new Map<string, Card>();
 let storedState: unknown;
+/** Ma photo de profil (clé « avatar »). */
+let myAvatar: { at: number; b64: string } | null = null;
+/** Photos de profil des amis (clé « fav:<code> »). */
+const friendAvatars = new Map<string, unknown>();
 
 const toUri = (src: { uri: string } | { base64: string }) => ('uri' in src ? src.uri : `data:image/jpeg;base64,${src.base64}`);
 const toB64 = (uri: string) => uri.replace(/^data:[^,]+,/, '');
@@ -24,7 +28,14 @@ const toB64 = (uri: string) => uri.replace(/^data:[^,]+,/, '');
 export async function prepare() {
   const [kv, cards] = await Promise.all([idbEntries<unknown>('kv'), idbEntries<StoredCard>('cards')]);
   storedState = kv.find(([k]) => k === 'state')?.[1];
-  for (const [k, v] of kv) if (k.startsWith('pins:')) savedPins.set(k.slice(5), v);
+  for (const [k, v] of kv) {
+    if (k.startsWith('pins:')) savedPins.set(k.slice(5), v);
+    else if (k.startsWith('fav:')) friendAvatars.set(k.slice(4), v);
+    else if (k === 'avatar' && v && typeof v === 'object') {
+      const a = v as { at?: unknown; b64?: unknown };
+      if (typeof a.at === 'number' && typeof a.b64 === 'string') myAvatar = { at: a.at, b64: a.b64 };
+    }
+  }
   for (const [id, v] of cards) {
     const card = migrateCard(v?.card);
     if (!card || typeof v.image !== 'string') continue;
@@ -53,6 +64,35 @@ export function loadPinsCache<T>(code: string): (T & { at: number; n: number }) 
   const v = savedPins.get(code) as (T & { at: number; n: number; cards?: unknown }) | undefined;
   return v && Array.isArray(v.cards) ? v : null;
 }
+
+/* Photo de profil (voir disk.ts). */
+export const myAvatarUri = (at: number) => (myAvatar && myAvatar.at === at ? `data:image/jpeg;base64,${myAvatar.b64}` : '');
+
+export function writeMyAvatar(at: number, base64: string) {
+  myAvatar = { at, b64: base64 };
+  void idbPut('kv', 'avatar', myAvatar);
+}
+
+export async function readMyAvatarBase64(at: number): Promise<string | null> {
+  return myAvatar && myAvatar.at === at ? myAvatar.b64 : null;
+}
+
+export function deleteMyAvatar() {
+  myAvatar = null;
+  void idbDelete('kv', 'avatar');
+}
+
+export function saveFriendAvatar(code: string, data: { at: number; rarity: string; img: string } | null) {
+  if (data) {
+    friendAvatars.set(code, data);
+    void idbPut('kv', `fav:${code}`, data);
+  } else {
+    friendAvatars.delete(code);
+    void idbDelete('kv', `fav:${code}`);
+  }
+}
+
+export const loadFriendAvatar = (code: string): unknown => friendAvatars.get(code) ?? null;
 
 export const loadCards = (): Card[] => [...sidecars.values()].sort((a, b) => a.obtainedAt - b.obtainedAt);
 export const verifyCardsAgainstSidecars = async (_cards: Card[]): Promise<Card[] | null> => null;
@@ -120,5 +160,7 @@ export async function resetWebSave() {
   images.clear();
   sidecars.clear();
   storedState = undefined;
+  myAvatar = null;
+  friendAvatars.clear();
   await Promise.all([idbClear('kv'), idbClear('cards'), idbClear('gallery')]);
 }

@@ -319,6 +319,37 @@ export async function cropImage(uri: string, rect: CropRect): Promise<{ imageUri
   }
 }
 
+/** Photo de profil : voir la version mobile (gallery.ts). */
+export async function cropAvatar(uri: string, rect: CropRect, size: number, maxB64: number): Promise<string | null> {
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.crossOrigin = 'anonymous';
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Image illisible'));
+      el.src = uri;
+    });
+    const W = img.naturalWidth;
+    const H = img.naturalHeight;
+    if (!W || !H) return null;
+    const sx = Math.max(0, Math.round(rect.x * W));
+    const sy = Math.max(0, Math.round(rect.y * H));
+    const sw = Math.max(16, Math.min(W - sx, Math.round(rect.w * W)));
+    const sh = Math.max(16, Math.min(H - sy, Math.round(rect.h * H)));
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    canvas.getContext('2d')!.drawImage(img, sx, sy, sw, sh, 0, 0, size, size);
+    for (const q of [0.8, 0.66, 0.52, 0.4, 0.3]) {
+      const b64 = canvas.toDataURL('image/jpeg', q).replace(/^data:[^,]+,/, '');
+      if (b64.length <= maxB64) return b64;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function processPhoto(assetId: string, isKnownHash: PhotoCheck): Promise<ProcessedPhoto | { duplicate: true } | null> {
   const blob = picked.get(assetId);
   if (!blob) {

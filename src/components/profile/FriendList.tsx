@@ -33,6 +33,7 @@ import { Button } from '../Button';
 import { Burst } from '../fx';
 import { OnlineDot } from '../online/Pulse';
 import { RankEmblem } from '../rank/RankEmblem';
+import { Avatar, useFriendAvatar } from './Avatar';
 import { TutoArrow } from '../tuto/TutoArrow';
 import { fightPaul, tradeWithPaul } from '../tuto/paul';
 
@@ -141,6 +142,7 @@ function FriendRow({
   onRemove(): void;
 }) {
   const rank = rankOf(mmr);
+  const avatar = useFriendAvatar(friend.code);
   // nouvel ami : la ligne s'allume en vert puis revient à la normale
   const lit = useSharedValue(0);
   const [boom, setBoom] = useState(0);
@@ -166,7 +168,7 @@ function FriendRow({
         accessibilityLabel={`${friend.name}, ${rank.label}, ${online ? 'en ligne' : 'hors ligne'} — voir son profil`}
       >
         <View>
-          <RankEmblem rank={rank} size={34} still />
+          <Avatar photo={avatar} size={38} fallback={<RankEmblem rank={rank} size={34} still />} />
           {boom ? (
             <View style={styles.burst} pointerEvents="none">
               <Burst trigger={boom} colors={[colors.success, colors.gold, '#FFFFFF']} count={14} radius={70} />

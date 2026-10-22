@@ -28,14 +28,16 @@ import {
 } from '../game/quests';
 import { cancelMatch, finishMatch, rankOf, settleAbandoned, shownMmr, startMatch } from '../game/rank';
 import { getRarity } from '../game/rarity';
-import { type CropRect, cropImage } from '../game/gallery';
+import { type CropRect, cropAvatar, cropImage } from '../game/gallery';
+import { AVATAR_SIZE, AVATAR_TARGET_B64, avatarBlock, avatarDataUri, avatarStillValid } from '../game/avatar';
 import { type FriendDrawPayment, type FriendPhoto, payFriendDraw } from '../game/friendDraw';
 import { NSFW_SCAN_VERSION, type PhotoMark, photoMark, scanFields, scanOrder, withScan } from '../game/nsfw';
 import { forgetPhoto, nsfwReady, preloadNsfw, scanPhoto, scanWithin } from '../game/nsfwScan';
 import { generatePack, makeCard } from '../game/pack';
 import { PAUL_NAME, paulFriend, paulHash } from '../game/paul';
 import { loadPaulPhotos } from '../game/paulPack';
-import { type TutoPatch, type TutoStep, advance, patchTutorial, drawsNeeded, finish as finishTuto, finishedTutorial, inPhase1, reached, skipTutorialForTests } from '../game/tutorial';
+import { type RenameTask, type TutoPatch, type TutoStep, advance, noteRename, patchTutorial, drawsNeeded, finish as finishTuto, finishedTutorial, inPhase1, reached, skipTutorialForTests } from '../game/tutorial';
+import { strongestCard } from '../game/heroCard';
 import { cleanPseudo } from '../net/socialCore';
 import * as disk from '../storage/disk';
 import { MAX_PINNED } from '../storage/model';
@@ -114,6 +116,14 @@ interface GameStore {
    */
   cropCard(id: string, rect: CropRect): Promise<boolean>;
   /**
+   * Photo de profil : la partie `rect` de la photo d'une carte, en rond (image à
+   * part, la carte n'est pas touchée). Une carte censurée ou pas encore
+   * vérifiée est refusée, et le cadrage passe lui aussi au filtre.
+   */
+  setAvatar(cardId: string, rect: CropRect): Promise<'ok' | 'censored' | 'pending' | 'error'>;
+  /** Retire la photo de profil (retour à l'emblème de rang). */
+  clearAvatar(): void;
+  /**
    * Épingle (ou retire) une carte du profil. Au-delà de `MAX_PINNED`, rien ne
    * se passe : l'écran le dit. Rend ce qui s'est passé.
    */
@@ -163,6 +173,8 @@ interface GameStore {
   patchTuto(patch: TutoPatch): void;
   /** Fin du tuto (après la phase 2, ou en la passant avec `skipped`). */
   finishTutorial(skipped?: boolean): void;
+  /** Tuto, étape `rename` : la carte (ou une de ses attaques) vient d'être renommée. */
+  noteTutoRename(cardId: string, task: RenameTask): void;
 }
 
 function persistState(save: SaveState) {
@@ -666,6 +678,36 @@ export const useGame = create<GameStore>((set, get) => ({
     return true;
   },
 
+  async setAvatar(cardId, rect) {
+    const card = get().cards.find((c) => c.id === cardId);
+    if (!card) return 'error';
+    const block = avatarBlock(card);
+    if (block) return block;
+    const b64 = await cropAvatar(disk.cardImageUri(cardId), rect, AVATAR_SIZE, AVATAR_TARGET_B64);
+    if (!b64) return 'error';
+    // le cadrage passe au filtre lui aussi (la carte entière l'a déjà passé : sans réponse à temps, on la croit)
+    if ((await scanWithin(avatarDataUri(b64), PACK_SCAN_MS)) === true) return 'censored';
+    const save = get().save;
+    // la carte a pu partir (ou être censurée) pendant ce temps
+    const still = get().cards.find((c) => c.id === cardId);
+    if (!save || !still || avatarBlock(still)) return still ? 'censored' : 'error';
+    const at = Math.max(Date.now(), (save.avatar?.at ?? 0) + 1);
+    disk.writeMyAvatar(at, b64);
+    const next: SaveState = { ...save, avatar: { cardId, rarity: still.rarity, at } };
+    persistState(next);
+    set({ save: next });
+    return 'ok';
+  },
+
+  clearAvatar() {
+    const save = get().save;
+    if (!save?.avatar) return;
+    disk.deleteMyAvatar();
+    const next: SaveState = { ...save, avatar: null };
+    persistState(next);
+    set({ save: next });
+  },
+
   setPlayerName(rawName) {
     const save = get().save;
     // pas de « # » : il sépare le pseudo de ses 4 caractères (« Léo#7F3K »)
@@ -850,7 +892,11 @@ export const useGame = create<GameStore>((set, get) => ({
     disk.saveIndex(cards);
     const latest = get().save ?? save;
     // gratuit : ni tirage ni pièces, et pas compté comme un paquet (chance, quêtes)
-    const next = withTutoStep({ ...latest, drawnHashes: [...new Set([...latest.drawnHashes, ...written.map((c) => c.hash)])] }, 'pioche');
+    const stepped = withTutoStep({ ...latest, drawnHashes: [...new Set([...latest.drawnHashes, ...written.map((c) => c.hash)])] }, 'pioche');
+    // tuto : la carte la plus forte sera celle à renommer (sans carte, on passe au combat)
+    const hero = stepped.tutorial.step === 'rename' ? strongestCard(cards) : null;
+    const next =
+      stepped.tutorial.step !== 'rename' ? stepped : hero ? { ...stepped, tutorial: { ...stepped.tutorial, heroCard: hero.id, renamed: [] } } : withTutoStep(stepped, 'rename');
     persistState(next);
     set({ cards, save: next, pendingPack: written });
     return written;
@@ -860,6 +906,16 @@ export const useGame = create<GameStore>((set, get) => ({
     const save = get().save;
     if (!save) return;
     const next: SaveState = { ...save, tutorial: patchTutorial(save.tutorial, patch) };
+    persistState(next);
+    set({ save: next });
+  },
+
+  noteTutoRename(cardId, task) {
+    const save = get().save;
+    if (!save) return;
+    const tutorial = noteRename(save.tutorial, cardId, task);
+    if (tutorial === save.tutorial) return;
+    const next: SaveState = { ...save, tutorial };
     persistState(next);
     set({ save: next });
   },
@@ -967,6 +1023,12 @@ useGame.subscribe((s, prev) => {
   if (s.cards === prev.cards) return;
   const marks = marksOf(s.cards);
   if (!sameMarks(marks, s.marks)) useGame.setState({ marks });
+});
+
+// photo de profil : elle saute si sa carte part (échange, carte brûlée) ou est censurée
+useGame.subscribe((s, prev) => {
+  if (s.cards === prev.cards || !s.ready || !s.save?.avatar) return;
+  if (!avatarStillValid(s.save.avatar, s.cards)) s.clearAvatar();
 });
 
 /** Ce qu'on montre de la photo d'une de mes cartes (`undefined` si ce n'est pas une de mes cartes). */

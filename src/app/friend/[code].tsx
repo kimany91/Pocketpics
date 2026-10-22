@@ -1,5 +1,5 @@
 /**
- * Profil d'un ami : son rang, sa présence, et les cartes qu'il a épinglées sur
+ * Profil d'un ami : sa photo de profil, son rang, sa présence, et les cartes qu'il a épinglées sur
  * son profil. Un appui sur une carte l'ouvre en 3D, avec ses stats.
  *
  * Les cartes épinglées ne sont pas stockées chez nous : on les demande à son
@@ -21,6 +21,7 @@ import { InspectFighter } from '../../components/battle/InspectFighter';
 import { OnlineDot } from '../../components/online/Pulse';
 import { Shine } from '../../components/online/Shine';
 import { RankEmblem } from '../../components/rank/RankEmblem';
+import { Avatar, useFriendAvatar } from '../../components/profile/Avatar';
 import { Screen } from '../../components/Screen';
 import { makeFighter } from '../../battle/engine';
 import { rankOf } from '../../game/rank';
@@ -46,6 +47,7 @@ export default function FriendProfileScreen() {
   const focused = useIsFocused();
   const { width } = useWindowDimensions();
   const [open, setOpen] = useState<PinnedCard | null>(null);
+  const avatar = useFriendAvatar(code);
   const online = !!code && isOnline(code);
   // hors ligne mais joignable : il reçoit une notification et l'invitation l'attend une minute
   const reachable = online || !!friend?.push;
@@ -107,7 +109,7 @@ export default function FriendProfileScreen() {
             style={StyleSheet.absoluteFill}
           />
           <Shine active={focused} every={5600} delay={1100} strength={0.09} />
-          <RankEmblem rank={rank} size={64} still={!focused} />
+          <Avatar photo={avatar} size={68} fallback={<RankEmblem rank={rank} size={64} still={!focused} />} />
           <View style={{ flex: 1, gap: 3 }}>
             <AppText variant="title" numberOfLines={1}>
               {friend.name}

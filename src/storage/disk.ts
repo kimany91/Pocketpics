@@ -9,6 +9,8 @@
  *     cards/<id>/card.json  ← SOURCE DE VÉRITÉ d'une carte
  *     cards/<id>/image.jpg
  *     cards/<id>/thumb.jpg
+ *     avatar/me-<date>.jpg  photo de profil (petite image à part)
+ *     friend-avatars/<code>.json  photos de profil des amis
  *
  * Chaque carte est autonome : même si index.json ou state.json étaient
  * corrompus, la collection est reconstruite à partir des dossiers `cards/`.
@@ -105,6 +107,62 @@ export function loadPinsCache<T = SavedPins>(code: string): (T & { at: number; n
   try {
     const v = readJson(pinsFile(code)) as (T & { at: number; n: number }) | undefined;
     return v && typeof v === 'object' && Array.isArray((v as { cards?: unknown }).cards) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/* ---------------------------- Photo de profil ---------------------------- */
+
+const avatarDir = () => new Directory(root(), 'avatar');
+let avatarBase: string | null = null;
+
+/** Adresse de ma photo de profil (le nom change avec la date : l'affichage n'en garde pas une vieille). */
+export const myAvatarUri = (at: number) => {
+  if (!avatarBase) {
+    const u = avatarDir().uri;
+    avatarBase = u.endsWith('/') ? u : `${u}/`;
+  }
+  return `${avatarBase}me-${at}.jpg`;
+};
+
+/** Écrit ma photo de profil (et efface les anciennes). */
+export function writeMyAvatar(at: number, base64: string) {
+  const dir = avatarDir();
+  ensureDir(dir);
+  for (const e of dir.list()) if (e instanceof File) e.delete();
+  new File(dir, `me-${at}.jpg`).write(base64, { encoding: 'base64' });
+}
+
+export async function readMyAvatarBase64(at: number): Promise<string | null> {
+  try {
+    const f = new File(avatarDir(), `me-${at}.jpg`);
+    return f.exists ? await f.base64() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function deleteMyAvatar() {
+  try {
+    const dir = avatarDir();
+    if (dir.exists) dir.delete();
+  } catch {}
+}
+
+const friendAvatarFile = (code: string) => new File(new Directory(root(), 'friend-avatars'), `${code.replace(/[^0-9A-Z]/g, '')}.json`);
+
+/** Garde la photo de profil d'un ami (`null` : il n'en a plus). */
+export function saveFriendAvatar(code: string, data: { at: number; rarity: string; img: string } | null) {
+  try {
+    if (data) writeJsonAtomic(friendAvatarFile(code), data);
+    else if (friendAvatarFile(code).exists) friendAvatarFile(code).delete();
+  } catch {}
+}
+
+export function loadFriendAvatar(code: string): unknown {
+  try {
+    return readJson(friendAvatarFile(code)) ?? null;
   } catch {
     return null;
   }

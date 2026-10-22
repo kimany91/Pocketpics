@@ -1,6 +1,8 @@
 /**
- * Carte d'identité du profil public : l'emblème et le libellé de rang (un
- * appui ouvre tous les rangs) et le pseudo, modifiable sur place. La présence
+ * Carte d'identité du profil public : la photo de profil (une carte de la
+ * collection, avec la pastille de sa rareté ; sans photo, l'emblème de rang),
+ * qu'un appui permet de changer, le libellé de rang (un appui ouvre tous les
+ * rangs) et le pseudo, modifiable sur place. La présence
  * en ligne, elle, s'affiche juste en dessous avec le code ami.
  */
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +19,7 @@ import { haptic } from '../../utils/haptics';
 import { AppText } from '../AppText';
 import { Shine } from '../online/Shine';
 import { RankEmblem } from '../rank/RankEmblem';
+import { Avatar, useMyAvatar } from './Avatar';
 
 /** Même limite que la sauvegarde : un pseudo plus long serait tronqué. */
 const NAME_MAX = 24;
@@ -30,6 +33,7 @@ export function ProfileCard({ active }: { active: boolean }) {
   const rank = rankOf(save ? shownMmr(save.rank) : 0);
 
   const openRanks = () => router.push('/ranks');
+  const photo = useMyAvatar();
 
   // `onSubmitEditing` est suivi de `onBlur` : on ne valide qu'une fois.
   const committed = useRef(false);
@@ -58,14 +62,20 @@ export function ProfileCard({ active }: { active: boolean }) {
       <Pressable
         onPress={() => {
           haptic.light();
-          openRanks();
+          router.push('/avatar');
         }}
         hitSlop={6}
         accessibilityRole="button"
-        accessibilityLabel={`Rang ${rank.label}, voir tous les rangs`}
+        accessibilityLabel={photo ? 'Ta photo de profil, la changer' : 'Choisir une photo de profil'}
         style={({ pressed }) => [styles.emblem, pressed && { transform: [{ scale: 0.95 }] }]}
       >
-        <RankEmblem rank={rank} size={66} still={!active} />
+        <Avatar photo={photo} size={70} fallback={<RankEmblem rank={rank} size={66} still={!active} />} />
+        {/* sans photo : un petit appareil photo invite à en choisir une */}
+        {photo ? null : (
+          <View style={styles.camera}>
+            <Ionicons name="camera" size={13} color="#0B0B0D" />
+          </View>
+        )}
       </Pressable>
 
       <View style={{ flex: 1, gap: 3 }}>
@@ -138,6 +148,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   emblem: { width: 74, alignItems: 'center' },
+  camera: {
+    position: 'absolute',
+    right: 0,
+    bottom: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.gold,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   kicker: { fontFamily: fonts.black, fontSize: 10, letterSpacing: 2, color: colors.gold, textTransform: 'uppercase' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   input: {

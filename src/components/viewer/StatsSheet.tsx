@@ -2,6 +2,9 @@
  * Stats de combat d'une carte, dans un panneau qui monte du bas de l'écran.
  * On peut y renommer les deux attaques : en combat, on lira
  * « <nom de la carte> utilise <nom de l'attaque> ! ».
+ *
+ * Tuto (étape `rename`) : `tutoSlot` pose une flèche sur l'attaque à renommer,
+ * et `autoClose` referme le panneau une fois tout renommé.
  */
 import { Ionicons } from '@expo/vector-icons';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
@@ -17,8 +20,27 @@ import type { Card } from '../../storage/model';
 import { colors, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
 import { AppText } from '../AppText';
+import { TutoArrow } from '../tuto/TutoArrow';
 
-export function StatsSheet({ card, onClose, onRename, locked = false, onLocked }: { card: Card; onClose(): void; onRename(slot: 0 | 1, name: string): void; locked?: boolean; onLocked?(): void }) {
+export function StatsSheet({
+  card,
+  onClose,
+  onRename,
+  locked = false,
+  onLocked,
+  tutoSlot,
+  autoClose = false,
+}: {
+  card: Card;
+  onClose(): void;
+  onRename(slot: 0 | 1, name: string): void;
+  locked?: boolean;
+  onLocked?(): void;
+  /** Tuto : l'attaque à renommer maintenant. */
+  tutoSlot?: 0 | 1;
+  /** Tuto : tout est renommé, le panneau se referme tout seul. */
+  autoClose?: boolean;
+}) {
   const { height } = useWindowDimensions();
   const r = getRarity(card.rarity);
   const b = card.battle;
@@ -38,6 +60,12 @@ export function StatsSheet({ card, onClose, onRename, locked = false, onLocked }
       if (fin) scheduleOnRN(onClose);
     });
   };
+  useEffect(() => {
+    if (!autoClose) return;
+    const t = setTimeout(close, 900);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoClose]);
 
   // Glisser le panneau vers le bas pour le fermer.
   const drag = Gesture.Pan()
@@ -88,7 +116,7 @@ export function StatsSheet({ card, onClose, onRename, locked = false, onLocked }
           </Rise>
 
           <Rise index={1}>
-            <AttackRow slot={0} attack={b.attacks[0]} title="Attaque classique" sub="Illimitée" accent={colors.text} onRename={onRename} locked={locked} onLocked={onLocked} meterDelay={260} />
+            <AttackRow slot={0} attack={b.attacks[0]} title="Attaque classique" sub="Illimitée" accent={colors.text} onRename={onRename} locked={locked} onLocked={onLocked} meterDelay={260} tuto={tutoSlot === 0 ? 'Renomme sa première attaque' : undefined} />
           </Rise>
           <Rise index={2}>
             <AttackRow
@@ -99,6 +127,7 @@ export function StatsSheet({ card, onClose, onRename, locked = false, onLocked }
               accent={r.color}
               onRename={onRename} locked={locked} onLocked={onLocked}
               meterDelay={340}
+              tuto={tutoSlot === 1 ? 'Maintenant, renomme la deuxième' : undefined}
             />
           </Rise>
           <Rise index={3}>
@@ -122,6 +151,7 @@ function AttackRow({
   meterDelay = 0,
   locked = false,
   onLocked,
+  tuto,
 }: {
   slot: 0 | 1;
   attack: Attack;
@@ -133,6 +163,8 @@ function AttackRow({
   /** Carte verrouillée : les noms d'attaque ne se changent plus. */
   locked?: boolean;
   onLocked?(): void;
+  /** Tuto : consigne et flèche sur le nom de l'attaque. */
+  tuto?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(attack.name);
@@ -151,41 +183,44 @@ function AttackRow({
         <AppText style={[styles.tag, { color: accent }]}>{title}</AppText>
         <AppText variant="caption">{sub}</AppText>
       </View>
-      {editing ? (
-        <View style={styles.editRow}>
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            autoFocus
-            maxLength={ATTACK_NAME_MAX}
-            placeholder="Nom de l'attaque"
-            placeholderTextColor={colors.textFaint}
-            style={styles.input}
-            returnKeyType="done"
-            onSubmitEditing={save}
-            onBlur={save}
-            selectionColor={accent}
-          />
-          <Pressable onPress={save} style={styles.ok} accessibilityLabel="Valider le nom de l'attaque">
-            <Ionicons name="checkmark" size={20} color="#0B0B0D" />
+      <View>
+        {editing ? (
+          <View style={styles.editRow}>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              autoFocus
+              maxLength={ATTACK_NAME_MAX}
+              placeholder="Nom de l'attaque"
+              placeholderTextColor={colors.textFaint}
+              style={styles.input}
+              returnKeyType="done"
+              onSubmitEditing={save}
+              onBlur={save}
+              selectionColor={accent}
+            />
+            <Pressable onPress={save} style={styles.ok} accessibilityLabel="Valider le nom de l'attaque">
+              <Ionicons name="checkmark" size={20} color="#0B0B0D" />
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            style={styles.nameRow}
+            onPress={() => {
+              if (locked) return onLocked?.();
+              setDraft(attack.name);
+              setEditing(true);
+            }}
+            accessibilityLabel={locked ? `${attack.name} (verrouillée)` : `Renommer ${attack.name}`}
+          >
+            <AppText style={styles.attackName} numberOfLines={1}>
+              {attack.name}
+            </AppText>
+            <Ionicons name={locked ? 'lock-closed' : 'pencil'} size={14} color={locked ? '#FFE08A' : colors.textDim} />
           </Pressable>
-        </View>
-      ) : (
-        <Pressable
-          style={styles.nameRow}
-          onPress={() => {
-            if (locked) return onLocked?.();
-            setDraft(attack.name);
-            setEditing(true);
-          }}
-          accessibilityLabel={locked ? `${attack.name} (verrouillée)` : `Renommer ${attack.name}`}
-        >
-          <AppText style={styles.attackName} numberOfLines={1}>
-            {attack.name}
-          </AppText>
-          <Ionicons name={locked ? 'lock-closed' : 'pencil'} size={14} color={locked ? '#FFE08A' : colors.textDim} />
-        </Pressable>
-      )}
+        )}
+        {tuto ? <TutoArrow key={editing ? 'edit' : 'name'} text={editing ? 'Écris un nom puis touche ✓' : tuto} sub={editing ? undefined : 'Touche son nom'} ring={12} gap={4} /> : null}
+      </View>
       <View style={styles.effectRow}>
         <View style={[styles.kind, slot === 1 && { borderColor: `${KIND_LOOK[kind].color}66`, borderWidth: 1 }]}>
           {slot === 1 ? <Ionicons name={KIND_LOOK[kind].icon} size={12} color={KIND_LOOK[kind].color} /> : null}

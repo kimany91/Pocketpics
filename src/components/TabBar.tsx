@@ -38,7 +38,8 @@ const PILL_W = 56;
 const TAB_HINT: Partial<Record<TabName, string>> = {
   profile: 'Nouvel onglet débloqué ! Va dans Profil pour ajouter un ami',
   index: 'Paul a accepté ! Retourne au menu principal',
-  battle: 'Les combats sont débloqués ! Va dans Combat',
+  collection: 'Nouvel onglet ! Va dans ta Collection',
+  battle: 'Bravo ! Maintenant, combats avec ta carte : va dans Combat',
 };
 
 export function TabBar({ state, navigation, insets, descriptors }: BottomTabBarProps) {

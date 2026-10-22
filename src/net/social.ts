@@ -12,7 +12,8 @@ import { create } from 'zustand';
 import { shownMmr } from '../game/rank';
 import { useGame } from '../state/game';
 import { pushToFriend, isPushToken } from '../notify';
-import { loadPinsCache, readThumbBase64Sync, savePinsCache } from '../storage/disk';
+import { loadFriendAvatar, loadPinsCache, readMyAvatarBase64, readThumbBase64Sync, saveFriendAvatar, savePinsCache } from '../storage/disk';
+import { type FriendAvatar, sanitizeFriendAvatar } from '../game/avatar';
 import { type MqttConnection } from '../trade/mqtt';
 import { connectRelay, deps } from '../trade/online';
 import { newOnlineCode } from '../trade/relayCore';
@@ -76,6 +77,11 @@ interface SocialStore {
    * incomplet tant que `n` cartes ne sont pas arrivées.
    */
   pins: Record<string, { at: number; n: number; cards: PinnedCard[]; /** Gardées de sa dernière visite (il n'est pas en ligne). */ saved?: boolean }>;
+  /**
+   * Photos de profil des amis (`null` : pas de photo ; absente : pas encore
+   * lue sur l'appareil). Gardées sur l'appareil pour les montrer hors ligne.
+   */
+  avatars: Record<string, FriendAvatar | null>;
 
   start(): void;
   stop(): void;
@@ -104,6 +110,8 @@ interface SocialStore {
   askPins(code: string): void;
   /** Ses dernières cartes épinglées vues, gardées sur l'appareil (pour quand il est hors ligne). */
   loadSavedPins(code: string): void;
+  /** Sa photo de profil gardée sur l'appareil (lue une fois). */
+  loadAvatar(code: string): void;
   /** Mon jeton de notification (téléphone, une fois l'autorisation donnée). */
   setPushToken(token: string | null): void;
   /** Republie ma présence (pseudo ou rang changé). */
@@ -138,6 +146,11 @@ const handledRooms = new Set<string>();
 let resendTimer: ReturnType<typeof setInterval> | null = null;
 const RESEND_MS = 4000;
 const HEARTBEAT_MS = 45_000;
+/** Photos de profil demandées (par ami : quelle version, quand) : on ne redemande pas sans cesse. */
+const avatarAsked = new Map<string, { av: number; t: number }>();
+/** Date de photo vue dans la dernière présence de chaque ami. */
+const presenceAv = new Map<string, number>();
+const AVATAR_RETRY_MS = 60_000;
 
 const save = () => useGame.getState().save;
 const profile = () => {
@@ -190,7 +203,11 @@ export const useSocial = create<SocialStore>((set, get) => {
     if (!isPaul(code)) publish(inboxTopic(code), sealFor(code, msg));
   };
 
-  const presenceMsg = (online: boolean): SocialMsg => ({
+  /**
+   * `withAvatar: false` pour la dernière volonté (écrite à la connexion) : la
+   * date de la photo y serait périmée si elle change pendant la session.
+   */
+  const presenceMsg = (online: boolean, withAvatar = true): SocialMsg => ({
     k: 'presence',
     from: myCode(),
     ...profile(),
@@ -199,6 +216,7 @@ export const useSocial = create<SocialStore>((set, get) => {
     pv: PIOCHE_VERSION,
     tag: myTag(),
     ...(myPush ? { pt: myPush } : {}),
+    ...(withAvatar ? { av: save()?.avatar?.at ?? 0 } : {}),
   });
   const announce = () => publish(presenceTopic(myCode()), sealFor(myCode(), presenceMsg(true)), true);
 
@@ -265,6 +283,52 @@ export const useSocial = create<SocialStore>((set, get) => {
     cards.forEach((card, i) => sendTo(to, { k: 'pin', from: myCode(), at, i, n: cards.length, card }));
   };
 
+  /** Ma photo de profil, pour un ami qui la demande (`null` : je n'en ai pas). */
+  const sendAvatar = async (to: string) => {
+    const a = save()?.avatar;
+    const img = a ? await readMyAvatarBase64(a.at) : null;
+    sendTo(to, { k: 'av', from: myCode(), at: now(), av: a && img ? { at: a.at, rarity: a.rarity, img } : null });
+  };
+
+  /** Sa photo de profil, connue ici (lue sur l'appareil au besoin). */
+  const knownAvatar = (code: string): FriendAvatar | null => {
+    const cur = get().avatars[code];
+    if (cur !== undefined) return cur;
+    const saved = sanitizeFriendAvatar(loadFriendAvatar(code));
+    set({ avatars: { ...get().avatars, [code]: saved } });
+    return saved;
+  };
+
+  const storeAvatar = (code: string, a: FriendAvatar | null) => {
+    set({ avatars: { ...get().avatars, [code]: a } });
+    saveFriendAvatar(code, a);
+  };
+
+  /**
+   * Sa présence donne la date de sa photo : rien (0) → on oublie l'ancienne ;
+   * une autre que celle qu'on a → on la lui demande (s'il est là).
+   */
+  const syncAvatar = (code: string, av: number, online: boolean) => {
+    presenceAv.set(code, av);
+    const known = knownAvatar(code);
+    if (av <= 0) {
+      if (known) storeAvatar(code, null);
+      return;
+    }
+    if (known?.at === av || !online) return;
+    const asked = avatarAsked.get(code);
+    if (asked && asked.av === av && now() - asked.t < AVATAR_RETRY_MS) return;
+    avatarAsked.set(code, { av, t: now() });
+    sendTo(code, { k: 'av?', from: myCode(), at: now() });
+  };
+
+  /** Il vient de nous ajouter : notre demande de photo d'avant a pu être ignorée, on la refait. */
+  const askAvatarAgain = (code: string) => {
+    const av = presenceAv.get(code);
+    avatarAsked.delete(code);
+    if (av) syncAvatar(code, av, true);
+  };
+
   const handle = (topic: string, payload: Uint8Array) => {
     const mine = myCode();
     // annuaire : un joueur cherché, ou ma propre fiche
@@ -298,12 +362,16 @@ export const useSocial = create<SocialStore>((set, get) => {
           if (friend) {
             useGame.getState().upsertFriend({ code: m.from, name: m.name, mmr: m.mmr, mutual: true, tag: tagOf(m.tag), push: pushOf(m.pt) });
             sendRequest(m.from, 'ok');
+            askAvatarAgain(m.from);
           } else if (!get().requests.some((r) => r.from === m.from)) {
             set({ requests: [...get().requests, { from: m.from, name: String(m.name).slice(0, 24), mmr: m.mmr, tag: tagOf(m.tag), push: pushOf(m.pt) }] });
           }
           return;
         case 'ok':
-          if (friend) useGame.getState().upsertFriend({ code: m.from, name: m.name, mmr: m.mmr, mutual: true, tag: tagOf(m.tag), push: pushOf(m.pt) });
+          if (friend) {
+            useGame.getState().upsertFriend({ code: m.from, name: m.name, mmr: m.mmr, mutual: true, tag: tagOf(m.tag), push: pushOf(m.pt) });
+            askAvatarAgain(m.from);
+          }
           return;
         case 'challenge': {
           // seulement les amis, et seulement un défi récent
@@ -361,6 +429,21 @@ export const useSocial = create<SocialStore>((set, get) => {
           if (next.cards.length >= n) savePinsCache(m.from, next);
           return;
         }
+        case 'av?':
+          // seulement pour un ami
+          if (friend) void sendAvatar(m.from);
+          return;
+        case 'av': {
+          if (!friend) return;
+          if (m.av === null) {
+            if (knownAvatar(m.from)) storeAvatar(m.from, null);
+            return;
+          }
+          // vérifiée avant d'être gardée (taille, format) ; la photo elle-même passe au filtre à l'affichage
+          const a = sanitizeFriendAvatar(m.av);
+          if (a && knownAvatar(m.from)?.at !== a.at) storeAvatar(m.from, a);
+          return;
+        }
       }
       return;
     }
@@ -377,6 +460,8 @@ export const useSocial = create<SocialStore>((set, get) => {
     set({ presence: { ...get().presence, [code]: { name: m.name, mmr: m.mmr, online: m.online && recent, at: now(), pv } } });
     const friend = save()?.friends.find((f) => f.code === code);
     if (friend) useGame.getState().upsertFriend({ code, name: m.name || friend.name, mmr: m.mmr, tag: tagOf(m.tag), push: pushOf(m.pt) });
+    // sa photo de profil (absente : app trop ancienne, on ne sait pas)
+    if (friend && typeof m.av === 'number' && Number.isFinite(m.av)) syncAvatar(code, m.av, m.online && recent);
     // il ne nous a pas encore ajouté : on lui renvoie la demande quand il est là
     if (friend && !friend.mutual && m.online && !resent.has(code)) {
       resent.add(code);
@@ -388,7 +473,7 @@ export const useSocial = create<SocialStore>((set, get) => {
     const gen = ++generation;
     const code = myCode();
     const topics = [inboxTopic(code), ...friendCodes().map(presenceTopic)];
-    const will = { topic: presenceTopic(code), payload: sealFor(code, presenceMsg(false)), retain: true };
+    const will = { topic: presenceTopic(code), payload: sealFor(code, presenceMsg(false, false)), retain: true };
     set({ status: 'connecting' });
     const clientBase = Array.from(getRandomBytes(6), (b) => b.toString(16).padStart(2, '0')).join('');
     // Tous les relais à la fois : deux amis se retrouvent même si l'un d'eux n'en joint qu'un.
@@ -427,6 +512,7 @@ export const useSocial = create<SocialStore>((set, get) => {
     challenge: null,
     outgoing: null,
     pins: {},
+    avatars: {},
 
     start() {
       if (!save() || get().status === 'online' || get().status === 'connecting') return;
@@ -551,6 +637,10 @@ export const useSocial = create<SocialStore>((set, get) => {
       set({ pins: { ...get().pins, [code]: { at: saved.at, n: cards.length, cards, saved: true } } });
     },
 
+    loadAvatar(code) {
+      knownAvatar(code);
+    },
+
     setPushToken(token) {
       if (token === myPush) return;
       myPush = token;
@@ -607,4 +697,9 @@ export const useSocial = create<SocialStore>((set, get) => {
       return isPaul(code) || isOnline(get().presence[code], now());
     },
   };
+});
+
+// ma photo de profil change (ou saute) : mes amis l'apprennent avec ma présence
+useGame.subscribe((s, prev) => {
+  if ((s.save?.avatar?.at ?? 0) !== (prev.save?.avatar?.at ?? 0)) useSocial.getState().announce();
 });

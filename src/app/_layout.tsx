@@ -90,6 +90,7 @@ export default function RootLayout() {
         <Stack.Screen name="solo" options={{ animation: 'fade_from_bottom', animationDuration: 300 }} />
         <Stack.Screen name="multi" />
         <Stack.Screen name="ranks" options={UP} />
+        <Stack.Screen name="avatar" options={UP} />
         <Stack.Screen name="online/host" options={{ gestureEnabled: false }} />
         <Stack.Screen name="online/join" options={{ gestureEnabled: false }} />
         <Stack.Screen name="online/scan" options={UP} />

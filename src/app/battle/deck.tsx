@@ -11,6 +11,9 @@
  * Une carte choisie bondit (avec quelques étincelles) et vient se poser dans
  * les emplacements de l'équipe, en bas ; quand l'équipe est complète, le bouton
  * « Combattre » s'illumine.
+ *
+ * Tuto (premier combat) : la carte renommée juste avant est déjà choisie, en
+ * premier, et ne peut pas être retirée (« Carte du tuto »).
  */
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -51,7 +54,8 @@ import { rankOf } from '../../game/rank';
 import { useMatch } from '../../net/match';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
-import { useTutoStep } from '../../state/useTuto';
+import { useHeroCard, useTutoStep } from '../../state/useTuto';
+import { cardStrength as strength } from '../../game/heroCard';
 import { TutoArrow } from '../../components/tuto/TutoArrow';
 import type { Card } from '../../storage/model';
 import { colors, fonts } from '../../theme';
@@ -63,8 +67,6 @@ const DECK_SIZE = 4;
 
 /** Dernier deck utilisé, reproposé au combat suivant. */
 let lastDeck: string[] = [];
-
-const strength = (c: Card) => c.battle.hp * (c.battle.attacks[0].power + c.battle.attacks[1].power * 0.5);
 
 export default function DeckScreen() {
   const { level: levelParam, online: onlineParam, challenge: challengeParam } = useLocalSearchParams<{ level?: string; online?: string; challenge?: string }>();
@@ -96,14 +98,17 @@ export default function DeckScreen() {
   const sorted = useMemo(() => [...allowed].sort((a, b) => getRarity(b.rarity).rank - getRarity(a.rarity).rank || strength(b) - strength(a)), [allowed]);
   const maxPicks = challenge ? challenge.count : DECK_SIZE;
   const need = Math.min(maxPicks, allowed.length);
+  // Tuto : premier combat guidé (« Auto », puis « Combattre »), la carte renommée d'office en premier
+  const tuto = useTutoStep() === 'battle' && !online && !challenge;
+  const hero = useHeroCard();
+  const heroId = tuto ? hero?.id : undefined;
   const [picked, setPicked] = useState<string[]>(() =>
     challenge
       ? [...allowed].sort((a, b) => strength(b) - strength(a)).slice(0, challenge.count).map((c) => c.id)
-      : lastDeck.filter((id) => cards.some((c) => c.id === id)).slice(0, DECK_SIZE),
+      : heroId
+        ? [heroId]
+        : lastDeck.filter((id) => cards.some((c) => c.id === id)).slice(0, DECK_SIZE),
   );
-
-  // Tuto : premier combat guidé (« Auto », puis « Combattre »)
-  const tuto = useTutoStep() === 'battle' && !online && !challenge;
   const cols = 3;
   const gap = 12;
   const cardW = Math.floor((width - 32 - gap * (cols - 1)) / cols);
@@ -146,12 +151,14 @@ export default function DeckScreen() {
 
   const toggle = (id: string) => {
     if (online && match.myReady) return;
+    if (id === heroId) return haptic.warning();
     haptic.tick();
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length >= maxPicks ? p : [...p, id]));
   };
   const auto = () => {
     haptic.light();
-    setPicked([...allowed].sort((a, b) => strength(b) - strength(a)).slice(0, maxPicks).map((c) => c.id));
+    const best = [...allowed].sort((a, b) => strength(b) - strength(a)).map((c) => c.id);
+    setPicked(heroId ? [heroId, ...best.filter((id) => id !== heroId)].slice(0, maxPicks) : best.slice(0, maxPicks));
   };
   const launch = () => {
     if (!challenge) lastDeck = picked;
@@ -247,7 +254,13 @@ export default function DeckScreen() {
         {cards.length > 0 ? (
           <View>
             <Button label="Auto" icon="flash-outline" kind="secondary" onPress={auto} />
-            {tuto && picked.length < need ? <TutoArrow side="bottom" text="Touche Auto : le jeu choisit tes 4 meilleures cartes" sub="Tu peux aussi les toucher une par une" ring={14} gap={8} /> : null}
+            {tuto && picked.length < need ? (
+              heroId ? (
+                <TutoArrow side="bottom" text="Ta carte renommée est déjà prête ! Touche Auto pour compléter l’équipe" sub="Elle commence le combat" ring={14} gap={8} />
+              ) : (
+                <TutoArrow side="bottom" text="Touche Auto : le jeu choisit tes 4 meilleures cartes" sub="Tu peux aussi les toucher une par une" ring={14} gap={8} />
+              )
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -261,17 +274,17 @@ export default function DeckScreen() {
         </View>
       ) : (
         <FlatList
-          data={sorted}
+          data={heroId ? [...sorted.filter((c) => c.id === heroId), ...sorted.filter((c) => c.id !== heroId)] : sorted}
           numColumns={cols}
           keyExtractor={(c) => c.id}
           contentContainerStyle={{ paddingHorizontal: 16, gap, paddingBottom: 200 }}
           columnWrapperStyle={{ gap }}
-          renderItem={({ item }) => <DeckCard card={item} order={picked.indexOf(item.id)} width={cardW} onPress={() => toggle(item.id)} />}
+          renderItem={({ item }) => <DeckCard card={item} order={picked.indexOf(item.id)} width={cardW} locked={item.id === heroId} onPress={() => toggle(item.id)} />}
         />
       )}
 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        {need > 0 ? <TeamSlots cards={picked.map((id) => cards.find((c) => c.id === id)).filter((c): c is Card => !!c)} slots={need} onRemove={toggle} /> : null}
+        {need > 0 ? <TeamSlots cards={picked.map((id) => cards.find((c) => c.id === id)).filter((c): c is Card => !!c)} slots={need} onRemove={toggle} lockedId={heroId} /> : null}
         {online && match.myReady ? (
           <View style={styles.waiting}>
             <ActivityIndicator color={colors.gold} />
@@ -301,7 +314,7 @@ export default function DeckScreen() {
 }
 
 /** Une carte de la collection : elle bondit quand on la choisit, se tasse quand on la retire. */
-function DeckCard({ card, order, width, onPress }: { card: Card; order: number; width: number; onPress(): void }) {
+function DeckCard({ card, order, width, onPress, locked = false }: { card: Card; order: number; width: number; onPress(): void; /** Tuto : la carte renommée, choisie d'office. */ locked?: boolean }) {
   const b = card.battle;
   const pop = useSharedValue(0);
   const prev = useRef(order);
@@ -318,7 +331,7 @@ function DeckCard({ card, order, width, onPress }: { card: Card; order: number; 
   const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pop.value * 0.07 }, { rotate: `${pop.value * -2.5}deg` }] }));
   const kind = kindOf(b.attacks[1]);
   return (
-    <Pressable onPress={onPress} style={{ width }} accessibilityLabel={`Choisir ${card.name ?? getRarity(card.rarity).label}`}>
+    <Pressable onPress={onPress} style={{ width }} accessibilityLabel={locked ? `${card.name ?? getRarity(card.rarity).label}, carte du tuto` : `Choisir ${card.name ?? getRarity(card.rarity).label}`}>
       <Animated.View style={style}>
         <CardFace card={card} width={width} quality="thumb" animated={false} />
         {order >= 0 ? (
@@ -326,6 +339,12 @@ function DeckCard({ card, order, width, onPress }: { card: Card; order: number; 
             <Animated.View key={order} entering={ZoomIn.springify().damping(9).stiffness(260)} style={styles.badge}>
               <AppText style={styles.badgeText}>{order + 1}</AppText>
             </Animated.View>
+            {locked ? (
+              <View style={styles.tutoTag}>
+                <Ionicons name="lock-closed" size={10} color="#141414" />
+                <AppText style={styles.tutoTagText}>Carte du tuto</AppText>
+              </View>
+            ) : null}
           </Animated.View>
         ) : null}
         <View pointerEvents="none" style={styles.sparkPoint}>
@@ -342,7 +361,7 @@ function DeckCard({ card, order, width, onPress }: { card: Card; order: number; 
 }
 
 /** Emplacements de l'équipe : les cartes choisies viennent s'y poser, dans l'ordre d'entrée en jeu. */
-function TeamSlots({ cards, slots, onRemove }: { cards: Card[]; slots: number; onRemove(id: string): void }) {
+function TeamSlots({ cards, slots, onRemove, lockedId }: { cards: Card[]; slots: number; onRemove(id: string): void; /** Tuto : carte qu'on ne peut pas retirer. */ lockedId?: string }) {
   const w = 34;
   return (
     <View style={styles.slots}>
@@ -356,6 +375,11 @@ function TeamSlots({ cards, slots, onRemove }: { cards: Card[]; slots: number; o
             {c ? (
               <Animated.View key={c.id} entering={ZoomIn.springify().damping(10).stiffness(220)} exiting={ZoomOut.duration(120)}>
                 <CardFace card={c} width={w} quality="thumb" animated={false} />
+                {c.id === lockedId ? (
+                  <View style={styles.slotLock}>
+                    <Ionicons name="lock-closed" size={9} color="#141414" />
+                  </View>
+                ) : null}
               </Animated.View>
             ) : (
               <AppText style={styles.slotNum}>{i + 1}</AppText>
@@ -437,6 +461,21 @@ const styles = StyleSheet.create({
   slot: { borderRadius: 7, borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
   slotFull: { borderStyle: 'solid', borderColor: colors.gold, backgroundColor: 'rgba(247,201,72,0.1)' },
   slotNum: { fontFamily: fonts.bold, fontSize: 13, color: colors.textFaint },
+  slotLock: { position: 'absolute', right: -5, bottom: -5, width: 16, height: 16, borderRadius: 8, backgroundColor: colors.gold, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: colors.bg },
+  tutoTag: {
+    position: 'absolute',
+    left: 4,
+    right: 4,
+    bottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: colors.gold,
+  },
+  tutoTagText: { fontFamily: fonts.bold, fontSize: 10, color: '#141414' },
   challenge: {
     flexDirection: 'row',
     alignItems: 'center',

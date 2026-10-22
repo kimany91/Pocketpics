@@ -13,6 +13,7 @@
  */
 import nacl from 'tweetnacl';
 
+import type { FriendAvatar } from '../game/avatar';
 import type { NetFighter } from './battleNet';
 import { utf8Decode, utf8Encode } from '../trade/mqtt';
 import { roomKey, roomTopic } from '../trade/relayCore';
@@ -147,7 +148,8 @@ export type PinnedCard = NetFighter;
 export type SocialMsg =
   /** `pv` : version de la Pioche amicale de son app (absente : app trop ancienne pour piocher chez lui). */
   /** `pt` : son jeton de notification, pour le prévenir quand son app est fermée. */
-  | { k: 'presence'; from: string; name: string; mmr: number; online: boolean; at: number; pv?: number; tag?: string; pt?: string }
+  /** `av` : date de sa photo de profil (0 : pas de photo ; absente : app trop ancienne). */
+  | { k: 'presence'; from: string; name: string; mmr: number; online: boolean; at: number; pv?: number; tag?: string; pt?: string; av?: number }
   /** Demande d'ami (ou « je t'ai ajouté »). */
   | { k: 'req'; from: string; name: string; mmr: number; at: number; tag?: string; pt?: string }
   /** Réponse : « moi aussi, je t'ai ajouté ». */
@@ -166,7 +168,11 @@ export type SocialMsg =
    * une carte pèse déjà des dizaines de kilo-octets, et six d'un coup ne
    * passeraient pas sur un relais public.
    */
-  | { k: 'pin'; from: string; at: number; i: number; n: number; card: PinnedCard | null };
+  | { k: 'pin'; from: string; at: number; i: number; n: number; card: PinnedCard | null }
+  /** « Envoie-moi ta photo de profil. » */
+  | { k: 'av?'; from: string; at: number }
+  /** Ma photo de profil (petite image JPEG, ~20 Ko), ou `null` : je n'en ai pas. */
+  | { k: 'av'; from: string; at: number; av: FriendAvatar | null };
 
 /** Chiffre un message pour le propriétaire du code `to` (sa boîte ou sa présence). */
 export function sealFor(to: string, msg: SocialMsg): Uint8Array {

@@ -876,9 +876,9 @@ export default function FightScreen() {
   const tutoAttack =
     tutoOn && mode === 'menu' && !stunned
       ? tutoTurns === 0
-        ? { slot: 0, text: 'C’est ton tour ! Touche ton attaque classique', sub: 'Elle marche à chaque tour' }
+        ? { slot: 0, text: `À toi ! Touche « ${me.attacks[0].name} »`, sub: 'Ton attaque classique : elle marche à chaque tour' }
         : tutoTurns === 1 && special && me.usesLeft > 0
-          ? { slot: 1, text: 'Essaie ton attaque spéciale !', sub: `Plus forte, mais limitée : ${me.usesLeft}/${me.maxUses} utilisations` }
+          ? { slot: 1, text: `Essaie « ${me.attacks[1].name} », ton attaque spéciale !`, sub: `Plus forte, mais limitée : ${me.usesLeft}/${me.maxUses} utilisations` }
           : null
       : null;
   const tutoBench =

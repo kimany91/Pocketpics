@@ -320,7 +320,7 @@ function Summary({
   // Tuto : après le 1er paquet, flèche sur « Paquet suivant » ; après le 2e et chez Paul, « Continuer »
   const step = useTutoStep();
   const tutoNext = !paul && step === 'pack2' && charges > 0;
-  const tutoDone = paul ? 'Les combats sont débloqués !' : step === 'pseudo' ? 'Bravo ! Un nouvel onglet est débloqué' : null;
+  const tutoDone = paul ? 'Ta Collection est débloquée ! Viens y renommer ta meilleure carte' : step === 'pseudo' ? 'Bravo ! Un nouvel onglet est débloqué' : null;
   const cols = cards.length <= 4 ? 2 : 3;
   const gap = 14;
   const cardW = Math.min((width - 40 - gap * (cols - 1)) / cols, 170);

@@ -8,6 +8,7 @@
  *  - une carte n'est jamais supprimée par une migration, seulement complétée.
  */
 import { type AdState, initialAds, migrateAds } from '../game/ads';
+import { type Avatar, migrateAvatar } from '../game/avatar';
 import { isPushToken } from '../notify/types';
 import { type BattleStats, normalizeStats } from '../battle/stats';
 import type { DrawState } from '../game/draws';
@@ -156,6 +157,11 @@ export interface SaveState {
    * passe, une nouvelle le commence ; voir src/game/tutorial.ts).
    */
   tutorial: TutorialState;
+  /**
+   * Photo de profil : une carte de la collection, recadrée (image à part, voir
+   * src/game/avatar.ts). Ajouté après : `null` (pas de photo) si absent.
+   */
+  avatar: Avatar | null;
   [extra: string]: unknown;
 }
 
@@ -257,6 +263,7 @@ export function createInitialState(now = Date.now()): SaveState {
     friendDrawIntro: false,
     ads: initialAds(now),
     tutorial: initialTutorial(),
+    avatar: null,
   };
 }
 
@@ -368,5 +375,6 @@ export function migrateState(input: unknown, now = Date.now()): SaveState {
     friendDrawIntro: s.friendDrawIntro === true,
     ads: migrateAds(s.ads, now),
     tutorial: migrateTutorial(s.tutorial, s),
+    avatar: migrateAvatar(s.avatar),
   };
 }

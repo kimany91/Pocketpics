@@ -152,5 +152,39 @@ export async function cropImage(uri: string, rect: CropRect): Promise<{ imageUri
   }
 }
 
+/** Qualités JPEG essayées pour la photo de profil, jusqu'à tenir dans la taille visée. */
+const AVATAR_QUALITIES = [0.8, 0.66, 0.52, 0.4, 0.3];
+
+/**
+ * Photo de profil : la partie gardée de l'image d'une carte, en carré de
+ * `size` pixels, en JPEG base64 assez léger pour être envoyé aux amis
+ * (`maxB64` caractères au plus). L'image de la carte n'est pas touchée.
+ * `null` si l'image est illisible.
+ */
+export async function cropAvatar(uri: string, rect: CropRect, size: number, maxB64: number): Promise<string | null> {
+  try {
+    const ref0 = await ImageManipulator.manipulate(uri).renderAsync();
+    const w = ref0.width;
+    const h = ref0.height;
+    if (!w || !h) return null;
+    const crop = {
+      originX: Math.max(0, Math.round(rect.x * w)),
+      originY: Math.max(0, Math.round(rect.y * h)),
+      width: Math.max(16, Math.min(w, Math.round(rect.w * w))),
+      height: Math.max(16, Math.min(h, Math.round(rect.h * h))),
+    };
+    const ref = await ImageManipulator.manipulate(uri).crop(crop).resize({ width: size, height: size }).renderAsync();
+    let last: string | null = null;
+    for (const compress of AVATAR_QUALITIES) {
+      const out = await ref.saveAsync({ format: SaveFormat.JPEG, compress, base64: true });
+      last = out.base64 ?? null;
+      if (last && last.length <= maxB64) return last;
+    }
+    return last && last.length <= maxB64 ? last : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Sur mobile la galerie est lue directement : elle ne change pas sous l'app. */
 export const onGalleryChange = (_cb: () => void): (() => void) => () => {};

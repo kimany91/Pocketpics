@@ -40,9 +40,11 @@ interface Props {
   grip: SharedValue<number>;
   /** Faux quand l'écran n'est plus devant : plus aucun geste ne prend. */
   enabled: boolean;
+  /** Fenêtre ronde (photo de profil). */
+  round?: boolean;
 }
 
-export function CropStage({ uri, base, win, zoom, offX, offY, grip, enabled }: Props) {
+export function CropStage({ uri, base, win, zoom, offX, offY, grip, enabled, round = false }: Props) {
   // Taille de la scène, pour ramener le point pincé au centre de la fenêtre.
   const stageW = useSharedValue(0);
   const stageH = useSharedValue(0);
@@ -144,7 +146,7 @@ export function CropStage({ uri, base, win, zoom, offX, offY, grip, enabled }: P
         <Animated.View style={[{ width: bw, height: bh }, photo]}>
           <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" allowDownscaling={false} transition={0} />
         </Animated.View>
-        <CropFrame win={win} grip={grip} />
+        <CropFrame win={win} grip={grip} round={round} />
       </View>
     </GestureDetector>
   );

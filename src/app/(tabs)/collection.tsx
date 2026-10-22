@@ -40,6 +40,8 @@ import { type ThumbRect, registerThumb, useCollectionView } from '../../state/co
 import { useGame } from '../../state/game';
 import type { Card } from '../../storage/model';
 import { CARD_RATIO, colors, fonts } from '../../theme';
+import { TutoArrow } from '../../components/tuto/TutoArrow';
+import { useHeroCard, useTutoStep } from '../../state/useTuto';
 import { haptic } from '../../utils/haptics';
 import { useMotionTilt } from '../../utils/motionTilt';
 
@@ -113,6 +115,9 @@ export default function CollectionScreen() {
   const pinnedSet = useMemo(() => new Set(pinned ?? []), [pinned]);
   const [menuId, setMenuId] = useState<string | null>(null);
   const [sort, setSort] = useState<Sort>('recent');
+  // Tuto, étape `rename` : sa carte la plus forte passe en tête, avec une flèche
+  const hero = useHeroCard();
+  const tutoHeroId = useTutoStep() === 'rename' ? hero?.id : undefined;
   const cols = width > 600 ? 4 : 3;
   const cardW = (width - 32 - GAP * (cols - 1)) / cols;
   const rowStep = cardW * CARD_RATIO + GAP;
@@ -137,12 +142,15 @@ export default function CollectionScreen() {
           : filter
             ? cards.filter((c) => c.rarity === filter)
             : [...cards];
-    return list.sort((a, b) =>
+    list.sort((a, b) =>
       sort === 'rarity'
         ? getRarity(b.rarity).rank - getRarity(a.rarity).rank || b.obtainedAt - a.obtainedAt
         : b.obtainedAt - a.obtainedAt,
     );
-  }, [cards, filter, sort, pinnedSet]);
+    const at = tutoHeroId ? list.findIndex((c) => c.id === tutoHeroId) : -1;
+    if (at > 0) list.unshift(...list.splice(at, 1));
+    return list;
+  }, [cards, filter, sort, pinnedSet, tutoHeroId]);
   const dataRef = useRef(data);
 
   // À chaque nouvel ordre : on retient d'où vient chaque carte pour la faire glisser à sa nouvelle place.
@@ -315,6 +323,8 @@ export default function CollectionScreen() {
             scrollEventThrottle={32}
             onViewableItemsChanged={onViewable}
             viewabilityConfig={VIEWABILITY}
+            // tuto : la bulle sous la première carte passe par-dessus les rangées suivantes
+            CellRendererComponent={tutoHeroId ? FirstRowOnTop : undefined}
             renderItem={({ item, index }) => (
               <Thumb
                 card={item}
@@ -324,6 +334,7 @@ export default function CollectionScreen() {
                 pinned={pinnedSet.has(item.id)}
                 onOpen={onOpen}
                 onLongPress={onLongPress}
+                tuto={item.id === tutoHeroId && focused && !openId}
               />
             )}
           />
@@ -338,6 +349,15 @@ export default function CollectionScreen() {
 }
 
 const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
+
+/** Rangée de la grille ; la première passe au-dessus des autres (bulle du tuto). */
+function FirstRowOnTop({ index, style, children, ...rest }: ComponentProps<typeof View> & { index: number }) {
+  return (
+    <View {...rest} style={[style, index === 0 && { zIndex: 5, elevation: 5 }]}>
+      {children}
+    </View>
+  );
+}
 
 /** Capte l'inclinaison du téléphone, seulement tant que l'onglet est affiché. */
 function MotionFeed({ target }: { target: SharedValue<number> }) {
@@ -367,6 +387,7 @@ const Thumb = memo(function Thumb({
   pinned,
   onOpen,
   onLongPress,
+  tuto = false,
 }: {
   card: Card;
   width: number;
@@ -376,6 +397,8 @@ const Thumb = memo(function Thumb({
   pinned: boolean;
   onOpen(id: string, rect: ThumbRect | null): void;
   onLongPress(id: string): void;
+  /** Tuto : la carte à renommer (flèche et anneau doré). */
+  tuto?: boolean;
 }) {
   const r = getRarity(card.rarity);
   const height = width * CARD_RATIO;
@@ -492,6 +515,7 @@ const Thumb = memo(function Thumb({
           ) : null}
         </Pressable>
       </Animated.View>
+      {tuto ? <TutoArrow side="bottom" text="Voici ta carte la plus forte !" sub="Touche-la pour lui donner un nom" ring={width * 0.07} gap={8} /> : null}
     </View>
   );
 });
