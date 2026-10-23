@@ -305,14 +305,15 @@ test('bots : ils répondent parfois, avec une emote qui existe', () => {
   assert.ok(['lol', 'cool'].includes(botReaction('won-ko', seq(0, 0.6)) as string));
 });
 
-test('sons : chaque emote a son son, court et léger (16 kHz mono, 45 Ko au plus)', () => {
+test('sons : chaque emote a son son, court et léger (16 kHz mono, 45 Ko au plus ; 52 Ko pour le boss final)', () => {
   let total = 0;
   for (const e of EMOTES) {
     const f = join(__dirname, '..', 'assets', 'sfx', 'emote', `${e.id}.wav`);
     assert.ok(existsSync(f), e.id);
     const size = statSync(f).size;
     total += size;
-    assert.ok(size > 8_000 && size <= 45_000, `${e.id} : ${size} octets`);
+    // le Grand Portrait (boss final) a droit à un son un peu plus long
+    assert.ok(size > 8_000 && size <= (e.id === 'portrait' ? 52_000 : 45_000), `${e.id} : ${size} octets`);
     const head = readFileSync(f).subarray(0, 44);
     assert.equal(head.toString('ascii', 0, 4), 'RIFF');
     assert.equal(head.readUInt16LE(22), 1, `${e.id} : mono`);

@@ -4,7 +4,9 @@
  * ses décors, son grand décor, son panneau, et son adversaire qui attend à
  * côté de son boss. Juste après la Tempête, le sanctuaire de la Divine
  * barre la route tant que la Divine n'est pas débloquée ; tout en haut, la
- * route file droit jusqu'au Grand Portrait.
+ * route file droit jusqu'au Grand Portrait, et la carte Galaxy attend
+ * au-dessus. Les mondes qui ont une emote la montrent à côté de leur boss
+ * (voir Rewards.tsx).
  *
  * Chaque monde est un SVG à part (une seule image géante serait trop lourde
  * sur téléphone) ; la route est tracée en entier dans chacun, et chaque SVG
@@ -23,10 +25,12 @@ import { DIVINE_GATE, TOTAL_LEVELS, WORLDS, firstLevel, getLevel, lastLevel, nee
 import { colors, fonts } from '../../theme';
 import { AppText } from '../AppText';
 import { Embers, Glow, Twinkles } from '../fx';
+import type { GalaxyState, MapEmote } from '../../game/mapRewards';
 import { DecorSprite, GRAND, HeroDecor, MoonSky, Road, Texture } from './decor';
 import { WorldLive, isLive } from './live';
 import { type MapLayout, ROAD_W, type WorldArea, mapLayout } from './mapLayout';
 import { PlayerPin } from './Pin';
+import { EmoteMarker, GalaxyMarker, type MapReward } from './Rewards';
 import { type Rect4, SanctuarySection, type SanctuaryState } from './Sanctuary';
 import { OUTLINE, SKY_H, WORLD_LOOKS } from './worlds';
 
@@ -301,6 +305,9 @@ export function SagaMap({
   focusKey = 0,
   topInset = 0,
   focusLevel,
+  emotes = [],
+  galaxy = 'locked',
+  onReward,
 }: {
   /** Niveaux terminés (le suivant est à jouer). */
   cleared: number;
@@ -316,6 +323,12 @@ export function SagaMap({
   topInset?: number;
   /** Niveau sur lequel s'ouvrir (ex. une quête « Termine le 5e monde ») ; sinon le niveau à jouer. */
   focusLevel?: number;
+  /** Emotes de l'aventure, montrées à côté du boss de leur monde. */
+  emotes?: MapEmote[];
+  /** La carte Galaxy, tout en haut. */
+  galaxy?: GalaxyState;
+  /** Une récompense touchée (emote ou carte Galaxy). */
+  onReward?(r: MapReward): void;
 }) {
   const { width, height } = useWindowDimensions();
   const layout = mapLayout(width);
@@ -329,10 +342,16 @@ export function SagaMap({
   const startY = Math.max(0, Math.min(layout.height - height, focusY));
 
   // Mondes animés : ceux qui touchent l'écran (avec une marge), recalculés au défilement ; « s » : le sanctuaire.
+  // Récompenses : « e<monde> » (emote), « g » (Galaxy), animées seulement quand elles sont presque à l'écran.
   const aliveFor = (y: number) => {
-    const near = (top: number, bottom: number) => bottom > y - 250 && top < y + height + 250;
+    const near = (top: number, bottom: number, margin = 250) => bottom > y - margin && top < y + height + margin;
     const ids: string[] = layout.worlds.filter((a) => near(a.top, a.bottom)).map((a) => String(a.w));
     if (near(layout.sanctuary.top, layout.sanctuary.bottom)) ids.push('s');
+    for (const m of emotes) {
+      const r = layout.worlds[m.world - 1]?.reward;
+      if (r && near(r.y - 40, r.y + 40, 80)) ids.push(`e${m.world}`);
+    }
+    if (near(layout.galaxy.y - 80, layout.galaxy.y + 80, 80)) ids.push('g');
     return ids.join(',');
   };
   const [alive, setAlive] = useState(() => aliveFor(startY));
@@ -382,6 +401,12 @@ export function SagaMap({
       {layout.worlds.map((a) =>
         WORLD_LOOKS[a.w - 1].straight ? null : <Mascot key={`m${a.w}`} area={a} defeated={(stars[lastLevel(a.w) - 1] ?? 0) > 0} />,
       )}
+      {/* récompenses : avant les niveaux, qui passent devant (et restent faciles à toucher) */}
+      {emotes.map((m) => {
+        const r = layout.worlds[m.world - 1]?.reward;
+        return r ? <EmoteMarker key={m.id} m={m} x={r.x} y={r.y} alive={aliveSet.has(`e${m.world}`)} onReward={onReward} /> : null;
+      })}
+      <GalaxyMarker x={layout.galaxy.x} y={layout.galaxy.y} state={galaxy} alive={aliveSet.has('g')} onReward={onReward} />
       {layout.nodes.map((p, i) => {
         const n = i + 1;
         const boss = !!getLevel(n)?.boss;
@@ -403,7 +428,7 @@ export function SagaMap({
       })}
       {/* haut de la carte : un voile pour la fin de l'aventure */}
       <LinearGradient colors={['rgba(9,9,11,0.85)', 'rgba(9,9,11,0)']} style={[styles.abs, { left: 0, right: 0, top: 0, height: 140 + topInset }]} pointerEvents="none" />
-      <View style={[styles.abs, { top: 50 + topInset, left: 0, right: 0, alignItems: 'center' }]} pointerEvents="none">
+      <View style={[styles.abs, { top: 58 + topInset, left: 0, right: 0, alignItems: 'center' }]} pointerEvents="none">
         <AppText style={styles.end}>{cleared >= TOTAL_LEVELS ? 'Aventure terminée !' : `Tout en haut : ${lastPlace}`}</AppText>
       </View>
     </ScrollView>

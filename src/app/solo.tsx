@@ -33,6 +33,7 @@ import { Button, Glint } from '../components/Button';
 import { CardFace } from '../components/card/CardFace';
 import { CoinChip, CoinIcon } from '../components/Coin';
 import { DivineCeremony } from '../components/map/DivineCeremony';
+import { type MapReward, RewardPopup } from '../components/map/Rewards';
 import { SagaMap } from '../components/map/SagaMap';
 import type { Rect4 } from '../components/map/Sanctuary';
 import { OUTLINE, WORLD_LOOKS } from '../components/map/worlds';
@@ -40,6 +41,7 @@ import { RankEmblem } from '../components/rank/RankEmblem';
 import { Rise } from '../components/Rise';
 import { RollingNumber } from '../components/RollingNumber';
 import { LEVEL_REWARD } from '../game/economy';
+import { galaxyState, mapEmotes } from '../game/mapRewards';
 import { rankOf } from '../game/rank';
 import { useGame } from '../state/game';
 import { useTutoStep } from '../state/useTuto';
@@ -58,6 +60,12 @@ export default function SoloScreen() {
   const coins = useGame((s) => s.save?.coins ?? 0);
   const name = useGame((s) => s.save?.playerName ?? '?');
   const divineUnlocked = useGame((s) => s.save?.divineUnlocked ?? false);
+  const owned = useGame((s) => s.save?.emotes.owned);
+  const galaxyClaimed = useGame((s) => s.save?.galaxyClaimed ?? false);
+  // récompenses de la carte : l'emote de chaque monde (à côté de son boss) et la carte Galaxy (tout en haut)
+  const emotes = useMemo(() => mapEmotes(owned ?? [], stars), [owned, stars]);
+  const galaxy = galaxyState(stars, galaxyClaimed);
+  const [reward, setReward] = useState<MapReward | null>(null);
   const focusLevel = useMemo(() => {
     const w = Number(worldParam);
     if (!Number.isInteger(w) || w < 1 || w > WORLDS) return undefined;
@@ -93,6 +101,12 @@ export default function SoloScreen() {
         focusKey={focusKey}
         topInset={insets.top}
         focusLevel={focusLevel}
+        emotes={emotes}
+        galaxy={galaxy}
+        onReward={(r) => {
+          haptic.light();
+          setReward(r);
+        }}
       />
 
       {/* en-tête fixe */}
@@ -114,7 +128,7 @@ export default function SoloScreen() {
         </Rise>
       </View>
 
-      {cleared < TOTAL_LEVELS && !open && !ceremony ? (
+      {cleared < TOTAL_LEVELS && !open && !ceremony && !reward ? (
         <Animated.View entering={ZoomIn.springify().damping(13).stiffness(220)} style={[styles.playWrap, { bottom: Math.max(insets.bottom, 14) + 6 }]} pointerEvents="box-none">
           {gated ? (
             <PlayButton label="La Divine t’attend" icon="sparkles" onPress={() => setCeremony({ from: null })} />
@@ -139,6 +153,8 @@ export default function SoloScreen() {
           tuto={tuto}
         />
       ) : null}
+
+      {reward ? <RewardPopup reward={reward} onClose={() => setReward(null)} onBoss={pick} /> : null}
 
       {ceremony ? (
         <DivineCeremony

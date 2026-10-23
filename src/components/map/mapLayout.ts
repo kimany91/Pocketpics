@@ -30,8 +30,8 @@ const PAD = STEP * 0.42;
 const SKY_PAD = 380;
 /** Le monde sous le sanctuaire : un peu plus de place en haut pour que la route rejoigne le pont. */
 const GATE_PAD = 160;
-/** Tout en haut, au-dessus du Grand Portrait. */
-const FINAL_PAD = 600;
+/** Tout en haut, au-dessus du Grand Portrait (et de la carte Galaxy). */
+const FINAL_PAD = 720;
 /** Bas d'un monde jusqu'à son premier niveau. */
 const BOTTOM_PAD = STEP + GAP - PAD;
 
@@ -57,6 +57,8 @@ export interface WorldArea {
   sign: Pt & { side: -1 | 1 };
   /** Portrait de l'adversaire, à côté du boss. */
   mascot: Pt;
+  /** Place d'une récompense (l'emote du monde), tout près du boss, à l'écart de la route. */
+  reward: Pt;
   hero: { kind: HeroKind; x: number; y: number; side: -1 | 1 };
   decor: Placed[];
   texture: Pt[];
@@ -86,6 +88,8 @@ export interface MapLayout {
   road: string;
   worlds: WorldArea[];
   sanctuary: Sanctuary;
+  /** Carte Galaxy (récompense du boss final) : tout en haut, au-dessus du Grand Portrait. */
+  galaxy: Pt;
 }
 
 /** Hasard déterministe : la carte est toujours la même. */
@@ -206,6 +210,47 @@ export function railPaths(pts: Pt[], yMin: number, yMax: number, gap = 10.5): st
   });
 }
 
+/** Rayon de la place gardée pour une récompense (pastille de 48 px et son étiquette). */
+export const REWARD_R = 30;
+
+type Circle = Pt & { r: number };
+
+/**
+ * Place d'une récompense près du boss : on essaie des points autour de lui (et
+ * autour du portrait de l'adversaire), et on garde celui qui laisse le plus de
+ * marge aux niveaux, à la route et aux panneaux, puis le plus proche du boss.
+ * Jamais plus haut que 95 px au-dessus du boss (le panneau du monde suivant).
+ */
+function rewardSpot(boss: Pt, around: Pt[], obstacles: Circle[], road: Pt[], width: number): Pt {
+  const near = road.filter((p) => Math.abs(p.y - boss.y) < 220);
+  const cands: Pt[] = [];
+  for (const c of [boss, ...around])
+    for (const r of [72, 86, 100])
+      for (let a = 0; a < 360; a += 15) cands.push({ x: c.x + r * Math.cos((a * Math.PI) / 180), y: c.y + r * Math.sin((a * Math.PI) / 180) });
+  let best = { x: boss.x, y: boss.y + 90 };
+  let bestScore = -Infinity;
+  for (const p of cands) {
+    if (p.x < REWARD_R + 4 || p.x > width - REWARD_R - 4 || p.y < boss.y - 95 || p.y > boss.y + 110) continue;
+    let room = Infinity;
+    for (const o of obstacles) room = Math.min(room, Math.sqrt(dist2(o, p)) - o.r - REWARD_R);
+    for (const s of near) room = Math.min(room, Math.sqrt(dist2(s, p)) - ROAD_W / 2 - REWARD_R);
+    const score = Math.min(room, 12) - 0.03 * Math.sqrt(dist2(p, boss));
+    if (score > bestScore) {
+      bestScore = score;
+      best = p;
+    }
+  }
+  return { x: Math.round(best.x), y: Math.round(best.y) };
+}
+
+/** Ce qui entoure un boss : son disque, sa couronne et ses étoiles au-dessus, son étiquette en dessous. */
+const bossCircles = (b: Pt): Circle[] => [
+  { ...b, r: 38 },
+  { x: b.x, y: b.y - 60, r: 28 },
+  { x: b.x - 20, y: b.y + 40, r: 16 },
+  { x: b.x + 20, y: b.y + 40, r: 16 },
+];
+
 const cache = new Map<number, MapLayout>();
 
 export function mapLayout(width: number): MapLayout {
@@ -246,7 +291,7 @@ export function mapLayout(width: number): MapLayout {
     const nextGround = w === GATE_WORLD ? SANCTUARY_VOID : (WORLD_LOOKS[w]?.ground ?? null);
 
     if (look.straight) {
-      worlds.push(galleryArea(w, top, bottom, worldNodes, width, rand, nextGround));
+      worlds.push(galleryArea(w, top, bottom, worldNodes, width, rand, nextGround, samples));
       continue;
     }
 
@@ -261,10 +306,26 @@ export function mapLayout(width: number): MapLayout {
     const midY = (first.y + lastN.y) / 2;
     const heroSide: -1 | 1 = roadXAt(samples, midY) > width / 2 ? -1 : 1;
     const hero = { kind: look.hero, x: heroSide < 0 ? width * 0.18 : width * 0.82, y: midY, side: heroSide };
+    // récompense (emote du monde) : près du boss, sans gêner les niveaux ni le portrait
+    const reward = rewardSpot(
+      lastN,
+      [mascot],
+      [
+        ...nodes.map((n) => ({ ...n, r: 32 })),
+        ...bossCircles(lastN),
+        { x: mascot.x, y: mascot.y - 14, r: 32 },
+        ...[-35, 0, 35].map((dx) => ({ x: mascot.x + dx, y: mascot.y + 18, r: 14 })),
+        { x: sign.x, y: sign.y, r: 64 },
+        { x: hero.x, y: hero.y, r: (HERO_R[look.hero] ?? 92) * 0.7 },
+      ],
+      samples,
+      width,
+    );
 
     const reserved: (Pt & { r: number })[] = [
       { ...sign, r: 70 },
       { ...mascot, r: 52 },
+      { ...reward, r: REWARD_R + 4 },
       { x: hero.x, y: hero.y, r: HERO_R[look.hero] ?? 92 },
       ...worldNodes.map((n) => ({ ...n, r: 44 })),
       // la ville néon monte haut au-dessus de son centre
@@ -309,10 +370,12 @@ export function mapLayout(width: number): MapLayout {
     }
     const rails = look.roadStyle === 'rails' ? railPaths(full, top, bottom) : null;
     const sky = look.sky ? { earth: { x: lastN.x < width / 2 ? width * 0.76 : width * 0.24, y: top + 158 } } : null;
-    worlds.push({ w, top, bottom, sign, mascot, hero, decor, texture, rails, sky, nextGround, ropes: null });
+    worlds.push({ w, top, bottom, sign, mascot, reward, hero, decor, texture, rails, sky, nextGround, ropes: null });
   }
 
-  const layout = { width, height, nodes, road: smoothPath(full), worlds, sanctuary };
+  // carte Galaxy : au-dessus de la couronne du Grand Portrait (ou du dernier niveau)
+  const galaxy = { x: cx, y: Math.round(finalStraight ? last.y - GRAND_FRAME.above - GRAND_FRAME.h - 125 : last.y - 150) };
+  const layout = { width, height, nodes, road: smoothPath(full), worlds, sanctuary, galaxy };
   cache.set(key, layout);
   return layout;
 }
@@ -325,7 +388,7 @@ export const GRAND_FRAME = { w: 232, h: 268, border: 24, above: 124 };
  * velours ; colonnes et socles de part et d'autre, cadres qui flottent sur
  * les bords, et le Grand Portrait tout en haut.
  */
-function galleryArea(w: number, top: number, bottom: number, nodes: Pt[], width: number, rand: () => number, nextGround: string | null): WorldArea {
+function galleryArea(w: number, top: number, bottom: number, nodes: Pt[], width: number, rand: () => number, nextGround: string | null, road: Pt[]): WorldArea {
   const cx = width / 2;
   const first = nodes[0];
   const lastN = nodes[nodes.length - 1];
@@ -350,6 +413,19 @@ function galleryArea(w: number, top: number, bottom: number, nodes: Pt[], width:
   // tout en haut : deux colonnes encadrent le Grand Portrait
   decor.push({ kind: 'pillar', x: cx - Math.min(width * 0.42, 168), y: lastN.y + 20, scale: 1.3, flip: false }, { kind: 'pillar', x: cx + Math.min(width * 0.42, 168), y: lastN.y + 20, scale: 1.3, flip: true });
   decor.sort((a, b) => a.y - b.y);
+  // récompense (emote du boss final) : à côté du dernier niveau, sous le cadre
+  const reward = rewardSpot(
+    lastN,
+    [],
+    [
+      ...nodes.map((n) => ({ ...n, r: 32 })),
+      ...bossCircles(lastN),
+      { x: cx, y: lastN.y - GRAND_FRAME.above - GRAND_FRAME.h / 2, r: GRAND_FRAME.h / 2 + 4 },
+      ...decor.filter((d) => d.kind === 'pillar' || d.kind === 'stanchion').map((d) => ({ x: d.x, y: d.y, r: d.kind === 'pillar' ? 18 * d.scale : 8 })),
+    ],
+    road,
+    width,
+  );
 
   // cordons de velours : ils pendent d'un poteau à l'autre, de chaque côté
   const rope = (x: number) => {
@@ -371,6 +447,7 @@ function galleryArea(w: number, top: number, bottom: number, nodes: Pt[], width:
     bottom,
     sign: { x: cx, y: (first.y + bottom) / 2 + 6, side: 1 },
     mascot: { x: cx, y: lastN.y - GRAND_FRAME.above },
+    reward,
     hero: { kind: WORLD_LOOKS[w - 1].hero, x: cx, y: lastN.y - GRAND_FRAME.above - GRAND_FRAME.h / 2, side: 1 },
     decor,
     texture,

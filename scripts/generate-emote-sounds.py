@@ -10,7 +10,8 @@ Tout est synthétisé ici (numpy seulement), rien sous licence :
  - un volume égalisé : chaque son est ramené à la même intensité perçue
    (fenêtre de 300 ms, aigus un peu pondérés), puis adouci en crête.
 
-Courts et légers : mono 16 bits, 16 kHz, 1,38 s au plus (45 Ko au plus).
+Courts et légers : mono 16 bits, 16 kHz, 1,38 s au plus (45 Ko au plus) ;
+seul le Grand Portrait, le son du boss final, va jusqu'à 1,6 s (52 Ko).
 Sortie : assets/sfx/emote/<id>.wav. `--check` écrit aussi un spectrogramme de
 chaque son (et une planche de tous) dans le dossier donné par PP_SPECTRO.
 """
@@ -24,6 +25,8 @@ import numpy as np
 SR = 16000
 OUT = "assets/sfx/emote"
 MAX_DUR = 1.38
+# son du boss final (Grand Portrait) : un peu plus long
+BOSS_DUR = 1.6
 rng = np.random.default_rng(2024)
 
 # ----------------------------------------------------------------- outils
@@ -382,9 +385,9 @@ def loudness(x):
     return float(np.sqrt(np.max(p)))
 
 
-def finish(x, dur, room=0.0, target=TARGET, peak=0.93):
+def finish(x, dur, room=0.0, target=TARGET, peak=0.93, max_dur=MAX_DUR):
     """Coupe à `dur`, fondu au bout, réverbération, puis même intensité pour tous et crêtes adoucies."""
-    dur = min(dur, MAX_DUR)
+    dur = min(dur, max_dur)
     n = n_of(dur)
     x = x[:n] if len(x) >= n else np.concatenate([x, np.zeros(n - len(x))])
     x = x - np.mean(x)
@@ -939,31 +942,55 @@ def make_cow():
     return finish(buf, dur, room=0.1)
 
 
+def engine(dur, f0, amp, rough=0.35, drive=1.6):
+    """Moteur de hors-bord : dent de scie à la hauteur `f0` [(t, Hz)], explosions
+    irrégulières (un temps sur deux plus faible), caisse qui résonne, un peu saturé."""
+    n = n_of(dur)
+    f = track(f0, n, smooth=True)
+    ph = np.cumsum(f) / SR
+    x = np.zeros(n)
+    for k in range(1, 48):
+        x += np.sin(2 * math.pi * k * ph) / k * (k * f < SR * 0.45)
+    # explosions : un cycle sur deux plus faible, et un peu de hasard
+    x *= 1 + rough * np.sin(math.pi * ph) + 0.15 * onepole_lp(noise(n), 40) * 4
+    y = resonator(x, 380, 160) * 0.8 + resonator(x, 950, 260) * 0.6 + resonator(x, 2300, 500) * 0.25 + x * 0.15
+    y = np.tanh(drive * y / (np.max(np.abs(y)) + 1e-9))
+    return y * track(amp, n, smooth=True)
+
+
 def make_boat():
-    """Ohé ! : la mer qui clapote, la grosse corne du bateau (« POUUUUH », deux
-    notes graves qui vibrent), puis la cloche du bord « ding-ding »."""
-    dur = 1.36
+    """Ohé ! : le hors-bord fait vrombir son moteur (deux coups d'accélérateur),
+    démarre en trombe et file (le moteur rugit, sa note retombe en s'éloignant,
+    souffle du vent et écume qui siffle), revient à fond par l'autre côté (la note
+    remonte, ça enfle), puis coupe les gaz et pile dans une grande gerbe d'eau."""
+    dur = 1.38
     buf = np.zeros(n_of(dur))
+    eng = engine(
+        dur,
+        [(0, 55), (0.06, 98), (0.11, 72), (0.17, 135), (0.24, 115), (0.3, 150), (0.42, 200), (0.66, 118), (0.8, 112), (0.84, 225), (1.22, 205), (1.3, 90), (1.38, 70)],
+        [(0, 0), (0.02, 0.55), (0.06, 0.85), (0.11, 0.55), (0.17, 0.95), (0.26, 0.9), (0.36, 1), (0.66, 0.16), (0.8, 0.08), (0.84, 0.2), (1.2, 1), (1.25, 0.8), (1.32, 0.25), (1.38, 0.1)],
+    )
+    place(buf, eng, 0, 1.0)
+    # souffle de vitesse : il part (aigu → grave), il revient (grave → aigu)
+    L = 0.45
+    away = hiss(L, "bp", track([(0, 2600), (L, 450)], n_of(L)), 1.1, attack=0.05, release=0.2) * np.exp(-t_axis(L) * 3)
+    place(buf, away, 0.25, 0.6)
+    L = 0.44
+    come = hiss(L, "bp", track([(0, 450), (L, 2800)], n_of(L)), 1.1, attack=L * 0.9, release=0.02)
+    place(buf, come, 0.8, 0.55)
+    # l'écume qui siffle sous la coque
     t = t_axis(dur)
-    lap = biquad(noise(len(t)), "lp", 700, 0.8) * (0.5 + 0.5 * np.sin(2 * math.pi * 1.6 * t) ** 2)
-    place(buf, lap, 0, 0.25)
-    L = 0.85
-    tl = t_axis(L)
-    f = np.array([98.0, 147.0])
-    horn = np.zeros(n_of(L))
-    for ff in f:
-        pitch = ff * (1 - 0.06 * np.exp(-tl * 18))  # le petit glissé au départ
-        ph = 2 * math.pi * np.cumsum(pitch) / SR
-        for k in range(1, 30):
-            if k * ff > SR * 0.45:
-                break
-            horn += np.sin(k * ph) / k
-    horn = resonator(horn, 520, 120) + resonator(horn, 1100, 200) * 0.6
-    horn *= np.clip(tl / 0.06, 0, 1) * np.clip((L - tl) / 0.15, 0, 1) * (1 + 0.04 * np.sin(2 * math.pi * 5 * tl))
-    place(buf, horn, 0.02, 1.0)
-    for at in (0.94, 1.12):
-        place(buf, bell(1320, 0.4, 0.5, bright=0.7, decay=5), at)
-    return finish(buf, dur, room=0.16)
+    speed = track([(0, 0), (0.24, 0), (0.32, 1), (0.6, 0.6), (0.68, 0), (0.86, 0), (1.2, 1), (1.25, 0)], len(t), smooth=True)
+    foam = biquad(noise(len(t)), "hp", 2800, 0.7) * (0.6 + 0.4 * np.tanh(onepole_lp(noise(len(t)), 12) * 10)) * speed
+    place(buf, foam, 0, 0.16)
+    # la gerbe d'eau quand il pile
+    L = 0.3
+    t = t_axis(L)
+    splash = biquad(noise(n_of(L)), "bp", track([(0, 2600), (L, 700)], n_of(L)), 0.8) * np.clip(t / 0.008, 0, 1) * np.exp(-t * 7)
+    place(buf, splash, 1.22, 1.4)
+    place(buf, thump(150, 60, 0.2, decay=16), 1.22, 0.7)
+    place(buf, crackle(0.3, rate=60, f=3500, q=1.2) * np.exp(-t_axis(0.3) * 6), 1.25, 0.5)
+    return finish(buf, dur, room=0.08)
 
 
 def make_bear():
@@ -990,30 +1017,53 @@ def make_bear():
 
 
 def make_storm():
-    """Orage : le nuage gronde, l'éclair claque (craquement sec et grésillement
-    électrique), puis le tonnerre roule longtemps."""
-    dur = 1.36
+    """Orage : le nuage se charge (un sifflement électrique qui monte, de plus en
+    plus de crépitements, un bourdonnement qui enfle, il tremble), un instant de
+    silence… puis il lâche tout : craquement sec de l'éclair, énorme coup de
+    tonnerre qui gronde et roule, et l'averse."""
+    dur = 1.38
+    S = 0.864  # l'éclair (36 % de l'animation de 2,4 s)
     buf = np.zeros(n_of(dur))
-    L = 0.45
-    grr = biquad(noise(n_of(L)), "lp", 160, 0.9) * np.clip(t_axis(L) / 0.3, 0, 1)
-    grr *= 0.6 + 0.4 * np.tanh(onepole_lp(noise(n_of(L)), 8) * 12)
-    place(buf, grr, 0, 1.4)
-    L = 0.22
+    # le sifflement de charge : il monte, tremble de plus en plus vite, coupé net juste avant l'éclair
+    L = S - 0.03
     t = t_axis(L)
-    crack = noise(n_of(L)) * np.exp(-t * 35)
-    crack = crack + biquad(noise(n_of(L)), "hp", 3000, 0.7) * np.exp(-t * 14) * 0.8
-    place(buf, crack, 0.4, 1.4)
-    zap = tone([120, 180], 0.25, "saw") * (0.5 + 0.5 * np.sign(np.sin(2 * math.pi * 60 * t_axis(0.25)))) * np.exp(-t_axis(0.25) * 10)
-    place(buf, biquad(zap, "hp", 400, 0.7), 0.4, 0.5)
-    place(buf, crackle(0.35, rate=120, f=4200, q=0.9) * np.exp(-t_axis(0.35) * 8), 0.42, 0.5)
-    L = 0.95
+    u = t / L
+    whine = chirp(220, 1900, L, curve=1.6) + 0.35 * chirp(330, 2850, L, shape="square", curve=1.6)
+    trem = 0.6 + 0.4 * np.sin(2 * math.pi * np.cumsum(18 + 40 * u) / SR)
+    whine *= trem * (0.2 + 0.8 * u ** 1.8) * np.clip((L - t) / 0.004, 0, 1)
+    place(buf, biquad(whine, "lp", 5000, 0.7), 0.0, 0.9)
+    # bourdonnement électrique qui enfle
+    hum = tone([100, 150], L, "saw") * (0.5 + 0.5 * np.sign(np.sin(2 * math.pi * 50 * t)))
+    hum = biquad(hum, "bp", 700, 0.9) * (u ** 1.5) * np.clip((L - t) / 0.004, 0, 1)
+    place(buf, hum, 0.0, 0.4)
+    # crépitements de plus en plus serrés
+    for i in range(6):
+        a = 0.08 + i * (L - 0.08) / 6
+        seg_ = crackle((L - 0.08) / 6, rate=30 + i * 55, f=3000 + i * 300, q=1.0)
+        place(buf, seg_, a, 0.2 + i * 0.14)
+    # le grondement sourd du nuage qui gonfle
+    grr = biquad(noise(n_of(L)), "lp", 150, 0.9) * (0.2 + 0.8 * u ** 1.5) * np.clip((L - t) / 0.01, 0, 1)
+    place(buf, grr, 0.0, 0.9)
+    # CRAC ! l'éclair
+    L = 0.25
     t = t_axis(L)
-    rumble = biquad(noise(n_of(L)), "lp", track([(0, 600), (0.2, 260), (L, 120)], n_of(L)), 0.8)
-    swell = 0.5 + 0.5 * np.tanh(onepole_lp(noise(n_of(L)), 6) * 14)
-    rumble *= np.clip(t / 0.02, 0, 1) * np.exp(-t * 2.2) * (0.5 + 0.7 * swell)
-    place(buf, rumble, 0.43, 2.2)
-    place(buf, biquad(crackle(0.8, rate=70, f=700, q=0.8), "lp", 1500, 0.7) * np.exp(-t_axis(0.8) * 3), 0.45, 0.6)
-    return finish(buf, dur, room=0.2)
+    crack = noise(n_of(L)) * np.exp(-t * 40) + biquad(noise(n_of(L)), "hp", 2500, 0.7) * np.exp(-t * 13) * 0.9
+    place(buf, crack, S, 1.6)
+    zap = tone([140, 210], 0.2, "saw") * (0.5 + 0.5 * np.sign(np.sin(2 * math.pi * 70 * t_axis(0.2)))) * np.exp(-t_axis(0.2) * 12)
+    place(buf, biquad(zap, "hp", 500, 0.7), S, 0.5)
+    # BOUM : le tonnerre (coup sourd très grave, puis il roule)
+    place(buf, thump(95, 30, 0.5, decay=4.5), S + 0.01, 2.2)
+    L = dur - S
+    t = t_axis(L)
+    rumble = biquad(noise(n_of(L)), "lp", track([(0, 2200), (0.12, 500), (L, 140)], n_of(L)), 0.8)
+    roll = 0.45 + 0.55 * np.tanh(onepole_lp(noise(n_of(L)), 7) * 16)
+    rumble *= np.clip(t / 0.008, 0, 1) * np.exp(-t * 2.4) * (0.55 + 0.6 * roll)
+    place(buf, np.tanh(rumble * 2.5), S + 0.005, 1.6)
+    # l'averse
+    rain = biquad(noise(n_of(L)), "hp", 3500, 0.7) * np.clip((t - 0.05) / 0.15, 0, 1)
+    rain *= 0.7 + 0.3 * np.abs(onepole_lp(noise(n_of(L)), 30)) * 4
+    place(buf, rain, S, 0.12)
+    return finish(buf, dur, room=0.18)
 
 
 def make_robot():
@@ -1049,43 +1099,76 @@ def make_robot():
     return finish(buf, dur, room=0.06)
 
 
+def echo(x, delay=0.17, fb=0.38, damp=2500):
+    """Écho qui se répète en s'assourdissant (grande salle)."""
+    D = n_of(delay)
+    y = x.copy()
+    for k in range(D, len(y), D):
+        prev = y[k - D:k]
+        n = min(D, len(y) - k)
+        y[k:k + n] += biquad(prev[:n], "lp", damp, 0.7) * fb
+    return y
+
+
 def make_portrait():
-    """Grand Portrait : le souffle monte (aspiration à l'envers), le cadre
-    explose (énorme coup sourd qui chute, verre qui vole en éclats), et le
-    spectre hurle : un cri fantomatique à deux voix qui tremble, dans une
-    grande salle, porté par une onde de choc."""
-    dur = 1.38
+    """Grand Portrait, le boss final : une cymbale à l'envers aspire tout pendant
+    que le cadre tremble, puis l'impact (énorme coup de sub-basse en couches,
+    claquement saturé) ; un chœur et un orgue sombres enflent sur un accord
+    mineur, le spectre pousse un rugissement saturé qui chute dans les graves,
+    et tout résonne en écho dans une grande salle."""
+    dur = BOSS_DUR
+    H = 0.63  # l'impact : le spectre jaillit du cadre (21 % de l'animation de 3 s)
     buf = np.zeros(n_of(dur))
-    L = 0.3
+    # cymbale à l'envers : souffle métallique qui grossit jusqu'à l'impact
+    L = H - 0.03
     t = t_axis(L)
-    rise = hiss(L, "bp", track([(0, 300), (L, 3500)], n_of(L)), 1.2, attack=L * 0.9, release=0.01)
-    rise += chirp(60, 220, L, shape="saw") * (t / L) ** 2 * 0.3
-    place(buf, rise, 0, 0.9)
-    place(buf, thump(95, 28, 0.9, decay=3.2), 0.3, 1.8)
-    place(buf, knock(170, 0.4, decay=9), 0.3, 1.0)
-    boom = biquad(noise(n_of(0.6)), "lp", track([(0, 2500), (0.6, 150)], n_of(0.6)), 0.8) * np.exp(-t_axis(0.6) * 6)
-    place(buf, boom, 0.3, 1.0)
-    for _ in range(26):
-        place(buf, bell(rng.uniform(2800, 6800), 0.18, 0.12, bright=0.2, decay=8), 0.3 + rng.uniform(0, 0.28))
-    place(buf, hiss(0.3, "hp", 4000, 0.7, attack=0.001, decay=12), 0.3, 0.5)
-    L = 0.95
-    scream = voice(
+    rev = biquad(noise(n_of(L)), "hp", track([(0, 6000), (L, 2500)], n_of(L)), 0.7)
+    rev += sum(np.sin(2 * math.pi * f * t + rng.uniform(0, 6)) for f in (3150, 4270, 5330, 6620)) * 0.15
+    rev *= np.exp((t - L) * 7) * np.clip((L - t) / 0.006, 0, 1)
+    place(buf, rev, 0.0, 0.35)
+    suck = chirp(38, 62, L, curve=2) * np.exp((t - L) * 5)
+    place(buf, suck, 0.0, 0.7)
+    # l'impact : sub-basse en couches, claquement, tout un peu saturé
+    hit = np.zeros(n_of(1.0))
+    hit += thump(72, 26, 1.0, decay=2.6) * 1.6
+    place(hit, thump(150, 45, 0.5, decay=7), 0, 0.8)
+    place(hit, knock(170, 0.5, decay=8), 0, 0.8)
+    hit += biquad(noise(n_of(1.0)), "lp", track([(0, 3500), (0.4, 200)], n_of(1.0)), 0.8) * np.exp(-t_axis(1.0) * 9) * 0.9
+    hit = np.tanh(hit * 1.8)
+    place(buf, hit, H, 1.5)
+    # chœur sombre (« aaah… oooh ») sur un accord de ré mineur, et l'orgue en dessous
+    L = dur - H
+    for f, vw, g in ((146.8, "a", 0.5), (174.6, "ô", 0.42), (220.0, "a", 0.42), (293.7, "o", 0.3)):
+        ch = voice(L, [(0, f * 0.99), (L, f * 0.985)], [(0, vw), (L * 0.6, "ô"), (L, "o")], [(0, 0), (0.18, 0.7), (0.5, 1), (L, 0.5)], scale=0.95, breath=0.35, tense=0.4, vib=(0.012, 5.2), jitter=0.006)
+        place(buf, ch, H + 0.02, g)
+    t = t_axis(L)
+    organ = np.zeros(n_of(L))
+    for f in (73.4, 110.0, 146.8, 174.6):
+        for k, a in ((1, 1.0), (2, 0.6), (3, 0.35), (4, 0.25), (8, 0.1)):
+            organ += a * np.sin(2 * math.pi * f * k * t + rng.uniform(0, 6))
+    organ *= np.clip(t / 0.25, 0, 1) * (1 + 0.05 * np.sin(2 * math.pi * 6 * t))
+    place(buf, organ, H + 0.02, 0.07)
+    # le rugissement du spectre : saturé, deux voix, qui chute dans les graves
+    L = 0.75
+    roar = voice(
         L,
-        [(0, 470), (0.1, 690), (0.5, 760), (0.8, 620), (L, 420)],
-        [(0, "a"), (0.3, "a"), (0.55, "è"), (0.8, "a"), (L, "ô")],
-        [(0, 0), (0.06, 1), (0.6, 0.9), (L, 0)],
-        aspir=[(0, 0.3), (0.2, 0.2), (L, 0.5)],
-        scale=1.12,
+        [(0, 400), (0.1, 520), (0.35, 430), (0.6, 250), (L, 150)],
+        [(0, "a"), (0.3, "a"), (0.55, "ô"), (L, "o")],
+        [(0, 0), (0.04, 1), (0.45, 0.9), (L, 0)],
+        aspir=[(0, 0.3), (0.2, 0.15), (L, 0.5)],
+        scale=1.0,
         breath=0.5,
-        tense=0.8,
-        jitter=0.02,
-        vib=(0.05, 6.5),
-        growl=0.2,
+        tense=0.95,
+        jitter=0.025,
+        vib=(0.03, 7),
+        growl=1.0,
+        sub=0.3,
     )
-    ghost = voice(L, [(0, 235), (0.1, 345), (0.5, 380), (0.8, 310), (L, 210)], [(0, "o"), (0.5, "ô"), (L, "o")], [(0, 0), (0.08, 1), (0.6, 0.9), (L, 0)], scale=0.85, breath=0.5, tense=0.6, vib=(0.05, 6.1), growl=0.4)
-    place(buf, scream, 0.36, 0.9)
-    place(buf, ghost, 0.37, 0.55)
-    return finish(buf, dur, room=0.3)
+    low = voice(L, [(0, 200), (0.1, 260), (0.35, 215), (0.6, 125), (L, 75)], [(0, "a"), (0.4, "ô"), (L, "u")], [(0, 0), (0.05, 1), (0.5, 0.9), (L, 0)], scale=0.78, breath=0.5, tense=0.9, growl=1.0, sub=0.5)
+    scream = np.tanh((roar + 0.8 * low) * 2.8)
+    scream = biquad(scream, "lp", 4200, 0.7)
+    place(buf, echo(scream, delay=0.16, fb=0.4), H + 0.04, 0.85)
+    return finish(buf, dur, room=0.32, max_dur=BOSS_DUR)
 
 
 SOUNDS = (
@@ -1157,6 +1240,8 @@ if __name__ == "__main__":
     made = []
     for name, fn in SOUNDS:
         if not only or name in only:
+            # même hasard pour un son, qu'on le fasse seul ou avec les autres
+            rng = np.random.default_rng(2024 + sum(map(ord, name)))
             x = fn()
             save(name, x)
             made.append((name, x))

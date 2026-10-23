@@ -9,7 +9,7 @@ import { View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { Circle, Defs, Ellipse, G, Line, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
-import { Group, Part, type T, around, bump, frac, osc, seg, springy, starPath, useG } from './emoteKit';
+import { Group, Part, TAU, type T, around, bump, frac, osc, seg, springy, starPath, useG } from './emoteKit';
 
 /** Le décor rond (ciel, mer…) : ce qui est dedans est coupé au bord du disque. */
 function Disc({ s, r = 46, children, style }: { s: number; r?: number; children: ReactNode; style?: object }) {
@@ -56,22 +56,63 @@ const wavePath = (y: number, amp: number, bottom = 100) => {
 
 const SKIN = '#F1BE93';
 const SKIN_LINE = '#6A3418';
+/** Petits sauts par boucle. */
+const HOPS = 3;
 
 function Beach({ s, t }: { s: number; t: T }) {
   const g = useG();
-  const arm = useAnimatedStyle(() => ({ transform: around(-8, 12, s, [{ rotate: `${osc(t.value, 2.5) * 16}deg` }]) }));
-  const sway = useAnimatedStyle(() => ({ transform: around(0, 26, s, [{ rotate: `${osc(t.value, 1) * 2.5}deg` }]) }));
+  // elle sautille : monte, retombe, s'écrase un peu en touchant le sable, et se dandine
+  const body = useAnimatedStyle(() => {
+    const p = frac(t.value * HOPS);
+    const h = Math.sin(Math.PI * p);
+    const land = Math.max(0, 1 - Math.min(p, 1 - p) / 0.14);
+    return {
+      transform: [
+        { translateY: -h * 8 * s },
+        ...around(0, 44, s, [{ scaleY: 1 - land * 0.07 }, { scaleX: 1 + land * 0.05 }]),
+        ...around(0, 30, s, [{ rotate: `${osc(t.value, HOPS / 2) * 5}deg` }]),
+      ],
+    };
+  });
+  // les noix de coco : en retard sur le saut, elles ballottent et se balancent sur leur ficelle
+  const nutL = useAnimatedStyle(() => {
+    const ph = t.value * HOPS;
+    const j = Math.sin(TAU * ph - 1.5);
+    return { transform: [{ translateY: j * 2.2 * s }, { translateX: Math.sin(TAU * ph * 2 - 0.4) * 0.8 * s }, ...around(0, -4.5, s, [{ rotate: `${Math.sin(TAU * ph * 2 - 0.4) * 26}deg` }, { scale: 1 + Math.max(0, j) * 0.08 }])] };
+  });
+  const nutR = useAnimatedStyle(() => {
+    const ph = t.value * HOPS;
+    const j = Math.sin(TAU * ph - 1.9);
+    return { transform: [{ translateY: j * 2.2 * s }, { translateX: -Math.sin(TAU * ph * 2 - 0.9) * 0.8 * s }, ...around(0, -4.5, s, [{ rotate: `${-Math.sin(TAU * ph * 2 - 0.9) * 26}deg` }, { scale: 1 + Math.max(0, j) * 0.08 }])] };
+  });
+  // les cheveux suivent avec un temps de retard
+  const hair = useAnimatedStyle(() => ({ transform: [{ translateY: Math.sin(TAU * t.value * HOPS - 1.1) * 1.4 * s }] }));
+  const arm = useAnimatedStyle(() => ({ transform: around(-8, 12, s, [{ rotate: `${osc(t.value, HOPS) * 20}deg` }]) }));
   const leaves = useAnimatedStyle(() => ({ transform: around(-10, -2, s, [{ rotate: `${osc(t.value, 1, 0.2) * 6}deg` }]) }));
   const sea = useAnimatedStyle(() => ({ transform: [{ translateX: -frac(t.value * 2) * 20 * s }] }));
-  const sun = useAnimatedStyle(() => ({ transform: [{ rotate: `${t.value * 90}deg` }] }));
-  const smile = useAnimatedStyle(() => ({ transform: around(0, -3, s, [{ scaleY: 0.85 + 0.2 * Math.abs(osc(t.value, 2.5)) }]) }));
+  const sun = useAnimatedStyle(() => ({ transform: [{ rotate: `${t.value * 90}deg` }, { scale: 1 + 0.08 * osc(t.value, 2) }] }));
+  // grand sourire, encore plus grand en haut du saut
+  const smile = useAnimatedStyle(() => ({ transform: around(0, -3, s, [{ scaleY: 0.85 + 0.3 * Math.sin(Math.PI * frac(t.value * HOPS)) }, { scaleX: 1 + 0.06 * Math.sin(Math.PI * frac(t.value * HOPS)) }]) }));
+  // un éclat passe sur les lunettes en haut de chaque saut
+  const shine = useAnimatedStyle(() => {
+    const p = frac(t.value * HOPS);
+    const k = bump(p, 0.3, 0.7);
+    return { opacity: k, transform: [{ scale: 0.3 + k * 0.9 }, { rotate: `${p * 120}deg` }] };
+  });
+  // petit nuage de sable à chaque atterrissage
+  const puff = useAnimatedStyle(() => {
+    const p = frac(t.value * HOPS + 0.06);
+    const k = Math.min(1, p / 0.25);
+    return { opacity: p < 0.25 ? (1 - k) * 0.9 : 0, transform: [{ scaleX: 0.5 + k * 0.9 }, { scaleY: 0.6 + k * 0.5 }] };
+  });
   return (
     <>
       <Disc s={s}>
         <Sky s={s} id={g('g-beach-sky')} top="#5CCBFF" bottom="#C8F1FF" />
-        <Part s={s} box={[66, 8, 28, 28]} style={sun}>
-          <Path d={starPath(80, 22, 13)} fill="#FFE98A" opacity={0.7} />
+        <Part s={s} box={[64, 6, 32, 32]} style={sun}>
+          <Path d={starPath(80, 22, 14)} fill="#FFE98A" opacity={0.75} />
           <Circle cx={80} cy={22} r={7.5} fill="#FFD23F" stroke="#F29A1A" strokeWidth={1.4} />
+          <Path d="M77 21 Q78 19.6 79 21 M81 21 Q82 19.6 83 21 M77.5 24 Q80 26.4 82.5 24" stroke="#C26A00" strokeWidth={0.9} fill="none" strokeLinecap="round" />
         </Part>
         <Part s={s} box={[-20, 64, 140, 40]} style={sea}>
           <Path d={wavePath(70, 3)} fill="#26B0E0" />
@@ -96,28 +137,41 @@ function Beach({ s, t }: { s: number; t: T }) {
           <Path d="M29 33 Q12 34 8 46 Q18 36 28 35Z" fill="#33A84E" stroke="#1E6A2E" strokeWidth={1.4} strokeLinejoin="round" />
           <Path d="M30 33 Q44 32 50 42 Q40 35 30 35Z" fill="#33A84E" stroke="#1E6A2E" strokeWidth={1.4} strokeLinejoin="round" />
         </Part>
-        {/* la vacancière : elle se balance doucement */}
-        <Group s={s} style={sway}>
+        <Part s={s} box={[26, 86, 60, 14]} style={puff}>
+          <Ellipse cx={34} cy={94} rx={5} ry={2.6} fill="#FFF1C8" />
+          <Ellipse cx={77} cy={94} rx={5} ry={2.6} fill="#FFF1C8" />
+          <Circle cx={29} cy={90} r={1.3} fill="#F2D38A" />
+          <Circle cx={82} cy={90} r={1.3} fill="#F2D38A" />
+        </Part>
+        {/* la vacancière : elle sautille de joie */}
+        <Group s={s} style={body}>
           {/* cheveux longs, derrière */}
-          <Part s={s} box={[34, 20, 42, 50]}>
+          <Part s={s} box={[34, 20, 42, 52]} style={hair}>
             <Path d="M40 40 Q36 24 55 22 Q74 24 71 42 Q73 56 70 66 Q64 62 62 54 L48 54 Q46 62 40 66 Q37 56 40 40Z" fill="#7A3E1C" stroke="#3A1A08" strokeWidth={1.6} strokeLinejoin="round" />
           </Part>
-          {/* corps : épaules, bras qui tient la hanche, paréo */}
-          <Part s={s} box={[30, 52, 50, 48]}>
+          {/* corps : épaules, bras qui tient la hanche, paréo (assez long pour ne jamais se voir en bas, même en l'air) */}
+          <Part s={s} box={[30, 52, 50, 64]}>
             <Path d="M50 54 L60 54 L60 60 L50 60Z" fill={SKIN} />
-            <Path d="M41 64 Q42 58 50 58 L60 58 Q69 58 70 64 L68 100 L42 100Z" fill={SKIN} stroke={SKIN_LINE} strokeWidth={1.8} strokeLinejoin="round" />
+            <Path d="M41 64 Q42 58 50 58 L60 58 Q69 58 70 64 L68 116 L42 116Z" fill={SKIN} stroke={SKIN_LINE} strokeWidth={1.8} strokeLinejoin="round" />
             <Path d="M42 66 Q35 74 37 84 Q39 90 45 88" stroke={SKIN_LINE} strokeWidth={7.6} fill="none" strokeLinecap="round" />
             <Path d="M42 66 Q35 74 37 84 Q39 90 45 88" stroke={SKIN} strokeWidth={5} fill="none" strokeLinecap="round" />
             {/* paréo à fleurs */}
-            <Path d="M41 88 L69 88 L71 100 L39 100Z" fill="#FF6FA8" stroke="#A8245E" strokeWidth={1.6} strokeLinejoin="round" />
+            <Path d="M41 88 L69 88 L73 116 L37 116Z" fill="#FF6FA8" stroke="#A8245E" strokeWidth={1.6} strokeLinejoin="round" />
             <Circle cx={48} cy={94} r={2} fill="#FFE45C" />
             <Circle cx={60} cy={95} r={2} fill="#FFFFFF" />
-            {/* haut en noix de coco : deux demi-noix, une ficelle */}
-            <Path d="M49 62 L45 70 M61 62 L65 70" stroke="#5A3A18" strokeWidth={1.2} />
-            <Path d="M44 74 L66 74" stroke="#5A3A18" strokeWidth={1.4} />
+            <Circle cx={54} cy={102} r={2} fill="#FFE45C" />
+            {/* la ficelle du haut en noix de coco */}
+            <Path d="M49 62 L46 69 M61 62 L64 69" stroke="#5A3A18" strokeWidth={1.2} />
+            <Path d="M44 70 L66 70" stroke="#5A3A18" strokeWidth={1.4} />
+          </Part>
+          {/* les deux demi-noix de coco, accrochées à la ficelle */}
+          <Part s={s} box={[43, 67.5, 13, 13]} style={nutL}>
             <Circle cx={49.5} cy={74} r={5.4} fill="#8A5626" stroke="#3A2008" strokeWidth={1.4} />
+            <Path d="M46 71.5 Q49 70 52 71.8 M47.5 77 L51 76" stroke="#C99A62" strokeWidth={1} fill="none" strokeLinecap="round" />
+          </Part>
+          <Part s={s} box={[54, 67.5, 13, 13]} style={nutR}>
             <Circle cx={60.5} cy={74} r={5.4} fill="#8A5626" stroke="#3A2008" strokeWidth={1.4} />
-            <Path d="M46 71.5 Q49 70 52 71.8 M57 71.5 Q60 70 63 71.8 M47.5 77 L51 76 M58.5 77 L62 76" stroke="#C99A62" strokeWidth={1} fill="none" strokeLinecap="round" />
+            <Path d="M57 71.5 Q60 70 63 71.8 M58.5 77 L62 76" stroke="#C99A62" strokeWidth={1} fill="none" strokeLinecap="round" />
           </Part>
           {/* la tête */}
           <Part s={s} box={[36, 22, 38, 38]}>
@@ -131,12 +185,16 @@ function Beach({ s, t }: { s: number; t: T }) {
             <Path d="M56.5 39 Q57 45 61 45 Q66 45 66 39Z" fill="#1E1E2A" stroke="#FF6FA8" strokeWidth={1.4} />
             <Path d="M53.5 39.6 L56.5 39.6" stroke="#FF6FA8" strokeWidth={1.4} />
             <Path d="M45.5 40.5 L48 40.5 M58 40.5 L60.5 40.5" stroke="#FFFFFF" strokeWidth={1} opacity={0.7} />
-            <Ellipse cx={45} cy={48} rx={2.6} ry={1.5} fill="#FF8FA8" opacity={0.6} />
-            <Ellipse cx={65} cy={48} rx={2.6} ry={1.5} fill="#FF8FA8" opacity={0.6} />
+            <Ellipse cx={44.5} cy={48} rx={2.8} ry={1.6} fill="#FF8FA8" opacity={0.7} />
+            <Ellipse cx={65.5} cy={48} rx={2.8} ry={1.6} fill="#FF8FA8" opacity={0.7} />
           </Part>
-          <Part s={s} box={[48, 46, 14, 10]} style={smile}>
-            <Path d="M50 48.5 Q55 49.5 60 48.5 Q59 54.5 55 54.5 Q51 54.5 50 48.5Z" fill="#7A1A1A" stroke={SKIN_LINE} strokeWidth={1.3} strokeLinejoin="round" />
-            <Path d="M51.2 49.2 Q55 50 58.8 49.2 L58.4 50.6 Q55 51.2 51.6 50.6Z" fill="#FFFFFF" />
+          <Part s={s} box={[61, 33, 10, 10]} style={shine}>
+            <Path d={starPath(65.5, 38, 3.6)} fill="#FFFFFF" />
+          </Part>
+          <Part s={s} box={[47, 45, 16, 13]} style={smile}>
+            <Path d="M48.5 47.6 Q55 50.2 61.5 47.6 Q60.6 56.4 55 56.4 Q49.4 56.4 48.5 47.6Z" fill="#7A1A1A" stroke={SKIN_LINE} strokeWidth={1.3} strokeLinejoin="round" />
+            <Path d="M49.6 48.4 Q55 50.6 60.4 48.4 L60 50.2 Q55 51.8 50 50.2Z" fill="#FFFFFF" />
+            <Ellipse cx={55} cy={54.2} rx={3.4} ry={1.6} fill="#FF6F7D" />
           </Part>
           {/* le bras qui fait coucou */}
           <Part s={s} box={[62, 26, 28, 40]} style={arm}>
@@ -156,7 +214,7 @@ function Beach({ s, t }: { s: number; t: T }) {
 
 /** Petits traits « coucou » autour de la main. */
 function WaveSign({ s, t, k }: { s: number; t: T; k: number }) {
-  const style = useAnimatedStyle(() => ({ opacity: Math.max(0, osc(t.value, 2.5, k * 0.5)) }));
+  const style = useAnimatedStyle(() => ({ opacity: Math.max(0, osc(t.value, HOPS, k * 0.5)) }));
   return (
     <Part s={s} box={[80, 18, 20, 30]} style={style}>
       <Path d={k ? 'M90 22 L95 18 M92 28 L98 27' : 'M88 36 L95 37 M86 42 L92 46'} stroke="#FFFFFF" strokeWidth={2.4} strokeLinecap="round" />
@@ -282,85 +340,210 @@ function MooLines({ s, t, side }: { s: number; t: T; side: -1 | 1 }) {
 /* ---------------------------------- Ohé ! --------------------------------- */
 
 const BOAT_LINE = '#2A1410';
-const HORN: [number, number] = [0.04, 0.42];
+/**
+ * Le bateau fait vrombir son moteur (0 → REV), fonce et sort à droite
+ * (→ GONE), fait le tour du monde et revient par la gauche (→ BACK), puis
+ * pile au milieu dans une grande gerbe d'eau (→ STOP).
+ */
+const REV = 0.12;
+const GONE = 0.32;
+const BACK = 0.4;
+const ARRIVE = 0.62;
+const STOP = 0.76;
+
+/** Position du bateau (unités du dessin, 0 : au milieu). */
+function boatX(v: number) {
+  'worklet';
+  if (v < REV) return 0;
+  if (v < GONE) {
+    const p = (v - REV) / (GONE - REV);
+    return 115 * p * p;
+  }
+  if (v < BACK) return 200;
+  if (v < ARRIVE) {
+    const p = (v - BACK) / (ARRIVE - BACK);
+    return -115 * (1 - p) * (1 - p);
+  }
+  if (v < STOP) {
+    const p = (v - ARRIVE) / (STOP - ARRIVE);
+    return 7 * Math.sin(p * Math.PI) * (1 - p * 0.6);
+  }
+  return 0;
+}
+/** Vitesse (0 → 1) : traits, sillage, gerbes. */
+function boatSpeed(v: number) {
+  'worklet';
+  return seg(v, REV - 0.02, REV + 0.04) * (1 - seg(v, ARRIVE - 0.04, ARRIVE + 0.03));
+}
 
 function Boat({ s, t }: { s: number; t: T }) {
   const g = useG();
-  const rock = useAnimatedStyle(() => ({ transform: around(0, 20, s, [{ rotate: `${osc(t.value, 1) * 7}deg` }, { translateY: osc(t.value, 2, 0.2) * 1.6 * s }]) }));
-  const far = useAnimatedStyle(() => ({ transform: [{ translateX: -frac(t.value * 1) * 20 * s }] }));
-  const near = useAnimatedStyle(() => ({ transform: [{ translateX: -frac(t.value * 2) * 20 * s }, { translateY: osc(t.value, 2) * 1.2 * s }] }));
-  const horn = useAnimatedStyle(() => {
-    const h = bump(t.value, HORN[0], HORN[1]);
-    return { opacity: h > 0.04 ? h : 0, transform: [{ scale: 0.7 + h * 0.4 }] };
+  const boat = useAnimatedStyle(() => {
+    const v = t.value;
+    const sp = boatSpeed(v);
+    const rev = v < REV ? seg(v, 0, 0.04) : 0;
+    const skid = bump(v, ARRIVE, STOP);
+    const idle = seg(v, STOP, STOP + 0.05);
+    // il se cabre en fonçant, pique du nez en freinant, puis se berce
+    const tilt = -4 * rev - 11 * sp + 9 * skid + idle * osc(v, 2) * 3;
+    return {
+      opacity: v > GONE && v < BACK ? 0 : 1,
+      transform: [
+        { translateX: (boatX(v) + osc(v, 30) * rev * 0.9) * s },
+        { translateY: (osc(v, 24) * (rev * 0.7 + sp * 0.5) + idle * osc(v, 2, 0.25) * 1.4) * s },
+        ...around(0, 18, s, [{ scale: 0.84 }]),
+        ...around(-30, 26, s, [{ rotate: `${tilt}deg` }]),
+      ],
+    };
   });
-  const eyes = useAnimatedStyle(() => ({ transform: [{ scaleY: 1 - bump(t.value, 0.7, 0.76) * 0.85 }] }));
+  // la mer défile, plus vite quand il fonce (tours entiers sur la boucle)
+  const far = useAnimatedStyle(() => ({ transform: [{ translateX: -frac(t.value + 3 * seg(t.value, REV, ARRIVE)) * 20 * s }] }));
+  const near = useAnimatedStyle(() => ({ transform: [{ translateX: -frac(t.value * 2 + 6 * seg(t.value, REV, ARRIVE)) * 20 * s }, { translateY: osc(t.value, 2) * 1.2 * s }] }));
+  const wake = useAnimatedStyle(() => {
+    const sp = boatSpeed(t.value);
+    return { opacity: sp, transform: around(22, 6, s, [{ scaleX: 0.4 + sp * 0.6 + osc(t.value, 20) * 0.06 * sp }, { scaleY: 0.6 + sp * 0.4 + osc(t.value, 14) * 0.08 * sp }]) };
+  });
+  const bow = useAnimatedStyle(() => {
+    const sp = boatSpeed(t.value);
+    return { opacity: sp, transform: around(-6, 6, s, [{ scale: 0.6 + sp * 0.4 + osc(t.value, 18) * 0.08 * sp }]) };
+  });
+  const flag = useAnimatedStyle(() => ({ transform: around(-3, 0, s, [{ scaleX: 1 + boatSpeed(t.value) * 0.5 }, { scaleY: 1 + osc(t.value, 12) * 0.25 }]) }));
+  const splash = useAnimatedStyle(() => {
+    const v = t.value;
+    const p = Math.max(0, Math.min(1, (v - ARRIVE + 0.01) / (STOP - ARRIVE + 0.05)));
+    const on = v > ARRIVE - 0.01 && v < STOP + 0.04;
+    return { opacity: on ? (p < 0.7 ? 1 : (1 - p) / 0.3) : 0, transform: around(0, 12, s, [{ scaleY: 0.25 + springy(p * 1.4) * 0.85 }, { scaleX: 0.8 + p * 0.35 }]) };
+  });
+  // regard décidé, sourcils froncés, dents serrées
+  const brows = useAnimatedStyle(() => ({ transform: [{ translateY: (0.6 + boatSpeed(t.value) * 0.8 - bump(t.value, ARRIVE, STOP) * 0.8) * s }] }));
   return (
     <>
       <Disc s={s}>
-        <Sky s={s} id={g('g-boat-sky')} top="#7FC8FF" bottom="#E2F4FF" />
+        <Sky s={s} id={g('g-boat-sky')} top="#6FC0FF" bottom="#DFF3FF" />
         <Part s={s} box={[6, 12, 40, 20]}>
           <Path d="M12 26 Q12 18 20 19 Q24 12 32 16 Q40 14 40 22 Q44 24 40 28 L14 28 Q10 28 12 26Z" fill="#FFFFFF" opacity={0.9} />
         </Part>
         <Part s={s} box={[-20, 56, 140, 44]} style={far}>
           <Path d={wavePath(64, 2.4)} fill="#3E8FE0" />
         </Part>
-        <Group s={s} style={rock}>
-          {/* cheminée, fumée et drapeau */}
-          <Part s={s} box={[54, 18, 24, 34]}>
-            <Rect x={58} y={24} width={11} height={22} rx={1.5} fill="#2C2C34" stroke={BOAT_LINE} strokeWidth={1.8} />
-            <Rect x={58} y={29} width={11} height={4} fill="#FF4A3D" />
-            <Line x1={74} y1={46} x2={74} y2={22} stroke={BOAT_LINE} strokeWidth={1.4} />
-            <Path d="M74 22 L77 25 L74 28Z" fill="#FFD23F" stroke={BOAT_LINE} strokeWidth={1} />
+        {Array.from({ length: 5 }, (_, k) => (
+          <SpeedLine key={k} s={s} t={t} k={k} />
+        ))}
+        <Group s={s} style={boat}>
+          {/* sillage d'écume, derrière */}
+          <Part s={s} box={[-40, 54, 56, 30]} style={wake}>
+            {/* gerbe d'écume qui gicle derrière, et le sillage */}
+            <Path d="M14 76 Q4 60 -14 56 Q-6 62 -8 66 Q-20 60 -34 62 Q-18 68 -20 72 Q-30 72 -38 76 Q-12 82 14 79Z" fill="#FFFFFF" stroke="#8FCBFF" strokeWidth={1.2} strokeLinejoin="round" />
+            <Path d="M6 70 Q-4 64 -12 62 M4 75 Q-12 72 -26 74" stroke="#BFE4FF" strokeWidth={1.4} fill="none" strokeLinecap="round" />
           </Part>
-          {/* cabine et ses hublots-yeux */}
-          <Part s={s} box={[30, 36, 44, 26]}>
-            <Rect x={33} y={39} width={36} height={21} rx={3} fill="#FFFFFF" stroke={BOAT_LINE} strokeWidth={2} />
-            <Rect x={33} y={39} width={36} height={4.5} rx={2} fill="#3D8BFF" />
+          {[0, 1, 2, 3].map((k) => (
+            <Spray key={k} s={s} t={t} k={k} />
+          ))}
+          {[0, 1, 2].map((k) => (
+            <Smoke key={k} s={s} t={t} k={k} />
+          ))}
+          {/* cheminée et drapeau */}
+          <Part s={s} box={[16, 22, 30, 38]}>
+            <Rect x={20} y={30} width={10} height={28} rx={1.5} fill="#2C2C34" stroke={BOAT_LINE} strokeWidth={1.8} />
+            <Rect x={20} y={35} width={10} height={4} fill="#FF4A3D" />
+            <Line x1={40} y1={40} x2={40} y2={24} stroke={BOAT_LINE} strokeWidth={1.4} />
           </Part>
-          <Part s={s} box={[34, 44, 34, 14]} style={eyes}>
-            <Circle cx={43} cy={51} r={5} fill="#BDE6FF" stroke={BOAT_LINE} strokeWidth={1.8} />
-            <Circle cx={59} cy={51} r={5} fill="#BDE6FF" stroke={BOAT_LINE} strokeWidth={1.8} />
-            <Circle cx={44} cy={52} r={2.4} fill="#1A1A2A" />
-            <Circle cx={60} cy={52} r={2.4} fill="#1A1A2A" />
-            <Circle cx={43.2} cy={51} r={0.8} fill="#FFFFFF" />
-            <Circle cx={59.2} cy={51} r={0.8} fill="#FFFFFF" />
+          <Part s={s} box={[30, 22, 12, 8]} style={flag}>
+            <Path d="M40 24 L33 26 L40 28Z" fill="#FFD23F" stroke={BOAT_LINE} strokeWidth={1} strokeLinejoin="round" />
           </Part>
-          {/* coque rouge, bouée, sourire */}
-          <Part s={s} box={[10, 56, 82, 26]}>
-            <Path d="M12 59 L90 59 Q87 72 78 78 L26 78 Q16 72 12 59Z" fill="#FF4A3D" stroke={BOAT_LINE} strokeWidth={2.4} strokeLinejoin="round" />
-            <Path d="M14 63 L88 63" stroke="#FFFFFF" strokeWidth={2.6} />
-            <Path d="M40 69 Q50 75 60 69" stroke={BOAT_LINE} strokeWidth={2.2} fill="none" strokeLinecap="round" />
-            <Circle cx={24} cy={68} r={4.6} fill="none" stroke="#FFFFFF" strokeWidth={2.8} />
-            <Circle cx={24} cy={68} r={4.6} fill="none" stroke="#FF4A3D" strokeWidth={2.8} strokeDasharray="3.6 3.6" />
+          {/* cabine et ses hublots-yeux, qui regardent droit devant */}
+          <Part s={s} box={[32, 36, 40, 26]}>
+            <Path d="M35 60 L35 42 Q35 39 38 39 L62 39 Q68 39 70 46 L70 60Z" fill="#FFFFFF" stroke={BOAT_LINE} strokeWidth={2} strokeLinejoin="round" />
+            <Path d="M35 43.5 L35 42 Q35 39 38 39 L62 39 Q66 39 68 43.5Z" fill="#3D8BFF" />
+            <Circle cx={45} cy={51} r={5.2} fill="#BDE6FF" stroke={BOAT_LINE} strokeWidth={1.8} />
+            <Circle cx={60} cy={51} r={5.2} fill="#BDE6FF" stroke={BOAT_LINE} strokeWidth={1.8} />
+            <Circle cx={47} cy={52} r={2.5} fill="#1A1A2A" />
+            <Circle cx={62} cy={52} r={2.5} fill="#1A1A2A" />
+            <Circle cx={46.3} cy={51} r={0.8} fill="#FFFFFF" />
+            <Circle cx={61.3} cy={51} r={0.8} fill="#FFFFFF" />
+          </Part>
+          <Part s={s} box={[36, 40, 32, 10]} style={brows}>
+            <Path d="M38.5 43 L50 47" stroke={BOAT_LINE} strokeWidth={3.4} strokeLinecap="round" />
+            <Path d="M54.5 47 L66 43" stroke={BOAT_LINE} strokeWidth={3.4} strokeLinecap="round" />
+          </Part>
+          {/* coque de course, éclair, dents serrées */}
+          <Part s={s} box={[8, 56, 92, 26]}>
+            <Path d="M10 58 L82 58 Q95 59 98 62 Q90 74 76 79 L22 79 Q13 72 10 58Z" fill="#FF4A3D" stroke={BOAT_LINE} strokeWidth={2.4} strokeLinejoin="round" />
+            <Path d="M12 62.5 L92 62.5" stroke="#FFFFFF" strokeWidth={2.4} />
+            <Path d="M20 66 L27 66 L24 70 L30 70 L21 76 L23 71 L18 71Z" fill="#FFD23F" stroke={BOAT_LINE} strokeWidth={1} strokeLinejoin="round" />
+            <Path d="M47 65.5 Q58 64.5 69 65.5 L68 72 Q58 73.5 48 72Z" fill="#FFFFFF" stroke={BOAT_LINE} strokeWidth={1.8} strokeLinejoin="round" />
+            <Path d="M47.5 68.8 Q58 68.2 68.5 68.8 M52.5 65.2 L52.5 72.6 M58 65 L58 73 M63.5 65.2 L63.5 72.6" stroke={BOAT_LINE} strokeWidth={1} />
+            <Path d="M45 64 L48 66 M71 64 L68 66" stroke={BOAT_LINE} strokeWidth={1.6} strokeLinecap="round" />
+          </Part>
+          {/* gerbe d'eau à la proue */}
+          <Part s={s} box={[80, 50, 24, 30]} style={bow}>
+            <Path d="M86 76 Q92 60 102 56 Q96 64 98 72 Q100 64 104 64 Q100 70 99 78Z" fill="#FFFFFF" stroke="#8FCBFF" strokeWidth={1.2} strokeLinejoin="round" />
+            <Circle cx={96} cy={55} r={1.6} fill="#FFFFFF" />
+            <Circle cx={101} cy={60} r={1.2} fill="#FFFFFF" />
           </Part>
         </Group>
         <Part s={s} box={[-20, 70, 140, 30]} style={near}>
           <Path d={wavePath(76, 3)} fill="#1E6FD0" />
           <Path d={wavePath(76, 3, 78)} fill="none" stroke="#BFE4FF" strokeWidth={1.6} />
         </Part>
-        {[0, 1, 2].map((k) => (
-          <Smoke key={k} s={s} t={t} k={k} />
-        ))}
+        {/* grande gerbe quand il pile */}
+        <Part s={s} box={[4, 44, 92, 40]} style={splash}>
+          {/* deux gerbes en couronne, de part et d'autre de la coque */}
+          <Path d="M10 80 Q8 66 4 60 Q12 64 15 72 Q15 58 20 50 Q22 62 22 72 Q26 62 32 58 Q28 68 28 80Z" fill="#FFFFFF" stroke="#4F9FE8" strokeWidth={1.3} strokeLinejoin="round" />
+          <Path d="M90 80 Q92 66 96 60 Q88 64 85 72 Q85 58 80 50 Q78 62 78 72 Q74 62 68 58 Q72 68 72 80Z" fill="#FFFFFF" stroke="#4F9FE8" strokeWidth={1.3} strokeLinejoin="round" />
+          <Circle cx={8} cy={52} r={2} fill="#FFFFFF" stroke="#4F9FE8" strokeWidth={0.8} />
+          <Circle cx={92} cy={52} r={2} fill="#FFFFFF" stroke="#4F9FE8" strokeWidth={0.8} />
+          <Circle cx={26} cy={47} r={1.6} fill="#FFFFFF" stroke="#4F9FE8" strokeWidth={0.8} />
+          <Circle cx={74} cy={47} r={1.6} fill="#FFFFFF" stroke="#4F9FE8" strokeWidth={0.8} />
+        </Part>
       </Disc>
       <Rim s={s} color="#1E6FD0" />
-      {/* « pouuuh » : les ondes de la corne */}
-      <Part s={s} box={[66, 2, 34, 30]} style={horn}>
-        <Path d="M72 18 Q76 12 82 12 M72 22 Q80 10 90 10 M74 26 Q86 12 98 12" stroke="#FFFFFF" strokeWidth={2.6} fill="none" strokeLinecap="round" />
-      </Part>
     </>
   );
 }
 
-function Smoke({ s, t, k }: { s: number; t: T; k: number }) {
+/** Traits de vitesse qui filent vers l'arrière. */
+function SpeedLine({ s, t, k }: { s: number; t: T; k: number }) {
+  const y = [24, 36, 48, 84, 91][k];
   const style = useAnimatedStyle(() => {
-    const p = frac(t.value * 1.5 + k / 3);
-    const big = 1 + bump(t.value, HORN[0], HORN[1]) * 0.6;
-    return { opacity: bump(p, 0, 1) * 0.9, transform: [{ translateX: (p * 10 - 2) * s }, { translateY: -p * 16 * s }, { scale: (0.5 + p * 0.9) * big }] };
+    const sp = boatSpeed(t.value);
+    const p = frac(t.value * 7 + k * 0.37);
+    return { opacity: sp * bump(p, 0, 1), transform: [{ translateX: (60 - p * 140) * s }] };
   });
   return (
-    <Part s={s} box={[56, 12, 16, 14]} style={style}>
-      <Circle cx={62} cy={20} r={4.6} fill="#E8E8EE" stroke="#A0A0AE" strokeWidth={1} />
-      <Circle cx={67} cy={18} r={3.4} fill="#F4F4F8" />
+    <Part s={s} box={[30, y - 2, 40, 4]} style={style}>
+      <Line x1={32} y1={y} x2={68} y2={y} stroke={k < 3 ? '#2F86E0' : '#FFFFFF'} strokeWidth={2.6} strokeLinecap="round" opacity={k < 3 ? 0.55 : 0.95} />
+    </Part>
+  );
+}
+
+/** Gouttes d'écume qui giclent derrière le bateau. */
+function Spray({ s, t, k }: { s: number; t: T; k: number }) {
+  const style = useAnimatedStyle(() => {
+    const sp = boatSpeed(t.value);
+    const p = frac(t.value * 9 + k * 0.25);
+    return { opacity: sp * (1 - p), transform: [{ translateX: -p * (18 + k * 4) * s }, { translateY: (-Math.sin(p * Math.PI) * (8 + k * 2) + p * 4) * s }, { scale: 1 - p * 0.4 }] };
+  });
+  return (
+    <Part s={s} box={[8, 66, 10, 10]} style={style}>
+      <Circle cx={13} cy={71} r={2.2} fill="#FFFFFF" stroke="#8FCBFF" strokeWidth={0.8} />
+    </Part>
+  );
+}
+
+/** Fumée de la cheminée : grosse quand le moteur vrombit, couchée vers l'arrière quand il fonce. */
+function Smoke({ s, t, k }: { s: number; t: T; k: number }) {
+  const style = useAnimatedStyle(() => {
+    const v = t.value;
+    const sp = boatSpeed(v);
+    const p = frac(v * (2 + sp * 3) + k / 3);
+    const big = 1 + (v < REV + 0.04 ? 0.5 : 0) + sp * 0.2;
+    return { opacity: bump(p, 0, 1) * 0.9, transform: [{ translateX: (-p * (4 + sp * 22)) * s }, { translateY: -p * (14 - sp * 9) * s }, { scale: (0.5 + p * 0.9) * big }] };
+  });
+  return (
+    <Part s={s} box={[18, 18, 16, 14]} style={style}>
+      <Circle cx={24} cy={26} r={4.6} fill="#5A5A66" stroke="#3A3A44" strokeWidth={1} />
+      <Circle cx={29} cy={24} r={3.4} fill="#7A7A86" />
     </Part>
   );
 }
@@ -478,58 +661,99 @@ function Snow({ s, t, k }: { s: number; t: T; k: number }) {
 /* ---------------------------------- Orage --------------------------------- */
 
 const CLOUD_LINE = '#1E1A3A';
-const STRIKE = 0.4;
+/** Le nuage se charge d'électricité et gonfle (CHARGE → STRIKE), puis lâche tout d'un coup. */
+const CHARGE = 0.05;
+const STRIKE = 0.36;
+const CLOUD_PATH = 'M16 58 Q4 58 6 46 Q8 36 20 37 Q18 22 34 20 Q42 10 56 14 Q68 10 74 22 Q90 22 90 36 Q98 42 92 52 Q90 60 80 60 L20 60 Q17 60 16 58Z';
+
+/** Charge électrique, de 0 à 1 (retombe d'un coup à l'éclair). */
+function charge(v: number) {
+  'worklet';
+  return v < STRIKE ? seg(v, CHARGE, STRIKE) : 0;
+}
+/** Taille du nuage : il gonfle, se vide d'un coup (avec un petit rebond), puis reprend sa taille. */
+function cloudScale(v: number) {
+  'worklet';
+  if (v < STRIKE) {
+    const c = seg(v, CHARGE, STRIKE);
+    return 1 + 0.2 * c * c;
+  }
+  const q = v - STRIKE;
+  const drop = seg(v, STRIKE, STRIKE + 0.08);
+  return 1.2 - 0.34 * drop + 0.14 * seg(v, 0.7, 0.98) + 0.05 * Math.sin(q * 60) * Math.exp(-q * 12);
+}
 
 function Storm({ s, t }: { s: number; t: T }) {
   const g = useG();
   const cloud = useAnimatedStyle(() => {
     const v = t.value;
-    const rumble = seg(v, 0.08, 0.3) * (1 - seg(v, STRIKE, STRIKE + 0.02));
-    const recoil = bump(v, STRIKE - 0.02, STRIKE + 0.12);
-    return { transform: [{ translateX: osc(v, 18) * rumble * 1.8 * s }, { translateY: -recoil * 3 * s }, { scale: 1 + rumble * 0.05 - recoil * 0.04 }] };
+    const c = charge(v);
+    const shake = c * c;
+    const recoil = bump(v, STRIKE, STRIKE + 0.12);
+    const sc = cloudScale(v);
+    return {
+      transform: [
+        { translateX: osc(v, 23) * shake * 2.6 * s },
+        { translateY: (osc(v, 17, 0.3) * shake * 1.4 - recoil * 5) * s },
+        ...around(0, -12, s, [{ scaleX: sc * (1 + 0.04 * recoil) }, { scaleY: sc * (1 - 0.06 * recoil) }]),
+      ],
+    };
   });
-  const arm = useAnimatedStyle(() => {
+  // halo jaune derrière le nuage, de plus en plus fort, qui grésille
+  const glow = useAnimatedStyle(() => {
     const v = t.value;
-    const back = seg(v, 0.1, 0.32) * (1 - seg(v, STRIKE - 0.04, STRIKE));
-    const swing = seg(v, STRIKE - 0.04, STRIKE + 0.02) * (1 - seg(v, 0.75, 0.9));
-    return { transform: around(-8, 6, s, [{ rotate: `${-55 * back + 40 * swing}deg` }]) };
+    const c = charge(v);
+    return { opacity: c * (0.65 + 0.35 * Math.abs(Math.sin(v * 190))) + bump(v, STRIKE, STRIKE + 0.1) * 0.8, transform: [{ scale: 0.7 + c * 0.5 }] };
   });
-  const held = useAnimatedStyle(() => ({ opacity: t.value > 0.08 && t.value < STRIKE - 0.01 ? 1 : 0 }));
+  // le nuage s'illumine de l'intérieur
+  const lit = useAnimatedStyle(() => {
+    const v = t.value;
+    const c = charge(v);
+    return { opacity: c * c * (0.4 + 0.35 * Math.abs(Math.sin(v * 230))) };
+  });
   const bolt = useAnimatedStyle(() => {
     const v = t.value;
-    const grow = seg(v, STRIKE - 0.01, STRIKE + 0.04);
-    const flick = v < STRIKE + 0.2 ? (Math.sin(v * 260) > -0.4 ? 1 : 0.35) : 1 - seg(v, STRIKE + 0.2, STRIKE + 0.3);
-    return { opacity: v > STRIKE - 0.01 && v < STRIKE + 0.3 ? flick : 0, transform: around(6, -22, s, [{ scaleY: grow }, { scaleX: 0.6 + grow * 0.4 }]) };
+    const grow = seg(v, STRIKE, STRIKE + 0.03);
+    const flick = v < STRIKE + 0.16 ? (Math.sin(v * 300) > -0.5 ? 1 : 0.3) : 1 - seg(v, STRIKE + 0.16, STRIKE + 0.26);
+    return { opacity: v > STRIKE && v < STRIKE + 0.26 ? flick : 0, transform: around(0, -27, s, [{ scaleY: grow }, { scaleX: 0.7 + grow * 0.3 }]) };
   });
-  const flash = useAnimatedStyle(() => ({ opacity: bump(t.value, STRIKE, STRIKE + 0.06) * 0.85 + bump(t.value, STRIKE + 0.09, STRIKE + 0.13) * 0.5 }));
-  const boom = useAnimatedStyle(() => ({ opacity: bump(t.value, STRIKE + 0.02, STRIKE + 0.22), transform: [{ scale: 0.4 + seg(t.value, STRIKE + 0.02, STRIKE + 0.22) * 1.1 }] }));
-  const brows = useAnimatedStyle(() => ({ transform: [{ translateY: (seg(t.value, 0.08, 0.2) * 2 - bump(t.value, STRIKE + 0.04, 0.8) * 2.5) * s }] }));
-  const grin = useAnimatedStyle(() => ({ opacity: t.value > STRIKE + 0.04 && t.value < 0.85 ? 1 : 0 }));
-  const frown = useAnimatedStyle(() => ({ opacity: t.value > STRIKE + 0.04 && t.value < 0.85 ? 0 : 1 }));
+  const flash = useAnimatedStyle(() => ({ opacity: bump(t.value, STRIKE, STRIKE + 0.05) * 0.9 + bump(t.value, STRIKE + 0.08, STRIKE + 0.11) * 0.45 }));
+  const impact = useAnimatedStyle(() => ({ opacity: bump(t.value, STRIKE + 0.01, STRIKE + 0.2), transform: [{ scale: 0.4 + seg(t.value, STRIKE + 0.01, STRIKE + 0.2) * 1.1 }] }));
+  // visages : il retient son souffle en se chargeant, rugit en lâchant tout, puis souffle, soulagé
+  const holding = useAnimatedStyle(() => ({ opacity: t.value > 0.1 && t.value < STRIKE ? 1 : 0 }));
+  const roaring = useAnimatedStyle(() => ({ opacity: t.value >= STRIKE && t.value < STRIKE + 0.22 ? 1 : 0 }));
+  const relieved = useAnimatedStyle(() => ({ opacity: t.value >= STRIKE + 0.22 && t.value < 0.88 ? 1 : 0 }));
+  const grumpy = useAnimatedStyle(() => ({ opacity: t.value <= 0.1 || t.value >= 0.88 ? 1 : 0 }));
+  const cheeks = useAnimatedStyle(() => ({ opacity: t.value > 0.1 && t.value < STRIKE ? 1 : 0, transform: [{ scale: 0.6 + charge(t.value) * 0.6 }] }));
   return (
     <>
-      {Array.from({ length: 6 }, (_, k) => (
+      {Array.from({ length: 10 }, (_, k) => (
         <Rain key={k} s={s} t={t} k={k} />
       ))}
-      {/* l'éclair lancé : il part du nuage et frappe le sol */}
-      <Part s={s} box={[28, 44, 44, 56]} style={bolt}>
-        <Path d="M58 46 L44 70 L53 70 L38 98 L64 64 L54 64 L66 46Z" fill="#FFE45C" stroke="#FF9A1F" strokeWidth={2.2} strokeLinejoin="round" />
-        <Path d="M60 49 L49 68 L57 68 L45 90" stroke="#FFFFFF" strokeWidth={2} fill="none" strokeLinejoin="round" />
+      {/* le grand éclair : du nuage jusqu'au sol */}
+      <Part s={s} box={[16, 46, 66, 54]} style={bolt}>
+        <Path d="M60 48 L34 76 L49 76 L28 100 L76 64 L58 64 L74 48Z" fill="#FFE45C" stroke="#FF9A1F" strokeWidth={2.6} strokeLinejoin="round" />
+        <Path d="M63 52 L41 74 L54 74 L37 94" stroke="#FFFFFF" strokeWidth={2.6} fill="none" strokeLinejoin="round" />
+        <Path d="M36 76 L22 84 L27 86 L18 96" stroke="#FFF3A0" strokeWidth={2} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+        <Path d="M66 64 L76 74 L72 76 L80 86" stroke="#FFF3A0" strokeWidth={1.8} fill="none" strokeLinejoin="round" strokeLinecap="round" />
       </Part>
-      <Part s={s} box={[20, 80, 40, 20]} style={boom}>
-        <Path d="M40 96 L30 86 M40 96 L40 82 M40 96 L50 86 M40 96 L26 94 M40 96 L54 94" stroke="#FFE45C" strokeWidth={2.6} strokeLinecap="round" />
+      <Part s={s} box={[18, 80, 44, 20]} style={impact}>
+        <Path d="M38 97 L26 86 M38 97 L38 82 M38 97 L50 86 M38 97 L22 95 M38 97 L54 95" stroke="#FFE45C" strokeWidth={2.6} strokeLinecap="round" />
       </Part>
+      {[0, 1].map((k) => (
+        <StormWave key={k} s={s} t={t} k={k} />
+      ))}
       <Group s={s} style={cloud}>
-        {/* le bras qui tient l'éclair, puis le lance */}
-        <Group s={s} style={arm}>
-          <Part s={s} box={[62, 18, 36, 34]} style={held}>
-            <Path d="M86 20 L80 32 L85 32 L79 46 L92 29 L87 29 L93 20Z" fill="#FFE45C" stroke="#FF9A1F" strokeWidth={1.6} strokeLinejoin="round" />
-          </Part>
-          <Part s={s} box={[66, 30, 24, 24]}>
-            <Circle cx={80} cy={42} r={7} fill="#7E77AE" stroke={CLOUD_LINE} strokeWidth={2.2} />
-            <Circle cx={76} cy={38} r={2.2} fill="#A9A2D6" />
-          </Part>
-        </Group>
+        <Part s={s} box={[0, 0, 100, 76]} style={glow}>
+          <Defs>
+            <RadialGradient id={g('g-storm-glow')} cx="50%" cy="50%" r="50%">
+              <Stop offset="0" stopColor="#FFF6A0" stopOpacity={0.95} />
+              <Stop offset="0.6" stopColor="#FFE14D" stopOpacity={0.45} />
+              <Stop offset="1" stopColor="#FFE14D" stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          <Ellipse cx={50} cy={38} rx={50} ry={38} fill={`url(#${g('g-storm-glow')})`} />
+        </Part>
         <Part s={s} box={[4, 8, 92, 60]}>
           <Defs>
             <LinearGradient id={g('g-storm')} x1="0" y1="0" x2="0" y2="1">
@@ -538,31 +762,53 @@ function Storm({ s, t }: { s: number; t: T }) {
               <Stop offset="1" stopColor="#433C6E" />
             </LinearGradient>
           </Defs>
-          <Path
-            d="M16 58 Q4 58 6 46 Q8 36 20 37 Q18 22 34 20 Q42 10 56 14 Q68 10 74 22 Q90 22 90 36 Q98 42 92 52 Q90 60 80 60 L20 60 Q17 60 16 58Z"
-            fill={`url(#${g('g-storm')})`}
-            stroke={CLOUD_LINE}
-            strokeWidth={2.6}
-            strokeLinejoin="round"
-          />
+          <Path d={CLOUD_PATH} fill={`url(#${g('g-storm')})`} stroke={CLOUD_LINE} strokeWidth={2.6} strokeLinejoin="round" />
           <Path d="M26 30 Q30 24 38 24 M58 20 Q64 18 68 24" stroke="#CFC9F0" strokeWidth={2.4} fill="none" strokeLinecap="round" opacity={0.8} />
         </Part>
-        {/* le visage en colère */}
-        <Part s={s} box={[28, 32, 44, 16]}>
+        <Part s={s} box={[4, 8, 92, 60]} style={lit}>
+          <Path d={CLOUD_PATH} fill="#ECE6FF" />
+        </Part>
+        {/* les étincelles qui courent sur le nuage */}
+        {CRACKLES.map((_, k) => (
+          <Crackle key={k} s={s} t={t} k={k} />
+        ))}
+        {/* il fait la tête */}
+        <Part s={s} box={[28, 30, 44, 28]} style={grumpy}>
           <Path d="M32 40 Q32 46 38 46 Q44 46 44 40Z" fill="#FFFFFF" stroke={CLOUD_LINE} strokeWidth={1.6} />
           <Path d="M56 40 Q56 46 62 46 Q68 46 68 40Z" fill="#FFFFFF" stroke={CLOUD_LINE} strokeWidth={1.6} />
           <Circle cx={39} cy={42.4} r={2.2} fill="#14102A" />
           <Circle cx={61} cy={42.4} r={2.2} fill="#14102A" />
-        </Part>
-        <Part s={s} box={[28, 30, 44, 12]} style={brows}>
-          <Path d="M30 34 L45 39 M70 34 L55 39" stroke={CLOUD_LINE} strokeWidth={3.4} strokeLinecap="round" />
-        </Part>
-        <Part s={s} box={[38, 46, 24, 12]} style={frown}>
+          <Path d="M31 34.5 L45 38.5 M69 34.5 L55 38.5" stroke={CLOUD_LINE} strokeWidth={3.4} strokeLinecap="round" />
           <Path d="M41 54 Q50 47 59 54" stroke={CLOUD_LINE} strokeWidth={3} fill="none" strokeLinecap="round" />
         </Part>
-        <Part s={s} box={[38, 46, 24, 12]} style={grin}>
-          <Path d="M41 49 Q50 57 59 49 Z" fill="#FFFFFF" stroke={CLOUD_LINE} strokeWidth={2} strokeLinejoin="round" />
-          <Path d="M45 50 L45 53 M50 50.5 L50 54 M55 50 L55 53" stroke={CLOUD_LINE} strokeWidth={1} />
+        {/* il retient son souffle : yeux plissés, joues gonflées, bouche pincée */}
+        <Part s={s} box={[28, 30, 44, 28]} style={holding}>
+          <Path d="M33 39 L42 42.5 L33 46" stroke={CLOUD_LINE} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M67 39 L58 42.5 L67 46" stroke={CLOUD_LINE} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M31 33.5 L45 38 M69 33.5 L55 38" stroke={CLOUD_LINE} strokeWidth={3.4} strokeLinecap="round" />
+          <Path d="M44 52 Q47 50 50 52 Q53 54 56 52" stroke={CLOUD_LINE} strokeWidth={2.6} fill="none" strokeLinecap="round" />
+        </Part>
+        <Part s={s} box={[26, 44, 48, 14]} style={cheeks}>
+          <Ellipse cx={34} cy={51} rx={5} ry={3.4} fill="#FF8FB0" opacity={0.75} />
+          <Ellipse cx={66} cy={51} rx={5} ry={3.4} fill="#FF8FB0" opacity={0.75} />
+        </Part>
+        {/* il lâche tout : yeux grands ouverts, gueule ouverte */}
+        <Part s={s} box={[28, 28, 44, 32]} style={roaring}>
+          <Circle cx={38} cy={41} r={5.4} fill="#FFFFFF" stroke={CLOUD_LINE} strokeWidth={1.6} />
+          <Circle cx={62} cy={41} r={5.4} fill="#FFFFFF" stroke={CLOUD_LINE} strokeWidth={1.6} />
+          <Circle cx={38} cy={41.5} r={2} fill="#14102A" />
+          <Circle cx={62} cy={41.5} r={2} fill="#14102A" />
+          <Path d="M30 32 L45 36.5 M70 32 L55 36.5" stroke={CLOUD_LINE} strokeWidth={3.4} strokeLinecap="round" />
+          <Path d="M40 48 Q50 46 60 48 Q59 59 50 59 Q41 59 40 48Z" fill="#3A0E1E" stroke={CLOUD_LINE} strokeWidth={2} strokeLinejoin="round" />
+          <Path d="M42 48.5 L44 51 L46 48.2 L48 51 L50 48 L52 51 L54 48.2 L56 51 L58 48.5" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth={0.6} strokeLinejoin="round" />
+          <Ellipse cx={50} cy={56} rx={4.5} ry={1.8} fill="#FF6F7D" />
+        </Part>
+        {/* puis il souffle, soulagé */}
+        <Part s={s} box={[28, 30, 44, 28]} style={relieved}>
+          <Path d="M33 43 Q38 46.5 43 43" stroke={CLOUD_LINE} strokeWidth={2.8} fill="none" strokeLinecap="round" />
+          <Path d="M57 43 Q62 46.5 67 43" stroke={CLOUD_LINE} strokeWidth={2.8} fill="none" strokeLinecap="round" />
+          <Path d="M33 37 L43 36 M57 36 L67 37" stroke={CLOUD_LINE} strokeWidth={2.6} strokeLinecap="round" />
+          <Ellipse cx={50} cy={52} rx={3.4} ry={2.8} fill="#3A0E1E" stroke={CLOUD_LINE} strokeWidth={1.6} />
         </Part>
       </Group>
       <Part s={s} box={[0, 0, 100, 100]} style={flash}>
@@ -572,15 +818,60 @@ function Storm({ s, t }: { s: number; t: T }) {
   );
 }
 
-function Rain({ s, t, k }: { s: number; t: T; k: number }) {
-  const x = 18 + k * 12;
+/** Étincelles sur le nuage : [x, y, angle]. */
+const CRACKLES: [number, number, number][] = [
+  [22, 40, -10],
+  [36, 24, 20],
+  [56, 18, -25],
+  [74, 28, 15],
+  [86, 44, -20],
+  [30, 56, 5],
+  [68, 56, -5],
+];
+
+function Crackle({ s, t, k }: { s: number; t: T; k: number }) {
+  const [x, y, r] = CRACKLES[k];
   const style = useAnimatedStyle(() => {
-    const p = frac(t.value * 3 + k * 0.37);
-    return { opacity: bump(p, 0, 1) * 0.9, transform: [{ translateY: p * 30 * s }, { translateX: -p * 4 * s }] };
+    const v = t.value;
+    const c = charge(v);
+    // de plus en plus souvent à mesure que le nuage se charge
+    const on = c > 0.12 && Math.sin(v * (260 + k * 61) + k * 2.3) > 0.75 - c * 0.9;
+    return { opacity: on ? 1 : 0, transform: [{ rotate: `${r + Math.sin(v * 310 + k) * 35}deg` }, { scale: 0.7 + c * 0.6 }] };
   });
   return (
-    <Part s={s} box={[x - 4, 60, 8, 14]} style={style}>
-      <Line x1={x + 1.5} y1={62} x2={x - 1.5} y2={71} stroke="#8FD0FF" strokeWidth={2.2} strokeLinecap="round" />
+    <Part s={s} box={[x - 9, y - 9, 18, 18]} style={style}>
+      <Path d={`M${x - 7} ${y - 2} L${x - 2} ${y - 3} L${x - 3} ${y + 2} L${x + 3} ${y + 1} L${x + 2} ${y + 5} L${x + 7} ${y + 3}`} stroke="#FFF36B" strokeWidth={2.2} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+      <Path d={`M${x - 7} ${y - 2} L${x - 2} ${y - 3} L${x - 3} ${y + 2} L${x + 3} ${y + 1} L${x + 2} ${y + 5} L${x + 7} ${y + 3}`} stroke="#FFFFFF" strokeWidth={0.9} fill="none" strokeLinejoin="round" />
+    </Part>
+  );
+}
+
+/** Onde de choc : un anneau jaune qui part du nuage quand il lâche tout. */
+function StormWave({ s, t, k }: { s: number; t: T; k: number }) {
+  const style = useAnimatedStyle(() => {
+    const a = STRIKE + k * 0.05;
+    const p = seg(t.value, a, a + 0.22);
+    return { opacity: t.value > a && t.value < a + 0.24 ? (1 - p) * 0.95 : 0, transform: [{ scale: 0.35 + p * (1.25 - k * 0.15) }] };
+  });
+  return (
+    <Part s={s} box={[0, 0, 100, 100]} style={style}>
+      <Circle cx={50} cy={50} r={44} fill="none" stroke={k ? '#FFFFFF' : '#FFF36B'} strokeWidth={k ? 2.2 : 4.5} />
+    </Part>
+  );
+}
+
+/** Pluie : une averse quand le nuage se vide. */
+function Rain({ s, t, k }: { s: number; t: T; k: number }) {
+  const x = 16 + k * 7.4;
+  const style = useAnimatedStyle(() => {
+    const v = t.value;
+    const pour = seg(v, STRIKE + 0.02, STRIKE + 0.08) * (1 - seg(v, 0.82, 0.94));
+    const p = frac(v * 5 + k * 0.37);
+    return { opacity: bump(p, 0, 1) * pour, transform: [{ translateY: p * 32 * s }, { translateX: -p * 5 * s }] };
+  });
+  return (
+    <Part s={s} box={[x - 4, 58, 8, 14]} style={style}>
+      <Line x1={x + 1.5} y1={60} x2={x - 1.5} y2={69} stroke="#8FD0FF" strokeWidth={2.2} strokeLinecap="round" />
     </Part>
   );
 }
@@ -754,7 +1045,7 @@ function BotSmoke({ s, t, k }: { s: number; t: T; k: number }) {
 
 const GOLD_LINE = '#3A2410';
 /** Le spectre jaillit du cadre, hurle, puis y retourne. */
-const BURST: [number, number] = [0.3, 0.84];
+const BURST: [number, number] = [0.21, 0.84];
 
 function Portrait({ s, t }: { s: number; t: T }) {
   const g = useG();
