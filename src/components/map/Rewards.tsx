@@ -1,7 +1,8 @@
 /**
  * Récompenses sur la carte de l'aventure :
- *  - l'emote d'un monde, en pastille à côté de son boss (verrouillée : un peu
- *    sombre, avec un cadenas ; à moi : vive, avec une coche) ;
+ *  - l'emote d'un monde, en grande pastille à côté de son boss, toujours en
+ *    couleurs (verrouillée : anneau argenté et cadenas ; à moi : anneau doré
+ *    et coche) ;
  *  - la carte Galaxy, tout en haut, au-dessus du Grand Portrait.
  * On les touche pour ouvrir leur fiche (`RewardPopup`) : l'emote en grand,
  * animée, avec son son, ou l'aperçu de la carte Galaxy, et comment l'obtenir.
@@ -34,8 +35,9 @@ import { OUTLINE } from './worlds';
 export type MapReward = { kind: 'emote'; m: MapEmote } | { kind: 'galaxy'; state: GalaxyState };
 
 /** Pastille d'une emote sur la carte (anneau compris). */
-const RING = 56;
-const BADGE = RING - 10;
+const RING = 84;
+const BADGE = RING - 12;
+const CHIP = 24;
 const LOCKED = '#6E747D';
 const GALAXY = '#B98CFF';
 
@@ -75,7 +77,7 @@ export const EmoteMarker = memo(function EmoteMarker({ m, x, y, alive, onReward 
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: -bob.value * 4 }, { scale: 1 - press.value * 0.1 }] }));
   if (!def) return null;
   return (
-    <View style={[styles.abs, { left: x - 40, top: y - RING / 2 - 2, width: 80, alignItems: 'center' }]} pointerEvents="box-none">
+    <View style={[styles.abs, { left: x - 55, top: y - RING / 2 - 2, width: 110, alignItems: 'center' }]} pointerEvents="box-none">
       <Pressable
         onPress={onPress}
         onPressIn={onPressIn}
@@ -85,15 +87,14 @@ export const EmoteMarker = memo(function EmoteMarker({ m, x, y, alive, onReward 
         accessibilityLabel={`Emote ${def.name}, ${m.owned ? 'débloquée' : `se débloque en finissant le monde ${m.worldName}`}`}
       >
         <Animated.View style={[{ alignItems: 'center' }, style]}>
-          {/* anneau doré (à moi) ou gris (verrouillée), comme les niveaux */}
-          <View style={[styles.ring, { backgroundColor: m.owned ? '#FFD54F' : '#B9BEC6' }]}>
+          {/* anneau doré (à moi) ou argenté (verrouillée) ; l'emote reste en couleurs : on voit ce qu'on gagne */}
+          <View style={[styles.ring, { backgroundColor: m.owned ? '#FFD54F' : '#DDE2EA' }]}>
             <View style={[styles.badge, { backgroundColor: def.color }]}>
-              <EmoteArt id={m.id} size={BADGE - 4} animated={alive} />
-              {!m.owned ? <View style={styles.dim} pointerEvents="none" /> : null}
+              <EmoteArt id={m.id} size={BADGE - 2} animated={alive} />
             </View>
           </View>
-          <View style={[styles.chip, { backgroundColor: m.owned ? colors.success : LOCKED }]}>
-            <Ionicons name={m.owned ? 'checkmark' : 'lock-closed'} size={11} color={m.owned ? '#0B3B2A' : '#FFFFFF'} />
+          <View style={[styles.chip, styles.chipBig, { backgroundColor: m.owned ? colors.success : LOCKED }]}>
+            <Ionicons name={m.owned ? 'checkmark' : 'lock-closed'} size={13} color={m.owned ? '#0B3B2A' : '#FFFFFF'} />
           </View>
           <View style={[styles.tag, { backgroundColor: m.owned ? def.color : '#2A2D36' }]}>
             <AppText style={[styles.tagText, m.owned && { color: '#141414' }]}>EMOTE</AppText>
@@ -288,10 +289,11 @@ const styles = StyleSheet.create({
   abs: { position: 'absolute' },
   ring: { width: RING, height: RING, borderRadius: RING / 2, borderWidth: 3, borderColor: OUTLINE, alignItems: 'center', justifyContent: 'center' },
   badge: { width: BADGE, height: BADGE, borderRadius: BADGE / 2, borderWidth: 2.5, borderColor: OUTLINE, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  dim: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(16,16,26,0.34)' },
-  chip: { position: 'absolute', right: -5, top: RING - 22, width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: OUTLINE, alignItems: 'center', justifyContent: 'center' },
-  tag: { marginTop: -7, paddingHorizontal: 6, height: 15, borderRadius: 5, borderWidth: 2, borderColor: OUTLINE, justifyContent: 'center' },
-  tagText: { fontFamily: fonts.black, fontSize: 8, lineHeight: 10, letterSpacing: 0.6, color: '#FFFFFF' },
+  chip: { position: 'absolute', right: -5, top: 36, width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: OUTLINE, alignItems: 'center', justifyContent: 'center' },
+  // pastille d'emote : en bas à droite de l'anneau
+  chipBig: { right: 0, top: RING - CHIP - 2, width: CHIP, height: CHIP, borderRadius: CHIP / 2 },
+  tag: { marginTop: -9, paddingHorizontal: 8, height: 18, borderRadius: 6, borderWidth: 2, borderColor: OUTLINE, justifyContent: 'center' },
+  tagText: { fontFamily: fonts.black, fontSize: 10, lineHeight: 12, letterSpacing: 0.8, color: '#FFFFFF' },
   mystery: { fontFamily: fonts.black, fontSize: 26, lineHeight: 32, color: '#FFFFFF', opacity: 0.85, textShadowColor: '#6A2FC2', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 },
   galaxyTag: { marginTop: 6, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8, backgroundColor: '#2A1650', borderWidth: 2, borderColor: OUTLINE, alignItems: 'center' },
   galaxyKicker: { fontFamily: fonts.bold, fontSize: 8, lineHeight: 10, letterSpacing: 0.8, color: '#D9C8FF', textTransform: 'uppercase' },

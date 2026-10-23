@@ -776,6 +776,88 @@ def make_cool():
     return finish(buf, dur, room=0.14)
 
 
+def party_horn(dur, f0, amp=1.0):
+    """Langue de belle-mère : une anche de papier qui bourdonne (dent de scie
+    nasale, hauteur `f0` [(t, Hz)]), et le papier qui frise et vibre."""
+    n = n_of(dur)
+    t = t_axis(dur)
+    f = track(f0, n, smooth=True) * (1 + 0.012 * np.sin(2 * math.pi * 7 * t))
+    ph = 2 * math.pi * np.cumsum(f) / SR
+    x = np.zeros(n)
+    for k in range(1, 28):
+        x += np.sin(k * ph) / k * (k * f < SR * 0.45)
+    # le papier qui frise : un léger crépitement de l'amplitude
+    flutter = 1 + 0.35 * np.tanh(onepole_lp(noise(n), 90) * 6)
+    x = x * flutter
+    x = biquad(x, "bp", 1250, 0.9) * 1.2 + biquad(x, "bp", 2600, 2.2) * 0.5 + biquad(x, "lp", 900, 0.7) * 0.4
+    x = np.tanh(x * 2.2)
+    e = np.clip(t / 0.012, 0, 1) * np.clip((dur - t) / 0.03, 0, 1)
+    return x * e * amp
+
+
+def make_party():
+    """Fête : deux coups de langue de belle-mère (« prout » court, puis un long
+    « pouêêêt » qui se déroule et retombe), un « youpi ! » tout content et les
+    confettis qui scintillent."""
+    dur = 1.36
+    buf = np.zeros(n_of(dur))
+    place(buf, party_horn(0.3, [(0, 400), (0.06, 470), (0.3, 455)]), 0.06, 0.5)
+    place(buf, party_horn(0.5, [(0, 410), (0.08, 490), (0.36, 505), (0.5, 380)]), 0.46, 0.6)
+    # le papier qui se déroule et s'enroule (petits froissements)
+    for at in (0.06, 0.33, 0.46, 0.93):
+        place(buf, hiss(0.05, "bp", 3800, 1.2, attack=0.004, decay=60), at, 0.25)
+    L = 0.15
+    you = voice(L, [(0, 470), (L, 560)], [(0, "y"), (0.05, "u"), (L, "u")], [(0, 0), (0.02, 1), (L * 0.7, 0.8), (L, 0)], aspir=[(0, 0.5), (0.03, 0.05), (L, 0.1)], scale=1.25, breath=0.25, tense=0.6)
+    place(buf, you, 0.98)
+    place(buf, click(1800, 2, 0.02, 200), 1.135, 0.35)
+    L = 0.2
+    pi = voice(L, [(0, 640), (0.06, 760), (L, 700)], [(0, "i"), (L, "i")], [(0, 0), (0.015, 1), (L * 0.6, 0.85), (L, 0)], aspir=[(0, 0.4), (0.02, 0.05), (L, 0.2)], scale=1.25, breath=0.25, tense=0.6, vib=(0.02, 7))
+    place(buf, pi, 1.15)
+    for at, f in ((0.95, 3136), (1.02, 3951), (1.1, 2637), (1.18, 4699), (1.26, 3520)):
+        place(buf, bell(f, 0.22, 0.28, bright=0.5, decay=6), at)
+    return finish(buf, dur, room=0.12)
+
+
+def make_monkey():
+    """Singe : « ou-ou-ah-ah ! » (deux « hou » qui montent, deux « ha » qui
+    descendent, voix aiguë de singe), puis il se gratte la tête (« scritch
+    scritch », des frottements rapides dans les poils)."""
+    dur = 1.36
+    buf = np.zeros(n_of(dur))
+    calls = (
+        (0.04, 0.15, (420, 760), ("u", "u"), 0.9),
+        (0.21, 0.15, (460, 820), ("u", "u"), 0.95),
+        (0.39, 0.16, (900, 620), ("a", "ô"), 1.0),
+        (0.58, 0.18, (860, 560), ("a", "ô"), 0.95),
+    )
+    for at, L, (a, b), (v1, v2), g in calls:
+        hoot = voice(
+            L,
+            [(0, a), (L * 0.6, b), (L, b * 0.92)],
+            [(0, v1), (L, v2)],
+            [(0, 0), (0.018, 1), (L * 0.6, 0.8), (L, 0)],
+            aspir=[(0, 0.8), (0.025, 0.08), (L, 0.25)],
+            scale=1.3,
+            breath=0.3,
+            tense=0.65,
+            jitter=0.02,
+            growl=0.08,
+        )
+        place(buf, hoot, at, g)
+    # gratt' gratt' : des aller-retours de frottement, un peu irréguliers
+    at = 0.84
+    k = 0
+    while at < 1.3:
+        L = 0.07
+        e = np.sin(math.pi * t_axis(L) / L) ** 1.5
+        sc = biquad(noise(n_of(L)), "bp", 2600 + (k % 2) * 900, 1.1) * e
+        sc = sc * (1 + 0.6 * np.sign(np.sin(2 * math.pi * 120 * t_axis(L))))
+        place(buf, sc, at, 0.26 if k % 2 else 0.34)
+        at += 0.085 + 0.012 * (k % 3)
+        k += 1
+    return finish(buf, dur, room=0.1)
+
+
 # ------------------------------------------------------------------ photo
 
 
@@ -1183,8 +1265,10 @@ SOUNDS = (
     ("sleep", make_sleep),
     ("hot", make_hot),
     ("love", make_love),
+    ("party", make_party),
     ("balloon", make_balloon),
     ("cool", make_cool),
+    ("monkey", make_monkey),
     ("selfie", make_selfie),
     ("eiffel", make_eiffel),
     ("dog", make_dog),

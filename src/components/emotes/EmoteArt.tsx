@@ -14,6 +14,7 @@ import { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, 
 import { Circle, Defs, Ellipse, Line, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { colors } from '../../theme';
+import { FUN_ART } from './EmoteArtFun';
 import { MORE_ART } from './EmoteArtMore';
 import { WORLD_ART } from './EmoteArtWorld';
 import { EyeOpen, Face, GradientSuffix, Group, LINE, Part, type T, bump, dropPath, frac, heartPath, osc, seg, springy, starPath, useG } from './emoteKit';
@@ -30,6 +31,8 @@ const DURATION: Record<string, number> = {
   sleep: 2400,
   love: 2000,
   cool: 2200,
+  party: 2400,
+  monkey: 2600,
   selfie: 2200,
   eiffel: 2400,
   dog: 2200,
@@ -38,7 +41,7 @@ const DURATION: Record<string, number> = {
   hot: 2000,
   balloon: 2600,
   car: 2000,
-  beach: 2400,
+  beach: 3200,
   cow: 2400,
   boat: 2000,
   bear: 2200,
@@ -58,6 +61,8 @@ const POSE: Record<string, number> = {
   sleep: 0.5,
   love: 0.25,
   cool: 0.6,
+  party: 0.3,
+  monkey: 0.4,
   selfie: 0.3,
   eiffel: 0.3,
   dog: 0.3,
@@ -66,7 +71,7 @@ const POSE: Record<string, number> = {
   hot: 0.35,
   balloon: 0.52,
   car: 0.12,
-  beach: 0.17,
+  beach: 0.53,
   cow: 0.7,
   boat: 0.2,
   bear: 0.5,
@@ -939,6 +944,7 @@ export const ART: Record<string, (p: { s: number; t: T }) => ReactNode> = {
   dog: Dog,
   cat: Cat,
   ...MORE_ART,
+  ...FUN_ART,
   ...WORLD_ART,
 };
 

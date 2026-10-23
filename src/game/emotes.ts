@@ -2,8 +2,8 @@
  * Emotes : des petites têtes animées qu'on envoie pendant un combat, un échange
  * ou une Pioche amicale (les deux joueurs la voient et l'entendent).
  *
- *  - 13 émotions : 4 de départ, les autres s'achètent avec des pièces
- *    (Profil → Emotes) ;
+ *  - 15 émotions : 4 de départ, les autres s'achètent avec des pièces
+ *    (Profil → Emotes ; le Singe est la plus chère) ;
  *  - 5 emotes « photo » : jamais en vente, débloquées en tirant une carte dont
  *    la photo est reconnue (selfie, monument, chien, chat, voiture) ;
  *  - 7 emotes de l'aventure : jamais en vente, débloquées en finissant un
@@ -30,8 +30,10 @@ export const EMOTE_IDS = [
   'sleep',
   'hot',
   'love',
+  'party',
   'balloon',
   'cool',
+  'monkey',
   'selfie',
   'eiffel',
   'dog',
@@ -95,8 +97,10 @@ export const EMOTES: readonly EmoteDef[] = [
   { id: 'sleep', name: 'Dodo', feeling: 's’ennuie à mourir', color: '#9C8CFF', price: 300 },
   { id: 'hot', name: 'En feu', feeling: 'a trop chaud, prend feu', color: '#FF6A2B', price: 350 },
   { id: 'love', name: 'Amoureux', feeling: 'a des cœurs dans les yeux', color: '#FF6FA8', price: 400 },
+  { id: 'party', name: 'Fête', feeling: 'souffle dans sa langue de belle-mère', color: '#B48CFF', price: 400 },
   { id: 'balloon', name: 'Ballon', feeling: 'gonfle, gonfle… et explose', color: '#FF8FD0', price: 450 },
   { id: 'cool', name: 'Trop fort', feeling: 'met ses lunettes de star', color: '#3DD6C6', price: 500 },
+  { id: 'monkey', name: 'Singe', feeling: 'se gratte la tête, perplexe', color: '#E08A3C', price: 750 },
   {
     id: 'selfie',
     name: 'Selfie',
@@ -123,7 +127,7 @@ export const EMOTES: readonly EmoteDef[] = [
     price: null,
     pack: { groups: ['car', 'sports_car'], labels: ['a toy car'], hint: 'Tire une carte voiture' },
   },
-  { id: 'beach', name: 'La Playa', feeling: 'sautille de joie sous son palmier', color: '#3FC9E8', price: null, solo: { world: 2, hint: 'Termine le monde de la Plage' } },
+  { id: 'beach', name: 'La Playa', feeling: 'fait un clin d’œil sous le soleil', color: '#3FC9E8', price: null, solo: { world: 2, hint: 'Termine le monde de la Plage' } },
   { id: 'cow', name: 'Meuh', feeling: 'broute tranquille', color: '#7CC95A', price: null, solo: { world: 13, hint: 'Termine le monde de la Ferme' } },
   { id: 'boat', name: 'Ohé !', feeling: 'fonce à toute vitesse sur l’eau', color: '#3D8BFF', price: null, solo: { world: 5, hint: 'Termine le monde du Port' } },
   { id: 'bear', name: 'Ours polaire', feeling: 'rugit dans la neige', color: '#BFE4FF', price: null, solo: { world: 6, hint: 'Termine le monde de la Montagne' } },
@@ -400,6 +404,8 @@ const REPLIES: Partial<Record<EmoteId, EmoteId[]>> = {
   cold: ['lol', 'shock'],
   hot: ['shock', 'cool'],
   balloon: ['lol', 'shock'],
+  party: ['lol', 'love'],
+  monkey: ['lol', 'shock'],
   car: ['lol', 'cool'],
   bear: ['scared', 'shock'],
   storm: ['scared', 'cry'],

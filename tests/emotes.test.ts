@@ -38,15 +38,15 @@ import { migrateState } from '../src/storage/model';
 
 /* ------------------------------- Catalogue ------------------------------- */
 
-test('emotes : 13 émotions, 5 emotes « photo », 7 de l’aventure, 4 de départ, des ids uniques, 5 équipées au plus', () => {
+test('emotes : 15 émotions, 5 emotes « photo », 7 de l’aventure, 4 de départ, des ids uniques, 5 équipées au plus', () => {
   assert.equal(MAX_EQUIPPED, 5);
-  assert.equal(EMOTES.length, 25);
-  assert.equal(new Set(EMOTES.map((e) => e.id)).size, 25);
+  assert.equal(EMOTES.length, 27);
+  assert.equal(new Set(EMOTES.map((e) => e.id)).size, 27);
   assert.deepEqual(EMOTES.map((e) => e.id), [...EMOTE_IDS], 'le catalogue suit la liste des ids');
   const feelings = EMOTES.filter((e) => !e.pack && !e.solo);
   const pack = EMOTES.filter((e) => e.pack);
   const solo = EMOTES.filter((e) => e.solo);
-  assert.equal(feelings.length, 13);
+  assert.equal(feelings.length, 15);
   assert.deepEqual(
     pack.map((e) => e.id),
     ['selfie', 'eiffel', 'dog', 'cat', 'car'],
@@ -61,7 +61,7 @@ test('emotes : 13 émotions, 5 emotes « photo », 7 de l’aventure, 4 de dépa
     assert.ok(e.name.trim() && e.feeling.trim(), e.id);
     assert.ok(!(e.pack && e.solo), `${e.id} : une seule façon de la débloquer`);
     if (e.starter || e.pack || e.solo) assert.equal(e.price, null, `${e.id} n'est pas en vente`);
-    else assert.ok(e.price !== null && e.price >= 150 && e.price <= 500, `${e.id} a un prix`);
+    else assert.ok(e.price !== null && e.price >= 150 && e.price <= 750, `${e.id} a un prix`);
     assert.equal(emoteSource(e), e.starter ? 'starter' : e.pack ? 'pack' : e.solo ? 'solo' : 'shop');
     assert.equal(lockHint(e) === null, !e.pack && !e.solo, e.id);
   }
@@ -73,17 +73,26 @@ test('emotes : 13 émotions, 5 emotes « photo », 7 de l’aventure, 4 de dépa
     EMOTES.filter((e) => ['cold', 'hot', 'balloon'].includes(e.id)).map((e) => e.price),
     [250, 350, 450],
   );
+  // et les dernières : la fête, et le singe, la plus chère de la boutique
+  assert.deepEqual(
+    EMOTES.filter((e) => ['party', 'monkey'].includes(e.id)).map((e) => e.price),
+    [400, 750],
+  );
+  const forSale = EMOTES.filter((e) => e.price !== null);
+  const top = Math.max(...forSale.map((e) => e.price as number));
+  assert.deepEqual(forSale.filter((e) => e.price === top).map((e) => e.id), ['monkey'], 'une seule emote au prix le plus haut');
+  assert.ok(forSale.filter((e) => e.id !== 'monkey').every((e) => (e.price as number) <= 500));
 });
 
 test('emotes : chacune a son dessin animé, sa durée, sa pose figée et son son', () => {
   const dir = join(__dirname, '..', 'src', 'components', 'emotes');
-  const art = ['EmoteArt.tsx', 'EmoteArtMore.tsx', 'EmoteArtWorld.tsx'].map((f) => readFileSync(join(dir, f), 'utf8')).join('\n');
+  const art = ['EmoteArt.tsx', 'EmoteArtMore.tsx', 'EmoteArtFun.tsx', 'EmoteArtWorld.tsx'].map((f) => readFileSync(join(dir, f), 'utf8')).join('\n');
   const block = (name: string) => {
     const i = art.indexOf(name);
     assert.ok(i >= 0, name);
     return art.slice(i, art.indexOf('};', i));
   };
-  const registry = ['export const ART', 'export const MORE_ART', 'export const WORLD_ART'].map(block).join('\n');
+  const registry = ['export const ART', 'export const MORE_ART', 'export const FUN_ART', 'export const WORLD_ART'].map(block).join('\n');
   const duration = block('const DURATION');
   const pose = block('const POSE');
   const sfx = readFileSync(join(__dirname, '..', 'src', 'audio', 'emoteSfx.ts'), 'utf8');
@@ -320,7 +329,7 @@ test('sons : chaque emote a son son, court et léger (16 kHz mono, 45 Ko au plus
     assert.equal(head.readUInt32LE(24), 16000, `${e.id} : 16 kHz`);
     assert.equal(head.readUInt16LE(34), 16, `${e.id} : 16 bits`);
   }
-  assert.ok(total < 1_150_000, `${total} octets en tout`);
+  assert.ok(total < 1_250_000, `${total} octets en tout`);
 });
 
 /* ------------------------- Déblocage par l'aventure ------------------------- */

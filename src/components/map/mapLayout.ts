@@ -210,8 +210,8 @@ export function railPaths(pts: Pt[], yMin: number, yMax: number, gap = 10.5): st
   });
 }
 
-/** Rayon de la place gardée pour une récompense (pastille de 48 px et son étiquette). */
-export const REWARD_R = 30;
+/** Rayon de la place gardée pour une récompense (pastille de 84 px et son étiquette). */
+export const REWARD_R = 46;
 
 type Circle = Pt & { r: number };
 
@@ -225,7 +225,7 @@ function rewardSpot(boss: Pt, around: Pt[], obstacles: Circle[], road: Pt[], wid
   const near = road.filter((p) => Math.abs(p.y - boss.y) < 220);
   const cands: Pt[] = [];
   for (const c of [boss, ...around])
-    for (const r of [72, 86, 100])
+    for (const r of [84, 96, 108, 120])
       for (let a = 0; a < 360; a += 15) cands.push({ x: c.x + r * Math.cos((a * Math.PI) / 180), y: c.y + r * Math.sin((a * Math.PI) / 180) });
   let best = { x: boss.x, y: boss.y + 90 };
   let bestScore = -Infinity;
@@ -325,7 +325,7 @@ export function mapLayout(width: number): MapLayout {
     const reserved: (Pt & { r: number })[] = [
       { ...sign, r: 70 },
       { ...mascot, r: 52 },
-      { ...reward, r: REWARD_R + 4 },
+      { ...reward, r: REWARD_R + 10 },
       { x: hero.x, y: hero.y, r: HERO_R[look.hero] ?? 92 },
       ...worldNodes.map((n) => ({ ...n, r: 44 })),
       // la ville néon monte haut au-dessus de son centre
@@ -412,7 +412,17 @@ function galleryArea(w: number, top: number, bottom: number, nodes: Pt[], width:
   decor.push({ kind: 'pillar', x: cx - side, y: first.y + 70, scale: 1.15, flip: false }, { kind: 'pillar', x: cx + side, y: first.y + 70, scale: 1.15, flip: true });
   // tout en haut : deux colonnes encadrent le Grand Portrait
   decor.push({ kind: 'pillar', x: cx - Math.min(width * 0.42, 168), y: lastN.y + 20, scale: 1.3, flip: false }, { kind: 'pillar', x: cx + Math.min(width * 0.42, 168), y: lastN.y + 20, scale: 1.3, flip: true });
-  decor.sort((a, b) => a.y - b.y);
+  // hauteur d'une colonne ou d'un socle : on garde la place de bas en haut
+  const tall = (d: Placed): Circle[] =>
+    d.kind === 'pillar'
+      ? [0, 35, 70, 100].map((h) => ({ x: d.x, y: d.y - h * d.scale, r: 18 * d.scale }))
+      : d.kind === 'pedestal'
+        ? [10, 40].map((h) => ({ x: d.x, y: d.y - h * d.scale, r: 18 * d.scale }))
+        : d.kind === 'frame'
+          ? [{ x: d.x, y: d.y - 20 * d.scale, r: 26 * d.scale }]
+          : [{ x: d.x, y: d.y, r: 8 }];
+  // les petites colonnes, socles et cadres des rangées peuvent céder leur place
+  const small = (d: Placed) => d.kind === 'frame' || d.kind === 'pedestal' || (d.kind === 'pillar' && d.scale < 1.15);
   // récompense (emote du boss final) : à côté du dernier niveau, sous le cadre
   const reward = rewardSpot(
     lastN,
@@ -421,11 +431,15 @@ function galleryArea(w: number, top: number, bottom: number, nodes: Pt[], width:
       ...nodes.map((n) => ({ ...n, r: 32 })),
       ...bossCircles(lastN),
       { x: cx, y: lastN.y - GRAND_FRAME.above - GRAND_FRAME.h / 2, r: GRAND_FRAME.h / 2 + 4 },
-      ...decor.filter((d) => d.kind === 'pillar' || d.kind === 'stanchion').map((d) => ({ x: d.x, y: d.y, r: d.kind === 'pillar' ? 18 * d.scale : 8 })),
+      // le bas du cadre (son étiquette, ses fleurons dans les coins)
+      ...[-0.5, -0.25, 0, 0.25, 0.5].map((k) => ({ x: cx + k * GRAND_FRAME.w, y: lastN.y - GRAND_FRAME.above - 8, r: 24 })),
+      ...decor.filter((d) => !small(d)).flatMap(tall),
     ],
     road,
     width,
   );
+  const kept = decor.filter((d) => !small(d) || tall(d).every((c) => dist2(c, reward) > (c.r + REWARD_R + 6) ** 2));
+  kept.sort((a, b) => a.y - b.y);
 
   // cordons de velours : ils pendent d'un poteau à l'autre, de chaque côté
   const rope = (x: number) => {
@@ -449,7 +463,7 @@ function galleryArea(w: number, top: number, bottom: number, nodes: Pt[], width:
     mascot: { x: cx, y: lastN.y - GRAND_FRAME.above },
     reward,
     hero: { kind: WORLD_LOOKS[w - 1].hero, x: cx, y: lastN.y - GRAND_FRAME.above - GRAND_FRAME.h / 2, side: 1 },
-    decor,
+    decor: kept,
     texture,
     rails: null,
     sky: null,

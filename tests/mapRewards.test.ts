@@ -79,14 +79,16 @@ test('carte : la carte Galaxy en haut (verrouillée, à réclamer, obtenue)', ()
   assert.match(galaxyText('ready').detail, /réclamer/);
 });
 
-test('carte : la pastille d’emote est tout près de son boss, dans l’écran, loin des niveaux ; la Galaxy tout en haut', () => {
+test('carte : la grande pastille d’emote est tout près de son boss, dans l’écran, loin des niveaux ; la Galaxy tout en haut', () => {
+  // pastille de 84 px et son étiquette
+  assert.ok(REWARD_R >= 44, `place gardée : ${REWARD_R} px`);
   for (const width of [360, 390, 400, 430]) {
     const L = mapLayout(width);
     for (const m of mapEmotes([], [])) {
       const r = L.worlds[m.world - 1].reward;
       const boss = L.nodes[m.boss - 1];
       const d = Math.hypot(r.x - boss.x, r.y - boss.y);
-      assert.ok(d > 60 && d < 130, `${m.id} (${width} px) : à ${Math.round(d)} px du boss`);
+      assert.ok(d > 34 + REWARD_R && d < 130, `${m.id} (${width} px) : à ${Math.round(d)} px du boss`);
       assert.ok(r.x - REWARD_R >= 0 && r.x + REWARD_R <= width, `${m.id} (${width} px) : dans l'écran (x = ${r.x})`);
       // ne gêne aucun niveau (on peut toujours les toucher)
       for (let n = 1; n <= TOTAL_LEVELS; n++) {
@@ -96,9 +98,13 @@ test('carte : la pastille d’emote est tout près de son boss, dans l’écran,
       }
       // ni sur le portrait de l'adversaire
       const a = L.worlds[m.world - 1];
-      if (m.world !== 21) assert.ok(Math.hypot(r.x - a.mascot.x, r.y - a.mascot.y) > 60, `${m.id} (${width} px) : sur le portrait`);
+      if (m.world !== 21) assert.ok(Math.hypot(r.x - a.mascot.x, r.y - (a.mascot.y - 14)) > 30 + REWARD_R + 20, `${m.id} (${width} px) : sur le portrait`);
       // et aucun décor posé dessous
-      for (const dcr of a.decor) if (dcr.kind !== 'stanchion' && dcr.kind !== 'pillar' && dcr.kind !== 'pedestal' && dcr.kind !== 'frame') assert.ok(Math.hypot(dcr.x - r.x, dcr.y - r.y) > REWARD_R, `${m.id} : décor dessous`);
+      for (const dcr of a.decor) if (dcr.kind !== 'stanchion' && dcr.kind !== 'pillar' && dcr.kind !== 'pedestal' && dcr.kind !== 'frame') assert.ok(Math.hypot(dcr.x - r.x, dcr.y - r.y) > REWARD_R + 10, `${m.id} : décor dessous`);
+      // colonnes et socles de la Galerie : hauts, rien sur toute leur hauteur
+      for (const dcr of a.decor)
+        if (dcr.kind === 'pillar' || dcr.kind === 'pedestal')
+          for (let h = 0; h <= (dcr.kind === 'pillar' ? 100 : 40); h += 10) assert.ok(Math.hypot(dcr.x - r.x, dcr.y - h * dcr.scale - r.y) > REWARD_R + 10, `${m.id} (${width} px) : sur une colonne`);
     }
     // la Galaxy : au milieu, au-dessus du dernier niveau et sous le haut de la carte
     const last = L.nodes[TOTAL_LEVELS - 1];

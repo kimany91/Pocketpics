@@ -56,169 +56,250 @@ const wavePath = (y: number, amp: number, bottom = 100) => {
 
 const SKIN = '#F1BE93';
 const SKIN_LINE = '#6A3418';
-/** Petits sauts par boucle. */
-const HOPS = 3;
+const HAIR = '#7A3E1C';
+const HAIR_LINE = '#3A1A08';
+const NUT_LINE = '#2E1606';
+/** Le clin d'œil (début, fin). */
+const WINK: [number, number] = [0.44, 0.62];
+
+/** Une noix de coco poilue (centre, rayon). */
+function Coconut({ cx, cy, r, gid }: { cx: number; cy: number; r: number; gid: string }) {
+  // quelques poils fins tout autour (c'est une noix de coco, pas une balle)
+  const hairs = Array.from({ length: 16 }, (_, i) => {
+    const a = (i / 16) * TAU + 0.2;
+    const r1 = r - 0.6;
+    const r2 = r + 1.3 + (i % 2) * 0.5;
+    return `M${(cx + Math.cos(a) * r1).toFixed(1)} ${(cy + Math.sin(a) * r1).toFixed(1)} L${(cx + Math.cos(a + 0.14) * r2).toFixed(1)} ${(cy + Math.sin(a + 0.14) * r2).toFixed(1)}`;
+  }).join(' ');
+  return (
+    <G>
+      <Defs>
+        <RadialGradient id={gid} cx="36%" cy="30%" r="75%">
+          <Stop offset="0" stopColor="#B57A40" />
+          <Stop offset="0.55" stopColor="#86501F" />
+          <Stop offset="1" stopColor="#5A2F10" />
+        </RadialGradient>
+      </Defs>
+      <Path d={hairs} stroke="#5A2F10" strokeWidth={1} strokeLinecap="round" />
+      <Circle cx={cx} cy={cy} r={r} fill={`url(#${gid})`} stroke={NUT_LINE} strokeWidth={1.8} />
+      {/* les fibres */}
+      <Path
+        d={`M${cx - r * 0.72} ${cy - r * 0.15} Q${cx - r * 0.3} ${cy - r * 0.42} ${cx + r * 0.15} ${cy - r * 0.32} M${cx - r * 0.6} ${cy + r * 0.32} Q${cx} ${cy + r * 0.08} ${cx + r * 0.65} ${cy + r * 0.22} M${cx - r * 0.25} ${cy + r * 0.72} Q${cx + r * 0.2} ${cy + r * 0.52} ${cx + r * 0.58} ${cy + r * 0.62}`}
+        stroke="#5A2E0E"
+        strokeWidth={1.1}
+        fill="none"
+        strokeLinecap="round"
+      />
+      <Path
+        d={`M${cx + r * 0.35} ${cy - r * 0.62} l${r * 0.16} ${r * 0.1} M${cx - r * 0.1} ${cy - r * 0.05} l${r * 0.18} ${r * 0.04} M${cx + r * 0.3} ${cy + r * 0.4} l${r * 0.16} ${r * 0.06} M${cx - r * 0.62} ${cy + r * 0.05} l${r * 0.12} ${r * 0.1}`}
+        stroke="#D7A86E"
+        strokeWidth={0.9}
+        strokeLinecap="round"
+        opacity={0.7}
+      />
+      <Ellipse cx={cx - r * 0.38} cy={cy - r * 0.45} rx={r * 0.3} ry={r * 0.16} fill="#FFFFFF" opacity={0.32} transform={`rotate(-30 ${cx - r * 0.38} ${cy - r * 0.45})`} />
+    </G>
+  );
+}
+
+/** Fleur d'hibiscus (centre, rayon). */
+function Hibiscus({ cx, cy, r }: { cx: number; cy: number; r: number }) {
+  return (
+    <G>
+      {[0, 1, 2, 3, 4].map((i) => {
+        const a = -Math.PI / 2 + (i * TAU) / 5;
+        return <Circle key={i} cx={cx + Math.cos(a) * r * 0.55} cy={cy + Math.sin(a) * r * 0.55} r={r * 0.5} fill="#FF4F8B" stroke="#A8245E" strokeWidth={1} />;
+      })}
+      <Circle cx={cx} cy={cy} r={r * 0.42} fill="#FF7FAE" />
+      <Circle cx={cx} cy={cy} r={r * 0.2} fill="#C21E5C" />
+      <Path d={`M${cx} ${cy} L${cx + r * 0.6} ${cy - r * 0.5}`} stroke="#FFE45C" strokeWidth={1.2} strokeLinecap="round" />
+      <Circle cx={cx + r * 0.62} cy={cy - r * 0.52} r={r * 0.13} fill="#FFE45C" />
+    </G>
+  );
+}
 
 function Beach({ s, t }: { s: number; t: T }) {
   const g = useG();
-  // elle sautille : monte, retombe, s'écrase un peu en touchant le sable, et se dandine
-  const body = useAnimatedStyle(() => {
-    const p = frac(t.value * HOPS);
-    const h = Math.sin(Math.PI * p);
-    const land = Math.max(0, 1 - Math.min(p, 1 - p) / 0.14);
-    return {
-      transform: [
-        { translateY: -h * 8 * s },
-        ...around(0, 44, s, [{ scaleY: 1 - land * 0.07 }, { scaleX: 1 + land * 0.05 }]),
-        ...around(0, 30, s, [{ rotate: `${osc(t.value, HOPS / 2) * 5}deg` }]),
-      ],
-    };
+  // tout en douceur : elle se balance un peu, la tête penche, puis un clin d'œil
+  const body = useAnimatedStyle(() => ({
+    transform: [{ translateY: osc(t.value, 2) * 0.7 * s }, ...around(0, 46, s, [{ rotate: `${osc(t.value, 1) * 2.2}deg` }])],
+  }));
+  const tilt = (v: number) => {
+    'worklet';
+    return around(2, 12, s, [{ rotate: `${osc(v, 1, 0.12) * 3 + bump(v, WINK[0] - 0.04, WINK[1] + 0.04) * 4}deg` }]);
+  };
+  const headBack = useAnimatedStyle(() => ({ transform: tilt(t.value) }));
+  const head = useAnimatedStyle(() => ({ transform: tilt(t.value) }));
+  // les mèches suivent avec un temps de retard
+  const lockL = useAnimatedStyle(() => ({ transform: around(0, -9, s, [{ rotate: `${osc(t.value, 1, 0.3) * 3}deg` }]) }));
+  const lockR = useAnimatedStyle(() => ({ transform: around(0, -9, s, [{ rotate: `${osc(t.value, 1, 0.34) * 3}deg` }]) }));
+  // la fleur qui sautille dans les cheveux
+  const flower = useAnimatedStyle(() => ({ transform: [{ translateY: -Math.abs(osc(t.value, 2)) * 1.2 * s }, { rotate: `${osc(t.value, 2) * 9}deg` }, { scale: 1 + Math.abs(osc(t.value, 2)) * 0.06 }] }));
+  // les noix de coco se balancent sur leur ficelle, en retard sur elle
+  const nutL = useAnimatedStyle(() => ({ transform: around(0, -12, s, [{ rotate: `${osc(t.value, 2, -0.12) * 5}deg` }]) }));
+  const nutR = useAnimatedStyle(() => ({ transform: around(0, -12, s, [{ rotate: `${osc(t.value, 2, -0.2) * 5}deg` }]) }));
+  const eyeOpen = useAnimatedStyle(() => ({ transform: around(0, 0, s, [{ scaleY: 1 - bump(t.value, WINK[0], WINK[1]) * 0.92 }]) }));
+  const eyeShut = useAnimatedStyle(() => ({ opacity: seg(bump(t.value, WINK[0], WINK[1]), 0.5, 0.9) }));
+  const smile = useAnimatedStyle(() => ({ transform: around(0, -3, s, [{ scaleX: 1 + bump(t.value, WINK[0] - 0.05, WINK[1] + 0.05) * 0.1 }, { scaleY: 1 + bump(t.value, WINK[0] - 0.05, WINK[1] + 0.05) * 0.12 }]) }));
+  // la petite étoile du clin d'œil, et l'éclat sur les lunettes
+  const twinkle = useAnimatedStyle(() => {
+    const k = bump(t.value, WINK[0] + 0.04, WINK[1] + 0.1);
+    return { opacity: k, transform: [{ scale: 0.4 + k * 0.8 }, { rotate: `${t.value * 200}deg` }] };
   });
-  // les noix de coco : en retard sur le saut, elles ballottent et se balancent sur leur ficelle
-  const nutL = useAnimatedStyle(() => {
-    const ph = t.value * HOPS;
-    const j = Math.sin(TAU * ph - 1.5);
-    return { transform: [{ translateY: j * 2.2 * s }, { translateX: Math.sin(TAU * ph * 2 - 0.4) * 0.8 * s }, ...around(0, -4.5, s, [{ rotate: `${Math.sin(TAU * ph * 2 - 0.4) * 26}deg` }, { scale: 1 + Math.max(0, j) * 0.08 }])] };
-  });
-  const nutR = useAnimatedStyle(() => {
-    const ph = t.value * HOPS;
-    const j = Math.sin(TAU * ph - 1.9);
-    return { transform: [{ translateY: j * 2.2 * s }, { translateX: -Math.sin(TAU * ph * 2 - 0.9) * 0.8 * s }, ...around(0, -4.5, s, [{ rotate: `${-Math.sin(TAU * ph * 2 - 0.9) * 26}deg` }, { scale: 1 + Math.max(0, j) * 0.08 }])] };
-  });
-  // les cheveux suivent avec un temps de retard
-  const hair = useAnimatedStyle(() => ({ transform: [{ translateY: Math.sin(TAU * t.value * HOPS - 1.1) * 1.4 * s }] }));
-  const arm = useAnimatedStyle(() => ({ transform: around(-8, 12, s, [{ rotate: `${osc(t.value, HOPS) * 20}deg` }]) }));
-  const leaves = useAnimatedStyle(() => ({ transform: around(-10, -2, s, [{ rotate: `${osc(t.value, 1, 0.2) * 6}deg` }]) }));
-  const sea = useAnimatedStyle(() => ({ transform: [{ translateX: -frac(t.value * 2) * 20 * s }] }));
-  const sun = useAnimatedStyle(() => ({ transform: [{ rotate: `${t.value * 90}deg` }, { scale: 1 + 0.08 * osc(t.value, 2) }] }));
-  // grand sourire, encore plus grand en haut du saut
-  const smile = useAnimatedStyle(() => ({ transform: around(0, -3, s, [{ scaleY: 0.85 + 0.3 * Math.sin(Math.PI * frac(t.value * HOPS)) }, { scaleX: 1 + 0.06 * Math.sin(Math.PI * frac(t.value * HOPS)) }]) }));
-  // un éclat passe sur les lunettes en haut de chaque saut
   const shine = useAnimatedStyle(() => {
-    const p = frac(t.value * HOPS);
-    const k = bump(p, 0.3, 0.7);
-    return { opacity: k, transform: [{ scale: 0.3 + k * 0.9 }, { rotate: `${p * 120}deg` }] };
+    const k = bump(t.value, 0.12, 0.3);
+    return { opacity: k, transform: [{ scale: 0.3 + k }, { rotate: `${t.value * 300}deg` }] };
   });
-  // petit nuage de sable à chaque atterrissage
-  const puff = useAnimatedStyle(() => {
-    const p = frac(t.value * HOPS + 0.06);
-    const k = Math.min(1, p / 0.25);
-    return { opacity: p < 0.25 ? (1 - k) * 0.9 : 0, transform: [{ scaleX: 0.5 + k * 0.9 }, { scaleY: 0.6 + k * 0.5 }] };
-  });
+  const sun = useAnimatedStyle(() => ({ transform: [{ rotate: `${t.value * 45}deg` }, { scale: 1 + 0.05 * osc(t.value, 1) }] }));
+  const leaves = useAnimatedStyle(() => ({ transform: around(-14, -14, s, [{ rotate: `${osc(t.value, 1, 0.25) * 4}deg` }]) }));
+  const sea = useAnimatedStyle(() => ({ transform: [{ translateX: -frac(t.value) * 20 * s }] }));
   return (
     <>
       <Disc s={s}>
-        <Sky s={s} id={g('g-beach-sky')} top="#5CCBFF" bottom="#C8F1FF" />
-        <Part s={s} box={[64, 6, 32, 32]} style={sun}>
-          <Path d={starPath(80, 22, 14)} fill="#FFE98A" opacity={0.75} />
-          <Circle cx={80} cy={22} r={7.5} fill="#FFD23F" stroke="#F29A1A" strokeWidth={1.4} />
-          <Path d="M77 21 Q78 19.6 79 21 M81 21 Q82 19.6 83 21 M77.5 24 Q80 26.4 82.5 24" stroke="#C26A00" strokeWidth={0.9} fill="none" strokeLinecap="round" />
+        {/* ciel d'été, plus chaud vers l'horizon */}
+        <Part s={s} box={[0, 0, 100, 100]}>
+          <Defs>
+            <LinearGradient id={g('g-beach-sky')} x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor="#3FBDF5" />
+              <Stop offset="0.42" stopColor="#9FE2FF" />
+              <Stop offset="0.62" stopColor="#FFE7B0" />
+              <Stop offset="1" stopColor="#FFC98A" />
+            </LinearGradient>
+          </Defs>
+          <Rect x={0} y={0} width={100} height={100} fill={`url(#${g('g-beach-sky')})`} />
         </Part>
-        <Part s={s} box={[-20, 64, 140, 40]} style={sea}>
-          <Path d={wavePath(70, 3)} fill="#26B0E0" />
-          <Path d={wavePath(75, 2.4)} fill="#4FC8F0" opacity={0.85} />
+        <Part s={s} box={[62, 2, 36, 36]} style={sun}>
+          <Path d={starPath(80, 20, 17)} fill="#FFF0A0" opacity={0.7} />
+          <Path d={starPath(80, 20, 15)} fill="#FFF0A0" opacity={0.6} transform="rotate(45 80 20)" />
+          <Circle cx={80} cy={20} r={9} fill="#FFD23F" stroke="#F29A1A" strokeWidth={1.4} />
         </Part>
-        <Part s={s} box={[0, 80, 100, 20]}>
-          <Path d="M0 86 Q30 80 60 84 Q80 86 100 82 L100 100 L0 100Z" fill="#FFE2A0" />
-          <Circle cx={20} cy={92} r={1.2} fill="#E8C478" />
-          <Circle cx={74} cy={94} r={1.4} fill="#E8C478" />
+        <Part s={s} box={[-20, 56, 140, 44]} style={sea}>
+          <Path d={wavePath(60, 2)} fill="#22AEE0" />
+          <Path d={wavePath(65, 1.6)} fill="#4FC8F0" />
+          <Path d="M-20 72 L120 72 L120 100 L-20 100Z" fill="#FFE2A0" />
         </Part>
-        {/* le palmier */}
-        <Part s={s} box={[8, 24, 30, 76]}>
-          <Path d="M16 100 Q14 70 22 46 Q25 36 28 32 L32 34 Q28 42 26 50 Q20 74 23 100Z" fill="#B07A42" stroke="#5A3A18" strokeWidth={1.6} strokeLinejoin="round" />
-          <Path d="M17 92 L23 90 M17 82 L23 80 M18 72 L24 70 M20 62 L26 60 M22 52 L28 51" stroke="#7A4E24" strokeWidth={1.3} />
-          <Circle cx={27} cy={36} r={3.4} fill="#7A4A1E" stroke="#3A2008" strokeWidth={1.2} />
-          <Circle cx={32} cy={37} r={3.2} fill="#8A5626" stroke="#3A2008" strokeWidth={1.2} />
+        {/* palmes du palmier, en haut à gauche */}
+        <Part s={s} box={[0, 0, 46, 46]} style={leaves}>
+          <Path d="M2 4 Q18 4 30 16 Q20 12 12 14 Q6 10 2 4Z" fill="#3DBE5A" stroke="#1E6A2E" strokeWidth={1.4} strokeLinejoin="round" />
+          <Path d="M0 8 Q16 14 22 30 Q14 22 6 22 Q2 16 0 8Z" fill="#33A84E" stroke="#1E6A2E" strokeWidth={1.4} strokeLinejoin="round" />
+          <Path d="M6 0 Q26 -2 40 8 Q28 8 20 10 Q12 4 6 0Z" fill="#4CD06A" stroke="#1E6A2E" strokeWidth={1.4} strokeLinejoin="round" />
+          <Path d="M6 6 Q16 12 26 15 M4 12 Q12 18 18 26 M12 3 Q24 4 34 8" stroke="#1E6A2E" strokeWidth={0.9} fill="none" strokeLinecap="round" opacity={0.6} />
         </Part>
-        <Part s={s} box={[2, 14, 52, 34]} style={leaves}>
-          <Path d="M29 33 Q14 18 4 26 Q16 22 26 34Z" fill="#3DBE5A" stroke="#1E6A2E" strokeWidth={1.4} strokeLinejoin="round" />
-          <Path d="M29 33 Q22 14 32 15 Q30 22 31 33Z" fill="#4CD06A" stroke="#1E6A2E" strokeWidth={1.4} strokeLinejoin="round" />
-          <Path d="M29 33 Q42 16 52 24 Q40 22 31 34Z" fill="#3DBE5A" stroke="#1E6A2E" strokeWidth={1.4} strokeLinejoin="round" />
-          <Path d="M29 33 Q12 34 8 46 Q18 36 28 35Z" fill="#33A84E" stroke="#1E6A2E" strokeWidth={1.4} strokeLinejoin="round" />
-          <Path d="M30 33 Q44 32 50 42 Q40 35 30 35Z" fill="#33A84E" stroke="#1E6A2E" strokeWidth={1.4} strokeLinejoin="round" />
-        </Part>
-        <Part s={s} box={[26, 86, 60, 14]} style={puff}>
-          <Ellipse cx={34} cy={94} rx={5} ry={2.6} fill="#FFF1C8" />
-          <Ellipse cx={77} cy={94} rx={5} ry={2.6} fill="#FFF1C8" />
-          <Circle cx={29} cy={90} r={1.3} fill="#F2D38A" />
-          <Circle cx={82} cy={90} r={1.3} fill="#F2D38A" />
-        </Part>
-        {/* la vacancière : elle sautille de joie */}
+        {/* elle, en gros plan (tête et épaules) */}
         <Group s={s} style={body}>
-          {/* cheveux longs, derrière */}
-          <Part s={s} box={[34, 20, 42, 52]} style={hair}>
-            <Path d="M40 40 Q36 24 55 22 Q74 24 71 42 Q73 56 70 66 Q64 62 62 54 L48 54 Q46 62 40 66 Q37 56 40 40Z" fill="#7A3E1C" stroke="#3A1A08" strokeWidth={1.6} strokeLinejoin="round" />
+          <Group s={s} style={headBack}>
+            {/* cheveux longs, derrière */}
+            <Part s={s} box={[16, 6, 72, 70]}>
+              <Defs>
+                <LinearGradient id={g('g-beach-hair')} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor="#94502A" />
+                  <Stop offset="1" stopColor="#5E2C12" />
+                </LinearGradient>
+              </Defs>
+              <Path d="M28 72 Q20 64 21.5 50 Q21 33 28 22 Q37 11 52 11 Q67 11 76 22 Q83 33 82.5 50 Q84 64 76 72 Q70 66 68 60 L36 60 Q34 66 28 72Z" fill={`url(#${g('g-beach-hair')})`} stroke={HAIR_LINE} strokeWidth={1.8} strokeLinejoin="round" />
+              <Path d="M27 30 Q23 44 25 60 M77 30 Q81 44 79 60" stroke="#B06A3C" strokeWidth={1.4} fill="none" strokeLinecap="round" opacity={0.7} />
+            </Part>
+          </Group>
+          {/* épaules et cou */}
+          <Part s={s} box={[0, 52, 100, 48]}>
+            <Path d="M2 104 L5 86 Q10 73 27 70 Q40 68 46 63 L58 63 Q64 68 77 70 Q94 73 98 86 L100 104Z" fill={SKIN} stroke={SKIN_LINE} strokeWidth={1.8} strokeLinejoin="round" />
+            <Path d="M46 54 L46 64 Q52 68 58 64 L58 54Z" fill={SKIN} />
+            <Path d="M46 58 L46 64 M58 58 L58 64" stroke={SKIN_LINE} strokeWidth={1.6} strokeLinecap="round" />
+            <Path d="M46 58 Q52 62 58 58 L58 56 L46 56Z" fill="#D99A6C" opacity={0.6} />
+            {/* le collier de coquillages */}
+            <Path d="M45 64 Q52 71 59 64" stroke="#FFFFFF" strokeWidth={1.1} fill="none" />
+            <Circle cx={52} cy={68.6} r={1.6} fill="#FFB0C8" stroke="#C25480" strokeWidth={0.8} />
+            {/* les ficelles du haut en noix de coco */}
+            <Path d="M46.5 63.5 L38 69 M57.5 63.5 L66 69 M24 82 L6 84 M78 82 L96 84" stroke="#5A3A18" strokeWidth={1.3} strokeLinecap="round" />
           </Part>
-          {/* corps : épaules, bras qui tient la hanche, paréo (assez long pour ne jamais se voir en bas, même en l'air) */}
-          <Part s={s} box={[30, 52, 50, 64]}>
-            <Path d="M50 54 L60 54 L60 60 L50 60Z" fill={SKIN} />
-            <Path d="M41 64 Q42 58 50 58 L60 58 Q69 58 70 64 L68 116 L42 116Z" fill={SKIN} stroke={SKIN_LINE} strokeWidth={1.8} strokeLinejoin="round" />
-            <Path d="M42 66 Q35 74 37 84 Q39 90 45 88" stroke={SKIN_LINE} strokeWidth={7.6} fill="none" strokeLinecap="round" />
-            <Path d="M42 66 Q35 74 37 84 Q39 90 45 88" stroke={SKIN} strokeWidth={5} fill="none" strokeLinecap="round" />
-            {/* paréo à fleurs */}
-            <Path d="M41 88 L69 88 L73 116 L37 116Z" fill="#FF6FA8" stroke="#A8245E" strokeWidth={1.6} strokeLinejoin="round" />
-            <Circle cx={48} cy={94} r={2} fill="#FFE45C" />
-            <Circle cx={60} cy={95} r={2} fill="#FFFFFF" />
-            <Circle cx={54} cy={102} r={2} fill="#FFE45C" />
-            {/* la ficelle du haut en noix de coco */}
-            <Path d="M49 62 L46 69 M61 62 L64 69" stroke="#5A3A18" strokeWidth={1.2} />
-            <Path d="M44 70 L66 70" stroke="#5A3A18" strokeWidth={1.4} />
+          <Group s={s} style={head}>
+            {/* le visage */}
+            <Part s={s} box={[32, 18, 40, 44]}>
+              <Ellipse cx={52} cy={41} rx={16.5} ry={18} fill={SKIN} stroke={SKIN_LINE} strokeWidth={1.9} />
+              <Ellipse cx={41.5} cy={50} rx={3.2} ry={1.9} fill="#FF8FA8" opacity={0.7} />
+              <Ellipse cx={62.5} cy={50} rx={3.2} ry={1.9} fill="#FF8FA8" opacity={0.7} />
+              <Path d="M51 46.5 Q52.6 48 51.2 49" stroke={SKIN_LINE} strokeWidth={1.1} fill="none" strokeLinecap="round" />
+              {/* sourcils */}
+              <Path d="M42 38.6 Q45.5 36.6 49 38.2 M55 38.2 Q58.5 36.6 62 38.6" stroke={HAIR_LINE} strokeWidth={1.3} fill="none" strokeLinecap="round" />
+            </Part>
+            {/* l'œil droit, toujours ouvert */}
+            <Part s={s} box={[54, 39, 9, 10]}>
+              <Ellipse cx={58.5} cy={44} rx={2.5} ry={3.2} fill="#2A1A0A" />
+              <Circle cx={57.7} cy={42.8} r={1} fill="#FFFFFF" />
+              <Path d="M60.4 41.6 L62 40.6" stroke="#2A1A0A" strokeWidth={0.9} strokeLinecap="round" />
+            </Part>
+            {/* l'œil gauche : il se ferme pour le clin d'œil */}
+            <Part s={s} box={[41, 39, 9, 10]} style={eyeOpen}>
+              <Ellipse cx={45.5} cy={44} rx={2.5} ry={3.2} fill="#2A1A0A" />
+              <Circle cx={44.7} cy={42.8} r={1} fill="#FFFFFF" />
+              <Path d="M43.6 41.6 L42 40.6" stroke="#2A1A0A" strokeWidth={0.9} strokeLinecap="round" />
+            </Part>
+            <Part s={s} box={[40, 40, 11, 8]} style={eyeShut}>
+              <Path d="M42.4 44.6 Q45.5 41.6 48.6 44.6" stroke="#2A1A0A" strokeWidth={1.5} fill="none" strokeLinecap="round" />
+              <Path d="M42.6 44.4 L41.2 43.2" stroke="#2A1A0A" strokeWidth={0.9} strokeLinecap="round" />
+            </Part>
+            {/* grand sourire */}
+            <Part s={s} box={[43, 49, 18, 12]} style={smile}>
+              <Path d="M45.6 51.4 Q52 54 58.4 51.4 Q57.6 58.6 52 58.6 Q46.4 58.6 45.6 51.4Z" fill="#7A1A1A" stroke={SKIN_LINE} strokeWidth={1.2} strokeLinejoin="round" />
+              <Path d="M46.6 52.2 Q52 54.4 57.4 52.2 L57 54 Q52 55.6 47 54Z" fill="#FFFFFF" />
+              <Ellipse cx={52} cy={57} rx={3} ry={1.3} fill="#FF6F7D" />
+            </Part>
+            {/* la frange, et les lunettes de soleil relevées sur la tête */}
+            <Part s={s} box={[32, 16, 40, 22]}>
+              <Path d="M35.2 37 Q34 22 52 21 Q70 22 68.8 37 Q66 31 60 30.4 Q54 33 48 30.6 Q40 31 35.2 37Z" fill={HAIR} stroke={HAIR_LINE} strokeWidth={1.5} strokeLinejoin="round" />
+              <Path d="M42 24.5 Q50 22 58 24" stroke="#A8643A" strokeWidth={1.4} fill="none" strokeLinecap="round" opacity={0.8} />
+              <Path d="M35.5 29.6 Q52 26.4 68.5 29.6" stroke="#1E1E2A" strokeWidth={1.6} fill="none" />
+              <Path d="M38 28.4 L50 27.6 L49.4 32.2 Q44.4 35.4 39.2 32.6Z" fill="#1E1E2A" stroke="#FF6FA8" strokeWidth={1.3} strokeLinejoin="round" />
+              <Path d="M54 27.6 L66 28.4 L64.8 32.6 Q59.6 35.4 54.6 32.2Z" fill="#1E1E2A" stroke="#FF6FA8" strokeWidth={1.3} strokeLinejoin="round" />
+              <Path d="M50 28.4 Q52 27 54 28.4" stroke="#FF6FA8" strokeWidth={1.3} fill="none" />
+              <Path d="M40.4 29.6 L43.6 29.4 M56 29.4 L59.2 29.6" stroke="#FFFFFF" strokeWidth={0.9} strokeLinecap="round" opacity={0.75} />
+            </Part>
+            <Part s={s} box={[60, 25, 10, 10]} style={shine}>
+              <Path d={starPath(64.5, 30, 3.6)} fill="#FFFFFF" />
+            </Part>
+            <Part s={s} box={[30, 34, 13, 13]} style={twinkle}>
+              <Path d={starPath(36.5, 40.5, 5)} fill="#FFF6B0" stroke="#F29A1A" strokeWidth={1} strokeLinejoin="round" />
+            </Part>
+            <Part s={s} box={[22, 14, 18, 18]} style={flower}>
+              <Path d="M27 28 Q24 24 26 20 Q30 23 30 27Z" fill="#3DBE5A" stroke="#1E6A2E" strokeWidth={0.9} />
+              <Hibiscus cx={31} cy={23} r={7} />
+            </Part>
+          </Group>
+          {/* les mèches qui tombent devant les épaules */}
+          <Part s={s} box={[18, 46, 16, 30]} style={lockL}>
+            <Defs>
+              <LinearGradient id={g('g-beach-lock-l')} gradientUnits="userSpaceOnUse" x1="0" y1="11" x2="0" y2="72">
+                <Stop offset="0" stopColor="#94502A" />
+                <Stop offset="1" stopColor="#5E2C12" />
+              </LinearGradient>
+            </Defs>
+            <Path d="M21.6 48 Q19 62 22 70 Q24 74 27 72 Q25 66 27 60 Q30 54 31 48Z" fill={`url(#${g('g-beach-lock-l')})`} />
+            <Path d="M21.6 48 Q19 62 22 70 Q24 74 27 72 Q25 66 27 60 Q30 54 31 48" stroke={HAIR_LINE} strokeWidth={1.4} fill="none" strokeLinejoin="round" strokeLinecap="round" />
           </Part>
-          {/* les deux demi-noix de coco, accrochées à la ficelle */}
-          <Part s={s} box={[43, 67.5, 13, 13]} style={nutL}>
-            <Circle cx={49.5} cy={74} r={5.4} fill="#8A5626" stroke="#3A2008" strokeWidth={1.4} />
-            <Path d="M46 71.5 Q49 70 52 71.8 M47.5 77 L51 76" stroke="#C99A62" strokeWidth={1} fill="none" strokeLinecap="round" />
+          <Part s={s} box={[70, 46, 16, 30]} style={lockR}>
+            <Defs>
+              <LinearGradient id={g('g-beach-lock-r')} gradientUnits="userSpaceOnUse" x1="0" y1="11" x2="0" y2="72">
+                <Stop offset="0" stopColor="#94502A" />
+                <Stop offset="1" stopColor="#5E2C12" />
+              </LinearGradient>
+            </Defs>
+            <Path d="M82.4 48 Q85 62 82 70 Q80 74 77 72 Q79 66 77 60 Q74 54 73 48Z" fill={`url(#${g('g-beach-lock-r')})`} />
+            <Path d="M82.4 48 Q85 62 82 70 Q80 74 77 72 Q79 66 77 60 Q74 54 73 48" stroke={HAIR_LINE} strokeWidth={1.4} fill="none" strokeLinejoin="round" strokeLinecap="round" />
           </Part>
-          <Part s={s} box={[54, 67.5, 13, 13]} style={nutR}>
-            <Circle cx={60.5} cy={74} r={5.4} fill="#8A5626" stroke="#3A2008" strokeWidth={1.4} />
-            <Path d="M57 71.5 Q60 70 63 71.8 M58.5 77 L62 76" stroke="#C99A62" strokeWidth={1} fill="none" strokeLinecap="round" />
+          <Part s={s} box={[46, 74, 12, 8]}>
+            <Path d="M48.6 78 L55.4 78" stroke="#5A3A18" strokeWidth={1.3} strokeLinecap="round" />
           </Part>
-          {/* la tête */}
-          <Part s={s} box={[36, 22, 38, 38]}>
-            <Circle cx={55} cy={40} r={14.5} fill={SKIN} stroke={SKIN_LINE} strokeWidth={1.9} />
-            <Path d="M41 37 Q42 23 56 24 Q68 25 69.5 36 Q62 30 54 31 Q47 31 41 37Z" fill="#7A3E1C" stroke="#3A1A08" strokeWidth={1.4} strokeLinejoin="round" />
-            {/* fleur d'hibiscus dans les cheveux */}
-            <Path d={starPath(42, 31, 5.4)} fill="#FF4F8B" stroke="#A8245E" strokeWidth={1} />
-            <Circle cx={42} cy={31} r={1.6} fill="#FFE45C" />
-            {/* lunettes de soleil */}
-            <Path d="M44 39 Q44 45 49 45 Q53 45 53.5 39Z" fill="#1E1E2A" stroke="#FF6FA8" strokeWidth={1.4} />
-            <Path d="M56.5 39 Q57 45 61 45 Q66 45 66 39Z" fill="#1E1E2A" stroke="#FF6FA8" strokeWidth={1.4} />
-            <Path d="M53.5 39.6 L56.5 39.6" stroke="#FF6FA8" strokeWidth={1.4} />
-            <Path d="M45.5 40.5 L48 40.5 M58 40.5 L60.5 40.5" stroke="#FFFFFF" strokeWidth={1} opacity={0.7} />
-            <Ellipse cx={44.5} cy={48} rx={2.8} ry={1.6} fill="#FF8FA8" opacity={0.7} />
-            <Ellipse cx={65.5} cy={48} rx={2.8} ry={1.6} fill="#FF8FA8" opacity={0.7} />
+          {/* les deux noix de coco, sur leur ficelle */}
+          <Part s={s} box={[21, 64, 32, 32]} style={nutL}>
+            <Coconut cx={37} cy={80} r={12.6} gid={g('g-beach-nut-l')} />
           </Part>
-          <Part s={s} box={[61, 33, 10, 10]} style={shine}>
-            <Path d={starPath(65.5, 38, 3.6)} fill="#FFFFFF" />
-          </Part>
-          <Part s={s} box={[47, 45, 16, 13]} style={smile}>
-            <Path d="M48.5 47.6 Q55 50.2 61.5 47.6 Q60.6 56.4 55 56.4 Q49.4 56.4 48.5 47.6Z" fill="#7A1A1A" stroke={SKIN_LINE} strokeWidth={1.3} strokeLinejoin="round" />
-            <Path d="M49.6 48.4 Q55 50.6 60.4 48.4 L60 50.2 Q55 51.8 50 50.2Z" fill="#FFFFFF" />
-            <Ellipse cx={55} cy={54.2} rx={3.4} ry={1.6} fill="#FF6F7D" />
-          </Part>
-          {/* le bras qui fait coucou */}
-          <Part s={s} box={[62, 26, 28, 40]} style={arm}>
-            <Path d="M67 62 Q76 56 79 42" stroke={SKIN_LINE} strokeWidth={7.6} fill="none" strokeLinecap="round" />
-            <Path d="M67 62 Q76 56 79 42" stroke={SKIN} strokeWidth={5} fill="none" strokeLinecap="round" />
-            <Path d="M75 41 Q74 32 77 31 L78 37 L79 29 Q81 28 81.5 30 L81 37 L83 31 Q85 31 84.6 33 L83 39 Q84 36 86 37 Q86 40 83 44 Q79 47 76 44Z" fill={SKIN} stroke={SKIN_LINE} strokeWidth={1.3} strokeLinejoin="round" />
+          <Part s={s} box={[51, 64, 32, 32]} style={nutR}>
+            <Coconut cx={67} cy={80} r={12.6} gid={g('g-beach-nut-r')} />
           </Part>
         </Group>
       </Disc>
       <Rim s={s} color="#2E9BD0" />
-      {[0, 1].map((k) => (
-        <WaveSign key={k} s={s} t={t} k={k} />
-      ))}
     </>
-  );
-}
-
-/** Petits traits « coucou » autour de la main. */
-function WaveSign({ s, t, k }: { s: number; t: T; k: number }) {
-  const style = useAnimatedStyle(() => ({ opacity: Math.max(0, osc(t.value, HOPS, k * 0.5)) }));
-  return (
-    <Part s={s} box={[80, 18, 20, 30]} style={style}>
-      <Path d={k ? 'M90 22 L95 18 M92 28 L98 27' : 'M88 36 L95 37 M86 42 L92 46'} stroke="#FFFFFF" strokeWidth={2.4} strokeLinecap="round" />
-    </Part>
   );
 }
 
