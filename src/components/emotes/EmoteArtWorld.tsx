@@ -52,7 +52,7 @@ const wavePath = (y: number, amp: number, bottom = 100) => {
   return `${d} L120 ${bottom} L-20 ${bottom} Z`;
 };
 
-/* ------------------------------ Noix de coco ------------------------------ */
+/* ------------------------------ La Playa ------------------------------ */
 
 const SKIN = '#F1BE93';
 const SKIN_LINE = '#6A3418';

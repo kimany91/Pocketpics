@@ -123,7 +123,7 @@ export const EMOTES: readonly EmoteDef[] = [
     price: null,
     pack: { groups: ['car', 'sports_car'], labels: ['a toy car'], hint: 'Tire une carte voiture' },
   },
-  { id: 'beach', name: 'Noix de coco', feeling: 'fait coucou sous son palmier', color: '#3FC9E8', price: null, solo: { world: 2, hint: 'Termine le monde de la Plage' } },
+  { id: 'beach', name: 'La Playa', feeling: 'fait coucou sous son palmier', color: '#3FC9E8', price: null, solo: { world: 2, hint: 'Termine le monde de la Plage' } },
   { id: 'cow', name: 'Meuh', feeling: 'broute tranquille', color: '#7CC95A', price: null, solo: { world: 13, hint: 'Termine le monde de la Ferme' } },
   { id: 'boat', name: 'Ohé !', feeling: 'tangue sur les vagues', color: '#3D8BFF', price: null, solo: { world: 5, hint: 'Termine le monde du Port' } },
   { id: 'bear', name: 'Ours polaire', feeling: 'rugit dans la neige', color: '#BFE4FF', price: null, solo: { world: 6, hint: 'Termine le monde de la Montagne' } },

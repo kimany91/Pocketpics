@@ -897,7 +897,7 @@ def make_car():
 
 
 def make_beach():
-    """Noix de coco : un ukulélé qui gratte (deux accords d'été), la vague
+    """La Playa : un ukulélé qui gratte (deux accords d'été), la vague
     qui roule, et un joyeux « You-hou ! » de vacances."""
     dur = 1.36
     buf = np.zeros(n_of(dur))
