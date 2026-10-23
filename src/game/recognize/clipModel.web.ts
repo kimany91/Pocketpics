@@ -106,7 +106,7 @@ export function loadClipModel(): Promise<ClipModel> {
       if (PARTS.length !== MANIFEST.parts.length) throw new Error('Morceaux du modèle incomplets');
       const [parts, tableBytes] = await Promise.all([Promise.all(PARTS.map(bytesOf)), bytesOf(TABLE)]);
       const run = makeEncoder(MANIFEST, await readWeights(MANIFEST, joinParts(MANIFEST, parts)));
-      const table = decodeHalfTable(tableBytes, META.labels.length, META.dim);
+      const table = decodeHalfTable(tableBytes, META.labels.length + (META.memes?.length ?? 0), META.dim);
       const embedTensor = async (input: Float32Array) => {
         const img = tf.tensor4d(input, [1, CLIP_INPUT, CLIP_INPUT, 3]);
         const out = await run(img).finally(() => img.dispose());

@@ -26,6 +26,8 @@ const META = require('../../../assets/clip/clip-labels.json') as LabelMeta;
 
 export interface LabelMeta {
   labels: string[];
+  /** Sujets de mèmes (memeVocab.ts), à la suite des labels dans la table. */
+  memes?: string[];
   dim: number;
   logitScale: number;
 }
@@ -42,7 +44,7 @@ export interface PhotoLook {
 
 export interface ClipModel {
   meta: LabelMeta;
-  /** Vecteurs des labels (float32, labels × dim). */
+  /** Vecteurs des labels puis des sujets de mèmes (float32, (labels + mèmes) × dim). */
   table: Float32Array;
   /** Vecteurs de la photo : carré du centre et/ou image entière. */
   embed(uri: string, views: ViewChoice): Promise<PhotoLook>;
@@ -110,7 +112,7 @@ export function loadClipModel(): Promise<ClipModel> {
   if (!loading) {
     loading = (async () => {
       const [model, tablePath] = await Promise.all([assetFile(MODEL).then((url) => loadTensorflowModel({ url }, [])), assetFile(TABLE)]);
-      const table = decodeHalfTable(new Uint8Array(await new File(tablePath).arrayBuffer()), META.labels.length, META.dim);
+      const table = decodeHalfTable(new Uint8Array(await new File(tablePath).arrayBuffer()), META.labels.length + (META.memes?.length ?? 0), META.dim);
       const run = async (m: TfliteModel, img: Pixels | null) => {
         if (!img) return null;
         const input = toModelInput(img.data, img.width, img.height, 4);

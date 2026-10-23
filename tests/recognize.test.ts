@@ -9,6 +9,10 @@ import {
   RECOG_RULE,
   RECOG_VERSION,
   type Recognizable,
+  MEME_FALLBACK,
+  MEME_FORBIDDEN,
+  FRIED_MEMES,
+  alignMemes,
   alignVocab,
   artSubjectName,
   attackNamesFor,
@@ -22,15 +26,19 @@ import {
   labelId,
   labelProbs,
   letterbox,
+  memeOf,
+  memePool,
   needsRecognition,
   noRecognition,
   readRecognition,
   recognitionOrder,
   screenshotMass,
+  splitProbs,
   viewsFor,
   withRecognition,
 } from '../src/game/recognize/recognize';
 import { JobQueue, takeForcedLabel } from '../src/game/recognize/recognizeQueue';
+import { MEME_LABELS } from '../src/game/recognize/memeVocab';
 import { appGroups, appLabels, isScreenshotName, screenshotApp } from '../src/game/recognize/screenshotHint';
 import { ART_SUBJECT, CATEGORY_NAMES, type CategoryId, GROUP_FAMILY, GROUP_GENERIC, GROUP_NAMES, VOCAB } from '../src/game/recognize/vocabV2';
 import * as tf from '@tensorflow/tfjs-core';
@@ -132,7 +140,11 @@ test('vocabulaire : noms de groupe, familles et dessins définis', () => {
 test('modèle : la table des labels suit vocabV2.ts (sinon relancer scripts/convert-clip-model.py --labels-only)', () => {
   const meta = JSON.parse(readFileSync(join(CLIP, 'clip-labels.json'), 'utf8'));
   assert.deepEqual(meta.labels, VOCAB.map(labelId));
-  assert.equal(statSync(join(CLIP, 'clip-labels.bin')).size, meta.labels.length * meta.dim * 2);
+  // puis les sujets de mèmes (memeVocab.ts), à la suite
+  assert.deepEqual(meta.memes, MEME_LABELS.map((m) => m.en[0]));
+  assert.equal(alignMemes(meta.memes).length, MEME_LABELS.length);
+  assert.deepEqual(alignMemes(meta.memes.slice(1)), []);
+  assert.equal(statSync(join(CLIP, 'clip-labels.bin')).size, (meta.labels.length + meta.memes.length) * meta.dim * 2);
   assert.ok(meta.logitScale > 1 && meta.logitScale <= 100);
   assert.equal(alignVocab(meta.labels).length, VOCAB.length);
   assert.throws(() => alignVocab(meta.labels.slice(1)));
@@ -560,8 +572,8 @@ test('cartes : seulement les miennes, vérifiées propres, pas encore regardées
   assert.equal(needsRecognition(card({ recognition: { ...noRecognition(), v: RECOG_VERSION - 1 } })), true);
 });
 
-test('version 3 : une carte nommée par une ancienne version est renommée, sauf ce que le joueur a changé', () => {
-  assert.equal(RECOG_VERSION, 3);
+test('version 4 : une carte nommée par une ancienne version est renommée, sauf ce que le joueur a changé', () => {
+  assert.equal(RECOG_VERSION, 4);
   // nommée par la v2 : revue
   assert.equal(needsRecognition(card({ recognition: { ...noRecognition(), v: 2 } })), true);
   const c = card({ id: 'v1', hash: 'oiseau-1' });
@@ -579,7 +591,7 @@ test('version 3 : une carte nommée par une ancienne version est renommée, sauf
   assert.deepEqual(v2.battle.attacks.map((x) => x.name), attackNamesFor(bird, c.hash));
   assert.ok(!v2.battle.attacks.some((x) => x.name === 'Rugissement' || x.name === 'Coup de croc'));
   assert.ok(v2.name === 'Oiseau' || GROUP_NAMES.bird.card.includes(v2.name!));
-  assert.equal(v2.recognition?.v, 3);
+  assert.equal(v2.recognition?.v, 4);
   assert.equal(needsRecognition(v2), false);
   // le joueur avait renommé la carte et la spéciale : la v2 n'y touche pas
   const mine = { ...v1, name: 'Titi', battle: { ...v1.battle, attacks: [v1.battle.attacks[0], { ...v1.battle.attacks[1], name: 'Cri qui tue' }] as typeof v1.battle.attacks } };

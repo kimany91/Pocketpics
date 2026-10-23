@@ -48,6 +48,7 @@ import { useGame, useLiveCards } from '../state/game';
 import { useDrawStatus } from '../state/useDrawStatus';
 import { useTutoStep } from '../state/useTuto';
 import { isUnlocked } from '../game/tutorial';
+import { isStarterStep } from '../game/starterPack';
 import { TutoArrow, TutoBubble } from '../components/tuto/TutoArrow';
 import type { Card } from '../storage/model';
 import { CARD_RATIO, colors, fonts } from '../theme';
@@ -83,6 +84,9 @@ function PackSession({ onNext, friend = false, paul = false }: { onNext(): void;
   const [phase, setPhase] = useState<Phase>('pack');
   const [boom, setBoom] = useState(0);
   const started = useRef(false);
+  // tuto : les deux premiers paquets sont triés (que des belles photos), ça peut prendre quelques secondes
+  const starterStep = useRef(useGame.getState().save?.tutorial.step).current;
+  const starter = !friend && !paul && isStarterStep(starterStep);
   // « Emote débloquée » : retenue pour le reste de l'app, affichée ici juste après sa carte (voir plus bas)
   useHoldUnlocks();
   /** Révélation : cartes retournées, et une carte encore en train de se jouer. */
@@ -229,7 +233,7 @@ function PackSession({ onNext, friend = false, paul = false }: { onNext(): void;
 
       {phase === 'fan' ? <CardFanOut count={cards?.length ?? CARDS_PER_PACK} cardW={cardW} fromY={fromY} lucky={lucky} onDone={() => setPhase(cards ? 'reveal' : 'waiting')} /> : null}
 
-      {phase === 'waiting' ? <WaitingStack cardW={cardW} /> : null}
+      {phase === 'waiting' ? <WaitingStack cardW={cardW} text={starter ? (starterStep === 'pack1' ? 'Préparation de ton premier paquet…' : 'Préparation de ton deuxième paquet…') : undefined} /> : null}
 
       {phase === 'reveal' && cards ? (
         <RevealStack
@@ -303,7 +307,7 @@ function Ambient({ width, height }: { width: number; height: number }) {
 }
 
 /** Pile qui patiente si les photos ne sont pas encore prêtes. */
-function WaitingStack({ cardW }: { cardW: number }) {
+function WaitingStack({ cardW, text = 'Développement des photos…' }: { cardW: number; text?: string }) {
   const p = useSharedValue(0);
   useEffect(() => {
     p.value = withRepeat(withTiming(1, { duration: 700 }), -1, true);
@@ -316,7 +320,7 @@ function WaitingStack({ cardW }: { cardW: number }) {
       </Animated.View>
       <Animated.View entering={FadeIn} style={styles.waiting}>
         <ActivityIndicator color={colors.text} />
-        <AppText variant="caption">Développement des photos…</AppText>
+        <AppText variant="caption">{text}</AppText>
       </Animated.View>
     </View>
   );

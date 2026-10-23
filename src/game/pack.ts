@@ -69,6 +69,11 @@ export async function generatePack(opts: {
    * réponse à temps (la photo est gardée, floutée puis vérifiée juste après).
    */
   screen?: (photo: ProcessedPhoto) => Promise<boolean | null>;
+  /**
+   * Tri (paquets de départ du tuto, voir starterPack.ts) : 0 = dans le paquet,
+   * plus = mise de côté, pour compléter seulement (et pas consommée sinon).
+   */
+  rank?: (photo: ProcessedPhoto, verdict: boolean | null) => Promise<number>;
 }): Promise<PackResult> {
   const count = opts.count ?? CARDS_PER_PACK;
   const now = opts.now ?? Date.now();
@@ -81,6 +86,7 @@ export async function generatePack(opts: {
     process: processPhoto,
     isKnownHash: (h) => opts.drawnHashes.has(h),
     screen: opts.screen,
+    rank: opts.rank,
   });
   if (photos.length === 0) throw new NoPhotosLeftError(unreadable > 0, consumed, rejected);
 

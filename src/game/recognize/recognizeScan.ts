@@ -8,7 +8,7 @@
 import { within } from '../nsfwQueue';
 import { nsfwPending } from '../nsfwScan';
 import { type ClipModel, loadClipModel } from './clipModel';
-import { type Decision, type PhotoHint, alignVocab, decidePhoto, forcedDecision, labelProbs, viewsFor } from './recognize';
+import { type Decision, type PhotoHint, RECOG_RULE, alignMemes, alignVocab, decidePhoto, forcedDecision, labelProbs, splitProbs, viewsFor } from './recognize';
 import { JobQueue, type RecogPriority, takeForcedLabel } from './recognizeQueue';
 
 /**
@@ -75,8 +75,17 @@ const queue = new JobQueue<Decision>(async (key) => {
     stats.lastMs = Date.now() - t1;
     stats.totalMs += stats.lastMs;
     stats.scans++;
-    const probs = (e: Float32Array | null) => e && labelProbs(e, m.table, m.meta.dim, m.meta.logitScale);
-    d = decidePhoto({ ...hint, aspect: look.aspect, center: probs(look.center), full: probs(look.full) }, alignVocab(m.meta.labels));
+    // un seul softmax pour les labels et les sujets de mèmes, puis séparés (les labels seuls : renormalisés)
+    const probs = (e: Float32Array | null) => e && splitProbs(labelProbs(e, m.table, m.meta.dim, m.meta.logitScale), m.meta.labels.length);
+    const center = probs(look.center);
+    const full = probs(look.full);
+    const memes = alignMemes(m.meta.memes ?? []);
+    d = decidePhoto(
+      { ...hint, aspect: look.aspect, center: center?.vocab, full: full?.vocab, memes: memes.length ? (center ?? full)?.memes : null },
+      alignVocab(m.meta.labels),
+      RECOG_RULE,
+      memes,
+    );
   } catch (e) {
     if (!forced) {
       stats.failed++;

@@ -14,7 +14,8 @@ Ce que le script écrit dans assets/clip/ :
   - tinyclip-web.json + tinyclip-web.N.bin : les mêmes poids pour le navigateur
     (int8 par canal de sortie + échelles), coupés en morceaux de moins de 14 Mo ;
   - clip-labels.bin + clip-labels.json : le vecteur de chaque label (float16),
-    dans l'ordre de VOCAB : moyenne des vecteurs (normés) de ses phrases
+    dans l'ordre de VOCAB, puis ceux des sujets de mèmes (MEME_LABELS,
+    src/game/recognize/memeVocab.ts, phrases telles quelles) : moyenne des vecteurs (normés) de ses phrases
     anglaises (« a dog », « a small bird perched on a branch »…) et, sauf
     pour les captures d'écran et les dessins, des mêmes phrases dans « a photo
     of {}. » et « a phone photo of {}. ». Chaque label y est nommé par sa
@@ -105,23 +106,35 @@ dump = "import('./src/game/recognize/vocabV2.ts').then((m) => console.log(JSON.s
 vocab = json.loads(subprocess.check_output(['node', '--import', 'tsx', '-e', dump], cwd=ROOT))
 labels = [en[0] for en, _ in vocab]
 assert len(set(labels)) == len(labels), 'première phrase en double dans le vocabulaire'
+# sujets de mèmes : à la suite, phrases telles quelles (ce ne sont pas des photos)
+dump = "import('./src/game/recognize/memeVocab.ts').then((m) => console.log(JSON.stringify((m.MEME_LABELS ?? m.default.MEME_LABELS).map((v) => v.en))))"
+memes = json.loads(subprocess.check_output(['node', '--import', 'tsx', '-e', dump], cwd=ROOT))
+meme_ids = [en[0] for en in memes]
+assert len(set(meme_ids)) == len(meme_ids), 'première phrase en double dans memeVocab.ts'
 tok = open_clip.get_tokenizer('ViT-B-32')
 rows = []
+
+
+def mean_row(texts):
+    e = model.encode_text(tok(texts)).float()
+    e = (e / e.norm(dim=-1, keepdim=True)).mean(0)
+    return (e / e.norm()).numpy()
+
+
 with torch.no_grad():
     for en, category in vocab:
-        texts = list(en) if category in NOT_PHOTOS else [t.format(p) for t in TEMPLATES for p in en]
-        e = model.encode_text(tok(texts)).float()
-        e = (e / e.norm(dim=-1, keepdim=True)).mean(0)
-        rows.append((e / e.norm()).numpy())
+        rows.append(mean_row(list(en) if category in NOT_PHOTOS else [t.format(p) for t in TEMPLATES for p in en]))
+    for en in memes:
+        rows.append(mean_row(list(en)))
 table = np.stack(rows).astype(np.float16)
 open(os.path.join(OUT, 'clip-labels.bin'), 'wb').write(table.tobytes())
 json.dump(
-    {'model': NAME, 'labels': labels, 'dim': 512, 'logitScale': round(logit_scale, 4), 'templates': TEMPLATES, 'notPhotos': list(NOT_PHOTOS)},
+    {'model': NAME, 'labels': labels, 'memes': meme_ids, 'dim': 512, 'logitScale': round(logit_scale, 4), 'templates': TEMPLATES, 'notPhotos': list(NOT_PHOTOS)},
     open(os.path.join(OUT, 'clip-labels.json'), 'w'),
     ensure_ascii=False,
     indent=1,
 )
-print(len(labels), 'labels, échelle', logit_scale)
+print(len(labels), 'labels,', len(meme_ids), 'sujets de mèmes, échelle', logit_scale)
 if LABELS_ONLY:
     sys.exit(0)
 

@@ -37,8 +37,10 @@ import { NSFW_SCAN_VERSION, type PhotoMark, photoMark, scanFields, scanOrder, wi
 import { within } from '../game/nsfwQueue';
 import { forgetPhoto, nsfwPending, nsfwReady, preloadNsfw, scanPhoto, scanWithin } from '../game/nsfwScan';
 import { type Decision, type PhotoHint, needsRecognition, noRecognition, recognitionOrder, withRecognition } from '../game/recognize/recognize';
-import { forgetRecognition, notePackWait, preloadRecognizer, recognizePhoto, recognizerGaveUp, recognizerLoaded, recognizerReady } from '../game/recognize/recognizeScan';
+import { forgetRecognition, notePackWait, preloadRecognizer, recognizePhoto, recognizeWithin, recognizerGaveUp, recognizerLoaded, recognizerReady } from '../game/recognize/recognizeScan';
 import { NoPhotosLeftError, generatePack, makeCard } from '../game/pack';
+import type { ProcessedPhoto } from '../game/gallery';
+import { isStarterStep, starterRank, starterWait } from '../game/starterPack';
 import { PAUL_NAME, paulFriend, paulHash } from '../game/paul';
 import { loadPaulPhotos } from '../game/paulPack';
 import { type RenameTask, type TutoPatch, type TutoStep, advance, noteRename, patchTutorial, drawsNeeded, finish as finishTuto, finishedTutorial, inPhase1, reached, skipTutorialForTests } from '../game/tutorial';
@@ -294,6 +296,8 @@ export const useGame = create<GameStore>((set, get) => ({
       preloadNsfw();
       setTimeout(() => void scanBacklog(), BACKLOG_DELAY_MS);
       // reconnaissance de la photo : le modèle se prépare un peu après, puis les cartes pas encore regardées
+      // (tout de suite au début du tuto : les deux premiers paquets sont triés avec lui)
+      if (isStarterStep(save.tutorial.step)) preloadRecognizer();
       setTimeout(() => {
         recogStarted = true;
         preloadRecognizer();
@@ -328,10 +332,14 @@ export const useGame = create<GameStore>((set, get) => ({
     let luckAfter = save.luck;
     const seen = new Set<string>();
     const startedAt = Date.now();
+    // tuto : les deux premiers paquets n'ont que des belles photos (gens, animaux, bâtiments, paysages)
+    const starter = isStarterStep(save.tutorial.step);
+    if (starter) preloadRecognizer();
     const pack = await generatePack({
       drawnAssetIds: new Set(save.drawnAssetIds),
       drawnHashes: new Set(save.drawnHashes),
       now,
+      rank: starter ? (photo, verdict) => starterRankOf(photo, verdict, startedAt) : undefined,
       rarities: (count) => {
         const plan = planPack({ state: save.luck, cards: count, packIndex, lucky, divine: save.divineUnlocked });
         luckAfter = plan.state;
@@ -1256,6 +1264,33 @@ async function recognitionsOf(photos: { uri: string; hint: PhotoHint }[], clean:
     },
   };
 }
+
+/**
+ * Paquet de départ (voir starterPack.ts) : le rang d'une photo. Une capture
+ * (métadonnées) est mise de côté sans passer au modèle ; une photo pas encore
+ * jugée propre n'y passe pas non plus (prise sans tri). Le résultat reste dans
+ * la file : la carte sera nommée avec, sans revoir la photo.
+ */
+async function starterRankOf(photo: ProcessedPhoto, verdict: boolean | null, startedAt: number): Promise<number> {
+  const hint: PhotoHint = { screenshot: photo.screenshot === true ? true : null, app: photo.screenshotApp ?? null };
+  if (hint.screenshot === true || verdict !== false || recognizerGaveUp()) {
+    return noteStarter({ at: Date.now() - startedAt, verdict, rank: starterRank(hint.screenshot, null) });
+  }
+  // premier lancement : le modèle a jusqu'à 9 s pour se charger, puis chaque photo jusqu'à 18 s
+  const loaded = recognizerLoaded() || (await within(recognizerReady().then(() => true), starterWait(Date.now() - startedAt, false))) === true;
+  const ms = loaded ? starterWait(Date.now() - startedAt, true) : 0;
+  const d = ms > 0 ? await recognizeWithin(photo.imageUri, ms, hint) : null;
+  return noteStarter({ at: Date.now() - startedAt, verdict, loaded, category: d ? d.category : undefined, rank: starterRank(hint.screenshot, d) });
+}
+
+/** Tests du navigateur : ce que le tri des paquets de départ a décidé (`globalThis.__pocketpicsStarterLog`). */
+const starterLog: { at: number; verdict: boolean | null; loaded?: boolean; category?: string | null; rank: number }[] = [];
+(globalThis as { __pocketpicsStarterLog?: typeof starterLog }).__pocketpicsStarterLog = starterLog;
+const noteStarter = (e: (typeof starterLog)[number]) => {
+  starterLog.push(e);
+  if (starterLog.length > 50) starterLog.shift();
+  return e.rank;
+};
 
 /** Ce que les métadonnées de la photo d'une carte disent pour la reconnaissance (capture d'écran, appli). */
 const hintOf = (c: Card): PhotoHint => ({ screenshot: c.screenshot === true ? true : null, app: c.screenshotApp ?? null });

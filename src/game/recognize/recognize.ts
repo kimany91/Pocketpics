@@ -14,6 +14,7 @@
  */
 import { isStockAttackName, seededRandom } from '../../battle/stats';
 import { NSFW_SCAN_VERSION } from '../nsfw';
+import { MEME_LABELS, type MemeLabel } from './memeVocab';
 import { appLabels } from './screenshotHint';
 import { ART_SUBJECT, CATEGORY_NAMES, type CategoryId, GROUP_FAMILY, GROUP_GENERIC, GROUP_NAMES, type NamePool, VOCAB, type VocabLabel } from './vocabV2';
 
@@ -23,8 +24,10 @@ import { ART_SUBJECT, CATEGORY_NAMES, type CategoryId, GROUP_FAMILY, GROUP_GENER
  * 2 : vocabulaire de 399 labels en 11 catégories, captures d'écran, attaques par groupe.
  * 3 : dessins et peintures (catégorie « art »), insectes et oiseaux plus fins,
  *     agenda / billets / notes séparés, nom du groupe quand le label est incertain.
+ * 4 : mèmes et images faites sur ordinateur : un nom drôle selon le sujet
+ *     (memeVocab.ts), jamais « Mème » ni « Illustration ».
  */
-export const RECOG_VERSION = 3;
+export const RECOG_VERSION = 4;
 
 /** Côté de l'image donnée au modèle. */
 export const CLIP_INPUT = 224;
@@ -64,6 +67,8 @@ export const CLIP_INPUT = 224;
  *     donné que s'il pèse au moins `preciseShare` du groupe ; sinon le nom du
  *     groupe (« Insecte ») s'il en a un, ou un nom drôle du groupe. Et 1 fois
  *     sur 4 (selon la photo), un nom drôle du groupe à la place.
+ *  8. Mème ou image faite sur ordinateur (voir `memeOf`) : un nom drôle selon
+ *     son sujet (memeVocab.ts), jamais « Mème » ni « Illustration ».
  */
 export const RECOG_RULE = {
   minCategory: 0.1,
@@ -77,6 +82,15 @@ export const RECOG_RULE = {
   art: 0.15,
   artSubject: 0.2,
   artSubjectShare: 0.7,
+  memeCartoon: 0.2,
+  memeArt: 0.8,
+  memePhoto: 0.95,
+  memePhotoTop: 0.9,
+  memeFried: 0.15,
+  memeTop: 0.3,
+  memeLead: 1.2,
+  memeSubject: 0.5,
+  memeSubjectMass: 0.1,
 } as const;
 
 /** Une règle (pour régler les seuils sur le jeu d'évaluation). */
@@ -96,6 +110,8 @@ export interface Recognition {
   group: string | null;
   /** Poids de la catégorie retenue (0 à 1). */
   score: number;
+  /** Mème : son sujet dans memeVocab.ts (`''` : mème au sujet pas net). Absent sinon. */
+  meme?: string;
   /** Noms mis par le jeu (pour savoir ensuite si le joueur les a changés). */
   given: { name: string | null; attacks: [string | null, string | null] };
 }
@@ -109,6 +125,16 @@ export interface Decision {
   share: number;
   /** Pour un dessin : l'animal dessiné, s'il est sûr (label du vocabulaire). */
   subject?: string | null;
+  /** Mème ou image faite sur ordinateur (absent sinon) : nommée par `memeOf`. */
+  meme?: MemeLook | null;
+}
+
+/** Ce qu'on sait d'un mème : son sujet dans memeVocab.ts s'il est net, sinon ce qu'il montre. */
+export interface MemeLook {
+  /** Sujet de mème (première phrase de son label dans memeVocab.ts), `null` s'il n'est pas net. */
+  label: string | null;
+  /** Sinon, le groupe du vocabulaire de ce qu'il montre (« dog », « selfie »…), `null` si rien de sûr. */
+  subject: string | null;
 }
 
 const CATEGORIES = Object.keys(CATEGORY_NAMES) as CategoryId[];
@@ -261,23 +287,133 @@ export function screenshotMass(probs: ArrayLike<number>, vocab: readonly VocabLa
  * l'indice des métadonnées.
  */
 export function decidePhoto(
-  look: PhotoHint & { center?: ArrayLike<number> | null; full?: ArrayLike<number> | null; aspect: number },
+  look: PhotoHint & {
+    center?: ArrayLike<number> | null;
+    full?: ArrayLike<number> | null;
+    aspect: number;
+    /** Sujets de mèmes (dans l'ordre de `memeVocab`) : leur part dans le softmax commun avec les labels, sur la vue principale. */
+    memes?: ArrayLike<number> | null;
+  },
   vocab: readonly VocabLabel[] = VOCAB,
   rule: RecogRule = RECOG_RULE,
+  memeVocab: readonly MemeLabel[] = MEME_LABELS,
 ): Decision {
   const { center, full } = look;
   const view = full ?? center;
+  const meme = (d: Decision, probs: ArrayLike<number>): Decision => {
+    const m = look.memes ? memeOf(d, probs, look.memes, vocab, memeVocab, rule) : null;
+    return m ? { ...d, meme: m } : d;
+  };
   if (look.screenshot === true && view) {
     const fits = appLabels(look.app);
     const d = fits ? decide(view, vocab, (v) => v.category === 'screenshot' && fits(v), rule) : null;
-    return d?.group ? d : onScreenTwin(decide(view, vocab, onScreen, rule), view, vocab, rule);
+    return meme(d?.group ? d : onScreenTwin(decide(view, vocab, onScreen, rule), view, vocab, rule), view);
   }
-  if (full && look.aspect >= rule.tall && screenshotMass(full, vocab) >= rule.screenshot) return onScreenTwin(decide(full, vocab, onScreen, rule), full, vocab, rule);
   const look1 = center ?? full;
+  if (full && look.aspect >= rule.tall && screenshotMass(full, vocab) >= rule.screenshot) return meme(onScreenTwin(decide(full, vocab, onScreen, rule), full, vocab, rule), look1 ?? full);
   if (!look1) return unknown(0);
   // ni le téléphone ni la forme ne disent « capture » : un agenda « d'appli » est un agenda en papier
   const d = decide(look1, vocab, undefined, rule);
-  return twin(d, look1, vocab, rule, PAPER_TWIN, 'screenshot');
+  return meme(twin(d, look1, vocab, rule, PAPER_TWIN, 'screenshot'), look1);
+}
+
+/** Probabilités du softmax commun (labels, puis sujets de mèmes) → celles des labels seuls (renormalisées) et la part de chaque sujet de mème. */
+export function splitProbs(joint: ArrayLike<number>, labels: number): { vocab: Float32Array; memes: Float32Array } {
+  const vocab = new Float32Array(labels);
+  const memes = new Float32Array(Math.max(0, joint.length - labels));
+  let sum = 0;
+  for (let i = 0; i < labels; i++) sum += vocab[i] = Number(joint[i]) || 0;
+  for (let i = 0; i < labels; i++) vocab[i] /= sum || 1;
+  for (let i = 0; i < memes.length; i++) memes[i] = Number(joint[labels + i]) || 0;
+  return { vocab, memes };
+}
+
+/** Groupes du vocabulaire faits sur ordinateur (illustration, pixel art) : l'image passe toujours par les mèmes. */
+const DIGITAL_GROUPS = ['digital', 'pixel'];
+/** Labels « dessin animé » : souvent faits sur ordinateur, mais aussi des croquis ou des coloriages. */
+const CARTOON_LABELS = ['a cartoon drawing', 'a manga drawing'];
+
+/** Sujets de mèmes qui disent « photo retouchée » (friture, yeux laser) : seuls à compter sur une photo. */
+export const FRIED_MEMES = ['a deep-fried image with oversaturated neon colors and noisy pixels', 'a face with red laser beams shooting from the eyes'];
+
+/** Catégories qui donnent le sujet d'un mème sans sujet net (un chien, un selfie…). */
+const MEME_SUBJECT_CATEGORIES: readonly CategoryId[] = ['animal', 'person', 'food', 'object', 'vehicle', 'plant', 'building', 'landscape', 'body'];
+
+/**
+ * Mème ou image faite sur ordinateur ? `null` si c'est une photo, un dessin
+ * d'enfant, un tableau… Sinon, son sujet de mème s'il est net, ou ce qu'il montre.
+ * `memes` : part de chaque sujet de mème dans le softmax commun avec les labels
+ * (leur somme `M` : l'image ressemble plus à un sujet de mème qu'à un label).
+ * C'est un mème si :
+ *  - le vocabulaire dit « capture d'un mème » ;
+ *  - ou « fait sur ordinateur » (illustration, pixel art) ;
+ *  - ou « dessin animé, manga » et `M` ≥ `memeCartoon` (sinon c'est souvent
+ *    un croquis, un coloriage) ;
+ *  - ou un autre dessin (enfant, peinture, croquis…) mais `M` ≥ `memeArt` ;
+ *  - ou une photo, mais `M` ≥ `memePhoto` avec un sujet de tête à `memePhotoTop`
+ *    (sur 1 200 photos, `M` monte jusqu'à 0,87 : un chat qui boude ressemble
+ *    à « un chat qui boude ») ;
+ *  - ou une photo frite / aux yeux laser : ces deux sujets pèsent au moins
+ *    `memeFried` dans le softmax commun (sur 1 200 images : 0,29 au plus,
+ *    un graffiti ; photos frites : jusqu'à 0,48).
+ * Sujet net : celui de tête a au moins `memeTop` des mèmes et `memeLead` fois le deuxième.
+ */
+export function memeOf(d: Decision, probs: ArrayLike<number>, memes: ArrayLike<number>, vocab: readonly VocabLabel[], memeVocab: readonly MemeLabel[], rule: RecogRule): MemeLook | null {
+  let mass = 0;
+  let t = -1;
+  let t2 = -1;
+  for (let i = 0; i < Math.min(memes.length, memeVocab.length); i++) {
+    const q = Number(memes[i]) || 0;
+    mass += q;
+    if (t < 0 || q > Number(memes[t])) {
+      t2 = t;
+      t = i;
+    } else if (t2 < 0 || q > Number(memes[t2])) t2 = i;
+  }
+  if (t < 0 || mass <= 0) return null;
+  const top = Number(memes[t]) / mass;
+  const lead = Number(memes[t]) / Math.max(1e-9, t2 < 0 ? 0 : Number(memes[t2]));
+  const id = memeVocab[t].en[0];
+  let fried = 0;
+  memeVocab.forEach((m, i) => {
+    if (FRIED_MEMES.includes(m.en[0])) fried += Number(memes[i]) || 0;
+  });
+  const art = d.category === 'art';
+  const digital = art && d.group !== null && DIGITAL_GROUPS.includes(d.group);
+  const cartoon = art && d.label !== null && CARTOON_LABELS.includes(d.label);
+  const is =
+    d.group === 'meme' ||
+    digital ||
+    (cartoon && mass >= rule.memeCartoon) ||
+    (art && mass >= rule.memeArt) ||
+    (mass >= rule.memePhoto && top >= rule.memePhotoTop) ||
+    fried >= rule.memeFried;
+  if (!is) return null;
+  const label = top >= rule.memeTop && lead >= rule.memeLead ? id : null;
+  // pixel art sans sujet sûr : les noms du pixel art (« Héros 8 bits »)
+  return { label, subject: label ? null : (memeSubject(probs, vocab, rule) ?? (d.group === 'pixel' ? 'pixel' : null)) };
+}
+
+/**
+ * Ce que montre un mème sans sujet net : le groupe le plus lourd (chien,
+ * selfie…) parmi les choses réelles, si elles pèsent au moins `memeSubjectMass`
+ * de l'image et lui au moins `memeSubject` d'entre elles.
+ */
+function memeSubject(probs: ArrayLike<number>, vocab: readonly VocabLabel[], rule: RecogRule): string | null {
+  const groups = new Map<string, number>();
+  let total = 0;
+  let subjects = 0;
+  vocab.forEach((v, i) => {
+    const q = Number(probs[i]) || 0;
+    total += q;
+    if (!MEME_SUBJECT_CATEGORIES.includes(v.category)) return;
+    subjects += q;
+    groups.set(v.group, (groups.get(v.group) ?? 0) + q);
+  });
+  let best: string | null = null;
+  for (const [g, w] of groups) if (!best || w > (groups.get(best) ?? 0)) best = g;
+  const w = best ? (groups.get(best) ?? 0) : 0;
+  return best && total > 0 && subjects / total >= rule.memeSubjectMass && w >= rule.memeSubject * subjects && GROUP_NAMES[best] ? best : null;
 }
 
 /** Dans une capture d'écran, un papier est son double à l'écran (agenda → appli agenda…). */
@@ -342,6 +478,37 @@ const NAME_MAX = 28;
 
 const pick = <T>(list: readonly T[], r: number) => list[Math.min(list.length - 1, Math.floor(r * list.length))];
 
+/**
+ * Mots jamais donnés à un mème : « Mème » ou « Illustration » cassent la
+ * blague (« même » reste permis).
+ */
+export const MEME_FORBIDDEN = /(^|[^\p{L}])m[èe]mes?($|[^\p{L}])|illustration|image|dessin/iu;
+
+const withoutForbidden = (list: readonly string[]) => list.filter((x) => !MEME_FORBIDDEN.test(x));
+
+/** Noms d'un mème au sujet pas net et sans rien de sûr dedans : blagues du net, retouches. */
+export const MEME_FALLBACK: NamePool = {
+  card: ['Pépite du web', 'Humour du net', 'Blague virale', 'Légende du web', 'Ctrl+Z champion', 'Roi du calque', 'Star de la souris', 'Copier-coller fou'],
+  classic: ['Légende', 'Texte gras', 'Réaction', 'Partage', 'Calque', 'Annuler'],
+  special: ['Blague infinie', 'Réaction nucléaire', 'Texte explosif', 'Partage en masse', 'Ctrl+Z infini', 'Fusion des calques'],
+};
+
+/**
+ * Noms d'un mème (carte, attaques) : ceux de son sujet de mème (memeVocab.ts),
+ * sinon les noms drôles de ce qu'il montre (« dog » → ceux des chiens), sinon
+ * MEME_FALLBACK. Jamais un mot de MEME_FORBIDDEN.
+ */
+export function memePool(m: MemeLook, memeVocab: readonly MemeLabel[] = MEME_LABELS): NamePool {
+  const hit = m.label ? memeVocab.find((v) => v.en[0] === m.label) : undefined;
+  const base = hit ? { card: hit.names, classic: hit.classic, special: hit.special } : (m.subject && GROUP_NAMES[m.subject]) || MEME_FALLBACK;
+  const or = (list: string[], fb: string[]) => (list.length ? list : fb);
+  return {
+    card: or(withoutForbidden(base.card), MEME_FALLBACK.card),
+    classic: or(withoutForbidden(base.classic), MEME_FALLBACK.classic),
+    special: or(withoutForbidden(base.special), MEME_FALLBACK.special),
+  };
+}
+
 /** Noms possibles (carte, attaques) pour ce qui a été reconnu : ceux du groupe, sinon de la catégorie. */
 export function namePool(d: Pick<Decision, 'category' | 'group'>): NamePool | null {
   if (!d.category) return null;
@@ -362,6 +529,7 @@ export function artSubjectName(template: string, animal: string): string {
  * groupe (« Insecte ») s'il en a un, sinon un nom drôle du groupe, ou de la catégorie.
  */
 export function cardNameFor(d: Decision, hash: string, vocab: readonly VocabLabel[] = VOCAB): string | null {
+  if (d.meme) return pick(memePool(d.meme).card, seededRandom(`nom:${hash}:mème:${d.meme.label ?? d.meme.subject ?? ''}`)());
   const pool = namePool(d);
   if (!pool) return null;
   const rnd = seededRandom(`nom:${hash}:${d.label ?? d.group ?? d.category}`);
@@ -378,10 +546,10 @@ export function cardNameFor(d: Decision, hash: string, vocab: readonly VocabLabe
 }
 
 /** Noms des deux attaques (classique, spéciale) du groupe (ou de la catégorie), toujours les mêmes pour une même photo. */
-export function attackNamesFor(d: Pick<Decision, 'category' | 'group'>, hash: string): [string, string] | null {
-  const pool = namePool(d);
+export function attackNamesFor(d: Pick<Decision, 'category' | 'group' | 'meme'>, hash: string): [string, string] | null {
+  const pool = d.meme ? memePool(d.meme) : namePool(d);
   if (!pool) return null;
-  const rnd = seededRandom(`attaques:${hash}:${d.group ?? d.category}`);
+  const rnd = seededRandom(d.meme ? `attaques:${hash}:mème:${d.meme.label ?? d.meme.subject ?? ''}` : `attaques:${hash}:${d.group ?? d.category}`);
   return [pick(pool.classic, rnd()), pick(pool.special, rnd())];
 }
 
@@ -421,6 +589,7 @@ export function readRecognition(v: unknown): Recognition | null {
     category: isCategory(r.category) ? r.category : null,
     group: strOrNull(r.group),
     score: typeof r.score === 'number' && Number.isFinite(r.score) ? r.score : 0,
+    ...(typeof r.meme === 'string' ? { meme: r.meme.slice(0, 120) } : {}),
     given: { name: strOrNull(g.name), attacks: [strOrNull(atk[0]), strOrNull(atk[1])] },
   };
 }
@@ -472,7 +641,7 @@ export function withRecognition<T extends Recognizable>(card: T, d: Decision): T
     given.attacks[slot] = attacks[slot];
     return { ...a, name: attacks[slot] };
   }) as T['battle']['attacks'];
-  const recognition: Recognition = { v: RECOG_VERSION, label: d.label, category: d.category, group: d.group, score: d.score, given };
+  const recognition: Recognition = { v: RECOG_VERSION, label: d.label, category: d.category, group: d.group, score: d.score, ...(d.meme ? { meme: d.meme.label ?? '' } : {}), given };
   return { ...card, name: nextName, battle: { ...card.battle, attacks: nextAttacks }, recognition };
 }
 
@@ -491,12 +660,26 @@ export function alignVocab(labels: readonly string[], vocab: readonly VocabLabel
 }
 
 /**
+ * Les sujets de mèmes dans l'ordre de la table (clip-labels.json, `memes`).
+ * Une table sans eux (ou qui ne suit plus memeVocab.ts) : liste vide, pas de
+ * noms de mèmes (le reste marche).
+ */
+export function alignMemes(ids: readonly string[], memeVocab: readonly MemeLabel[] = MEME_LABELS): MemeLabel[] {
+  const byId = new Map(memeVocab.map((m) => [m.en[0], m]));
+  const out = ids.map((id) => byId.get(id));
+  return out.length === memeVocab.length && out.every((m) => m) ? (out as MemeLabel[]) : [];
+}
+
+/**
  * Réponse forcée par le crochet de test : ce label à 100 % (sa phrase anglaise
- * ou son nom français ; hors vocabulaire : inconnu).
+ * ou son nom français ; une phrase de memeVocab.ts : ce sujet de mème ; sinon : inconnu).
  */
 export function forcedDecision(label: string, vocab: readonly VocabLabel[] = VOCAB): Decision {
   const want = label.toLowerCase();
   const hit = vocab.find((v) => v.en.includes(label) || v.fr.toLowerCase() === want);
+  // un sujet de mème (sa phrase anglaise) : une image faite sur ordinateur, avec ce sujet
+  const meme = hit ? undefined : MEME_LABELS.find((m) => m.en.includes(label));
+  if (meme) return { label: null, category: 'art', group: 'digital', score: 1, share: 0, meme: { label: meme.en[0], subject: null } };
   return decide(
     vocab.map((v) => (v === hit ? 1 : 0)),
     vocab,
