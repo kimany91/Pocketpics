@@ -518,22 +518,22 @@ export const VOCAB: VocabLabel[] = [
 export const GROUP_NAMES: Record<string, NamePool> = {
   // ---------- Animaux ----------
   bird: {
-    card: ['Piou-piou', 'Plumeau', 'Roi du ciel', 'Gazouilleur', 'Chef de la branche'],
+    card: ['Gazouilleur en chef', 'Roi des perchoirs', 'Chef des plumes', 'Champion du perchoir', 'Piou-piou royal'],
     classic: ['Coup de bec', 'Battement d’ailes', 'Gazouillis', 'Piqué', 'Plume volante', 'Cui-cui'],
-    special: ['Tornade de plumes', 'Chant sonique', 'Vol en piqué', 'Nid explosif', 'Ouragan d’ailes', 'Piaillement fou'],
+    special: ['Tornade de plumes', 'Chant sonique', 'Vol en piqué', 'Bombardement aérien', 'Ouragan d’ailes', 'Pique-nique volé'],
   },
   raptor: {
-    card: ['Seigneur des airs', 'Rapace royal', 'Œil de faucon', 'Maître du vol', 'Gardien des cieux'],
+    card: ['Vigile du ciel', 'Pilote du vent', 'Œil de faucon', 'Rapace en colère', 'Vigie des hauteurs'],
     classic: ['Coup de serre', 'Piqué', 'Regard perçant', 'Vol rasant', 'Bec crochu', 'Cri strident'],
     special: ['Piqué fatal', 'Chasse éclair', 'Vision laser', 'Ombre en piqué', 'Tornade de serres', 'Attaque du faucon'],
   },
   waterbird: {
-    card: ['Coin-coin', 'Chef du bassin', 'Nageur fou', 'Pingouin pro', 'Flamant chic'],
-    classic: ['Coin-coin', 'Éclaboussure', 'Plouf', 'Coup d’aile', 'Bec en avant', 'Glisse sur l’eau'],
-    special: ['Tsunami de canard', 'Plongeon royal', 'Danse du flamant', 'Coin-coin de guerre', 'Vague géante', 'Cri du lac'],
+    card: ['Chef du bassin', 'Nageur fou', 'Pataugeur en chef', 'Roi du bord de l’eau', 'Dandy des flots'],
+    classic: ['Coup de bec', 'Éclaboussure', 'Plouf', 'Coup d’aile', 'Bec en avant', 'Glisse sur l’eau'],
+    special: ['Plongeon royal', 'Tsunami de plumes', 'Danse du flamant', 'Cri de guerre', 'Vague géante', 'Cri du lac'],
   },
   dog: {
-    card: ['Toutou', 'Meilleur ami', 'Chef de meute', 'Boule de poils', 'Roi du canapé'],
+    card: ['Toutou en chef', 'Meilleur ami', 'Roi du canapé', 'Chasseur de balles', 'Boule de poils'],
     classic: ['Coup de truffe', 'Aboiement', 'Coup de langue', 'Bâton volé', 'Grattouille', 'Jappement'],
     special: ['Balle volée', 'Aboiement sismique', 'Câlin ravageur', 'Vol de pantoufle', 'Ruée vers la balle', 'Cri de meute'],
   },
@@ -543,68 +543,69 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Griffes de ninja', 'Miaulement sonique', 'Saut du rideau', 'Ronron ravageur', 'Vol du pot de yaourt', 'Regard hypnotique'],
   },
   big_cat: {
-    card: ['Roi de la savane', 'Crinière folle', 'Fauve royal', 'Chef de la jungle', 'Rugisseur'],
+    card: ['Gros matou', 'Fauve royal', 'Rugisseur en chef', 'Maître de la savane', 'Minou géant'],
     classic: ['Griffure', 'Coup de patte', 'Rugissement', 'Morsure', 'Bond', 'Regard féroce'],
     special: ['Rugissement sismique', 'Charge du fauve', 'Ombre furtive', 'Griffes d’acier', 'Bond fatal', 'Roi de la jungle'],
   },
   hoofed: {
-    card: ['Crinière au vent', 'Sabot d’or', 'Cavalier fou', 'Bois royal', 'Galopeur'],
+    card: ['Crinière au vent', 'Sabot d’or', 'Galopeur du dimanche', 'Bois royal', 'Trotteur en chef'],
     classic: ['Coup de sabot', 'Hennissement', 'Galop', 'Coup de tête', 'Ruade', 'Petit trot'],
     special: ['Galop fou', 'Ruade légendaire', 'Charge des bois', 'Ouragan de crinière', 'Sabot tonnerre', 'Course infinie'],
   },
   farm_animal: {
-    card: ['Ferme royale', 'Champion du pré', 'Brouteur', 'Boule de laine', 'Câlin de ferme'],
-    classic: ['Meuh', 'Bêêê', 'Coup de sabot', 'Mastication', 'Coup de corne', 'Éclaboussure de boue'],
+    card: ['Brouteur en chef', 'Champion du pré', 'Vedette de la ferme', 'Roi de la boue', 'Gros câlin de ferme'],
+    classic: ['Meuh', 'Bêêê', 'Coup de sabot', 'Mastication', 'Coup de tête', 'Éclaboussure de boue'],
     special: ['Ruée du troupeau', 'Meuh sonique', 'Charge du bélier', 'Boue royale', 'Bêlement géant', 'Galop de ferme'],
   },
   farm_bird: {
-    card: ['Reine du poulailler', 'Cocorico', 'Pondeuse royale', 'Chef du poulailler', 'Coq de combat'],
+    card: ['Reine du poulailler', 'Pondeuse royale', 'Chef du poulailler', 'Gloussante en chef', 'Cocorico'],
     classic: ['Coup de bec', 'Cot-cot', 'Battement d’ailes', 'Grattage', 'Caquètement', 'Picorage'],
     special: ['Cocorico sonique', 'Tornade de plumes', 'Ponte éclair', 'Ruée du poulailler', 'Attaque du coq', 'Pluie de graines'],
   },
   small_mammal: {
-    card: ['Petite boule', 'Grignoteur', 'Roi du terrier', 'Mini-champion', 'Boule de moelleux'],
-    classic: ['Grignotage', 'Bond', 'Roulade', 'Coup de queue', 'Pelote de poils', 'Petit cri'],
+    card: ['Grignoteur en chef', 'Gourmand à moustaches', 'Roi du terrier', 'Champion de la roue', 'Boule de moelleux'],
+    classic: ['Grignotage', 'Bond', 'Roulade', 'Coup de moustache', 'Pelote de poils', 'Petit cri'],
     special: ['Roulade géante', 'Course de roue', 'Tornade moustachue', 'Pluie de noisettes', 'Bond surprise', 'Terrier secret'],
   },
   fish: {
-    card: ['Nageur masqué', 'Roi des eaux', 'Poisson volant', 'Bulle de mer', 'Écaille d’or'],
+    card: ['Nageur en chef', 'Roi de l’aquarium', 'Bulle de mer', 'Chef du banc', 'Écaille d’or'],
     classic: ['Coup de nageoire', 'Bulle', 'Éclaboussure', 'Morsure', 'Nage rapide', 'Bouche bée'],
     special: ['Tsunami de bulles', 'Saut hors de l’eau', 'Morsure géante', 'Banc infernal', 'Vague écailleuse', 'Attaque du requin'],
   },
   sea_mammal: {
-    card: ['Roi des vagues', 'Saut de l’océan', 'Sauteur', 'Chanteur des mers', 'Mammifère marin'],
+    card: ['Roi des vagues', 'Acrobate des mers', 'Chanteur des mers', 'Champion du plongeon', 'Cracheur de bulles'],
     classic: ['Éclaboussure', 'Coup de queue', 'Sifflement', 'Saut', 'Chant', 'Bulle géante'],
     special: ['Vague géante', 'Chant sonique', 'Saut de baleine', 'Tsunami du large', 'Jet d’eau royal', 'Chanson des abysses'],
   },
   reptile: {
-    card: ['Écailles d’or', 'Roi du soleil', 'Charmeur de serpents', 'Langue fourchue', 'Carapace fière'],
-    classic: ['Coup de queue', 'Morsure', 'Sifflement', 'Coup de langue', 'Carapace', 'Glissade'],
-    special: ['Crocs acérés', 'Enroulement fatal', 'Sifflement venimeux', 'Roulade de carapace', 'Attaque écaillée', 'Bond de crocodile'],
+    card: ['Champion du bain de soleil', 'Petit dragon', 'Roi du rocher chaud', 'Écailles d’or', 'Sang-froid légendaire'],
+    classic: ['Coup de queue', 'Morsure', 'Sifflement', 'Coup de langue', 'Glissade', 'Figement'],
+    special: ['Crocs acérés', 'Enroulement fatal', 'Sifflement menaçant', 'Roulade écaillée', 'Coup de queue géant', 'Bond surprise'],
   },
   amphibian: {
-    card: ['Sauteur fou', 'Prince du marais', 'Coasseur', 'Mini-dragon', 'Roi des mares'],
+    card: ['Sauteur fou', 'Coasseur en chef', 'Prince du marais', 'Roi des mares', 'Champion du grand saut'],
     classic: ['Coassement', 'Bond', 'Coup de langue', 'Éclaboussure', 'Gonflement', 'Plouf'],
-    special: ['Coassement géant', 'Saut de l’étang', 'Langue ultra', 'Marécage furieux', 'Gonflette', 'Pluie de mares'],
+    special: ['Coassement géant', 'Saut de l’étang', 'Langue-éclair', 'Marécage furieux', 'Gonflette', 'Plongeon de mare'],
   },
+  // Insectes : le groupe couvre abeilles, guêpes, fourmis, mouches, coccinelles…, donc des noms qui vont à toutes
   insect: {
-    card: ['Petit bourdon', 'Roi des bestioles', 'Mini-guerrier', 'Bzzz-champion', 'Chasseur de miettes'],
-    classic: ['Piqûre', 'Bzzz', 'Chatouille', 'Zigzag', 'Coup d’antenne', 'Vol stationnaire'],
-    special: ['Essaim', 'Piqûre géante', 'Bzzz sonique', 'Armée de fourmis', 'Vol en spirale', 'Nuée infernale'],
+    card: ['Roi des six pattes', 'Six pattes, zéro pitié', 'Mini-guerrier', 'Acrobate du jardin', 'Bestiole de compétition'],
+    classic: ['Coup d’antenne', 'Chatouille', 'Zigzag', 'Petit saut', 'Pincement', 'Pas de côté'],
+    special: ['Essaim furieux', 'Invasion de cuisine', 'Bzzz sonique', 'Armée minuscule', 'Chute en vrille', 'Nuée infernale'],
   },
   butterfly: {
-    card: ['Ailes de velours', 'Reine des fleurs', 'Papillon chic', 'Danseur du jardin', 'Poudre magique'],
-    classic: ['Battement d’ailes', 'Poudre magique', 'Pirouette', 'Vol zigzag', 'Pollen', 'Chatouille'],
-    special: ['Arc-en-ciel d’ailes', 'Métamorphose', 'Danse des ailes', 'Nuée de papillons', 'Ouragan de pollen', 'Vol psychédélique'],
+    card: ['Ailes de velours', 'Reine des fleurs', 'Danseur du jardin', 'Poudre magique', 'Métamorphose en cours'],
+    classic: ['Battement d’ailes', 'Poudre magique', 'Pirouette', 'Vol zigzag', 'Grignotage', 'Chatouille'],
+    special: ['Arc-en-ciel d’ailes', 'Métamorphose', 'Danse des ailes', 'Nuée de papillons', 'Ouragan de pollen', 'Vol kaléidoscope'],
   },
   spider: {
-    card: ['Tisseuse', 'Araignée pro', 'Maîtresse des fils', 'Chasseuse nocturne', 'Huit pattes'],
+    card: ['Tisseuse en chef', 'Architecte de toile', 'Pro du filet', 'Champion de la toile', 'Huit pattes d’acier'],
     classic: ['Toile collante', 'Piqûre', 'Coup de patte', 'Fil de soie', 'Saut surprise', 'Grimpette'],
-    special: ['Toile piège', 'Piqûre fatale', 'Tissage express', 'Ombre à huit pattes', 'Filet géant', 'Assaut à 8 pattes'],
+    special: ['Toile piège', 'Piqûre fatale', 'Tissage express', 'Ombre à huit pattes', 'Filet géant', 'Descente en rappel'],
   },
   bear: {
-    card: ['Gros nounours', 'Roi de la forêt', 'Câlin ambulant', 'Ourson chef', 'Panda chic'],
-    classic: ['Câlin serré', 'Coup de patte', 'Grognement', 'Vol de miel', 'Charge', 'Grattouille de dos'],
+    card: ['Gros nounours', 'Roi de la forêt', 'Câlin ambulant', 'Ourson en chef', 'Panda chic'],
+    classic: ['Câlin serré', 'Coup de patte', 'Grognement', 'Vol de miel', 'Charge', 'Grattage de dos'],
     special: ['Grognement sismique', 'Charge de l’ours', 'Câlin fatal', 'Tempête de griffes', 'Sieste géante', 'Vol de pique-nique'],
   },
   monkey: {
@@ -613,40 +614,40 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Pluie de bananes', 'Cri de la jungle', 'Pirouette infinie', 'Vol de lunettes', 'Balançoire folle', 'Chapardage royal'],
   },
   elephant: {
-    card: ['Mémoire d’éléphant', 'Colosse', 'Trompe d’or', 'Roi de la savane', 'Gros câlin'],
+    card: ['Ne jamais oublier', 'Colosse aux oreilles', 'Trompe d’or', 'Roi de la douche', 'Gros câlin'],
     classic: ['Coup de trompe', 'Arrosage', 'Barrissement', 'Piétinement', 'Coup de défense', 'Câlin à la trompe'],
     special: ['Barrissement fou', 'Douche géante', 'Charge du colosse', 'Mémoire fatale', 'Tornade de trompe', 'Piétinement du titan'],
   },
   exotic: {
-    card: ['Cou de girafe', 'Roi du zoo', 'Rayé royal', 'Sauteur australien', 'Star du zoo'],
+    card: ['Star du zoo', 'Roi du zoo', 'Vedette de la savane', 'Champion de la sieste', 'Touriste de l’année'],
     classic: ['Coup de sabot', 'Ruade', 'Coup de queue', 'Bond', 'Coup de pied de boxe', 'Bâillement'],
     special: ['Ruade tonnerre', 'Bond interminable', 'Coup de cou', 'Bâillement sismique', 'Course du zèbre', 'Attaque du hippo'],
   },
   snail: {
-    card: ['Lent mais sûr', 'Coquille d’or', 'Champion de la lenteur', 'Escargot ninja', 'Gourmand du jardin'],
-    classic: ['Bave', 'Lenteur', 'Coup de coquille', 'Rétractation', 'Ventouse', 'Feuille mâchée'],
-    special: ['Super bave', 'Coquille blindée', 'Sieste éternelle', 'Tornade de bave', 'Vitesse ultra lente', 'Glissade fatale'],
+    card: ['Lent mais sûr', 'Champion de la lenteur', 'Roi de la bave', 'Gourmand du jardin', 'Ninja silencieux'],
+    classic: ['Bave', 'Lenteur', 'Glissade lente', 'Rétractation', 'Ventouse', 'Feuille mâchée'],
+    special: ['Super bave', 'Mur de bave', 'Sieste éternelle', 'Tornade de bave', 'Vitesse ultra lente', 'Glissade fatale'],
   },
   sea_critter: {
-    card: ['Roi des abysses', 'Pince d’or', 'Capitaine des fonds', 'Pieuvre géante', 'Gardien des mers'],
+    card: ['Roi des abysses', 'Champion du fond', 'Gardien des mers', 'Bestiole des profondeurs', 'Monstre des marées'],
     classic: ['Coup de pince', 'Jet d’encre', 'Tentacule', 'Pincement', 'Éclaboussure', 'Enlacement'],
     special: ['Tentacules en folie', 'Nuage d’encre', 'Pince géante', 'Ombre des abysses', 'Tsunami de pinces', 'Étreinte de pieuvre'],
   },
 
   // ---------- Plantes ----------
   tree: {
-    card: ['Vieux sage', 'Géant vert', 'Chêne légendaire', 'Ombre royale', 'Bonsaï zen'],
-    classic: ['Ombre', 'Chute de feuilles', 'Racine', 'Branche', 'Pomme de pin', 'Glands'],
-    special: ['Tempête de feuilles', 'Racines sismiques', 'Forêt en colère', 'Branche géante', 'Pluie de glands', 'Photosynthèse'],
+    card: ['Vieux sage', 'Géant vert', 'Ombre royale', 'Pro de la photosynthèse', 'Roi du feuillage'],
+    classic: ['Ombre', 'Chute de feuilles', 'Racine', 'Branche', 'Bourgeon', 'Balancement'],
+    special: ['Tempête de feuilles', 'Racines sismiques', 'Forêt en colère', 'Branche géante', 'Pluie de feuilles', 'Photosynthèse'],
   },
   flower: {
-    card: ['Fleur de saison', 'Bouquet royal', 'Jardinier fou', 'Pétale d’or', 'Reine du pré'],
+    card: ['Reine du parfum', 'Star du jardin', 'Fleur de saison', 'Pétale d’or', 'Bouquet royal'],
     classic: ['Pétale', 'Parfum', 'Pollen', 'Éternuement', 'Bourgeon', 'Effluve'],
     special: ['Explosion de pétales', 'Parfum irrésistible', 'Tornade de pollen', 'Nuée de papillons', 'Floraison express', 'Bouquet explosif'],
   },
   cactus: {
-    card: ['Piquant', 'Boule d’épines', 'Survivant du désert', 'Roi du soleil', 'Gardien du désert'],
-    classic: ['Piquant', 'Épine', 'Coup d’épines', 'Réserve d’eau', 'Racine sèche', 'Sable dans les yeux'],
+    card: ['Piquant', 'Boule d’épines', 'Survivant du désert', 'Pro de la soif', 'Gardien du désert'],
+    classic: ['Pointe acérée', 'Épine', 'Coup d’épines', 'Réserve d’eau', 'Racine sèche', 'Sable dans les yeux'],
     special: ['Pluie d’épines', 'Désert furieux', 'Piquage géant', 'Floraison rare', 'Chaleur torride', 'Mirage'],
   },
   houseplant: {
@@ -656,40 +657,40 @@ export const GROUP_NAMES: Record<string, NamePool> = {
   },
   mushroom: {
     card: ['Champi', 'Roi des bois', 'Chapeau pointu', 'Fée des sous-bois', 'Spore sauteur'],
-    classic: ['Spores', 'Chapeau volant', 'Pied', 'Coup de chapeau', 'Poudre magique', 'Sporée'],
-    special: ['Nuage de spores', 'Champignon géant', 'Vision colorée', 'Explosion de spores', 'Forêt magique', 'Chapeau tornade'],
+    classic: ['Spores', 'Chapeau volant', 'Pousse soudaine', 'Coup de chapeau', 'Poudre magique', 'Sporée'],
+    special: ['Nuage de spores', 'Champignon géant', 'Pousse express', 'Explosion de spores', 'Forêt magique', 'Chapeau tornade'],
   },
   leafy: {
-    card: ['Tapis vert', 'Touffe folle', 'Brin d’herbe', 'Fougère royale', 'Buisson malin'],
+    card: ['Tapis vert', 'Touffe folle', 'Brin d’herbe', 'Roi du gazon', 'Buisson malin'],
     classic: ['Chatouille', 'Feuille glissante', 'Touffe', 'Brin', 'Ronces', 'Chute de feuilles'],
     special: ['Tapis volant', 'Jungle express', 'Tornade de brins', 'Gazon géant', 'Fougère sauvage', 'Forêt entière'],
   },
 
   // ---------- Paysages ----------
   sunset: {
-    card: ['Golden hour', 'Lueur dorée', 'Roi du crépuscule', 'Dégradé royal', 'Soleil couchant'],
+    card: ['Heure dorée', 'Lueur dorée', 'Roi du crépuscule', 'Pro du coucher', 'Dégradé royal'],
     classic: ['Lueur', 'Rayon doré', 'Dégradé', 'Ombre longue', 'Éblouissement', 'Brume chaude'],
     special: ['Coucher explosif', 'Soleil géant', 'Flash doré', 'Crépuscule infini', 'Éclat solaire', 'Boule de feu'],
   },
   beach: {
     card: ['Roi du sable', 'Vacances infinies', 'Pieds dans le sable', 'Bronzage express', 'Plage party'],
-    classic: ['Éclaboussure', 'Sable dans les yeux', 'Coup de serviette', 'Vague', 'Château de sable', 'Ballon de plage'],
+    classic: ['Éclaboussure', 'Sable dans les yeux', 'Coup de serviette', 'Vague', 'Pelle en avant', 'Ballon de plage'],
     special: ['Tsunami de sable', 'Vague géante', 'Bronzage fatal', 'Parasol volant', 'Crème solaire chic', 'Sieste ultime'],
   },
   water: {
-    card: ['Maître des eaux', 'Roi du lac', 'Cascade royale', 'Vague de fond', 'Eau miracle'],
+    card: ['Maître des eaux', 'Roi du bleu', 'Vague de fond', 'Miroir d’eau', 'Pro du clapotis'],
     classic: ['Vague', 'Éclaboussure', 'Clapotis', 'Remous', 'Goutte', 'Courant'],
     special: ['Tsunami', 'Déluge express', 'Cascade géante', 'Marée folle', 'Raz-de-marée', 'Tourbillon'],
   },
   mountain: {
     card: ['Roi des sommets', 'Cime légendaire', 'Alpiniste fou', 'Géant de pierre', 'Pic du destin'],
-    classic: ['Éboulement', 'Caillou', 'Écho', 'Pas de montagne', 'Vent glacé', 'Pierre roulante'],
+    classic: ['Éboulement', 'Caillou', 'Écho', 'Pas de chamois', 'Vent glacé', 'Pierre roulante'],
     special: ['Avalanche', 'Éruption', 'Cri de l’écho', 'Séisme', 'Brume géante', 'Chute de pierres'],
   },
   snow: {
-    card: ['Bonhomme de neige', 'Flocon géant', 'Roi des glaces', 'Schuss', 'Glaçon fou'],
+    card: ['Bonhomme de neige', 'Flocon géant', 'Roi des glaces', 'Frileux en chef', 'Glaçon fou'],
     classic: ['Boule de neige', 'Flocon', 'Glissade', 'Gel', 'Bourrasque', 'Gant mouillé'],
-    special: ['Avalanche de neige', 'Blizzard', 'Super schuss', 'Tempête polaire', 'Glaçon géant', 'Hiver éternel'],
+    special: ['Avalanche de neige', 'Blizzard', 'Super virage', 'Tempête polaire', 'Glaçon géant', 'Hiver éternel'],
   },
   forest: {
     card: ['Gardien du bois', 'Sous-bois secret', 'Roi de la forêt', 'Esprit des bois', 'Chemin perdu'],
@@ -699,35 +700,34 @@ export const GROUP_NAMES: Record<string, NamePool> = {
   city_night: {
     card: ['Noctambule', 'Roi des lumières', 'Ville qui ne dort jamais', 'Néon fou', 'Flâneur nocturne'],
     classic: ['Klaxon', 'Clignotement', 'Lampadaire', 'Embouteillage', 'Coup de néon', 'Trottoir glissant'],
-    special: ['Pluie de néons', 'Embouteillage géant', 'Sirène', 'Ville en feu', 'Flash urbain', 'Grand huit nocturne'],
+    special: ['Pluie de néons', 'Embouteillage géant', 'Sirène', 'Ville en fête', 'Flash urbain', 'Grand huit nocturne'],
   },
   sky: {
-    card: ['Maître des nuages', 'Arc-en-ciel magique', 'Étoile filante', 'Lune rieuse', 'Faiseur de pluie'],
-    classic: ['Nuage', 'Goutte', 'Éclair', 'Courant d’air', 'Pluie fine', 'Brouillard'],
+    card: ['Maître des nuages', 'Faiseur de pluie', 'Lune rieuse', 'Étoile filante', 'Décorateur du ciel'],
+    classic: ['Nuage', 'Goutte', 'Éclair', 'Courant d’air', 'Pluie fine', 'Scintillement'],
     special: ['Orage', 'Feu d’artifice', 'Arc-en-ciel explosif', 'Pluie d’étoiles', 'Tornade de nuages', 'Éclipse'],
   },
 
-
   // ---------- Bâtiments ----------
   tower: {
-    card: ['Tour de guet', 'Géant de fer', 'Phare légendaire', 'Monument vertical', 'Roi de la ville'],
+    card: ['Tour de guet', 'Géant de fer', 'Chef de la vue', 'Monument vertical', 'Roi du panorama'],
     classic: ['Ombre', 'Antenne', 'Ascenseur', 'Balcon', 'Grimpette', 'Écho'],
     special: ['Éclairage géant', 'Tour infernale', 'Vue imprenable', 'Pluie de rivets', 'Sirène du phare', 'Ombre géante'],
   },
   old_building: {
-    card: ['Vieux sage', 'Château fort', 'Cathédrale céleste', 'Gardien du passé', 'Donjon légendaire'],
+    card: ['Gardien du passé', 'Vieille pierre', 'Mémoire de pierre', 'Patron du patrimoine', 'Bâtisse qui a du style'],
     classic: ['Cloche', 'Gargouille', 'Vitrail', 'Pierre', 'Écho', 'Visite guidée'],
     special: ['Carillon sonique', 'Chute de gargouilles', 'Pluie de pierres', 'Procession', 'Donjon fatal', 'Sortilège de vitrail'],
   },
   skyscraper: {
     card: ['Géant de verre', 'Tour infinie', 'Roi du centre-ville', 'Gratte-ciel fou', 'Monstre de béton'],
     classic: ['Reflet', 'Ombre', 'Ascenseur fou', 'Vertige', 'Vitre sale', 'Bourrasque'],
-    special: ['Effondrement', 'Ombre géante', 'Reflet aveuglant', 'Tempête de verre', 'Vertige à 80 étages', 'Ascension express'],
+    special: ['Fumée géante', 'Ombre géante', 'Reflet aveuglant', 'Tempête de verre', 'Vertige à 80 étages', 'Ascension express'],
   },
   bridge: {
     card: ['Trait d’union', 'Pont magique', 'Roi du franchissement', 'Lien de fer', 'Passeur'],
     classic: ['Péage', 'Trottoir', 'Rambarde', 'Embouteillage', 'Câble', 'Bouchon'],
-    special: ['Effondrement', 'Pont-levis', 'Ouragan de câbles', 'Péage géant', 'Blocage total', 'Traversée épique'],
+    special: ['Vertige du vide', 'Pont-levis', 'Ouragan de câbles', 'Péage géant', 'Blocage total', 'Traversée épique'],
   },
   stadium: {
     card: ['Roi du stade', 'Ola géante', 'Arène sacrée', 'Tribune folle', 'Super supporter'],
@@ -735,22 +735,22 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Ola infinie', 'Ovation', 'Cri sonique', 'Stade en fusion', 'Pluie de confettis', 'Chant de la foule'],
   },
   monument: {
-    card: ['Statue vivante', 'Bronze royal', 'Mémorial', 'Héros de pierre', 'Roi de la place'],
+    card: ['Statue vivante', 'Bronze royal', 'Immobile en chef', 'Héros de pierre', 'Roi de la place'],
     classic: ['Pose immobile', 'Poussière', 'Pigeon sur la tête', 'Regard de bronze', 'Pose héroïque', 'Coup d’épée'],
     special: ['Bronze tremblant', 'Piédestal fatal', 'Pose de héros', 'Éboulis', 'Cri de statue', 'Gloire éternelle'],
   },
   house: {
-    card: ['Maison de rêve', 'Foyer chaleureux', 'Chaumière chic', 'Bijou du quartier', 'Maître des lieux'],
+    card: ['Maison de rêve', 'Maître des lieux', 'Bijou du quartier', 'Toit de champion', 'Foyer chaleureux'],
     classic: ['Porte qui grince', 'Sonnette', 'Gouttière', 'Volet claqué', 'Jardin fleuri', 'Toit glissant'],
     special: ['Déménagement express', 'Tornade de toit', 'Serrure géante', 'Porte claquée', 'Maison hantée', 'Jardin sauvage'],
   },
   shop: {
     card: ['Vitrine royale', 'Roi des soldes', 'Caissier fou', 'Bon plan', 'Boutique secrète'],
-    classic: ['Soldes', 'Ticket de caisse', 'Vitrine', 'Carte de fidélité', 'Chariot', 'Bonne affaire'],
+    classic: ['Soldes', 'File d’attente', 'Vitrine', 'Carte à tampons', 'Chariot', 'Bonne affaire'],
     special: ['Soldes folles', 'Rupture de stock', 'Caisse infinie', 'Promo explosive', 'Vitrine éblouissante', 'Ruée sur les soldes'],
   },
   bedroom: {
-    card: ['Roi de la sieste', 'Lit royal', 'Oreiller d’or', 'Pyjama champion', 'Doudou suprême'],
+    card: ['Roi de la grasse matinée', 'Lit royal', 'Oreiller d’or', 'Pyjama champion', 'Maître du bazar'],
     classic: ['Couette', 'Oreiller', 'Pyjama', 'Réveil', 'Chaussette perdue', 'Chat sur le lit'],
     special: ['Ronflement', 'Sieste éclair', 'Matelas volant', 'Réveil raté', 'Oreiller géant', 'Nuit blanche'],
   },
@@ -767,14 +767,14 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Dérapage', 'Embouteillage maudit', 'Turbo familial', 'Tonneau', 'Frein hurlant', 'Parking infini'],
   },
   sports_car: {
-    card: ['Bolide', 'Flèche rouge', 'Roi de la piste', 'Vitesse pure', 'Monstre à quatre roues'],
+    card: ['Bolide', 'Flèche rouge', 'Roi de la piste', 'Vitesse pure', 'Fusée à quatre roues'],
     classic: ['Dérapage', 'Turbo', 'Klaxon de luxe', 'Coup de frein', 'Vrombissement', 'Démarrage canon'],
     special: ['Turbo infernal', 'Drift fatal', 'Vitesse lumière', 'Rugissement moteur', 'Course folle', 'Nitro explosif'],
   },
   motorbike: {
-    card: ['Roi du guidon', 'Motard fou', 'Casque d’or', 'Vrombissement', 'Pilote éclair'],
+    card: ['Roi du guidon', 'Motard fou', 'Casque d’or', 'Fou du bitume', 'Pilote éclair'],
     classic: ['Roue arrière', 'Vrombissement', 'Coup de casque', 'Démarrage', 'Dérapage', 'Pot d’échappement'],
-    special: ['Roue arrière fatale', 'Rugissement moteur', 'Tour de piste', 'Dérapage sauvage', 'Coup de gaz', 'Pluie de casques'],
+    special: ['Roue arrière fatale', 'Rugissement moteur', 'Tour de piste', 'Dérapage sauvage', 'Coup de gaz', 'Slalom infernal'],
   },
   bicycle: {
     card: ['Pédaleur fou', 'Roi du vélo', 'Petite reine', 'Sonnette d’argent', 'Champion du pédalier'],
@@ -782,7 +782,7 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Pédalage infernal', 'Sprint en côte', 'Sonnette sonique', 'Roue folle', 'Trottinette volante', 'Descente folle'],
   },
   big_vehicle: {
-    card: ['Géant de la route', 'Monstre routier', 'Bus fou', 'Roi du bitume', 'Camion sacré'],
+    card: ['Géant de la route', 'Monstre routier', 'Gros bras du bitume', 'Mastodonte sacré', 'Roi du gabarit'],
     classic: ['Klaxon', 'Marche arrière', 'Coup de frein', 'Pot d’échappement', 'Bouchon', 'Rétroviseur'],
     special: ['Embouteillage géant', 'Klaxon sismique', 'Remorque volante', 'Trajet infini', 'Blocage total', 'Tracteur fou'],
   },
@@ -792,7 +792,7 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Retard monumental', 'Sifflet sonique', 'Grand express', 'Tunnel infernal', 'Voie coupée', 'Train fantôme'],
   },
   plane: {
-    card: ['Roi du ciel', 'Pilote de ligne', 'Oiseau d’acier', 'Hublot doré', 'Commandant de bord'],
+    card: ['Oiseau d’acier', 'Commandant de bord', 'Pilote de ligne', 'Hublot doré', 'Roi des nuages'],
     classic: ['Turbulence', 'Décollage', 'Hublot', 'Plateau repas', 'Bagage à main', 'Atterrissage'],
     special: ['Looping', 'Turbulence infernale', 'Décollage express', 'Vol sans escale', 'Traînée blanche', 'Chute de plateaux'],
   },
@@ -809,8 +809,8 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Pizza géante', 'Fromage filant', 'Tornade de pepperoni', 'Pâte en folie', 'Four infernal', 'Part de trop'],
   },
   fast_food: {
-    card: ['Roi du fast-food', 'Burger légendaire', 'Frite géante', 'Gourmand pressé', 'Sauce secrète'],
-    classic: ['Frite volante', 'Coup de sauce', 'Sandwich', 'Ketchup', 'Mayo', 'Cornichon'],
+    card: ['Roi du fast-food', 'Gourmand pressé', 'Sauce secrète', 'Dîner express', 'Champion du grignotage'],
+    classic: ['Frite volante', 'Coup de sauce', 'Tranche de pain', 'Ketchup', 'Mayo', 'Cornichon'],
     special: ['Sauce surprise', 'Empilement infernal', 'Burger géant', 'Tornade de frites', 'Pluie de sauce', 'Menu XXL'],
   },
   sushi: {
@@ -819,7 +819,7 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Déferlante de sushis', 'Wasabi explosif', 'Rouleau géant', 'Baguettes volantes', 'Banquet infini', 'Vague de saumon'],
   },
   pasta: {
-    card: ['Roi des pâtes', 'Spaghetti fou', 'Chef des pâtes', 'Sauce tomate', 'Lasagne géante'],
+    card: ['Roi des pâtes', 'Spaghetti fou', 'Chef des pâtes', 'Maître de l’al dente', 'Fourchette en or'],
     classic: ['Enroulement', 'Sauce tomate', 'Fourchette', 'Parmesan', 'Pâte', 'Giclée de sauce'],
     special: ['Tornade de spaghetti', 'Pluie de parmesan', 'Sauce infinie', 'Pâte géante', 'Gloutonnerie', 'Lasagne sismique'],
   },
@@ -829,12 +829,12 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Explosion de crème', 'Gâteau géant', 'Étage de trop', 'Sucre sonique', 'Parfum chocolat', 'Pluie de bonbons'],
   },
   ice_cream: {
-    card: ['Glacier fou', 'Cornet royal', 'Chef des glaces', 'Boule magique', 'Sundae suprême'],
+    card: ['Glacier fou', 'Cornet royal', 'Chef des glaces', 'Boule magique', 'Coupe suprême'],
     classic: ['Coulure', 'Léchouille', 'Boule qui tombe', 'Chantilly', 'Cornet', 'Froid mordant'],
-    special: ['Coulure géante', 'Glace infinie', 'Tempête glacée', 'Sundae explosif', 'Léchage royal', 'Congélation express'],
+    special: ['Coulure géante', 'Glace infinie', 'Tempête glacée', 'Coupe explosive', 'Léchage royal', 'Congélation express'],
   },
   coffee: {
-    card: ['Accro au café', 'Maître du latte', 'Réveil matin', 'Tasse royale', 'Barista fou'],
+    card: ['Accro des boissons chaudes', 'Champion des mugs', 'Réveil matin', 'Tasse royale', 'Barista fou'],
     classic: ['Mousse', 'Gorgée brûlante', 'Dégustation', 'Cuillère', 'Sucre', 'Coup de fouet'],
     special: ['Espresso turbo', 'Mousse géante', 'Réveil express', 'Tasse volante', 'Caféine infinie', 'Tornade de mousse'],
   },
@@ -846,7 +846,7 @@ export const GROUP_NAMES: Record<string, NamePool> = {
   salad: {
     card: ['Roi du vert', 'Salade chic', 'Feuille d’or', 'Vitamine man', 'Crudité royale'],
     classic: ['Croquant', 'Vinaigrette', 'Feuille volante', 'Tomate', 'Crouton', 'Coup de fourchette'],
-    special: ['Vinaigrette folle', 'Tornade de laitue', 'Croquant sonique', 'Bol infini', 'Salade géante', 'Détox fatale'],
+    special: ['Vinaigrette folle', 'Tornade de laitue', 'Croquant sonique', 'Bol infini', 'Salade géante', 'Assaut de crudités'],
   },
   breakfast: {
     card: ['Roi du petit-déj', 'Tartine légendaire', 'Matin doré', 'Gourmand du réveil', 'Confiture royale'],
@@ -871,22 +871,22 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Notification géante', 'Batterie à 1 %', 'Vibreur sismique', 'Scroll infini', 'Appel surprise', 'Mise à jour forcée'],
   },
   computer: {
-    card: ['Geek suprême', 'Clavier virtuose', 'Roi du clic', 'Laptop fou', 'Souris d’or'],
+    card: ['Geek suprême', 'Virtuose du clavier', 'Roi du clic', 'Écran en chef', 'Souris d’or'],
     classic: ['Clic', 'Frappe', 'Écran bleu', 'Mise à jour', 'Câble', 'Surchauffe'],
     special: ['Tornade de touches', 'Bug géant', 'Mise à jour forcée', 'Surchauffe fatale', 'Raccourci secret', 'Écran figé'],
   },
   sneakers: {
     card: ['Roi des baskets', 'Semelle volante', 'Pointure de légende', 'Pas de géant', 'Chausseur fou'],
     classic: ['Lacet défait', 'Semelle glissante', 'Coup de talon', 'Foulée', 'Boue sur le pied', 'Chaussette'],
-    special: ['Sprint éclair', 'Semelle turbo', 'Tornade de lacets', 'Pas de géant', 'Course infinie', 'Chaussure volante'],
+    special: ['Sprint éclair', 'Semelle turbo', 'Tornade de lacets', 'Talon aiguille', 'Course infinie', 'Chaussure volante'],
   },
   watch: {
-    card: ['Maître du temps', 'Horloger fou', 'Roi des aiguilles', 'Montre suisse', 'Cadran royal'],
-    classic: ['Tic-tac', 'Retard', 'Bracelet', 'Cadran', 'Pile à plat', 'Aiguille'],
-    special: ['Arrêt du temps', 'Compte à rebours', 'Alarme sonique', 'Tic-tac géant', 'Remontoir fou', 'Heure bonus'],
+    card: ['Maître du temps', 'Horloger fou', 'Roi du bracelet', 'Gardien de l’heure', 'Cadran royal'],
+    classic: ['Tic-tac', 'Retard', 'Bracelet', 'Cadran', 'Pile à plat', 'Vibration'],
+    special: ['Arrêt du temps', 'Compte à rebours', 'Alarme sonique', 'Tic-tac géant', 'Rappel insistant', 'Heure bonus'],
   },
   sunglasses: {
-    card: ['Star du soleil', 'Lunettes de glamour', 'Cool en personne', 'Roi des reflets', 'Mister soleil'],
+    card: ['Star du soleil', 'Lunettes de glamour', 'Cool en personne', 'Roi des reflets', 'Monsieur soleil'],
     classic: ['Clin d’œil', 'Reflet', 'Pose', 'Monture', 'Lunette glissée', 'Regard sombre'],
     special: ['Éclat aveuglant', 'Pose de star', 'Tornade de reflets', 'Lunettes volantes', 'Regard cool', 'Mode fatale'],
   },
@@ -896,17 +896,17 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Sac sans fond', 'Tornade de trucs', 'Coup de sac géant', 'Objet caché', 'Pluie de stylos', 'Fouille infinie'],
   },
   plushie: {
-    card: ['Doudou suprême', 'Boule de câlins', 'Roi des peluches', 'Nounours chef', 'Coussin vivant'],
-    classic: ['Câlin', 'Peluche lancée', 'Bisou', 'Ventre mou', 'Oreille tombante', 'Grosse tête'],
-    special: ['Câlin ravageur', 'Pluie de peluches', 'Bisou fatal', 'Tornade de moelleux', 'Doudou sacré', 'Ronronnement mou'],
+    card: ['Doudou suprême', 'Boule de câlins', 'Roi des jouets', 'Nounours chef', 'Coussin vivant'],
+    classic: ['Câlin', 'Peluche lancée', 'Bisou', 'Ventre moelleux', 'Oreille tombante', 'Tête qui dodeline'],
+    special: ['Câlin ravageur', 'Pluie de peluches', 'Bisou fatal', 'Tornade de moelleux', 'Doudou sacré', 'Ronflement moelleux'],
   },
   lego: {
     card: ['Architecte fou', 'Roi des briques', 'Brique d’or', 'Maître du montage', 'Bâtisseur'],
     classic: ['Brique dans le pied', 'Pile de briques', 'Assemblage', 'Coup de plot', 'Mode d’emploi', 'Éparpillement'],
-    special: ['Tour infernale', 'Pluie de briques', 'Assemblage géant', 'Pas dans la brique', 'Effondrement', 'Notice maudite'],
+    special: ['Tour infernale', 'Pluie de briques', 'Assemblage géant', 'Pas dans la brique', 'Château qui tombe', 'Notice maudite'],
   },
   controller: {
-    card: ['Pro gamer', 'Roi de la manette', 'Joueur légendaire', 'Doigt d’or', 'Boss du canapé'],
+    card: ['Pro du joystick', 'Roi de la manette', 'Joueur légendaire', 'Doigt d’or', 'Boss du canapé'],
     classic: ['Pression du pouce', 'Bouton rouge', 'Joystick', 'Vibration', 'Combo', 'Défaite amère'],
     special: ['Combo infini', 'Vibration sismique', 'Trophée fatal', 'Mode turbo', 'Partie interminable', 'Abandon héroïque'],
   },
@@ -918,7 +918,7 @@ export const GROUP_NAMES: Record<string, NamePool> = {
   perfume: {
     card: ['Parfumeur fou', 'Nez d’or', 'Effluve royal', 'Odeur fatale', 'Star des senteurs'],
     classic: ['Pschitt', 'Vaporisation', 'Effluve', 'Éternuement', 'Nuage parfumé', 'Brume'],
-    special: ['Nuage géant', 'Odeur fatale', 'Parfum irrésistible', 'Pschitt sonique', 'Brume magique', 'Flacon volant'],
+    special: ['Nuage géant', 'Senteur tenace', 'Parfum irrésistible', 'Pschitt sonique', 'Brume magique', 'Flacon volant'],
   },
   keys: {
     card: ['Gardien des clés', 'Trousseau d’or', 'Maître des portes', 'Porte-clé fou', 'Roi du tintement'],
@@ -938,18 +938,18 @@ export const GROUP_NAMES: Record<string, NamePool> = {
 
   // ---------- Personnes ----------
   selfie: {
-    card: ['Roi du selfie', 'Influenceur', 'Pose de star', 'Miroir magique', 'Bras d’or'],
+    card: ['Roi du selfie', 'Influenceur', 'Pose de star', 'Miroir magique', 'Champion du cadrage'],
     classic: ['Duck face', 'Bras tendu', 'Grimace', 'Clin d’œil', 'Sourire forcé', 'Pose cool'],
     special: ['Filtre paillettes', 'Flash aveuglant', 'Selfie infini', 'Filtre chien', 'Perche à selfie', 'Pose parfaite'],
   },
   friends: {
-    card: ['La bande', 'Meilleur pote', 'Team du week-end', 'Pote officiel', 'Dream team'],
-    classic: ['Tape dans le dos', 'High five', 'Bisou sur la joue', 'Chatouille', 'Fou rire', 'Câlin de groupe'],
-    special: ['Câlin de groupe', 'Fou rire contagieux', 'Blague de trop', 'Bande de choc', 'Soirée improvisée', 'Pote-attaque'],
+    card: ['La bande', 'Meilleur pote', 'Team du week-end', 'Pote officiel', 'Équipe de choc'],
+    classic: ['Tape dans le dos', 'Tape dans la main', 'Bisou sur la joue', 'Chatouille', 'Fou rire', 'Câlin de groupe'],
+    special: ['Photo de groupe', 'Fou rire contagieux', 'Blague de trop', 'Bande de choc', 'Soirée improvisée', 'Pote-attaque'],
   },
   couple: {
-    card: ['Duo d’amour', 'Couple star', 'Tourtereaux', 'Amoureux fous', 'Love story'],
-    classic: ['Bisou', 'Mains unies', 'Câlin', 'Regard amoureux', 'Clin d’œil', 'Sourire béat'],
+    card: ['Duo d’amour', 'Couple star', 'Tourtereaux', 'Amoureux fous', 'Histoire d’amour'],
+    classic: ['Bisou', 'Main dans la main', 'Câlin', 'Regard amoureux', 'Clin d’œil', 'Sourire béat'],
     special: ['Bisou explosif', 'Cœur sur cœur', 'Dîner aux chandelles', 'Déclaration', 'Pluie de cœurs', 'Coup de foudre'],
   },
   baby: {
@@ -965,7 +965,7 @@ export const GROUP_NAMES: Record<string, NamePool> = {
   party: {
     card: ['Fêtard', 'Roi de la piste', 'Champion de la soirée', 'Boule à facettes', 'Maître des confettis'],
     classic: ['Pas de danse', 'Chenille infernale', 'Confettis', 'Trinquer', 'Ballon', 'Toast'],
-    special: ['Chenille infernale', 'Pluie de confettis', 'Danse sismique', 'Gâteau volant', 'Fête sans fin', 'Boum sonique'],
+    special: ['Guerre de confettis', 'Pluie de confettis', 'Danse sismique', 'Gâteau volant', 'Fête sans fin', 'Boum sonique'],
   },
   sport: {
     card: ['Champion', 'Athlète fou', 'Sprinteur du dimanche', 'Roi du podium', 'Médaillé d’or'],
@@ -979,7 +979,7 @@ export const GROUP_NAMES: Record<string, NamePool> = {
   },
   holiday: {
     card: ['Pro du transat', 'Roi du bronzage', 'Globe-trotter', 'Voyageur', 'Aventurier du dimanche'],
-    classic: ['Bronzage', 'Crème solaire', 'Chapeau de paille', 'Photo souvenir', 'Coucher de soleil', 'Glace sur le nez'],
+    classic: ['Bronzage', 'Crème solaire', 'Chapeau de paille', 'Photo souvenir', 'Coucher de soleil', 'Carte postale'],
     special: ['Vacances infinies', 'Sieste au soleil', 'Photo sur le bord', 'Selfie monument', 'Coup de soleil', 'Bateau gonflable'],
   },
   sleeper: {
@@ -988,7 +988,7 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Ronflement sismique', 'Sieste éclair', 'Rêve sonique', 'Réveil brutal', 'Coussin volant', 'Somnambulisme'],
   },
   eater: {
-    card: ['Appétit d’ogre', 'Fourchette d’or', 'Mangeur d’élite', 'Roi du buffet', 'Estomac d’acier'],
+    card: ['Appétit d’ogre', 'Fourchette d’or', 'Mangeur d’élite', 'Roi du buffet', 'Chasseur de desserts'],
     classic: ['Bouchée', 'Mastication', 'Coup de fourchette', 'Serviette', 'Miette', 'Gloutonnerie'],
     special: ['Buffet infini', 'Bouchée géante', 'Glouton sismique', 'Tablier taché', 'Dessert surprise', 'Festin royal'],
   },
@@ -1003,7 +1003,7 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Transformation', 'Cape volante', 'Pouvoir secret', 'Cri de héros', 'Pose héroïque', 'Super-pouvoir'],
   },
   concert: {
-    card: ['Fan numéro un', 'Roi du premier rang', 'Groupie', 'Chanteur de douche', 'Lightshow'],
+    card: ['Fan numéro un', 'Roi du premier rang', 'Fan en délire', 'Chanteur de douche', 'Chef des lumières'],
     classic: ['Bras levés', 'Cri de fan', 'Tape-main', 'Bousculade', 'Chant à tue-tête', 'Briquet levé'],
     special: ['Ola géante', 'Vague de lumières', 'Rappel', 'Solo improvisé', 'Ola sonique', 'Chant de la foule'],
   },
@@ -1030,18 +1030,18 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Regard hypnotique', 'Éternuement sismique', 'Sourire ravageur', 'Grimace géante', 'Clin d’œil fatal', 'Bisou volant'],
   },
   hand: {
-    card: ['Main de maître', 'Pichenette royale', 'Tape-main', 'Main d’or', 'Roi du high five'],
-    classic: ['Pichenette', 'Gifle', 'High five', 'Poignée de main', 'Chatouille', 'Doigt pointé'],
-    special: ['Gifle sonique', 'Tape-main géant', 'Pichenette fatale', 'Main de fer', 'Poigne ferme', 'Coup de paume'],
+    card: ['Main de maître', 'Pichenette royale', 'Tape-main', 'Main d’or', 'Roi de la poignée de main'],
+    classic: ['Pichenette', 'Chiquenaude', 'Tape-main', 'Poignée de main', 'Chatouille', 'Doigt pointé'],
+    special: ['Claquement sonique', 'Tape-main géant', 'Pichenette fatale', 'Main de fer', 'Poigne ferme', 'Coup de paume'],
   },
   finger: {
     card: ['Doigt magique', 'Pointeur fou', 'Index d’or', 'Pouce roi', 'Doigt-bolide'],
     classic: ['Tapotement', 'Pointage', 'Pichenette', 'Glissement', 'Clic', 'Pouce levé'],
-    special: ['Pointage fatal', 'Tapotement infini', 'Glissement express', 'Pouce d’or', 'Doigt magique', 'Clic géant'],
+    special: ['Pointage fatal', 'Tapotement infini', 'Glissement express', 'Pouce d’or', 'Doigt de génie', 'Clic géant'],
   },
   nails: {
     card: ['Virtuose du vernis', 'Griffes de star', 'Manucure chic', 'Ongles d’or', 'Vernis fou'],
-    classic: ['Vernis', 'Strass', 'Lime', 'Éclat', 'Nail art', 'Griffure douce'],
+    classic: ['Vernis', 'Strass', 'Lime', 'Éclat', 'Motif fleuri', 'Griffure douce'],
     special: ['Paillettes', 'Tourbillon de vernis', 'Ongles géants', 'Strass sonique', 'Manucure éclair', 'Éclat aveuglant'],
   },
   foot: {
@@ -1057,7 +1057,7 @@ export const GROUP_NAMES: Record<string, NamePool> = {
   beard: {
     card: ['Ami à poils', 'Maître de la barbe', 'Moustache d’or', 'Poil de légende', 'Barbe magique'],
     classic: ['Chatouille', 'Gratte', 'Moustache tombante', 'Barbe au vent', 'Coup de menton', 'Poil rebelle'],
-    special: ['Barbe magique', 'Gratte sismique', 'Moustache tourbillon', 'Barbe géante', 'Tapis de poils', 'Bouclette de légende'],
+    special: ['Gratte sismique', 'Moustache tourbillon', 'Barbe géante', 'Tapis de poils', 'Bouclette de légende', 'Rasage express'],
   },
   tattoo: {
     card: ['Encre de légende', 'Artiste de peau', 'Roi du dessin', 'Tatouage vivant', 'Peau dessinée'],
@@ -1065,9 +1065,9 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Encre magique', 'Tatouage géant', 'Dessin animé', 'Motif sacré', 'Cri de tatoueur', 'Dragon sur le bras'],
   },
   belly: {
-    card: ['Gargouille royale', 'Gourmand sincère', 'Soupir content', 'Maître du gargouillis', 'Rire royal'],
-    classic: ['Gargouillis', 'Coup de ventre', 'Craquement', 'Rire', 'Pose de chat', 'Grand éclat'],
-    special: ['Gargouillis sismique', 'Fou rire', 'Pirouette express', 'Ventre sonore', 'Digestion express', 'Dos d’acier'],
+    card: ['Chasseur de soleil', 'Maître du bronzage', 'Dos de champion', 'Pose de héros', 'Roi du transat'],
+    classic: ['Soupir', 'Étirement', 'Craquement', 'Rire', 'Pose de chat', 'Grand éclat'],
+    special: ['Éclat de soleil', 'Fou rire', 'Pirouette express', 'Cri de vacances', 'Sieste ultime', 'Dos d’acier'],
   },
   knee: {
     card: ['Genou de héros', 'Rotule royale', 'Roi du pansement', 'Articulation d’or', 'Genou courageux'],
@@ -1082,14 +1082,14 @@ export const GROUP_NAMES: Record<string, NamePool> = {
 
   // ---------- Captures d’écran et mèmes ----------
   social_feed: {
-    card: ['Roi du like', 'Influenceur', 'Accro au scroll', 'Scroll infini', 'Viral en un clic'],
-    classic: ['Like en rafale', 'Double-tap', 'Commentaire', 'Partage', 'Scroll infini', 'Pouce levé'],
-    special: ['Buzz', 'Hashtag', 'Vue floue', 'Flop', 'Viral', 'Algorithme'],
+    card: ['Roi du like', 'Star du fil', 'Accro au scroll', 'Pouce en or', 'Viral en un clic'],
+    classic: ['Like en rafale', 'Double clic', 'Commentaire', 'Partage', 'Défilement', 'Pouce levé'],
+    special: ['Buzz soudain', 'Hashtag géant', 'Flop spectaculaire', 'Algorithme fantasque', 'Vue floue', 'Abonnement forcé'],
   },
   story: {
     card: ['Maître des stories', 'Story en feu', 'Éphémère', 'Filtre roi', 'Reine des 24 heures'],
     classic: ['Glissement', 'Autocollant', 'Réponse rapide', 'Emoji', 'Filtre', 'Pause'],
-    special: ['Story infinie', 'Expiration fatale', 'Sondage sonique', 'Swipe de légende', 'Filtre ultime', 'Disparition'],
+    special: ['Story infinie', 'Expiration fatale', 'Sondage sonique', 'Glissé de légende', 'Filtre ultime', 'Disparition'],
   },
   short_video: {
     card: ['Vidéo folle', 'Roi du défilement', 'Danse de feu', 'Clip éclair', 'Star du vertical'],
@@ -1102,9 +1102,9 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Spam de messages', 'Vocal de 5 minutes', 'Autocorrection folle', 'Groupe en ébullition', 'Message fantôme', 'Réponse express'],
   },
   video_call: {
-    card: ['Visioconférence', 'Roi du direct', 'Caméra coupée', 'Micro en sourdine', 'Présentateur fou'],
+    card: ['Roi de la visio', 'Roi du direct', 'Caméra coupée', 'Micro en sourdine', 'Présentateur fou'],
     classic: ['Micro coupé', 'Image figée', 'Coupure', 'Signal faible', 'Retard de voix', 'Écran partagé'],
-    special: ['Écran gelé', 'Coupure sonique', 'Écran partagé fatal', 'Micro en sourdine', 'Connexion instable', 'Appel infini'],
+    special: ['Écran gelé', 'Coupure sonique', 'Écran partagé fatal', 'Retour au son', 'Connexion instable', 'Appel infini'],
   },
   meme: {
     card: ['Pépite du web', 'Roi du mème', 'Humour du net', 'Blague virale', 'Légende du web'],
@@ -1112,13 +1112,13 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Mème viral', 'Blague infinie', 'Réaction nucléaire', 'Texte explosif', 'Partage en masse', 'Rire inextinguible'],
   },
   video_game: {
-    card: ['Gamer', 'Manette en feu', 'Boss de niveau', 'Champion du score', 'Pro du pad'],
+    card: ['Gamer', 'Manette en feu', 'Boss de niveau', 'Champion du score', 'Maître du niveau'],
     classic: ['Combo', 'Coup spécial', 'Esquive', 'Potion', 'Saut', 'Bug'],
     special: ['Super combo', 'Mode boss', 'Ultime', 'Niveau bonus', 'Bug géant', 'Partie parfaite'],
   },
   map: {
     card: ['Explorateur', 'Roi du GPS', 'Guide de poche', 'Boussole folle', 'Cartographe'],
-    classic: ['Demi-tour', 'Itinéraire', 'Rond-point', 'Panne de GPS', 'Trajet', 'Épingle'],
+    classic: ['Demi-tour', 'Recalcul', 'Rond-point', 'Panne de GPS', 'Trajet', 'Épingle'],
     special: ['Itinéraire fou', 'Demi-tour sismique', 'Embouteillage', 'Boussole magique', 'Trajet infini', 'Voix du GPS'],
   },
   article: {
@@ -1129,7 +1129,7 @@ export const GROUP_NAMES: Record<string, NamePool> = {
   music: {
     card: ['DJ du dimanche', 'Roi du tube', 'Mélomane', 'Playlist royale', 'Chef d’orchestre'],
     classic: ['Refrain', 'Saut de piste', 'Volume à fond', 'Pause', 'Lecture aléatoire', 'Basse'],
-    special: ['Tube planétaire', 'Volume à fond', 'Refrain obsédant', 'Playlist maudite', 'Concert en direct', 'Remix sonique'],
+    special: ['Tube planétaire', 'Volume explosif', 'Refrain obsédant', 'Playlist maudite', 'Concert en direct', 'Remix sonique'],
   },
   home_screen: {
     card: ['Maître de l’écran', 'Icône d’or', 'Fond d’écran fou', 'Roi des applis', 'Grille parfaite'],
@@ -1137,12 +1137,12 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Dossier secret', 'Écran surchargé', 'Widget géant', 'Applis volantes', 'Notification infinie', 'Fond d’écran mystère'],
   },
   settings: {
-    card: ['Maître des réglages', 'Roi du menu', 'Interrupteur fou', 'Paramètre secret', 'Mode avion'],
+    card: ['Maître des réglages', 'Roi du menu', 'Interrupteur fou', 'Paramètre secret', 'Pro de la batterie'],
     classic: ['Interrupteur', 'Mode avion', 'Wi-Fi capricieux', 'Mise à jour', 'Bluetooth', 'Luminosité'],
     special: ['Mise à jour forcée', 'Mode sombre', 'Réinitialisation', 'Batterie critique', 'Paramètre caché', 'Silence total'],
   },
   shopping: {
-    card: ['Acheteur compulsif', 'Roi du panier', 'Soldes folles', 'Pro du clic', 'Commande express'],
+    card: ['Chasseur de promos', 'Roi du panier', 'Soldes folles', 'Pro du clic', 'Commande express'],
     classic: ['Ajout au panier', 'Livraison', 'Code promo', 'Paiement', 'Frais de port', 'Colis perdu'],
     special: ['Panier infini', 'Livraison éclair', 'Promo explosive', 'Colis géant', 'Achat impulsif', 'Rupture de stock'],
   },
@@ -1158,15 +1158,15 @@ export const GROUP_NAMES: Record<string, NamePool> = {
   },
   eticket: {
     card: ['Pass numérique', 'Roi du QR', 'Voyageur connecté', 'Embarquement immédiat', 'Sésame du téléphone'],
-    classic: ['Scan', 'Bip', 'Code QR', 'Contrôle', 'Porte d’embarquement', 'Écran plein'],
+    classic: ['Scan', 'Bip', 'Présentation', 'Contrôle', 'Porte d’embarquement', 'Écran plein'],
     special: ['Embarquement éclair', 'Scan infini', 'Batterie à 1 %', 'Porte fermée', 'Surclassement', 'Billet fantôme'],
   },
 
   // ---------- Documents ----------
   receipt: {
-    card: ['Comptable fou', 'Roi du ticket', 'Note de frais', 'Caisse magique', 'Petit papier'],
-    classic: ['Ticket froissé', 'Total', 'Remise', 'Bon de caisse', 'Monnaie', 'Facture'],
-    special: ['Total explosif', 'Ticket infini', 'Remise géante', 'Pluie de tickets', 'Addition sismique', 'Caisse fatale'],
+    card: ['Ticket de la honte', 'Total qui pique', 'Comptable fou', 'Roi du ticket', 'Note de frais'],
+    classic: ['Ticket froissé', 'Total', 'Remise', 'Papier thermique', 'Monnaie', 'Bon de caisse'],
+    special: ['Total salé', 'Remboursement refusé', 'Ticket infini', 'Remise géante', 'Pluie de tickets', 'Caisse fatale'],
   },
   ticket: {
     card: ['Billet d’or', 'Pass VIP', 'Roi du coupe-file', 'Sésame', 'Passe-partout'],
@@ -1174,33 +1174,33 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Billet sacré', 'Coupe-file sonique', 'Contrôle surprise', 'Pass infini', 'Ticket volant', 'Départ manqué'],
   },
   card: {
-    card: ['Carte maîtresse', 'Joker', 'Sésame plastique', 'Carte d’or', 'Fidélité royale'],
-    classic: ['Code-barres', 'Glissement', 'Puce', 'Carte oubliée', 'Pliage', 'Badge'],
+    card: ['Carte maîtresse', 'Carte d’or', 'Fidélité royale', 'Sésame plastique', 'Oubliée au fond du sac'],
+    classic: ['Scan du code', 'Glissement', 'Puce', 'Carte oubliée', 'Pliage', 'Badge'],
     special: ['Carte infinie', 'Scan fatal', 'Carte volante', 'Puce sonique', 'Fidélité extrême', 'Badge tournoyant'],
   },
   agenda: {
-    card: ['Ministre du planning', 'Carnet de bord', 'Organisé de la vie', 'Semainier fou', 'Gardien des dates'],
+    card: ['Ministre des rendez-vous', 'Carnet de bord', 'Organisateur de vie', 'Semainier fou', 'Gardien des dates'],
     classic: ['Rature', 'Rendez-vous', 'Page tournée', 'Coin corné', 'Date entourée', 'Stylo bleu'],
-    special: ['Semaine infernale', 'Rendez-vous surprise', 'Page arrachée', 'Agenda débordé', 'Date fatale', 'Tornade de pages'],
+    special: ['Rendez-vous oublié', 'Réunion surprise', 'Semaine infernale', 'Page arrachée', 'Agenda débordé', 'Date fatale'],
   },
   todo: {
-    card: ['Chef de liste', 'Roi de la case cochée', 'Coche-tout', 'Liste sans fin', 'Organisateur fou'],
+    card: ['Chef de liste', 'Roi de la case cochée', 'Coche-tout', 'Liste sans fin', 'Procrastinateur d’élite'],
     classic: ['Case cochée', 'Rature', 'Tâche barrée', 'Oubli', 'Ajout', 'Petit trait'],
-    special: ['Liste infinie', 'Tout coché', 'Oubli fatal', 'Rature géante', 'Liste de courses XXL', 'Procrastination'],
+    special: ['Liste infinie', 'Tout coché', 'Oubli fatal', 'Rature géante', 'Tâche reportée', 'Procrastination'],
   },
   sticky: {
     card: ['Petit carré jaune', 'Mémo collant', 'Colle-partout', 'Rappel volant', 'Papier pense-bête'],
     classic: ['Collage', 'Décollage', 'Mémo', 'Rappel', 'Pliage', 'Coin qui rebique'],
-    special: ['Pluie de post-it', 'Mur de mémos', 'Collage éclair', 'Rappel sonique', 'Post-it fatal', 'Tempête jaune'],
+    special: ['Pluie de carrés', 'Mur de mémos', 'Collage éclair', 'Rappel sonique', 'Carré fatal', 'Tempête jaune'],
   },
   letter: {
-    card: ['Facteur', 'Courrier du jour', 'Lettre recommandée', 'Paperasse officielle', 'Plume administrative'],
+    card: ['Facteur pressé', 'Courrier du jour', 'Lettre recommandée', 'Paperasse officielle', 'Plume administrative'],
     classic: ['Tampon', 'Pli', 'Timbre', 'Ouverture', 'Signature', 'Accusé de réception'],
-    special: ['Lettre recommandée', 'Courrier piégé', 'Tampon sonique', 'Paperasse infinie', 'Timbre rare', 'Avis de passage'],
+    special: ['Recommandé surprise', 'Courrier piégé', 'Tampon sonique', 'Paperasse infinie', 'Timbre rare', 'Avis de passage'],
   },
   handwriting: {
     card: ['Plume d’or', 'Scribe', 'Gribouilleur fou', 'Calligraphe', 'Poète du carnet'],
-    classic: ['Gribouillage', 'Pâté d’encre', 'Surligneur', 'Rature', 'Trait tremblant', 'Dessin'],
+    classic: ['Gribouillage', 'Pâté d’encre', 'Boucle de plume', 'Rature', 'Trait tremblant', 'Dessin'],
     special: ['Pâté géant', 'Tornade de ratures', 'Rédaction éclair', 'Encre magique', 'Feuille volante', 'Écriture illisible'],
   },
   book: {
@@ -1210,7 +1210,7 @@ export const GROUP_NAMES: Record<string, NamePool> = {
   },
   menu: {
     card: ['Gourmet', 'Maître queux', 'Carte royale', 'Chef du jour', 'Roi de l’ardoise'],
-    classic: ['Plat du jour', 'Entrée', 'Dessert', 'Addition', 'Serveur pressé', 'Carte'],
+    classic: ['Plat du jour', 'Entrée', 'Dessert', 'Note salée', 'Serveur pressé', 'Carte'],
     special: ['Menu XXL', 'Festin infini', 'Dessert surprise', 'Addition sismique', 'Plat secret', 'Serveur volant'],
   },
   sign: {
@@ -1226,28 +1226,28 @@ export const GROUP_NAMES: Record<string, NamePool> = {
 
   // ---------- Dessins, peintures (art) ----------
   child_drawing: {
-    card: ['Chef-d’œuvre du frigo', 'Petit Picasso', 'Artiste en herbe', 'Gribouillis de génie', 'Trésor de maternelle'],
+    card: ['Picasso en CP', 'Chef-d’œuvre du frigo', 'Artiste en herbe', 'Pablo de maternelle', 'Trésor de maternelle'],
     classic: ['Coup de crayon', 'Gribouillis', 'Feutre baveux', 'Hors des traits', 'Soleil qui sourit', 'Bonhomme bâton'],
     special: ['Feutres arc-en-ciel', 'Dessin pour maman', 'Pluie de paillettes', 'Gribouillis géant', 'Expo sur le frigo', 'Tornade de crayons'],
   },
   sketch: {
-    card: ['Coup de crayon', 'Esquisse', 'Main d’artiste', 'Mine de plomb', 'Carnet secret'],
+    card: ['Gribouilleur pro', 'Crayon en mode turbo', 'Main d’artiste', 'Crayon sous pression', 'Carnet secret'],
     classic: ['Trait fin', 'Hachures', 'Gomme', 'Estompe', 'Ombre portée', 'Taille-crayon'],
     special: ['Esquisse éclair', 'Hachures folles', 'Gomme magique', 'Trait de génie', 'Ombre totale', 'Mine brisée'],
   },
   painting: {
-    card: ['Chef-d’œuvre', 'Grand maître', 'Toile de maître', 'Coup de pinceau', 'Musée vivant'],
+    card: ['Chef-d’œuvre', 'Grand maître', 'Peintre du dimanche', 'Toile de maître', 'Musée vivant'],
     classic: ['Coup de pinceau', 'Touche de couleur', 'Glacis', 'Vernis', 'Palette', 'Aplat'],
     special: ['Tempête de couleurs', 'Toile vivante', 'Pinceau fou', 'Chef-d’œuvre éclair', 'Giclée de peinture', 'Cadre doré'],
   },
   gallery: {
-    card: ['Visiteur de musée', 'Gardien du musée', 'Expo du jour', 'Cadre doré', 'Amateur d’art'],
+    card: ['Visiteur de musée', 'Critique en chef', 'Expo du jour', 'Cadre doré', 'Amateur d’art'],
     classic: ['Contemplation', 'Audioguide', 'Regard perçant', 'Pas feutré', 'Cadre', 'Silence'],
-    special: ['Visite guidée', 'Alarme du musée', 'Flash interdit', 'Contemplation', 'Œuvre volée', 'Vernissage'],
+    special: ['Visite guidée', 'Alarme du musée', 'Flash interdit', 'Silence sacré', 'Visite express', 'Vernissage'],
   },
   cartoon: {
     card: ['Héros de papier', 'Bulle de BD', 'Personnage culte', 'Super-héros dessiné', 'Star du dessin animé'],
-    classic: ['Bulle', 'Onomatopée', 'Case suivante', 'Gros yeux', 'Pow !', 'Encrage'],
+    classic: ['Bulle', 'Onomatopée', 'Case suivante', 'Gros yeux', 'Boum !', 'Encrage'],
     special: ['Coup de poing BD', 'Pluie d’onomatopées', 'Attaque manga', 'Grosse bulle', 'Transformation', 'Fin du chapitre'],
   },
   graffiti: {
@@ -1256,12 +1256,12 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     special: ['Mur entier', 'Tag éclair', 'Pluie de spray', 'Fresque géante', 'Couleurs fluo', 'Graff nocturne'],
   },
   digital: {
-    card: ['Pixel magique', 'Artiste numérique', 'Stylet d’or', 'Calque secret', 'Image de rêve'],
+    card: ['Roi du calque', 'Artiste numérique', 'Stylet d’or', 'Ctrl+Z champion', 'Image de rêve'],
     classic: ['Calque', 'Annuler', 'Pinceau numérique', 'Pipette', 'Zoom', 'Filtre'],
     special: ['Fusion des calques', 'Ctrl+Z infini', 'Filtre ultime', 'Rendu épique', 'Lumière magique', 'Glitch'],
   },
   pixel: {
-    card: ['Héros 8 bits', 'Carré par carré', 'Rétro légende', 'Sprite pro', 'Petit pixel'],
+    card: ['Héros 8 bits', 'Carré par carré', 'Rétro légende', 'Sprite pro', 'Gros pixel'],
     classic: ['Pixel', 'Saut 8 bits', 'Bip', 'Clignotement', 'Carré', 'Sprite'],
     special: ['Pluie de pixels', 'Niveau bonus', 'Game over', 'Super saut 8 bits', 'Pixel géant', 'Écran clignotant'],
   },
@@ -1275,7 +1275,7 @@ export const GROUP_NAMES: Record<string, NamePool> = {
 // Fallback par catégorie quand le label précis est incertain.
 export const CATEGORY_NAMES: Record<CategoryId, NamePool> = {
   animal: {
-    card: ['Bestiole', 'Ami poilu', 'Champion de la ménagerie', 'Créature mystère', 'Compagnon'],
+    card: ['Roi de la ménagerie', 'Ami poilu', 'Bestiole mystère', 'Champion des pattes', 'Compagnon à pattes'],
     classic: ['Coup de patte', 'Coup de bec', 'Grattouille', 'Cri', 'Bond', 'Regard malin'],
     special: ['Cri sauvage', 'Bond fou', 'Charge sauvage', 'Attaque mystère', 'Ruée animale', 'Coup de queue'],
   },
@@ -1290,9 +1290,9 @@ export const CATEGORY_NAMES: Record<CategoryId, NamePool> = {
     special: ['Panorama infini', 'Tempête', 'Lueur', 'Séisme', 'Vue éblouissante', 'Mirage'],
   },
   building: {
-    card: ['Monument mystère', 'Bâtisse folle', 'Gardien de la ville', 'Architecte fou', 'Repère'],
+    card: ['Monument mystère', 'Bâtisse folle', 'Gardien de la ville', 'Architecte fou', 'Roi du béton'],
     classic: ['Porte qui grince', 'Ombre', 'Fenêtre', 'Escalier', 'Écho', 'Toit glissant'],
-    special: ['Effondrement', 'Visite guidée', 'Tremblement', 'Ombre géante', 'Porte claquée', 'Tour infernale'],
+    special: ['Ravalement express', 'Visite guidée', 'Tremblement', 'Ombre géante', 'Porte claquée', 'Tour infernale'],
   },
   person: {
     card: ['Star de la photo', 'Personnage', 'Tête connue', 'Visage du jour', 'Bon public'],
@@ -1305,17 +1305,17 @@ export const CATEGORY_NAMES: Record<CategoryId, NamePool> = {
     special: ['Chatouille sismique', 'Craquement géant', 'Pichenette fatale', 'Éternuement sonique', 'Pose héroïque', 'Coup de jus'],
   },
   screenshot: {
-    card: ['Capture mystère', 'Écran magique', 'Instantané', 'Capture du jour', 'Photo d’écran'],
+    card: ['Capture mystère', 'Doigt sur le bouton', 'Instantané', 'Capture du jour', 'Photo d’écran'],
     classic: ['Défilement', 'Like', 'Partage', 'Notification', 'Zoom', 'Pouce levé'],
     special: ['Capture éclair', 'Bug d’écran', 'Défilement infini', 'Notif sismique', 'Écran figé', 'Pixel fatal'],
   },
   document: {
-    card: ['Paperasse', 'Papier mystère', 'Scribe du jour', 'Pièce à conviction', 'Feuille volante'],
+    card: ['Paperasse en chef', 'Roi de la paperasse', 'Papier mystère', 'Pièce à conviction', 'Feuille volante'],
     classic: ['Pliage', 'Froissement', 'Tampon', 'Trombone', 'Feuille froissée', 'Encre'],
-    special: ['Feuille volante', 'Paperasse infinie', 'Tornade de papiers', 'Tampon sonique', 'Archive secrète', 'Dossier fatal'],
+    special: ['Avalanche de papier', 'Paperasse infinie', 'Tornade de papiers', 'Tampon sonique', 'Archive secrète', 'Dossier fatal'],
   },
   vehicle: {
-    card: ['Bolide mystère', 'Roi de la route', 'Engin fou', 'Moteur sacré', 'Voyageur'],
+    card: ['Bolide mystère', 'Roi de la route', 'Engin fou', 'Moteur sacré', 'Mastodonte mystère'],
     classic: ['Klaxon', 'Coup de frein', 'Dérapage', 'Vrombissement', 'Démarrage', 'Créneau raté'],
     special: ['Turbo', 'Embouteillage', 'Vol plané', 'Tonnerre moteur', 'Trajet infini', 'Coup de volant'],
   },
@@ -1328,8 +1328,9 @@ export const CATEGORY_NAMES: Record<CategoryId, NamePool> = {
     card: ['Objet mystère', 'Trouvaille', 'Bidule magique', 'Gadget fou', 'Relique'],
     classic: ['Choc', 'Chute', 'Bidule', 'Coup de coude', 'Vibration', 'Clic'],
     special: ['Objet volant', 'Choc sismique', 'Trésor caché', 'Gadget ultime', 'Tornade de bidules', 'Relique sacrée'],
-  },  art: {
-    card: ['Œuvre mystère', 'Artiste du jour', 'Chef-d’œuvre inconnu', 'Coup de génie', 'Muse'],
+  },
+  art: {
+    card: ['Œuvre mystère', 'Artiste du jour', 'Chef-d’œuvre inconnu', 'Coup de génie', 'Muse en chef'],
     classic: ['Coup de pinceau', 'Coup de crayon', 'Couleur', 'Trait', 'Ombre', 'Retouche'],
     special: ['Pluie de couleurs', 'Chef-d’œuvre', 'Inspiration', 'Tornade artistique', 'Coup de génie', 'Vernissage'],
   },
