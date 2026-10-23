@@ -16,10 +16,11 @@ Ce que le script écrit dans assets/clip/ :
   - clip-labels.bin + clip-labels.json : le vecteur de chaque label (float16),
     dans l'ordre de VOCAB : moyenne des vecteurs (normés) de ses phrases
     anglaises (« a dog », « a small bird perched on a branch »…) et, sauf
-    pour les captures d'écran, des mêmes phrases dans « a photo of {}. » et
-    « a phone photo of {}. ». Chaque label y est nommé par sa première phrase.
-    (Mesuré sur 300 photos de galerie : ces deux modèles de phrase en plus
-    font +3 points de catégorie juste ; voir le README.)
+    pour les captures d'écran et les dessins, des mêmes phrases dans « a photo
+    of {}. » et « a phone photo of {}. ». Chaque label y est nommé par sa
+    première phrase. (Mesuré sur 300 photos de galerie : ces deux modèles de
+    phrase en plus font +3 points de catégorie juste ; sur les dessins, ils
+    ne changent rien ; voir le README.)
 
 Puis il compare, sur des images sans risque, le modèle d'origine (PyTorch,
 float32) aux versions TFLite et navigateur : même label en tête. Mesuré sur 320
@@ -66,9 +67,9 @@ NAME = 'TinyCLIP-ViT-40M-32-Text-19M-LAION400M.pt'
 URL = f'https://github.com/wkcn/TinyCLIP-model-zoo/releases/download/checkpoints/{NAME}'
 SHA256 = 'af5042c3e3662c43573c16113d4a72014cf3aa19267a7a50c4b94be3c4e8366a'
 CHUNK = 14_000_000
-# phrases ajoutées à celles du vocabulaire (pas pour les captures d'écran, qui ne sont pas des photos)
+# phrases ajoutées à celles du vocabulaire (pas pour les captures d'écran ni les dessins, qui ne sont pas des photos)
 TEMPLATES = ['{}', 'a photo of {}.', 'a phone photo of {}.']
-NOT_PHOTOS = ('screenshot',)
+NOT_PHOTOS = ('screenshot', 'art')
 MEAN = [0.48145466, 0.4578275, 0.40821073]
 STD = [0.26862954, 0.26130258, 0.27577711]
 WIDTH, LAYERS, HEADS, PATCH = 512, 12, 8, 32

@@ -10,6 +10,7 @@ import {
   RECOG_VERSION,
   type Recognizable,
   alignVocab,
+  artSubjectName,
   attackNamesFor,
   cardNameFor,
   decide,
@@ -31,7 +32,7 @@ import {
 } from '../src/game/recognize/recognize';
 import { JobQueue, takeForcedLabel } from '../src/game/recognize/recognizeQueue';
 import { appGroups, appLabels, isScreenshotName, screenshotApp } from '../src/game/recognize/screenshotHint';
-import { CATEGORY_NAMES, type CategoryId, GROUP_NAMES, VOCAB } from '../src/game/recognize/vocabV2';
+import { ART_SUBJECT, CATEGORY_NAMES, type CategoryId, GROUP_FAMILY, GROUP_GENERIC, GROUP_NAMES, VOCAB } from '../src/game/recognize/vocabV2';
 import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-cpu';
 
@@ -71,7 +72,7 @@ test('vocabulaire : labels uniques, groupes définis, noms assez courts', () => 
   const ids = VOCAB.map(labelId);
   assert.equal(new Set(ids).size, ids.length);
   assert.equal(new Set(VOCAB.flatMap((v) => v.en)).size, VOCAB.flatMap((v) => v.en).length, 'phrase anglaise en double');
-  assert.ok(VOCAB.length >= 350 && VOCAB.length <= 450, String(VOCAB.length));
+  assert.ok(VOCAB.length >= 400 && VOCAB.length <= 500, String(VOCAB.length));
   for (const v of VOCAB) {
     assert.ok(v.en.length >= 2 && v.en.length <= 4, labelId(v));
     assert.ok(v.fr.trim() && v.fr.length <= 28, v.fr);
@@ -97,8 +98,35 @@ test('vocabulaire : labels uniques, groupes définis, noms assez courts', () => 
 });
 
 test('catégories : la liste attendue', () => {
-  const cats: CategoryId[] = ['animal', 'plant', 'landscape', 'building', 'person', 'body', 'screenshot', 'document', 'vehicle', 'food', 'object'];
+  const cats: CategoryId[] = ['animal', 'plant', 'landscape', 'building', 'person', 'body', 'screenshot', 'document', 'vehicle', 'food', 'object', 'art'];
   assert.deepEqual(Object.keys(CATEGORY_NAMES).sort(), [...cats].sort());
+});
+
+test('vocabulaire : noms de groupe, familles et dessins définis', () => {
+  const groups = new Set(VOCAB.map((v) => v.group));
+  const fr = new Set(VOCAB.map((v) => v.fr));
+  for (const [g, name] of Object.entries(GROUP_GENERIC)) {
+    assert.ok(groups.has(g), g);
+    assert.ok(name.length <= 28 && !GROUP_NAMES[g].card.includes(name), name);
+  }
+  for (const [g, f] of Object.entries(GROUP_FAMILY)) assert.ok(groups.has(g) && groups.has(f) && !GROUP_FAMILY[f], `${g} → ${f}`);
+  const art = new Set(VOCAB.filter((v) => v.category === 'art').map((v) => v.group));
+  assert.deepEqual([...art].sort(), Object.keys(ART_SUBJECT).sort());
+  for (const t of Object.values(ART_SUBJECT)) assert.ok(t.includes('{}'), t);
+  // les insectes et les autres petites bêtes : groupes séparés (une araignée n'est pas un insecte)
+  for (const x of ['Coccinelle', 'Abeille', 'Guêpe', 'Fourmi', 'Mouche', 'Moustique', 'Scarabée', 'Sauterelle', 'Libellule']) assert.equal(byFr(x).group, 'insect', x);
+  for (const x of ['Papillon', 'Papillon de nuit', 'Chenille']) assert.equal(byFr(x).group, 'butterfly', x);
+  assert.equal(byFr('Araignée').group, 'spider');
+  assert.equal(byFr('Escargot').group, 'snail');
+  assert.equal(byFr('Limace').group, 'snail');
+  for (const x of ['Pigeon', 'Moineau', 'Mouette', 'Canard', 'Cygne', 'Perroquet', 'Hibou', 'Aigle', 'Poule']) assert.equal(byFr(x).category, 'animal', x);
+  // papiers et applis : chacun son groupe
+  const g = (x: string) => `${byFr(x).category}/${byFr(x).group}`;
+  assert.deepEqual(
+    ['Agenda', 'Agenda du téléphone', 'Ticket de caisse', 'Billet de train', 'Billet électronique', 'Note manuscrite', 'Notes', 'Liste à cocher', 'Post-it', 'Lettre'].map(g),
+    ['document/agenda', 'screenshot/calendar', 'document/receipt', 'document/ticket', 'screenshot/eticket', 'document/handwriting', 'screenshot/notes', 'document/todo', 'document/sticky', 'document/letter'],
+  );
+  assert.ok(fr.has('Dessin d’enfant') && fr.has('Pixel art') && fr.has('Coloriage') && fr.has('Graffiti'));
 });
 
 test('modèle : la table des labels suit vocabV2.ts (sinon relancer scripts/convert-clip-model.py --labels-only)', () => {
@@ -203,6 +231,149 @@ test('décision : trop incertain → inconnu, rien ne sera renommé ; groupe inc
   assert.ok(CATEGORY_NAMES.animal.card.includes(cardNameFor(spread, 'h')!));
   const [a, b] = attackNamesFor(spread, 'h')!;
   assert.ok(CATEGORY_NAMES.animal.classic.includes(a) && CATEGORY_NAMES.animal.special.includes(b));
+});
+
+/* ---------------------------- Dessins (art) ----------------------------- */
+
+/** Une empreinte de photo qui ne tire pas de nom drôle (1 fois sur 4). */
+function seriousHash(d: Decision, want: (n: string) => boolean): string {
+  for (let i = 0; i < 100; i++) if (want(cardNameFor(d, `h${i}`)!)) return `h${i}`;
+  throw new Error('aucune empreinte');
+}
+
+test('dessins : un dessin gagne sur ce qu’il montre, même un chien', () => {
+  // le chien dessiné pèse plus lourd que « dessin d'enfant », mais c'est un dessin
+  const d = decide(probs({ 'a dog': 0.55, 'a puppy': 0.05, "a child's crayon drawing": 0.2, "a child's colorful painting": 0.05, Selfie: 0.15 }));
+  assert.equal(d.category, 'art');
+  assert.equal(d.group, 'child_drawing');
+  assert.equal(d.label, "a child's crayon drawing");
+  assert.equal(d.subject, 'a dog');
+  const h = seriousHash(d, (n) => !GROUP_NAMES.child_drawing.card.includes(n));
+  assert.equal(cardNameFor(d, h), 'Dessin de chien');
+  // attaques du dessin, pas du chien (et pas d'emote « chien »)
+  const [a, b] = attackNamesFor(d, h)!;
+  assert.ok(GROUP_NAMES.child_drawing.classic.includes(a) && GROUP_NAMES.child_drawing.special.includes(b));
+  // un peu de « dessin » sur une vraie photo de chien : reste un chien
+  assert.equal(decide(probs({ 'a dog': 0.85, "a child's crayon drawing": 0.1, Selfie: 0.05 })).category, 'animal');
+  assert.equal(RECOG_RULE.art, 0.15);
+  // un animal rare ou incertain sur un dessin : pas de sujet, le nom du dessin
+  const odd = decide(probs({ 'an oil painting': 0.5, 'a jellyfish': 0.4, Selfie: 0.1 }));
+  assert.equal(odd.category, 'art');
+  assert.equal(odd.subject, null);
+  assert.equal(cardNameFor(odd, seriousHash(odd, (n) => !GROUP_NAMES.painting.card.includes(n))), 'Tableau');
+  const unsure = decide(probs({ 'an oil painting': 0.5, 'a dog': 0.2, 'a cat': 0.2, Selfie: 0.1 }));
+  assert.equal(unsure.subject, null);
+  // une peinture sans animal : le nom précis du label
+  const paint = decide(probs({ 'a watercolor painting': 0.7, 'a lake': 0.3 }));
+  assert.deepEqual([paint.category, paint.group, paint.subject], ['art', 'painting', null]);
+  assert.equal(forcedDecision('Pixel art').group, 'pixel');
+  assert.equal(forcedDecision('Coloriage').group, 'coloring');
+  assert.equal(forcedDecision('Graffiti').group, 'graffiti');
+  assert.equal(forcedDecision('a comic book page').category, 'art');
+});
+
+test('dessins : le nom « Dessin de chien », avec « d’ » devant une voyelle', () => {
+  assert.equal(artSubjectName(ART_SUBJECT.child_drawing, 'Chien'), 'Dessin de chien');
+  assert.equal(artSubjectName(ART_SUBJECT.painting, 'Oiseau'), 'Tableau d’oiseau');
+  assert.equal(artSubjectName(ART_SUBJECT.graffiti, 'Hibou'), 'Graffiti de hibou');
+  assert.equal(artSubjectName(ART_SUBJECT.sketch, 'Éléphant'), 'Croquis d’éléphant');
+  assert.equal(artSubjectName(ART_SUBJECT.pixel, 'Chat'), 'Chat en pixels');
+  // nom trop long (« Illustration de chien paresseux ») : le nom du dessin
+  for (const v of VOCAB.filter((x) => x.category === 'animal'))
+    for (const g of Object.keys(ART_SUBJECT)) {
+      const label = labelId(VOCAB.find((x) => x.group === g)!);
+      const d: Decision = { label, category: 'art', group: g, score: 0.9, share: 1, subject: labelId(v) };
+      for (let i = 0; i < 4; i++) assert.ok(cardNameFor(d, `p${i}`)!.length <= 28, cardNameFor(d, `p${i}`)!);
+    }
+});
+
+/* --------------------------- Animaux, insectes -------------------------- */
+
+test('insectes : le nom précis quand il est sûr, sinon « Insecte »', () => {
+  const lady = decide(probs({ 'a ladybug': 0.8, 'a beetle': 0.1, Herbe: 0.1 }));
+  assert.equal(lady.group, 'insect');
+  assert.equal(lady.label, 'a ladybug');
+  assert.equal(cardNameFor(lady, seriousHash(lady, (n) => !GROUP_NAMES.insect.card.includes(n))), 'Coccinelle');
+  // guêpe ou abeille ? pas sûr : « Insecte », jamais une mauvaise « Guêpe »
+  const buzz = decide(probs({ 'a wasp': 0.3, 'a bee': 0.28, 'a fly': 0.22, 'an ant': 0.2 }));
+  assert.equal(buzz.group, 'insect');
+  assert.ok(buzz.share < RECOG_RULE.preciseShare);
+  for (let i = 0; i < 40; i++) {
+    const n = cardNameFor(buzz, `p${i}`)!;
+    assert.ok(n === 'Insecte' || GROUP_NAMES.insect.card.includes(n), n);
+  }
+  // papillon, papillon de nuit, chenille : même famille que les insectes
+  assert.equal(decide(probs({ 'a moth': 0.7, 'a butterfly': 0.3 })).label, 'a moth');
+  const mixed = decide(probs({ 'a butterfly': 0.25, 'a bee': 0.3, 'a fly': 0.25, 'a moth': 0.2 }));
+  assert.equal(mixed.category, 'animal');
+  assert.equal(mixed.group, 'insect'); // une seule famille : insectes 0,55 contre papillons 0,45
+  // une araignée, un escargot : pas des insectes
+  assert.equal(decide(probs({ 'a spider': 0.6, 'an ant': 0.4 })).group, 'spider');
+  assert.equal(decide(probs({ 'a slug': 0.7, 'a snail': 0.3 })).label, 'a slug');
+});
+
+test('oiseaux : famille sûre mais groupe incertain → « Oiseau », sans nom précis', () => {
+  const d = decide(probs({ 'an eagle': 0.3, 'a duck': 0.3, 'a pigeon': 0.2, 'a sparrow': 0.2 }));
+  assert.equal(d.category, 'animal');
+  assert.equal(d.group, 'bird'); // le groupe de tête de la famille
+  assert.equal(d.label, null);
+  for (let i = 0; i < 40; i++) {
+    const n = cardNameFor(d, `p${i}`)!;
+    assert.ok(n === 'Oiseau' || GROUP_NAMES.bird.card.includes(n), n);
+  }
+  assert.ok(RECOG_RULE.familySplit > 0.3 && RECOG_RULE.familySplit <= 0.6);
+  // groupe net : son label
+  const owl = decide(probs({ 'an owl': 0.7, 'an eagle': 0.1, 'a duck': 0.2 }));
+  assert.deepEqual([owl.group, owl.label], ['raptor', 'an owl']);
+  const gull = decide(probs({ 'a seagull': 0.8, 'a pigeon': 0.2 }));
+  assert.deepEqual([gull.group, gull.label], ['waterbird', 'a seagull']);
+});
+
+test('décision : toujours la même pour les mêmes probabilités', () => {
+  const p = probs({ "a child's crayon drawing": 0.3, 'a dog': 0.4, 'a wasp': 0.1, Agenda: 0.1, Selfie: 0.1 });
+  assert.deepEqual(decide(p), decide([...p]));
+  const look = { screenshot: null, aspect: 1.33, center: p, full: null };
+  assert.deepEqual(decidePhoto(look), decidePhoto({ ...look }));
+  const d = decide(p);
+  assert.equal(cardNameFor(d, 'même-photo'), cardNameFor(d, 'même-photo'));
+  assert.deepEqual(attackNamesFor(d, 'même-photo'), attackNamesFor(d, 'même-photo'));
+});
+
+/* ------------------------ Agenda, billets, notes ------------------------ */
+
+test('papiers : agenda, ticket de caisse, billet, notes, to-do, post-it, chacun son groupe', () => {
+  const g = (w: Record<string, number>) => {
+    const d = decidePhoto({ screenshot: null, aspect: 1.33, center: probs(w) });
+    return `${d.category}/${d.group}`;
+  };
+  assert.equal(g({ Agenda: 0.5, Calendrier: 0.2, 'Note manuscrite': 0.15, 'Billet de train': 0.15 }), 'document/agenda');
+  assert.equal(g({ 'Ticket de caisse': 0.6, 'Billet de cinéma': 0.2, Addition: 0.2 }), 'document/receipt');
+  assert.equal(g({ 'Billet de concert': 0.5, 'Billet de train': 0.3, 'Ticket de caisse': 0.2 }), 'document/ticket');
+  assert.equal(g({ 'Note manuscrite': 0.6, 'Liste à cocher': 0.2, Agenda: 0.2 }), 'document/handwriting');
+  assert.equal(g({ 'Liste à cocher': 0.5, 'Liste de courses': 0.3, 'Note manuscrite': 0.2 }), 'document/todo');
+  assert.equal(g({ 'Post-it': 0.7, 'Note manuscrite': 0.3 }), 'document/sticky');
+  // une photo (pas une capture) qui ressemble à une appli d'agenda : un agenda en papier
+  const paper = decidePhoto({ screenshot: null, aspect: 1.33, center: probs({ 'Agenda du téléphone': 0.6, Agenda: 0.25, Selfie: 0.15 }) });
+  assert.deepEqual([paper.category, paper.group, paper.label], ['document', 'agenda', labelId(byFr('Agenda'))]);
+  assert.equal(decidePhoto({ screenshot: null, aspect: 1.33, center: probs({ 'E-billet': 0.7, 'Billet de train': 0.3 }) }).group, 'ticket');
+  assert.equal(decidePhoto({ screenshot: null, aspect: 1.33, center: probs({ Notes: 0.7, 'Note manuscrite': 0.3 }) }).group, 'handwriting');
+});
+
+test('papiers : avec l’indice « capture », l’appli (agenda, notes, billet électronique)', () => {
+  const shot = (w: Record<string, number>) => {
+    const d = decidePhoto({ screenshot: true, aspect: 2.17, full: probs(w) });
+    return `${d.category}/${d.group}/${d.label ? VOCAB.find((v) => labelId(v) === d.label)?.fr : '-'}`;
+  };
+  // une capture d'agenda vue comme un agenda en papier : l'appli agenda
+  assert.equal(shot({ Agenda: 0.6, 'Agenda du téléphone': 0.25, Selfie: 0.15 }), 'screenshot/calendar/Agenda du téléphone');
+  assert.equal(shot({ 'Note manuscrite': 0.6, Notes: 0.3, Selfie: 0.1 }), 'screenshot/notes/Notes');
+  assert.equal(shot({ 'Liste à cocher': 0.6, 'Liste de tâches': 0.3, Selfie: 0.1 }), 'screenshot/notes/Liste de tâches');
+  assert.equal(shot({ 'Carte d’embarquement': 0.7, 'Billet électronique': 0.2, Selfie: 0.1 }), 'screenshot/eticket/Billet électronique');
+  assert.equal(shot({ 'Ticket de caisse': 0.6, Commande: 0.3, Selfie: 0.1 }), 'screenshot/shopping/Commande');
+  // déjà une appli : gardée
+  assert.equal(shot({ Planning: 0.6, Notes: 0.4 }), 'screenshot/calendar/Planning');
+  // un papier sans double à l'écran (lettre) reste un document
+  assert.equal(shot({ Lettre: 0.8, Notes: 0.2 }).split('/')[0], 'document');
 });
 
 /* --------------------------- Captures d'écran --------------------------- */
@@ -319,9 +490,13 @@ test('noms : le même pour une même photo ; surtout le nom précis, parfois un 
   assert.ok(precise > 250 && precise < 350, String(precise)); // ≈ 75 %
   for (const n of names) assert.ok(n === 'Chien' || GROUP_NAMES.dog.card.includes(n), n);
   assert.ok(new Set(names).size >= 4, 'des variantes drôles apparaissent');
-  // label pas sûr dans son groupe : un nom du groupe, jamais le nom précis
-  const vague: Decision = { ...sure, share: RECOG_RULE.preciseShare - 0.01 };
-  for (let i = 0; i < 50; i++) assert.ok(GROUP_NAMES.dog.card.includes(cardNameFor(vague, `p${i}`)!));
+  // label pas sûr dans son groupe : le nom du groupe (« Chien »), ou un nom drôle du groupe
+  const vague: Decision = { ...sure, label: 'a puppy', share: RECOG_RULE.preciseShare - 0.01 };
+  for (let i = 0; i < 50; i++) {
+    const n = cardNameFor(vague, `p${i}`)!;
+    assert.ok(n === GROUP_GENERIC.dog || GROUP_NAMES.dog.card.includes(n), n);
+    assert.notEqual(n, 'Chiot');
+  }
   // attaques : toujours les mêmes pour une photo, variées d'une photo à l'autre
   assert.deepEqual(attackNamesFor(sure, 'h4'), attackNamesFor(sure, 'h4'));
   const all = new Set(Array.from({ length: 40 }, (_, i) => attackNamesFor(forcedDecision('a pizza'), `x${i}`)!.join('|')));
@@ -385,8 +560,10 @@ test('cartes : seulement les miennes, vérifiées propres, pas encore regardées
   assert.equal(needsRecognition(card({ recognition: { ...noRecognition(), v: RECOG_VERSION - 1 } })), true);
 });
 
-test('version 2 : une carte nommée par la v1 est renommée, sauf ce que le joueur a changé', () => {
-  assert.equal(RECOG_VERSION, 2);
+test('version 3 : une carte nommée par une ancienne version est renommée, sauf ce que le joueur a changé', () => {
+  assert.equal(RECOG_VERSION, 3);
+  // nommée par la v2 : revue
+  assert.equal(needsRecognition(card({ recognition: { ...noRecognition(), v: 2 } })), true);
   const c = card({ id: 'v1', hash: 'oiseau-1' });
   // nommée par la v1 : « Oiseau » + attaques de l'ancienne liste « animal » (dont « Rugissement »)
   const v1 = {
@@ -402,7 +579,7 @@ test('version 2 : une carte nommée par la v1 est renommée, sauf ce que le joue
   assert.deepEqual(v2.battle.attacks.map((x) => x.name), attackNamesFor(bird, c.hash));
   assert.ok(!v2.battle.attacks.some((x) => x.name === 'Rugissement' || x.name === 'Coup de croc'));
   assert.ok(v2.name === 'Oiseau' || GROUP_NAMES.bird.card.includes(v2.name!));
-  assert.equal(v2.recognition?.v, 2);
+  assert.equal(v2.recognition?.v, 3);
   assert.equal(needsRecognition(v2), false);
   // le joueur avait renommé la carte et la spéciale : la v2 n'y touche pas
   const mine = { ...v1, name: 'Titi', battle: { ...v1.battle, attacks: [v1.battle.attacks[0], { ...v1.battle.attacks[1], name: 'Cri qui tue' }] as typeof v1.battle.attacks } };

@@ -1,4 +1,4 @@
-// Vocabulaire v2 de reconnaissance : labels CLIP (en) et noms français des cartes.
+// Vocabulaire de reconnaissance (v3) : labels CLIP (en) et noms français des cartes.
 // Données uniquement, aucune logique.
 
 export type CategoryId =
@@ -12,7 +12,8 @@ export type CategoryId =
   | 'document'
   | 'vehicle'
   | 'food'
-  | 'object';
+  | 'object'
+  | 'art';
 
 export interface VocabLabel {
   /** 2 à 4 prompts anglais pour le modèle, courts et concrets. Pas de doublons. */
@@ -35,17 +36,26 @@ export interface NamePool {
 
 export const VOCAB: VocabLabel[] = [
   // ---------- Animaux ----------
+  // Oiseaux (groupes bird, raptor, waterbird, farm_bird : famille « Oiseau »)
   { en: ['a bird', 'a small bird perched on a branch', 'a photo of a songbird'], fr: 'Oiseau', category: 'animal', group: 'bird' },
-  { en: ['a pigeon', 'a grey pigeon on a city street'], fr: 'Pigeon', category: 'animal', group: 'bird' },
-  { en: ['a sparrow', 'a little brown sparrow on a fence'], fr: 'Moineau', category: 'animal', group: 'bird' },
-  { en: ['a parrot', 'a colorful parrot on a perch'], fr: 'Perroquet', category: 'animal', group: 'bird' },
-  { en: ['an eagle', 'a bald eagle flying in the sky'], fr: 'Aigle', category: 'animal', group: 'raptor' },
-  { en: ['an owl', 'a big owl with yellow eyes at night'], fr: 'Hibou', category: 'animal', group: 'raptor' },
-  { en: ['a hawk', 'a hawk perched on a wooden pole'], fr: 'Faucon', category: 'animal', group: 'raptor' },
-  { en: ['a duck', 'a duck swimming on a pond'], fr: 'Canard', category: 'animal', group: 'waterbird' },
-  { en: ['a swan', 'a white swan on a calm lake'], fr: 'Cygne', category: 'animal', group: 'waterbird' },
+  { en: ['a pigeon', 'a grey pigeon walking on a city street', 'a close-up photo of a pigeon on a pavement'], fr: 'Pigeon', category: 'animal', group: 'bird' },
+  { en: ['a sparrow', 'a little brown sparrow on a fence', 'a small brown streaked sparrow on the ground'], fr: 'Moineau', category: 'animal', group: 'bird' },
+  { en: ['a robin', 'a robin with an orange red breast on a branch'], fr: 'Rouge-gorge', category: 'animal', group: 'bird' },
+  { en: ['a crow', 'a black crow on the grass', 'a black raven'], fr: 'Corbeau', category: 'animal', group: 'bird' },
+  { en: ['a parrot', 'a colorful parrot on a perch', 'a grey parrot in a cage'], fr: 'Perroquet', category: 'animal', group: 'bird' },
+  { en: ['a budgie', 'a small green parakeet in a cage', 'a cockatiel with a yellow crest'], fr: 'Perruche', category: 'animal', group: 'bird' },
+  { en: ['an eagle', 'a bald eagle flying in the sky', 'a big eagle with spread wings'], fr: 'Aigle', category: 'animal', group: 'raptor' },
+  { en: ['an owl', 'a big owl with yellow eyes', 'a close-up photo of an owl face'], fr: 'Hibou', category: 'animal', group: 'raptor' },
+  { en: ['a hawk', 'a hawk perched on a wooden pole', 'a bird of prey soaring in the sky'], fr: 'Faucon', category: 'animal', group: 'raptor' },
+  { en: ['a duck', 'a duck swimming on a pond', 'a mallard duck with a green head'], fr: 'Canard', category: 'animal', group: 'waterbird' },
+  { en: ['a swan', 'a white swan on a calm lake', 'a black swan with a red beak'], fr: 'Cygne', category: 'animal', group: 'waterbird' },
+  { en: ['a seagull', 'a white and grey seagull on the beach', 'a gull flying over the sea'], fr: 'Mouette', category: 'animal', group: 'waterbird' },
+  { en: ['a goose', 'a goose walking on the grass'], fr: 'Oie', category: 'animal', group: 'waterbird' },
   { en: ['a flamingo', 'a pink flamingo standing in shallow water'], fr: 'Flamant rose', category: 'animal', group: 'waterbird' },
   { en: ['a penguin', 'a penguin standing on ice'], fr: 'Pingouin', category: 'animal', group: 'waterbird' },
+  { en: ['a chicken', 'a hen in a farmyard', 'a brown hen pecking on the ground'], fr: 'Poule', category: 'animal', group: 'farm_bird' },
+  { en: ['a rooster', 'a rooster with a red comb', 'a close-up photo of a rooster head'], fr: 'Coq', category: 'animal', group: 'farm_bird' },
+  // Mammifères
   { en: ['a dog', 'a happy dog outside', 'a photo of a dog'], fr: 'Chien', category: 'animal', group: 'dog' },
   { en: ['a puppy', 'a small puppy playing on the grass'], fr: 'Chiot', category: 'animal', group: 'dog' },
   { en: ['a dog lying on a blanket', 'a sleepy dog on a sofa'], fr: 'Chien paresseux', category: 'animal', group: 'dog' },
@@ -57,38 +67,55 @@ export const VOCAB: VocabLabel[] = [
   { en: ['a leopard', 'a leopard resting on a tree branch'], fr: 'Léopard', category: 'animal', group: 'big_cat' },
   { en: ['a horse', 'a brown horse in a green field'], fr: 'Cheval', category: 'animal', group: 'hoofed' },
   { en: ['a pony', 'a small pony with a long mane'], fr: 'Poney', category: 'animal', group: 'hoofed' },
+  { en: ['a donkey', 'a grey donkey with long ears'], fr: 'Âne', category: 'animal', group: 'hoofed' },
   { en: ['a deer', 'a deer standing in a forest clearing'], fr: 'Cerf', category: 'animal', group: 'hoofed' },
-  { en: ['a cow', 'a cow standing in a green pasture'], fr: 'Vache', category: 'animal', group: 'farm_animal' },
-  { en: ['a sheep', 'a fluffy sheep on a hill'], fr: 'Mouton', category: 'animal', group: 'farm_animal' },
-  { en: ['a pig', 'a pink pig in the mud'], fr: 'Cochon', category: 'animal', group: 'farm_animal' },
-  { en: ['a goat', 'a goat standing on rocks'], fr: 'Chèvre', category: 'animal', group: 'farm_animal' },
-  { en: ['a chicken', 'a hen in a farmyard'], fr: 'Poule', category: 'animal', group: 'farm_bird' },
-  { en: ['a rooster', 'a rooster crowing at dawn'], fr: 'Coq', category: 'animal', group: 'farm_bird' },
-  { en: ['a hamster', 'a hamster in its cage'], fr: 'Hamster', category: 'animal', group: 'small_mammal' },
-  { en: ['a mouse', 'a small grey mouse'], fr: 'Souris', category: 'animal', group: 'small_mammal' },
+  { en: ['a cow', 'a black and white cow in a green pasture', 'a brown cow with horns'], fr: 'Vache', category: 'animal', group: 'farm_animal' },
+  { en: ['a sheep', 'a fluffy white sheep in a field', 'a flock of sheep'], fr: 'Mouton', category: 'animal', group: 'farm_animal' },
+  { en: ['a pig', 'a pink pig in the mud', 'a black pig in a farm pen'], fr: 'Cochon', category: 'animal', group: 'farm_animal' },
+  { en: ['a goat', 'a goat with horns standing on rocks'], fr: 'Chèvre', category: 'animal', group: 'farm_animal' },
+  { en: ['a hamster', 'a golden hamster held in a hand', 'a hamster in its cage'], fr: 'Hamster', category: 'animal', group: 'small_mammal' },
+  { en: ['a guinea pig', 'a guinea pig eating hay'], fr: 'Cochon d’Inde', category: 'animal', group: 'small_mammal' },
+  { en: ['a mouse', 'a small grey mouse', 'a rat with a long tail'], fr: 'Souris', category: 'animal', group: 'small_mammal' },
   { en: ['a squirrel', 'a squirrel eating a nut on a tree'], fr: 'Écureuil', category: 'animal', group: 'small_mammal' },
-  { en: ['a rabbit', 'a rabbit with long ears in the grass'], fr: 'Lapin', category: 'animal', group: 'small_mammal' },
+  { en: ['a rabbit', 'a rabbit with long ears in the grass', 'a white pet bunny'], fr: 'Lapin', category: 'animal', group: 'small_mammal' },
   { en: ['a hedgehog', 'a hedgehog on fallen leaves'], fr: 'Hérisson', category: 'animal', group: 'small_mammal' },
-  { en: ['a fish', 'a fish swimming underwater'], fr: 'Poisson', category: 'animal', group: 'fish' },
-  { en: ['a goldfish', 'an orange goldfish in a bowl'], fr: 'Poisson rouge', category: 'animal', group: 'fish' },
+  // Poissons et bêtes de la mer
+  { en: ['a fish', 'a fish swimming underwater', 'a close-up photo of a fish in an aquarium'], fr: 'Poisson', category: 'animal', group: 'fish' },
+  { en: ['a goldfish', 'an orange goldfish in a bowl', 'colorful koi carp in a pond'], fr: 'Poisson rouge', category: 'animal', group: 'fish' },
   { en: ['a shark', 'a shark swimming in the ocean'], fr: 'Requin', category: 'animal', group: 'fish' },
+  { en: ['a clownfish', 'an orange and white clownfish in an anemone'], fr: 'Poisson-clown', category: 'animal', group: 'fish' },
   { en: ['a seahorse', 'a tiny seahorse among seaweed'], fr: 'Hippocampe', category: 'animal', group: 'fish' },
   { en: ['a dolphin', 'dolphins jumping in the sea'], fr: 'Dauphin', category: 'animal', group: 'sea_mammal' },
   { en: ['a whale', 'a whale breaching in the ocean'], fr: 'Baleine', category: 'animal', group: 'sea_mammal' },
   { en: ['a seal', 'a seal lying on the rocks'], fr: 'Phoque', category: 'animal', group: 'sea_mammal' },
-  { en: ['a snake', 'a snake coiled on a rock'], fr: 'Serpent', category: 'animal', group: 'reptile' },
-  { en: ['a lizard', 'a lizard on a sunny wall'], fr: 'Lézard', category: 'animal', group: 'reptile' },
+  // Reptiles, amphibiens
+  { en: ['a snake', 'a snake coiled on a rock', 'a close-up photo of a snake with scales'], fr: 'Serpent', category: 'animal', group: 'reptile' },
+  { en: ['a lizard', 'a small lizard on a sunny wall', 'a close-up photo of a lizard on a rock'], fr: 'Lézard', category: 'animal', group: 'reptile' },
+  { en: ['an iguana', 'a green iguana with spikes on its back', 'a chameleon on a branch'], fr: 'Iguane', category: 'animal', group: 'reptile' },
   { en: ['a crocodile', 'a crocodile near the river'], fr: 'Crocodile', category: 'animal', group: 'reptile' },
-  { en: ['a turtle', 'a turtle swimming in clear water'], fr: 'Tortue', category: 'animal', group: 'reptile' },
-  { en: ['a frog', 'a green frog sitting on a leaf'], fr: 'Grenouille', category: 'animal', group: 'amphibian' },
-  { en: ['a toad', 'a warty toad on the ground'], fr: 'Crapaud', category: 'animal', group: 'amphibian' },
-  { en: ['an insect', 'a close-up of an insect'], fr: 'Insecte', category: 'animal', group: 'insect' },
-  { en: ['a bee', 'a bee on a flower', 'a close-up of a honey bee'], fr: 'Abeille', category: 'animal', group: 'insect' },
-  { en: ['a ladybug', 'a red ladybug on a leaf'], fr: 'Coccinelle', category: 'animal', group: 'insect' },
-  { en: ['a dragonfly', 'a dragonfly resting on a reed'], fr: 'Libellule', category: 'animal', group: 'insect' },
-  { en: ['an ant', 'a row of ants on the ground'], fr: 'Fourmi', category: 'animal', group: 'insect' },
-  { en: ['a butterfly', 'a butterfly with open wings', 'a close-up of a butterfly'], fr: 'Papillon', category: 'animal', group: 'butterfly' },
-  { en: ['a spider', 'a spider on its web'], fr: 'Araignée', category: 'animal', group: 'spider' },
+  { en: ['a turtle', 'a sea turtle swimming in clear water', 'a tortoise with a big shell on the ground'], fr: 'Tortue', category: 'animal', group: 'reptile' },
+  { en: ['a frog', 'a green frog sitting on a leaf', 'a close-up photo of a frog'], fr: 'Grenouille', category: 'animal', group: 'amphibian' },
+  { en: ['a toad', 'a warty brown toad on the ground'], fr: 'Crapaud', category: 'animal', group: 'amphibian' },
+  // Insectes (groupes insect et butterfly : famille « Insecte »)
+  { en: ['an insect', 'a close-up of an insect', 'a macro photo of a small bug'], fr: 'Insecte', category: 'animal', group: 'insect' },
+  { en: ['a bee', 'a honey bee on a flower', 'a fuzzy bumblebee on a purple flower'], fr: 'Abeille', category: 'animal', group: 'insect' },
+  { en: ['a wasp', 'a yellow and black striped wasp', 'a hornet close-up'], fr: 'Guêpe', category: 'animal', group: 'insect' },
+  { en: ['a ladybug', 'a close-up photo of a ladybug on a leaf', 'a red ladybird beetle with black spots'], fr: 'Coccinelle', category: 'animal', group: 'insect' },
+  { en: ['an ant', 'a close-up photo of an ant', 'a row of ants on the ground'], fr: 'Fourmi', category: 'animal', group: 'insect' },
+  { en: ['a fly', 'a house fly on a surface', 'a close-up photo of a fly with big red eyes'], fr: 'Mouche', category: 'animal', group: 'insect' },
+  { en: ['a mosquito', 'a mosquito biting skin', 'a small mosquito on a human arm'], fr: 'Moustique', category: 'animal', group: 'insect' },
+  { en: ['a beetle', 'a shiny green beetle on a leaf', 'a close-up photo of a black beetle'], fr: 'Scarabée', category: 'animal', group: 'insect' },
+  { en: ['a grasshopper', 'a green grasshopper on a blade of grass', 'a cricket insect with long antennae'], fr: 'Sauterelle', category: 'animal', group: 'insect' },
+  { en: ['a praying mantis', 'a green praying mantis on a plant'], fr: 'Mante religieuse', category: 'animal', group: 'insect' },
+  { en: ['a dragonfly', 'a dragonfly resting on a reed', 'a dragonfly with transparent wings'], fr: 'Libellule', category: 'animal', group: 'insect' },
+  { en: ['a butterfly', 'a colorful butterfly with open wings on a flower', 'a close-up of a butterfly'], fr: 'Papillon', category: 'animal', group: 'butterfly' },
+  { en: ['a moth', 'a brown moth resting on a leaf', 'a pale night moth on a wall'], fr: 'Papillon de nuit', category: 'animal', group: 'butterfly' },
+  { en: ['a caterpillar', 'a green caterpillar eating a leaf', 'a fuzzy hairy caterpillar', 'a striped caterpillar on a twig'], fr: 'Chenille', category: 'animal', group: 'butterfly' },
+  // Autres petites bêtes (pas des insectes)
+  { en: ['a spider', 'a spider on its web', 'a close-up photo of a hairy spider', 'a long-legged spider on a wall'], fr: 'Araignée', category: 'animal', group: 'spider' },
+  { en: ['a snail', 'a snail with a spiral shell on a wet leaf', 'a garden snail crawling'], fr: 'Escargot', category: 'animal', group: 'snail' },
+  { en: ['a slug', 'a slimy slug without a shell', 'a long slimy slug with two antennae crawling'], fr: 'Limace', category: 'animal', group: 'snail' },
+  // Grands animaux, zoo
   { en: ['a bear', 'a brown bear in the forest'], fr: 'Ours', category: 'animal', group: 'bear' },
   { en: ['a panda', 'a giant panda eating bamboo'], fr: 'Panda', category: 'animal', group: 'bear' },
   { en: ['a monkey', 'a monkey sitting in a tree'], fr: 'Singe', category: 'animal', group: 'monkey' },
@@ -100,7 +127,6 @@ export const VOCAB: VocabLabel[] = [
   { en: ['a kangaroo', 'a kangaroo with its joey'], fr: 'Kangourou', category: 'animal', group: 'exotic' },
   { en: ['a koala', 'a koala hugging a tree'], fr: 'Koala', category: 'animal', group: 'exotic' },
   { en: ['a camel', 'a camel walking in the desert'], fr: 'Chameau', category: 'animal', group: 'exotic' },
-  { en: ['a snail', 'a snail on a wet leaf'], fr: 'Escargot', category: 'animal', group: 'snail' },
   { en: ['a crab', 'a red crab on the sand'], fr: 'Crabe', category: 'animal', group: 'sea_critter' },
   { en: ['a lobster', 'a lobster in a seafood display'], fr: 'Homard', category: 'animal', group: 'sea_critter' },
   { en: ['an octopus', 'an octopus with long tentacles'], fr: 'Pieuvre', category: 'animal', group: 'sea_critter' },
@@ -122,7 +148,7 @@ export const VOCAB: VocabLabel[] = [
   { en: ['a succulent', 'a succulent plant in a small pot'], fr: 'Succulente', category: 'plant', group: 'cactus' },
   { en: ['a potted plant', 'a green houseplant in a pot'], fr: 'Plante verte', category: 'plant', group: 'houseplant' },
   { en: ['a monstera plant', 'a monstera plant with large leaves indoors'], fr: 'Monstera', category: 'plant', group: 'houseplant' },
-  { en: ['a mushroom', 'a mushroom growing in the forest', 'a photo of a mushroom'], fr: 'Champignon', category: 'plant', group: 'mushroom' },
+  { en: ['a mushroom', 'a mushroom growing in the forest', 'a brown wild mushroom with a cap on the forest floor', 'a photo of a mushroom'], fr: 'Champignon', category: 'plant', group: 'mushroom' },
   { en: ['grass', 'a close-up of green grass'], fr: 'Herbe', category: 'plant', group: 'leafy' },
   { en: ['a fern', 'a fern leaf in the forest'], fr: 'Fougère', category: 'plant', group: 'leafy' },
   { en: ['moss', 'moss covering a rock'], fr: 'Mousse', category: 'plant', group: 'leafy' },
@@ -420,28 +446,39 @@ export const VOCAB: VocabLabel[] = [
   { en: ['a screenshot of an online order confirmation', 'a phone screenshot of an order confirmation with a price'], fr: 'Commande', category: 'screenshot', group: 'shopping' },
   { en: ['a screenshot of an online shopping cart', 'a screenshot of a cart with several items'], fr: 'Panier', category: 'screenshot', group: 'shopping' },
   { en: ['a screenshot of a payment confirmation with a checkmark', 'a phone screenshot of a payment done message'], fr: 'Paiement validé', category: 'screenshot', group: 'shopping' },
-  { en: ['a screenshot of a notes app', 'a phone screenshot of a notes app with a typed list'], fr: 'Notes', category: 'screenshot', group: 'notes' },
-  { en: ['a screenshot of a to-do list', 'a phone screenshot of a checklist app'], fr: 'Liste de tâches', category: 'screenshot', group: 'notes' },
-  { en: ['a screenshot of a calendar', 'a phone screenshot of a calendar with events'], fr: 'Agenda', category: 'screenshot', group: 'notes' },
+  { en: ['a screenshot of a notes app', 'a phone screenshot of a notes app with a typed list', 'a phone screenshot of typed notes on a white screen'], fr: 'Notes', category: 'screenshot', group: 'notes' },
+  { en: ['a screenshot of a to-do list app', 'a phone screenshot of a checklist app with round checkboxes'], fr: 'Liste de tâches', category: 'screenshot', group: 'notes' },
+  { en: ['a screenshot of a notes app with colored note cards', 'a phone screenshot of a grid of colorful notes'], fr: 'Pense-bête', category: 'screenshot', group: 'notes' },
+  { en: ['a screenshot of a calendar app', 'a phone screenshot of a monthly calendar app with colored events', 'a screenshot of a calendar'], fr: 'Agenda du téléphone', category: 'screenshot', group: 'calendar' },
+  { en: ['a phone screenshot of a day schedule in a calendar app', 'a screenshot of a calendar app with hourly time slots'], fr: 'Planning', category: 'screenshot', group: 'calendar' },
+  { en: ['a phone screenshot of a mobile boarding pass with a qr code', 'a screenshot of an e-ticket in a wallet app'], fr: 'Billet électronique', category: 'screenshot', group: 'eticket' },
+  { en: ['a phone screenshot of a concert e-ticket with a qr code', 'a screenshot of a train e-ticket on a phone'], fr: 'E-billet', category: 'screenshot', group: 'eticket' },
 
   // ---------- Documents ----------
-  { en: ['a receipt', 'a paper receipt on a table', 'a photo of a shop receipt'], fr: 'Ticket de caisse', category: 'document', group: 'receipt' },
+  { en: ['a receipt', 'a shop till receipt with a list of prices and a total', 'a photo of a long paper receipt from a supermarket'], fr: 'Ticket de caisse', category: 'document', group: 'receipt' },
   { en: ['a restaurant bill', 'a paper bill on a table after a meal'], fr: 'Addition', category: 'document', group: 'receipt' },
-  { en: ['a long grocery store receipt', 'a grocery receipt with many lines'], fr: 'Ticket de courses', category: 'document', group: 'receipt' },
+  { en: ['a long grocery store receipt', 'a crumpled grocery receipt with many lines'], fr: 'Ticket de courses', category: 'document', group: 'receipt' },
   { en: ['a paper invoice', 'a printed invoice with a company header'], fr: 'Facture', category: 'document', group: 'receipt' },
-  { en: ['a concert ticket', 'a paper concert ticket'], fr: 'Billet de concert', category: 'document', group: 'ticket' },
-  { en: ['a train ticket', 'a paper train ticket'], fr: 'Billet de train', category: 'document', group: 'ticket' },
+  { en: ['a concert ticket', 'a paper concert ticket with a seat number', 'a stack of event tickets'], fr: 'Billet de concert', category: 'document', group: 'ticket' },
+  { en: ['a train ticket', 'a paper train ticket with departure and destination'], fr: 'Billet de train', category: 'document', group: 'ticket' },
   { en: ['a movie ticket', 'a cinema ticket on a table'], fr: 'Billet de cinéma', category: 'document', group: 'ticket' },
-  { en: ['a museum ticket', 'a printed museum ticket'], fr: 'Billet de musée', category: 'document', group: 'ticket' },
+  { en: ['a museum ticket', 'a printed museum entry ticket'], fr: 'Billet de musée', category: 'document', group: 'ticket' },
+  { en: ['a paper boarding pass', 'a printed airline boarding pass with a barcode'], fr: 'Carte d’embarquement', category: 'document', group: 'ticket' },
+  { en: ['a paper planner page with handwritten appointments', 'an open weekly planner notebook with dates and notes', 'a diary agenda page with days of the week'], fr: 'Agenda', category: 'document', group: 'agenda' },
+  { en: ['a paper wall calendar with a grid of dates', 'a printed monthly calendar page with numbered days'], fr: 'Calendrier', category: 'document', group: 'agenda' },
   { en: ['a membership card', 'a plastic membership card on a table'], fr: 'Carte de fidélité', category: 'document', group: 'card' },
   { en: ['a plastic card with a barcode', 'a plastic card with a printed barcode'], fr: 'Carte à code', category: 'document', group: 'card' },
   { en: ['a transit pass card', 'a plastic transit card'], fr: 'Carte de transport', category: 'document', group: 'card' },
-  { en: ['a handwritten note', 'a handwritten note on paper'], fr: 'Note manuscrite', category: 'document', group: 'handwriting' },
-  { en: ['a shopping list written on paper', 'a handwritten list on a sticky note'], fr: 'Liste', category: 'document', group: 'handwriting' },
-  { en: ['a yellow sticky note', 'a yellow sticky note on a wall'], fr: 'Mémo', category: 'document', group: 'handwriting' },
+  { en: ['a handwritten note', 'a handwritten note on lined paper', 'a page of handwriting in blue ink'], fr: 'Note manuscrite', category: 'document', group: 'handwriting' },
+  { en: ['a handwritten letter', 'an old handwritten letter in cursive'], fr: 'Lettre manuscrite', category: 'document', group: 'handwriting' },
+  { en: ['a handwritten to-do list with checkboxes', 'a checklist written on a notepad with ticked boxes'], fr: 'Liste à cocher', category: 'document', group: 'todo' },
+  { en: ['a shopping list written on paper', 'a handwritten grocery list on a notepad'], fr: 'Liste de courses', category: 'document', group: 'todo' },
+  { en: ['a yellow sticky note', 'a sticky note with handwriting stuck on a wall', 'colorful post-it notes on a desk'], fr: 'Post-it', category: 'document', group: 'sticky' },
+  { en: ['a printed letter', 'an official letter with a letterhead and paragraphs of text', 'a printed document page on a table'], fr: 'Lettre', category: 'document', group: 'letter' },
+  { en: ['an envelope', 'an envelope with a stamp and a written address', 'a pile of mail and envelopes'], fr: 'Enveloppe', category: 'document', group: 'letter' },
+  { en: ['a postcard', 'an old postcard with handwriting and a stamp'], fr: 'Carte de vacances', category: 'document', group: 'letter' },
   { en: ['a book page', 'an open book with text on the pages'], fr: 'Page de livre', category: 'document', group: 'book' },
   { en: ['a book cover', 'a book cover on a table'], fr: 'Livre', category: 'document', group: 'book' },
-  { en: ['a comic book page', 'a page of a comic book with speech bubbles'], fr: 'Bande dessinée', category: 'document', group: 'book' },
   { en: ['a restaurant menu', 'a printed restaurant menu on a table'], fr: 'Menu', category: 'document', group: 'menu' },
   { en: ['a chalkboard menu', 'a chalkboard menu in a cafe'], fr: 'Ardoise', category: 'document', group: 'menu' },
   { en: ['a sign', 'a street sign with text', 'a photo of a sign'], fr: 'Panneau', category: 'document', group: 'sign' },
@@ -452,8 +489,29 @@ export const VOCAB: VocabLabel[] = [
   { en: ['a qr code on a phone screen', 'a qr code displayed on a screen'], fr: 'Code à scanner', category: 'document', group: 'qr' },
   { en: ['a barcode', 'a product barcode on a package'], fr: 'Code-barres', category: 'document', group: 'qr' },
   { en: ['homework', 'a homework sheet with math exercises'], fr: 'Devoirs', category: 'document', group: 'school' },
-  { en: ['a whiteboard', 'a whiteboard covered in writing and diagrams'], fr: 'Tableau blanc', category: 'document', group: 'school' },
+  { en: ['a whiteboard', 'a whiteboard covered in writing and diagrams', 'a blackboard with chalk writing'], fr: 'Tableau blanc', category: 'document', group: 'school' },
   { en: ['a school notebook', 'an open notebook with a math lesson'], fr: 'Cahier', category: 'document', group: 'school' },
+
+  // ---------- Dessins, peintures (art) ----------
+  { en: ["a child's crayon drawing", "a kid's drawing of a house, a sun and stick figures", "a child's drawing on white paper"], fr: 'Dessin d’enfant', category: 'art', group: 'child_drawing' },
+  { en: ["a child's colorful painting", "a kid's painting with bright gouache colors"], fr: 'Peinture d’enfant', category: 'art', group: 'child_drawing' },
+  { en: ['a pencil sketch on paper', 'a realistic graphite pencil drawing with shading', 'a pencil drawing in a sketchbook'], fr: 'Croquis', category: 'art', group: 'sketch' },
+  { en: ['a black ink pen drawing', 'a sketchbook page with ink drawings', 'a line drawing in black ink'], fr: 'Dessin à l’encre', category: 'art', group: 'sketch' },
+  { en: ['an oil painting', 'a painting on canvas', 'a classical oil painting of a scene'], fr: 'Tableau', category: 'art', group: 'painting' },
+  { en: ['a watercolor painting', 'a watercolor painting on paper', 'a soft watercolor landscape'], fr: 'Aquarelle', category: 'art', group: 'painting' },
+  { en: ['a painted portrait', 'an oil painting portrait of a person'], fr: 'Portrait peint', category: 'art', group: 'painting' },
+  { en: ['an abstract painting', 'a modern abstract artwork with colorful brush strokes'], fr: 'Art abstrait', category: 'art', group: 'painting' },
+  { en: ['a framed painting hanging on a wall', 'a photo of a painting in a gold frame'], fr: 'Tableau au mur', category: 'art', group: 'gallery' },
+  { en: ['an art gallery with paintings on the walls', 'people looking at paintings in a museum'], fr: 'Galerie d’art', category: 'art', group: 'gallery' },
+  { en: ['a cartoon drawing', 'a cartoon character illustration', 'a colorful cartoon'], fr: 'Dessin animé', category: 'art', group: 'cartoon' },
+  { en: ['a manga drawing', 'an anime character with big eyes and colorful hair', 'a japanese manga comic page with panels'], fr: 'Manga', category: 'art', group: 'cartoon' },
+  { en: ['a comic book page', 'a page of a comic book with speech bubbles', 'a colorful comic strip'], fr: 'Bande dessinée', category: 'art', group: 'cartoon' },
+  { en: ['graffiti on a wall', 'colorful spray paint graffiti', 'graffiti letters painted on a train'], fr: 'Graffiti', category: 'art', group: 'graffiti' },
+  { en: ['a street art mural on a building', 'a large painted mural on a city wall'], fr: 'Fresque', category: 'art', group: 'graffiti' },
+  { en: ['a digital illustration', 'a digital painting of a fantasy character', 'a vector illustration'], fr: 'Illustration', category: 'art', group: 'digital' },
+  { en: ['concept art of a fantasy scene', 'a digital artwork drawn on a tablet'], fr: 'Art numérique', category: 'art', group: 'digital' },
+  { en: ['pixel art', 'a pixel art video game sprite', 'a retro 8-bit pixel art scene'], fr: 'Pixel art', category: 'art', group: 'pixel' },
+  { en: ['a coloring page with black outlines', 'a coloring book page', 'a half colored coloring page'], fr: 'Coloriage', category: 'art', group: 'coloring' },
 ];
 
 // Pools d’attaques et de noms de carte, par sous-groupe.
@@ -1093,6 +1151,16 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     classic: ['Liste', 'Rappel', 'Case cochée', 'Surlignage', 'Mémo', 'Date oubliée'],
     special: ['Liste infinie', 'Rappel sonique', 'Oubli fatal', 'Brouillon volant', 'Synchro express', 'Agenda surchargé'],
   },
+  calendar: {
+    card: ['Maître du planning', 'Semaine chargée', 'Roi du rendez-vous', 'Emploi du temps', 'Jamais en retard'],
+    classic: ['Rappel', 'Rendez-vous', 'Alarme', 'Créneau', 'Invitation', 'Report'],
+    special: ['Semaine surchargée', 'Rappel sonique', 'Réunion infinie', 'Rendez-vous oublié', 'Agenda en feu', 'Créneau impossible'],
+  },
+  eticket: {
+    card: ['Pass numérique', 'Roi du QR', 'Voyageur connecté', 'Embarquement immédiat', 'Sésame du téléphone'],
+    classic: ['Scan', 'Bip', 'Code QR', 'Contrôle', 'Porte d’embarquement', 'Écran plein'],
+    special: ['Embarquement éclair', 'Scan infini', 'Batterie à 1 %', 'Porte fermée', 'Surclassement', 'Billet fantôme'],
+  },
 
   // ---------- Documents ----------
   receipt: {
@@ -1109,6 +1177,26 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     card: ['Carte maîtresse', 'Joker', 'Sésame plastique', 'Carte d’or', 'Fidélité royale'],
     classic: ['Code-barres', 'Glissement', 'Puce', 'Carte oubliée', 'Pliage', 'Badge'],
     special: ['Carte infinie', 'Scan fatal', 'Carte volante', 'Puce sonique', 'Fidélité extrême', 'Badge tournoyant'],
+  },
+  agenda: {
+    card: ['Ministre du planning', 'Carnet de bord', 'Organisé de la vie', 'Semainier fou', 'Gardien des dates'],
+    classic: ['Rature', 'Rendez-vous', 'Page tournée', 'Coin corné', 'Date entourée', 'Stylo bleu'],
+    special: ['Semaine infernale', 'Rendez-vous surprise', 'Page arrachée', 'Agenda débordé', 'Date fatale', 'Tornade de pages'],
+  },
+  todo: {
+    card: ['Chef de liste', 'Roi de la case cochée', 'Coche-tout', 'Liste sans fin', 'Organisateur fou'],
+    classic: ['Case cochée', 'Rature', 'Tâche barrée', 'Oubli', 'Ajout', 'Petit trait'],
+    special: ['Liste infinie', 'Tout coché', 'Oubli fatal', 'Rature géante', 'Liste de courses XXL', 'Procrastination'],
+  },
+  sticky: {
+    card: ['Petit carré jaune', 'Mémo collant', 'Colle-partout', 'Rappel volant', 'Papier pense-bête'],
+    classic: ['Collage', 'Décollage', 'Mémo', 'Rappel', 'Pliage', 'Coin qui rebique'],
+    special: ['Pluie de post-it', 'Mur de mémos', 'Collage éclair', 'Rappel sonique', 'Post-it fatal', 'Tempête jaune'],
+  },
+  letter: {
+    card: ['Facteur', 'Courrier du jour', 'Lettre recommandée', 'Paperasse officielle', 'Plume administrative'],
+    classic: ['Tampon', 'Pli', 'Timbre', 'Ouverture', 'Signature', 'Accusé de réception'],
+    special: ['Lettre recommandée', 'Courrier piégé', 'Tampon sonique', 'Paperasse infinie', 'Timbre rare', 'Avis de passage'],
   },
   handwriting: {
     card: ['Plume d’or', 'Scribe', 'Gribouilleur fou', 'Calligraphe', 'Poète du carnet'],
@@ -1134,6 +1222,53 @@ export const GROUP_NAMES: Record<string, NamePool> = {
     card: ['Scanner fou', 'Roi du code', 'Mini-labyrinthe', 'Pixel d’or', 'Maître du scan'],
     classic: ['Scan', 'Bip', 'Pixel', 'Lien piégé', 'Code', 'Flash'],
     special: ['Scan infini', 'Bip sonique', 'Code secret', 'Pixel géant', 'Portail web', 'Flash aveuglant'],
+  },
+
+  // ---------- Dessins, peintures (art) ----------
+  child_drawing: {
+    card: ['Chef-d’œuvre du frigo', 'Petit Picasso', 'Artiste en herbe', 'Gribouillis de génie', 'Trésor de maternelle'],
+    classic: ['Coup de crayon', 'Gribouillis', 'Feutre baveux', 'Hors des traits', 'Soleil qui sourit', 'Bonhomme bâton'],
+    special: ['Feutres arc-en-ciel', 'Dessin pour maman', 'Pluie de paillettes', 'Gribouillis géant', 'Expo sur le frigo', 'Tornade de crayons'],
+  },
+  sketch: {
+    card: ['Coup de crayon', 'Esquisse', 'Main d’artiste', 'Mine de plomb', 'Carnet secret'],
+    classic: ['Trait fin', 'Hachures', 'Gomme', 'Estompe', 'Ombre portée', 'Taille-crayon'],
+    special: ['Esquisse éclair', 'Hachures folles', 'Gomme magique', 'Trait de génie', 'Ombre totale', 'Mine brisée'],
+  },
+  painting: {
+    card: ['Chef-d’œuvre', 'Grand maître', 'Toile de maître', 'Coup de pinceau', 'Musée vivant'],
+    classic: ['Coup de pinceau', 'Touche de couleur', 'Glacis', 'Vernis', 'Palette', 'Aplat'],
+    special: ['Tempête de couleurs', 'Toile vivante', 'Pinceau fou', 'Chef-d’œuvre éclair', 'Giclée de peinture', 'Cadre doré'],
+  },
+  gallery: {
+    card: ['Visiteur de musée', 'Gardien du musée', 'Expo du jour', 'Cadre doré', 'Amateur d’art'],
+    classic: ['Contemplation', 'Audioguide', 'Regard perçant', 'Pas feutré', 'Cadre', 'Silence'],
+    special: ['Visite guidée', 'Alarme du musée', 'Flash interdit', 'Contemplation', 'Œuvre volée', 'Vernissage'],
+  },
+  cartoon: {
+    card: ['Héros de papier', 'Bulle de BD', 'Personnage culte', 'Super-héros dessiné', 'Star du dessin animé'],
+    classic: ['Bulle', 'Onomatopée', 'Case suivante', 'Gros yeux', 'Pow !', 'Encrage'],
+    special: ['Coup de poing BD', 'Pluie d’onomatopées', 'Attaque manga', 'Grosse bulle', 'Transformation', 'Fin du chapitre'],
+  },
+  graffiti: {
+    card: ['Roi du mur', 'Bombe de couleurs', 'Artiste urbain', 'Tag légendaire', 'Mur qui parle'],
+    classic: ['Coup de bombe', 'Tag', 'Coulure', 'Pochoir', 'Contour', 'Spray'],
+    special: ['Mur entier', 'Tag éclair', 'Pluie de spray', 'Fresque géante', 'Couleurs fluo', 'Graff nocturne'],
+  },
+  digital: {
+    card: ['Pixel magique', 'Artiste numérique', 'Stylet d’or', 'Calque secret', 'Image de rêve'],
+    classic: ['Calque', 'Annuler', 'Pinceau numérique', 'Pipette', 'Zoom', 'Filtre'],
+    special: ['Fusion des calques', 'Ctrl+Z infini', 'Filtre ultime', 'Rendu épique', 'Lumière magique', 'Glitch'],
+  },
+  pixel: {
+    card: ['Héros 8 bits', 'Carré par carré', 'Rétro légende', 'Sprite pro', 'Petit pixel'],
+    classic: ['Pixel', 'Saut 8 bits', 'Bip', 'Clignotement', 'Carré', 'Sprite'],
+    special: ['Pluie de pixels', 'Niveau bonus', 'Game over', 'Super saut 8 bits', 'Pixel géant', 'Écran clignotant'],
+  },
+  coloring: {
+    card: ['Roi du coloriage', 'Page à colorier', 'Dépasse pas !', 'Contours parfaits', 'Crayon de couleur'],
+    classic: ['Coup de crayon', 'Dépassement', 'Remplissage', 'Contour', 'Feutre', 'Taille-crayon'],
+    special: ['Coloriage éclair', 'Arc-en-ciel', 'Dépassement géant', 'Feutre magique', 'Page terminée', 'Tornade de couleurs'],
   },
 };
 
@@ -1193,5 +1328,67 @@ export const CATEGORY_NAMES: Record<CategoryId, NamePool> = {
     card: ['Objet mystère', 'Trouvaille', 'Bidule magique', 'Gadget fou', 'Relique'],
     classic: ['Choc', 'Chute', 'Bidule', 'Coup de coude', 'Vibration', 'Clic'],
     special: ['Objet volant', 'Choc sismique', 'Trésor caché', 'Gadget ultime', 'Tornade de bidules', 'Relique sacrée'],
+  },  art: {
+    card: ['Œuvre mystère', 'Artiste du jour', 'Chef-d’œuvre inconnu', 'Coup de génie', 'Muse'],
+    classic: ['Coup de pinceau', 'Coup de crayon', 'Couleur', 'Trait', 'Ombre', 'Retouche'],
+    special: ['Pluie de couleurs', 'Chef-d’œuvre', 'Inspiration', 'Tornade artistique', 'Coup de génie', 'Vernissage'],
   },
+};
+
+/**
+ * Nom d'un groupe entier (« Oiseau », « Insecte »), donné quand le label
+ * précis n'est pas sûr : mieux vaut « Insecte » qu'une mauvaise « Guêpe ».
+ */
+export const GROUP_GENERIC: Record<string, string> = {
+  bird: 'Oiseau',
+  raptor: 'Rapace',
+  waterbird: 'Oiseau d’eau',
+  farm_bird: 'Volaille',
+  insect: 'Insecte',
+  fish: 'Poisson',
+  reptile: 'Reptile',
+  amphibian: 'Batracien',
+  small_mammal: 'Petite bête à poils',
+  dog: 'Chien',
+  cat: 'Chat',
+  receipt: 'Ticket de caisse',
+  ticket: 'Billet',
+  agenda: 'Agenda',
+  handwriting: 'Note manuscrite',
+  todo: 'Liste',
+  sticky: 'Post-it',
+  letter: 'Courrier',
+  notes: 'Notes',
+  calendar: 'Agenda du téléphone',
+  eticket: 'Billet électronique',
+  child_drawing: 'Dessin d’enfant',
+  sketch: 'Dessin',
+  painting: 'Peinture',
+  cartoon: 'Dessin animé',
+  graffiti: 'Graffiti',
+  digital: 'Illustration',
+};
+
+/**
+ * Familles de groupes : un groupe incertain entre ceux de sa famille prend le
+ * groupe de tête (un rapace pris pour un oiseau d'eau devient « Oiseau »).
+ */
+export const GROUP_FAMILY: Record<string, string> = {
+  raptor: 'bird',
+  waterbird: 'bird',
+  farm_bird: 'bird',
+  butterfly: 'insect',
+};
+
+/** Nom d'un dessin quand on voit aussi ce qu'il montre (« Dessin de chien »). `{}` : le nom de l'animal. */
+export const ART_SUBJECT: Record<string, string> = {
+  child_drawing: 'Dessin de {}',
+  sketch: 'Croquis de {}',
+  painting: 'Tableau de {}',
+  gallery: 'Tableau de {}',
+  cartoon: 'Dessin de {}',
+  graffiti: 'Graffiti de {}',
+  digital: 'Illustration de {}',
+  pixel: '{} en pixels',
+  coloring: 'Coloriage de {}',
 };
