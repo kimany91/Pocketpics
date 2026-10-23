@@ -16,13 +16,24 @@ const SOURCES: Record<EmoteId, number> = {
   disgust: require('../../assets/sfx/emote/disgust.wav'),
   scared: require('../../assets/sfx/emote/scared.wav'),
   shock: require('../../assets/sfx/emote/shock.wav'),
+  cold: require('../../assets/sfx/emote/cold.wav'),
   sleep: require('../../assets/sfx/emote/sleep.wav'),
+  hot: require('../../assets/sfx/emote/hot.wav'),
   love: require('../../assets/sfx/emote/love.wav'),
+  balloon: require('../../assets/sfx/emote/balloon.wav'),
   cool: require('../../assets/sfx/emote/cool.wav'),
   selfie: require('../../assets/sfx/emote/selfie.wav'),
   eiffel: require('../../assets/sfx/emote/eiffel.wav'),
   dog: require('../../assets/sfx/emote/dog.wav'),
   cat: require('../../assets/sfx/emote/cat.wav'),
+  car: require('../../assets/sfx/emote/car.wav'),
+  beach: require('../../assets/sfx/emote/beach.wav'),
+  cow: require('../../assets/sfx/emote/cow.wav'),
+  boat: require('../../assets/sfx/emote/boat.wav'),
+  bear: require('../../assets/sfx/emote/bear.wav'),
+  storm: require('../../assets/sfx/emote/storm.wav'),
+  robot: require('../../assets/sfx/emote/robot.wav'),
+  portrait: require('../../assets/sfx/emote/portrait.wav'),
 };
 
 const players = new Map<EmoteId, AudioPlayer>();
@@ -52,6 +63,7 @@ export function playEmoteSound(id: string, volume = 0.9) {
   try {
     p.volume = Math.min(1, volume * master * 1.3);
     p.seekTo(0).catch(() => {});
-    p.play();
+    // navigateur : le son est refusé tant que le joueur n'a pas touché la page (on n'insiste pas)
+    Promise.resolve(p.play() as unknown).catch(() => {});
   } catch {}
 }

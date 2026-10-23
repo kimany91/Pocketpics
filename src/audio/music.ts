@@ -122,7 +122,7 @@ function start(fromStart: boolean) {
       if (fromStart) p.seekTo(0).catch(() => {});
       level = 0;
       apply();
-      p.play();
+      Promise.resolve(p.play() as unknown).catch(() => {});
       playing = true;
     }
   } catch {}

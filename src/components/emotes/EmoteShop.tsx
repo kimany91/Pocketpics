@@ -1,8 +1,9 @@
 /**
- * La boutique des emotes, en bas de l'écran des quêtes : les emotes
- * équipées, puis toutes les emotes avec leur état (équipée, à équiper, prix en
- * pièces, ou verrouillée avec la carte à tirer pour l'avoir). Toucher une
- * vignette la joue, avec son son.
+ * La boutique des emotes (Profil → Emotes) : les emotes équipées, puis toutes
+ * les emotes en trois familles (émotions, emotes « photo », emotes de
+ * l'aventure) avec leur état : équipée, à équiper, prix en pièces, ou
+ * verrouillée avec ce qu'il faut faire pour l'avoir. Toucher une vignette la
+ * joue, avec son son.
  */
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
@@ -10,7 +11,7 @@ import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { FadeInDown, ZoomIn, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 
 import { playEmoteSound } from '../../audio/emoteSfx';
-import { EMOTES, type EmoteDef, MAX_EQUIPPED, getEmote } from '../../game/emotes';
+import { EMOTES, type EmoteDef, type EmoteSource, MAX_EQUIPPED, emoteSource, getEmote, lockHint } from '../../game/emotes';
 import { useGame } from '../../state/game';
 import { colors, fonts } from '../../theme';
 import { confirmAction } from '../../utils/confirm';
@@ -19,6 +20,15 @@ import { AppText } from '../AppText';
 import { CoinIcon } from '../Coin';
 import { notice } from '../Notice';
 import { EmoteArt } from './EmoteArt';
+
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+/** Les trois familles de la boutique. */
+const FAMILIES: { title: string; sub: string; icon: IconName; sources: EmoteSource[] }[] = [
+  { title: 'Émotions', sub: 'Les 4 de départ, et les autres à acheter avec tes pièces.', icon: 'happy', sources: ['starter', 'shop'] },
+  { title: 'Emotes photo', sub: 'Pas en vente : tire une carte qui montre la bonne chose.', icon: 'images', sources: ['pack'] },
+  { title: 'Emotes de l’aventure', sub: 'Pas en vente : finis un monde de l’aventure solo.', icon: 'map', sources: ['solo'] },
+];
 
 export function EmoteShop({ active = true }: { /** Animations seulement quand l'écran est affiché. */ active?: boolean }) {
   const { width } = useWindowDimensions();
@@ -83,22 +93,38 @@ export function EmoteShop({ active = true }: { /** Animations seulement quand l'
         </View>
       </View>
 
-      <View style={[styles.grid, { gap }]}>
-        {EMOTES.map((def, i) => (
-          <ShopTile
-            key={def.id}
-            def={def}
-            width={tileW}
-            index={i}
-            owned={owned.has(def.id)}
-            equipped={equipped.includes(def.id)}
-            canPay={def.price !== null && coins >= def.price}
-            active={active}
-            onBuy={() => buy(def)}
-            onToggle={() => toggle(def)}
-          />
-        ))}
-      </View>
+      {FAMILIES.map((fam) => {
+        const list = EMOTES.filter((e) => fam.sources.includes(emoteSource(e)));
+        const have = list.filter((e) => owned.has(e.id)).length;
+        return (
+          <View key={fam.title} style={{ gap: 10 }}>
+            <View style={styles.famHead}>
+              <Ionicons name={fam.icon} size={15} color={colors.gold} />
+              <AppText style={styles.famTitle}>{fam.title}</AppText>
+              <AppText style={styles.famCount}>{`${have}/${list.length}`}</AppText>
+            </View>
+            <AppText variant="caption" style={{ marginTop: -6 }}>
+              {fam.sub}
+            </AppText>
+            <View style={[styles.grid, { gap }]}>
+              {list.map((def, i) => (
+                <ShopTile
+                  key={def.id}
+                  def={def}
+                  width={tileW}
+                  index={i}
+                  owned={owned.has(def.id)}
+                  equipped={equipped.includes(def.id)}
+                  canPay={def.price !== null && coins >= def.price}
+                  active={active}
+                  onBuy={() => buy(def)}
+                  onToggle={() => toggle(def)}
+                />
+              ))}
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -127,7 +153,8 @@ function ShopTile({
   const [play, setPlay] = useState(0);
   const pop = useSharedValue(1);
   const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
-  const locked = !owned && !!def.pack;
+  const hint = lockHint(def);
+  const locked = !owned && hint !== null;
   const preview = () => {
     haptic.light();
     setPlay((n) => n + 1);
@@ -152,15 +179,12 @@ function ShopTile({
           </View>
         ) : null}
       </Pressable>
-      <AppText style={styles.name} numberOfLines={1}>
-        {def.name}
-      </AppText>
+      {/* nom en entier (sur deux lignes s'il le faut) */}
+      <AppText style={styles.name}>{def.name}</AppText>
       {locked ? (
         <View style={styles.hintBox}>
-          <Ionicons name="images-outline" size={12} color={colors.textDim} />
-          <AppText style={styles.hint}>
-            {def.pack?.hint}
-          </AppText>
+          <Ionicons name={def.solo ? 'map-outline' : 'images-outline'} size={12} color={colors.textDim} />
+          <AppText style={styles.hint}>{hint}</AppText>
         </View>
       ) : owned ? (
         <Pressable onPress={onToggle} style={[styles.action, equipped ? styles.actionOn : styles.actionEquip]} accessibilityLabel={equipped ? `Retirer ${def.name}` : `Équiper ${def.name}`}>
@@ -184,10 +208,13 @@ const styles = StyleSheet.create({
   slotEmpty: { borderStyle: 'dashed', borderColor: colors.borderStrong, backgroundColor: 'rgba(255,255,255,0.02)' },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   tile: { padding: 8, gap: 6, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border, alignItems: 'center' },
-  artBox: { alignSelf: 'stretch', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  artBox: { alignSelf: 'stretch', borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   lockBadge: { position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
   equippedBadge: { position: 'absolute', top: 6, right: 6, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.gold },
-  name: { fontFamily: fonts.bold, fontSize: 13, color: colors.text },
+  name: { alignSelf: 'stretch', fontFamily: fonts.bold, fontSize: 13, lineHeight: 16, color: colors.text, textAlign: 'center' },
+  famHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  famTitle: { flex: 1, fontFamily: fonts.black, fontSize: 13, letterSpacing: 1, color: colors.text, textTransform: 'uppercase' },
+  famCount: { fontFamily: fonts.bold, fontSize: 12, color: colors.textDim },
   // pas de hauteur fixe ni de troncature : la tuile grandit avec le texte (2 ou 3 lignes)
   hintBox: { alignSelf: 'stretch', alignItems: 'center', gap: 3, minHeight: 42, paddingHorizontal: 2 },
   hint: { alignSelf: 'stretch', fontFamily: fonts.semibold, fontSize: 10.5, lineHeight: 13, color: colors.textDim, textAlign: 'center' },

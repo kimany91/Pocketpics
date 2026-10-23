@@ -1,8 +1,9 @@
 /**
  * Onglet Profil : le profil public du joueur, c'est-à-dire ce que ses amis
  * voient de lui. Son pseudo et son rang, son code ami et son QR code, ses
- * statistiques, ses cartes épinglées, et ses amis (ajout par code ou par QR
- * code, demandes reçues, et la liste pour les défier).
+ * cartes épinglées, ses 5 emotes équipées (et le bouton « Emotes » vers leur
+ * page), ses statistiques, et ses amis (ajout par code ou par QR code,
+ * demandes reçues, et la liste pour les défier).
  *
  * Les blocs « amis » sont les mêmes que ceux de l'écran Amis
  * (`src/components/profile/`).
@@ -11,6 +12,7 @@ import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 
 import { AppText } from '../../components/AppText';
+import { EmoteProfile } from '../../components/emotes/EmoteProfile';
 import { FriendAdd } from '../../components/profile/FriendAdd';
 import { FriendCodeCard } from '../../components/profile/FriendCodeCard';
 import { FriendList } from '../../components/profile/FriendList';
@@ -84,18 +86,23 @@ export default function ProfileTab() {
           <FriendCodeCard active={focused} />
         </Rise>
 
-        <Section visit={visit} index={3} title="Statistiques">
+        <Section visit={visit} index={3} title="Cartes épinglées">
+          <PinnedCards />
+        </Section>
+
+        {/* les 5 emotes équipées, et le bouton de leur page */}
+        <Section visit={visit} index={4} title="Mes emotes">
+          <EmoteProfile active={focused} />
+        </Section>
+
+        <Section visit={visit} index={5} title="Statistiques">
           <ProfileStats />
           <AppText variant="caption" style={styles.version}>
             {`PocketPics · version ${GAME_VERSION} · ${platformLabel()}`}
           </AppText>
         </Section>
 
-        <Section visit={visit} index={4} title="Cartes épinglées">
-          <PinnedCards />
-        </Section>
-
-        <Rise visit={visit} index={5}>
+        <Rise visit={visit} index={6}>
           <FriendAdd onAdded={welcome} />
         </Rise>
         <FriendRequests onAccepted={welcome} />

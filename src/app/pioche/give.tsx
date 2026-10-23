@@ -179,14 +179,15 @@ export default function PiocheGive() {
 
   return (
     <Screen edges={['top', 'bottom']}>
-      <Header title="Pioche amicale" onBack={close} right={role === 'giver' && emotePhases.includes(phase) ? <EmoteButton /> : undefined} />
+      <Header title="Pioche amicale" onBack={close} />
       <View style={styles.body}>{body}</View>
+      {/* emotes : en bas à droite, sous le pouce */}
+      {role === 'giver' && emotePhases.includes(phase) ? <EmoteButton style={[styles.emote, { bottom: insets.bottom + 16 }]} /> : null}
       <EmoteOverlay
         enabled={role === 'giver' && emotePhases.includes(phase)}
         send={(id) => usePioche.getState().sendEmote(id)}
-        panel={{ top: insets.top + 54, right: 10 }}
         theirs={{ top: insets.top + 58, left: 18 }}
-        mine={{ bottom: insets.bottom + 24, right: 18 }}
+        mine={{ bottom: insets.bottom + 84, right: 18 }}
       />
       {askRefuse && phase === 'judging' ? (
         <RefuseConfirm
@@ -246,4 +247,5 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 18 },
   actions: { alignSelf: 'stretch', alignItems: 'center', gap: 10, marginTop: 20 },
   timer: { width: 30, height: 30 },
+  emote: { position: 'absolute', right: 16 },
 });

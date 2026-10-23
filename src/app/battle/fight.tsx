@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -92,8 +92,9 @@ import { usePhotoVerdict } from '../../game/nsfwScan';
 import { getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import { TutoArrow, TutoBubble } from '../../components/tuto/TutoArrow';
-import { EmoteButton, EmoteOverlay } from '../../components/emotes/EmoteDock';
-import { type EmoteId, botReaction, botReply } from '../../game/emotes';
+import { EMOTE_BUTTON, EmoteButton, EmoteOverlay } from '../../components/emotes/EmoteDock';
+import { EmoteUnlockHost } from '../../components/emotes/EmoteUnlock';
+import { type EmoteId, type EmoteUnlock, botReaction, botReply, getEmote } from '../../game/emotes';
 import { receiveEmote, useHoldUnlocks } from '../../state/emoteLive';
 import { phase2Todo } from '../../game/tutorial';
 import type { Card } from '../../storage/model';
@@ -788,6 +789,8 @@ export default function FightScreen() {
     // l'adversaire arrive, puis ta carte
     doEnter(1);
     setTimeout(() => alive.current && doEnter(0), 260);
+    // tests du navigateur seulement : victoire immédiate en solo (voir winSoloForTests)
+    if (level && !online && !friendly && winSoloForTests()) setTimeout(() => alive.current && finish(0), 900);
   };
 
   const layout = useMemo(() => {
@@ -927,7 +930,6 @@ export default function FightScreen() {
           </Pressable>
           <AppText variant="label" style={{ color: colors.textDim, flexShrink: 1 }} numberOfLines={1}>{foeInfo.label}</AppText>
           <View style={styles.headerRight}>
-            {emotesOn ? <EmoteButton /> : null}
             <Pressable onPress={() => setSoundOpen(true)} hitSlop={12} style={styles.round} accessibilityLabel="Régler le son">
               <Ionicons name="musical-notes" size={17} color={colors.text} />
             </Pressable>
@@ -1066,6 +1068,8 @@ export default function FightScreen() {
             })}
             {tutoBench ? <TutoArrow key={tutoBench.text} text={tutoBench.text} sub={tutoBench.sub} gap={4} /> : null}
           </View>
+          {/* emotes : en bas à droite, sous le pouce, juste au-dessus des attaques */}
+          {emotesOn && !intro && result === null ? <EmoteButton style={[styles.emote, { top: (layout.benchH - EMOTE_BUTTON) / 2 }]} /> : null}
         </View>
 
         {/* Actions */}
@@ -1162,7 +1166,6 @@ export default function FightScreen() {
           enabled={!intro}
           send={online && !botFoe ? (id) => useMatch.getState().sendEmote(id) : undefined}
           onSent={(id) => botEmote(botReply(id))}
-          panel={{ top: insets.top + 50, right: 12 }}
           theirs={{ top: insets.top + 54, left: 14 }}
           mine={{ top: insets.top + 48 + layout.foeW * CARD_RATIO + layout.msgH + 4, right: 14 }}
         />
@@ -1199,6 +1202,8 @@ export default function FightScreen() {
           />
         ) : null
       ) : null}
+      {/* emote de l'aventure : le monde vient d'être fini, fêtée sur l'écran de victoire */}
+      {result === 0 && level && !online && !friendly ? <EmoteUnlockHost local delay={1600} select={soloUnlock} /> : null}
       {quitting ? (
         <Animated.View entering={FadeIn.duration(150)} style={[StyleSheet.absoluteFill, styles.overlay]}>
           <Animated.View entering={ZoomIn.duration(200)} style={styles.dialog}>
@@ -1231,6 +1236,15 @@ export default function FightScreen() {
     </View>
   );
 }
+
+/**
+ * Tests dans le navigateur : `globalThis.__pocketpicsWinSolo = true` fait gagner
+ * le prochain combat solo (3 étoiles) dès la fin de l'intro. Jamais sur téléphone.
+ */
+const winSoloForTests = () => Platform.OS === 'web' && (globalThis as { __pocketpicsWinSolo?: unknown }).__pocketpicsWinSolo === true;
+
+/** Une emote de l'aventure à fêter (débloquée par un monde fini). */
+const soloUnlock = (unseen: readonly EmoteUnlock[]) => unseen.find((u) => u.world !== undefined && !!getEmote(u.id)) ?? null;
 
 function InspectOverlay({
   inspect,
@@ -2029,6 +2043,7 @@ const styles = StyleSheet.create({
   plateInner: { paddingHorizontal: 12, paddingVertical: 9, gap: 5 },
   bench: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20 },
   benchCards: { flexDirection: 'row', gap: 10 },
+  emote: { position: 'absolute', right: 12 },
   benchItem: { alignItems: 'center', gap: 4, padding: 3, borderRadius: 8, borderWidth: 1.5, borderColor: 'transparent' },
   benchPicked: { borderColor: colors.gold },
   benchPulse: { borderColor: colors.success },

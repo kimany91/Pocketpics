@@ -42,6 +42,7 @@ import { FriendRefused, FriendVerdictBanner, RepiocheButton } from '../component
 import { usePioche } from '../net/pioche';
 import { EmoteButton, EmoteOverlay } from '../components/emotes/EmoteDock';
 import { EmoteUnlockHost } from '../components/emotes/EmoteUnlock';
+import { unlockDuringReveal } from '../game/emotes';
 import { useHoldUnlocks } from '../state/emoteLive';
 import { useGame, useLiveCards } from '../state/game';
 import { useDrawStatus } from '../state/useDrawStatus';
@@ -82,8 +83,10 @@ function PackSession({ onNext, friend = false, paul = false }: { onNext(): void;
   const [phase, setPhase] = useState<Phase>('pack');
   const [boom, setBoom] = useState(0);
   const started = useRef(false);
-  // « Emote débloquée » : pas pendant l'ouverture, seulement sur le récapitulatif (voir plus bas)
+  // « Emote débloquée » : retenue pour le reste de l'app, affichée ici juste après sa carte (voir plus bas)
   useHoldUnlocks();
+  /** Révélation : cartes retournées, et une carte encore en train de se jouer. */
+  const [progress, setProgress] = useState({ revealed: 0, busy: true });
   // Pioche amicale : on peut s'envoyer des emotes tant que l'ami est relié
   const piochePhase = usePioche((s) => s.phase);
   const emotesLive = friend && ['ready', 'opening', 'judging'].includes(piochePhase);
@@ -233,6 +236,7 @@ function PackSession({ onNext, friend = false, paul = false }: { onNext(): void;
           cards={cards}
           firsts={firsts}
           onReveal={friend ? (i) => usePioche.getState().reveal(i) : undefined}
+          onProgress={(revealed, busy) => setProgress({ revealed, busy })}
           onDone={() => {
             if (friend) usePioche.getState().finish();
             setPhase('summary');
@@ -263,19 +267,19 @@ function PackSession({ onNext, friend = false, paul = false }: { onNext(): void;
       <Flash trigger={boom} color="#FFF4D6" peak={0.55} />
       {friend ? (
         <>
-          {emotesLive ? (
-            <View style={[styles.emote, { top: insets.top + 6 }]}>
-              <EmoteButton />
-            </View>
-          ) : null}
+          {/* emotes : en bas à droite, sous le pouce */}
+          {emotesLive ? <EmoteButton style={[styles.emote, { bottom: insets.bottom + 16 }]} /> : null}
           <EmoteOverlay
             enabled={emotesLive}
             send={(id) => usePioche.getState().sendEmote(id)}
-            panel={{ top: insets.top + 54, left: 12 }}
             theirs={{ top: insets.top + 56, right: 16 }}
             mine={{ bottom: insets.bottom + 150, left: 16 }}
           />
         </>
+      ) : null}
+      {/* emote débloquée : dès que sa carte est retournée (OK, et la révélation continue) */}
+      {phase === 'reveal' && cards ? (
+        <EmoteUnlockHost local delay={200} okLabel="OK, on continue !" select={(unseen) => unlockDuringReveal(unseen, { cardIds: cards.map((c) => c.id), revealed: progress.revealed, busy: progress.busy })} />
       ) : null}
       {phase === 'summary' ? <EmoteUnlockHost local /> : null}
     </View>
@@ -679,7 +683,7 @@ const styles = StyleSheet.create({
   centerAbs: { alignItems: 'center', justifyContent: 'center' },
   waiting: { position: 'absolute', bottom: 40, flexDirection: 'row', gap: 10, alignItems: 'center' },
   skip: { position: 'absolute', right: 20, padding: 6, zIndex: 10 },
-  emote: { position: 'absolute', left: 14, zIndex: 30 },
+  emote: { position: 'absolute', right: 16, zIndex: 30 },
   summary: { paddingHorizontal: 20, paddingTop: 32, paddingBottom: 24 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
   summaryFooter: { paddingHorizontal: 20, paddingBottom: 12, gap: 4 },

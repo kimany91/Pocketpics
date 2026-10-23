@@ -7,7 +7,7 @@ import { setSfxVolume } from '../audio/sfx';
 import { ATTACK_NAME_MAX } from '../battle/stats';
 import { watchedAd } from '../game/ads';
 import { DRAW_PRICE, type SoloReward, soloReward } from '../game/economy';
-import { type BuyResult, buyEmote, equipAt, seeUnlock, toggleEquip, unlockFromCards } from '../game/emotes';
+import { type BuyResult, buyEmote, equipAt, seeUnlock, toggleEquip, unlockFromCards, unlockFromSolo } from '../game/emotes';
 import { DIVINE_GATE, TOTAL_LEVELS, needsDivine } from '../battle/levels';
 import { planPack, rollLucky } from '../game/luck';
 import {
@@ -239,6 +239,12 @@ function countBy(values: string[]): Record<string, number> {
   return out;
 }
 
+/** Emotes de l'aventure : chaque monde fini débloque la sienne, une seule fois. */
+function withSoloEmotes(save: SaveState): SaveState {
+  const res = unlockFromSolo(save.emotes, save.soloStars);
+  return res.unlocked.length ? { ...save, emotes: res.state } : save;
+}
+
 export const useGame = create<GameStore>((set, get) => ({
   ready: false,
   loadError: null,
@@ -278,7 +284,8 @@ export const useGame = create<GameStore>((set, get) => ({
       // Paul doit être là pour la suite de la phase 1 (étapes Pioche et Combat)
       const paul = paulFriend();
       const needsPaul = inPhase1(tutoSave.tutorial.step) && reached(tutoSave.tutorial.step, 'pioche') && !tutoSave.friends.some((f) => f.code === paul.code);
-      const save = withTutoDraws(needsPaul ? { ...tutoSave, friends: [...tutoSave.friends, paul] } : tutoSave);
+      // emotes de l'aventure : les mondes déjà finis (avant la mise à jour) les débloquent
+      const save = withSoloEmotes(withTutoDraws(needsPaul ? { ...tutoSave, friends: [...tutoSave.friends, paul] } : tutoSave));
       persistState(save);
       setSfxVolume(save.soundVolume);
       setMusicVolume(save.musicVolume);
@@ -488,7 +495,8 @@ export const useGame = create<GameStore>((set, get) => ({
     const soloStars = [...save.soloStars];
     while (soloStars.length < n) soloStars.push(0);
     soloStars[n - 1] = Math.max(soloStars[n - 1], Math.max(1, Math.min(3, stars)));
-    const next: SaveState = { ...withQuest(save, 'soloWin'), soloLevel: Math.max(save.soloLevel, n), soloStars, coins: save.coins + reward.coins };
+    // dernier niveau d'un monde : son emote de l'aventure se débloque (fêtée sur l'écran de victoire)
+    const next = withSoloEmotes({ ...withQuest(save, 'soloWin'), soloLevel: Math.max(save.soloLevel, n), soloStars, coins: save.coins + reward.coins });
     persistState(next);
     set({ save: next });
     return reward;

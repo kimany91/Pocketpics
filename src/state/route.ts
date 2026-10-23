@@ -25,6 +25,6 @@ export function parentOf(path: string): string {
   if (/^\/online\//.test(path)) return '/multi';
   if (/^\/trade\//.test(path)) return '/trade';
   if (/^\/card\//.test(path)) return '/collection';
-  if (/^\/(friend\/|friends)/.test(path)) return '/profile';
+  if (/^\/(friend\/|friends|emotes)/.test(path)) return '/profile';
   return '/';
 }

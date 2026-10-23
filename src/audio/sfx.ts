@@ -84,7 +84,8 @@ export function playSfx(name: Sfx, opts: { volume?: number; from?: number } = {}
   try {
     p.volume = Math.min(1, (opts.volume ?? 1) * master);
     p.seekTo(opts.from ?? 0).catch(() => {});
-    p.play();
+    // navigateur : le son est refusé tant que le joueur n'a pas touché la page (on n'insiste pas)
+    Promise.resolve(p.play() as unknown).catch(() => {});
   } catch {}
 }
 

@@ -88,6 +88,7 @@ export default function RootLayout() {
         <Stack.Screen name="pioche/fish" options={{ gestureEnabled: false }} />
         <Stack.Screen name="pioche/give" options={{ gestureEnabled: false }} />
         <Stack.Screen name="friends" />
+        <Stack.Screen name="emotes" />
         <Stack.Screen name="solo" options={{ animation: 'fade_from_bottom', animationDuration: 300 }} />
         <Stack.Screen name="multi" />
         <Stack.Screen name="ranks" options={UP} />

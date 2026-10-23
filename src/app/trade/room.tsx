@@ -114,11 +114,7 @@ export default function RoomScreen() {
 
   return (
     <Screen edges={['top', 'bottom']}>
-      <Header
-        title={`Échange avec ${t.peerName ?? '…'}`}
-        onBack={askExit}
-        right={<EmoteButton dot={<OnlineDot online active={focused} />} />}
-      />
+      <Header title={`Échange avec ${t.peerName ?? '…'}`} onBack={askExit} right={<OnlineDot online active={focused} />} />
 
       <View style={styles.offers}>
         <OfferRow
@@ -215,7 +211,8 @@ export default function RoomScreen() {
         }}
       />
 
-      <View style={styles.actions}>
+      <View style={[styles.actions, t.phase === 'room' && styles.actionsRow]}>
+        <View style={{ flex: 1 }}>
         {!t.myLocked ? (
           <View>
             <Button label="Valider mon offre" size="lg" disabled={nothing || (t.paul && t.myOffer.length !== 1)} onPress={() => t.setLocked(true)} />
@@ -237,11 +234,13 @@ export default function RoomScreen() {
         ) : (
           <Waiting text={`En attente de la confirmation de ${t.peerName ?? 'ton ami'}…`} />
         )}
+        </View>
+        {/* emotes : en bas à droite, à côté du bouton principal */}
+        {t.phase === 'room' ? <EmoteButton /> : null}
       </View>
       <EmoteOverlay
         enabled={t.phase === 'room'}
         send={(id) => useTrade.getState().sendEmote(id)}
-        panel={{ top: insets.top + 54, right: 10 }}
         theirs={{ top: insets.top + 58, right: 18 }}
         mine={{ bottom: insets.bottom + 92, left: 18 }}
       />
@@ -516,6 +515,7 @@ const styles = StyleSheet.create({
   },
   check: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.text, alignItems: 'center', justifyContent: 'center' },
   actions: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  actionsRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, paddingRight: 14 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, height: 58 },
   done: { padding: 24, paddingTop: 48, alignItems: 'center' },
   doneFx: { position: 'absolute', left: '50%', top: 34, width: 0, height: 0 },

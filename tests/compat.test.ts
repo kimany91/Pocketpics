@@ -399,6 +399,12 @@ test('emotes : message facultatif, le même dans les trois protocoles, sans chan
   assert.equal(readEmoteMessage(n.tradeEmote), 'cat');
   assert.equal(readEmoteMessage(n.piocheEmote), 'dog');
   assert.equal(readEmoteMessage(n.emoteExtraFields), 'angry', 'champs en plus : ignorés');
+  // les emotes ajoutées ensuite (voiture, ballon, Grand Portrait…) : même message, même niveau ;
+  // une version qui ne les connaît pas les prend pour un id inconnu (ignoré, comme « moonwalk »)
+  assert.equal(readEmoteMessage(n.battleEmoteWorld), 'portrait');
+  assert.equal(readEmoteMessage(n.tradeEmoteCar), 'car');
+  assert.equal(readEmoteMessage(n.piocheEmoteShop), 'balloon');
+  assert.ok(isTradeMessage(n.tradeEmoteCar));
   // emote d'une version plus récente : ignorée ; et l'ancien message inventé (« e ») aussi
   assert.equal(readEmoteMessage(n.emoteUnknownId), null);
   assert.equal(readEmoteMessage(n.tradeUnknown), null);
@@ -416,6 +422,7 @@ test('emotes : l’invité d’un combat (et une version qui ne les connaît pas
   const m = v1('battle');
   listeners.forEach((l) => l(synthetic.newer.battleEmote as BattleMsg));
   listeners.forEach((l) => l(synthetic.newer.emoteUnknownId as BattleMsg));
+  listeners.forEach((l) => l(synthetic.newer.battleEmoteWorld as BattleMsg));
   listeners.forEach((l) => l({ t: 'step', events: m.step.events, battle: m.step.battle } as unknown as BattleMsg));
   const step = await guest.next();
   assert.ok(step.battle);

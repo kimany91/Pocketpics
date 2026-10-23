@@ -26,9 +26,19 @@ export interface EmoteShow {
 /** Une bulle reste ce temps à l'écran. */
 export const SHOW_MS = 2600;
 
+/** Où est le bouton des emotes à l'écran (coordonnées de la fenêtre). */
+export interface EmoteAnchor {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 interface EmoteLive {
   /** Panneau des emotes ouvert. */
   open: boolean;
+  /** Le bouton qui a ouvert le panneau : le panneau s'ouvre juste au-dessus. */
+  anchor: EmoteAnchor | null;
   /** Les emotes de l'autre joueur sont masquées (pour cette partie). */
   muted: boolean;
   /** Bulles à l'écran (une par joueur au plus). */
@@ -39,7 +49,7 @@ interface EmoteLive {
   holds: number;
   /** Écrans qui affichent les emotes (sans écran, une emote reçue est ignorée). */
   stages: number;
-  toggle(): void;
+  toggle(anchor?: EmoteAnchor | null): void;
   close(): void;
   setMuted(muted: boolean): void;
 }
@@ -51,12 +61,13 @@ const timers = new Map<EmoteWho, ReturnType<typeof setTimeout>>();
 
 export const useEmoteLive = create<EmoteLive>((set, get) => ({
   open: false,
+  anchor: null,
   muted: false,
   shows: [],
   readyAt: 0,
   holds: 0,
   stages: 0,
-  toggle: () => set({ open: !get().open }),
+  toggle: (anchor) => set(anchor !== undefined ? { open: !get().open, anchor } : { open: !get().open }),
   close: () => get().open && set({ open: false }),
   setMuted: (muted) => set(muted ? { muted, shows: get().shows.filter((s) => s.who !== 'them') } : { muted }),
 }));

@@ -8,48 +8,15 @@
  * horloge `t` va de 0 à 1 sur la durée de l'emote, en boucle ; `animated={false}`
  * fige l'emote sur sa meilleure pose (petites vignettes).
  */
-import { type ReactNode, useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
-import Animated, { Easing, type SharedValue, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
-import Svg, { Circle, Defs, Ellipse, G, Line, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { type ReactNode, useEffect, useId } from 'react';
+import { View } from 'react-native';
+import { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import { Circle, Defs, Ellipse, Line, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { colors } from '../../theme';
-
-type T = SharedValue<number>;
-
-/* --------------------------------- Outils --------------------------------- */
-
-const TAU = Math.PI * 2;
-
-/** sin(2π n t) */
-function osc(t: number, n: number, phase = 0) {
-  'worklet';
-  return Math.sin(TAU * (n * t + phase));
-}
-/** 0 avant a, 1 après b, et entre les deux une montée douce. */
-function seg(t: number, a: number, b: number) {
-  'worklet';
-  const x = Math.min(1, Math.max(0, (t - a) / (b - a)));
-  return x * x * (3 - 2 * x);
-}
-/** 0 → 1 → 0 entre a et b. */
-function bump(t: number, a: number, b: number) {
-  'worklet';
-  if (t <= a || t >= b) return 0;
-  return Math.sin((Math.PI * (t - a)) / (b - a));
-}
-/** Partie décimale. */
-function frac(x: number) {
-  'worklet';
-  return x - Math.floor(x);
-}
-/** Ressort : dépasse un peu puis se pose (x de 0 à 1). */
-function springy(x: number) {
-  'worklet';
-  if (x <= 0) return 0;
-  if (x >= 1) return 1;
-  return 1 - Math.exp(-6 * x) * Math.cos(9 * x);
-}
+import { MORE_ART } from './EmoteArtMore';
+import { WORLD_ART } from './EmoteArtWorld';
+import { EyeOpen, Face, GradientSuffix, Group, LINE, Part, type T, bump, dropPath, frac, heartPath, osc, seg, springy, starPath, useG } from './emoteKit';
 
 /** Les durées de chaque emote (une boucle). */
 const DURATION: Record<string, number> = {
@@ -67,6 +34,17 @@ const DURATION: Record<string, number> = {
   eiffel: 2400,
   dog: 2200,
   cat: 2200,
+  cold: 2000,
+  hot: 2000,
+  balloon: 2600,
+  car: 2000,
+  beach: 2400,
+  cow: 2400,
+  boat: 2400,
+  bear: 2200,
+  storm: 2400,
+  robot: 2800,
+  portrait: 3000,
 };
 /** Pose figée la plus parlante (vignettes immobiles). */
 const POSE: Record<string, number> = {
@@ -84,74 +62,20 @@ const POSE: Record<string, number> = {
   eiffel: 0.3,
   dog: 0.3,
   cat: 0.25,
+  cold: 0.3,
+  hot: 0.35,
+  balloon: 0.52,
+  car: 0.12,
+  beach: 0.3,
+  cow: 0.7,
+  boat: 0.15,
+  bear: 0.5,
+  storm: 0.45,
+  robot: 0.5,
+  portrait: 0.45,
 };
 
 export const emoteDuration = (id: string) => DURATION[id] ?? 2000;
-
-/**
- * Un morceau du dessin : la boîte `[x, y, w, h]` (unités du dessin) et ses formes
- * SVG, en coordonnées du dessin. Il tourne ou grandit autour du centre de sa boîte.
- */
-function Part({ s, box, style, children, clip }: { s: number; box: [number, number, number, number]; style?: object; children: ReactNode; clip?: boolean }) {
-  const [x, y, w, h] = box;
-  return (
-    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: x * s, top: y * s, width: w * s, height: h * s }, clip && { overflow: 'hidden' }, style]}>
-      <Svg width={w * s} height={h * s} viewBox={`${x} ${y} ${w} ${h}`}>
-        {children}
-      </Svg>
-    </Animated.View>
-  );
-}
-
-/** Un groupe de morceaux qui bouge d'un bloc (la tête). */
-function Group({ s, style, children }: { s: number; style?: object; children: ReactNode }) {
-  return (
-    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: 100 * s, height: 100 * s }, style]}>
-      {children}
-    </Animated.View>
-  );
-}
-
-const LINE = '#5A3200';
-
-/** La tête ronde, avec son reflet. `grad` : haut, milieu, bord. */
-function Face({ s, gid, grad = ['#FFEB8A', '#FFC93C', '#F29A1A'], line = LINE, cy = 54, r = 38 }: { s: number; gid: string; grad?: [string, string, string]; line?: string; cy?: number; r?: number }) {
-  return (
-    <Part s={s} box={[0, 0, 100, 100]}>
-      <Defs>
-        <RadialGradient id={gid} cx="38%" cy="30%" r="75%">
-          <Stop offset="0" stopColor={grad[0]} />
-          <Stop offset="0.55" stopColor={grad[1]} />
-          <Stop offset="1" stopColor={grad[2]} />
-        </RadialGradient>
-      </Defs>
-      <Circle cx={50} cy={cy} r={r} fill={`url(#${gid})`} stroke={line} strokeWidth={3} />
-      <Ellipse cx={37} cy={cy - 20} rx={11} ry={6} fill="#FFFFFF" opacity={0.42} transform={`rotate(-32 37 ${cy - 20})`} />
-    </Part>
-  );
-}
-
-/** Un œil ouvert : blanc, pupille, petit reflet. */
-function EyeOpen({ cx, cy, r = 7, pr = 3.6, line = LINE }: { cx: number; cy: number; r?: number; pr?: number; line?: string }) {
-  return (
-    <G>
-      <Ellipse cx={cx} cy={cy} rx={r} ry={r * 1.12} fill="#FFFFFF" stroke={line} strokeWidth={2.2} />
-      <Circle cx={cx} cy={cy + 0.5} r={pr} fill="#2A1A0A" />
-      <Circle cx={cx - pr * 0.35} cy={cy - pr * 0.4} r={pr * 0.35} fill="#FFFFFF" />
-    </G>
-  );
-}
-
-/** Étoile à 4 branches (éclat). */
-const starPath = (x: number, y: number, r: number) =>
-  `M${x} ${y - r} Q${x + r * 0.18} ${y - r * 0.18} ${x + r} ${y} Q${x + r * 0.18} ${y + r * 0.18} ${x} ${y + r} Q${x - r * 0.18} ${y + r * 0.18} ${x - r} ${y} Q${x - r * 0.18} ${y - r * 0.18} ${x} ${y - r}Z`;
-
-/** Cœur centré sur (x, y), de largeur ~2r. */
-const heartPath = (x: number, y: number, r: number) =>
-  `M${x} ${y + r * 0.85} C${x - r * 1.5} ${y - r * 0.1} ${x - r * 0.9} ${y - r * 1.2} ${x} ${y - r * 0.45} C${x + r * 0.9} ${y - r * 1.2} ${x + r * 1.5} ${y - r * 0.1} ${x} ${y + r * 0.85}Z`;
-
-/** Goutte (larme) pointe en haut, centrée sur (x, y). */
-const dropPath = (x: number, y: number, r: number) => `M${x} ${y - r * 1.6} C${x + r * 0.4} ${y - r * 0.6} ${x + r} ${y - r * 0.2} ${x + r} ${y + r * 0.35} A${r} ${r} 0 0 1 ${x - r} ${y + r * 0.35} C${x - r} ${y - r * 0.2} ${x - r * 0.4} ${y - r * 0.6} ${x} ${y - r * 1.6}Z`;
 
 /* ------------------------------ Mort de rire ------------------------------ */
 
@@ -271,6 +195,7 @@ function Flow({ s, t, x, k }: { s: number; t: T; x: number; k: number }) {
 /* ---------------------------------- Rage ---------------------------------- */
 
 function Angry({ s, t }: { s: number; t: T }) {
+  const g = useG();
   const head = useAnimatedStyle(() => {
     const on = seg(t.value, 0.15, 0.35);
     return { transform: [{ translateX: osc(t.value, 26) * 1.8 * on * s }, { scale: 1 + on * 0.05 }] };
@@ -284,13 +209,13 @@ function Angry({ s, t }: { s: number; t: T }) {
         {/* le rouge qui monte */}
         <Part s={s} box={[0, 0, 100, 100]} style={red}>
           <Defs>
-            <RadialGradient id="g-angry-red" cx="40%" cy="30%" r="75%">
+            <RadialGradient id={g('g-angry-red')} cx="40%" cy="30%" r="75%">
               <Stop offset="0" stopColor="#FF8A6A" />
               <Stop offset="0.55" stopColor="#F2321E" />
               <Stop offset="1" stopColor="#A50E0E" />
             </RadialGradient>
           </Defs>
-          <Circle cx={50} cy={54} r={38} fill="url(#g-angry-red)" stroke="#4A0606" strokeWidth={3} />
+          <Circle cx={50} cy={54} r={38} fill={`url(#${g('g-angry-red')})`} stroke="#4A0606" strokeWidth={3} />
           <Ellipse cx={37} cy={34} rx={11} ry={6} fill="#FFFFFF" opacity={0.3} transform="rotate(-32 37 34)" />
         </Part>
         {/* sourcils froncés, yeux méchants */}
@@ -470,6 +395,7 @@ function Stink({ s, t, k }: { s: number; t: T; k: number }) {
 /* --------------------------------- Trouille -------------------------------- */
 
 function Scared({ s, t }: { s: number; t: T }) {
+  const g = useG();
   const head = useAnimatedStyle(() => ({ transform: [{ translateX: osc(t.value, 30) * 1.4 * s }, { translateY: osc(t.value, 22, 0.3) * 0.6 * s }] }));
   const pupils = useAnimatedStyle(() => ({ transform: [{ translateX: osc(t.value, 2) * 2.6 * s }] }));
   const mouth = useAnimatedStyle(() => ({ transform: [{ scaleY: 1 + osc(t.value, 8) * 0.08 }, { scaleX: 1 + osc(t.value, 8, 0.25) * 0.05 }] }));
@@ -483,13 +409,13 @@ function Scared({ s, t }: { s: number; t: T }) {
       {/* le bleu de la peur, du haut */}
       <Part s={s} box={[10, 14, 80, 80]}>
         <Defs>
-          <LinearGradient id="g-scared-blue" x1="0" y1="0" x2="0" y2="1">
+          <LinearGradient id={g('g-scared-blue')} x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0" stopColor="#5B7CFF" stopOpacity={0.95} />
             <Stop offset="0.5" stopColor="#8FB0FF" stopOpacity={0.55} />
             <Stop offset="0.75" stopColor="#B8CCFF" stopOpacity={0} />
           </LinearGradient>
         </Defs>
-        <Circle cx={50} cy={54} r={36.5} fill="url(#g-scared-blue)" />
+        <Circle cx={50} cy={54} r={36.5} fill={`url(#${g('g-scared-blue')})`} />
         <Path d="M40 22 L40 30 M47 20 L47 30 M54 20 L54 30 M61 22 L61 30" stroke="#2C3E9E" strokeWidth={2} strokeLinecap="round" />
       </Part>
       {/* sourcils très hauts */}
@@ -767,6 +693,7 @@ function Selfie({ s, t }: { s: number; t: T }) {
 const IRON = '#3E2410';
 
 function Eiffel({ s, t }: { s: number; t: T }) {
+  const g = useG();
   const tower = useAnimatedStyle(() => {
     const r = osc(t.value, 1) * 7;
     const sq = osc(t.value, 2) * 0.04;
@@ -776,12 +703,12 @@ function Eiffel({ s, t }: { s: number; t: T }) {
     <>
       <Part s={s} box={[2, 2, 96, 96]}>
         <Defs>
-          <RadialGradient id="g-eiffel-sky" cx="50%" cy="40%" r="60%">
+          <RadialGradient id={g('g-eiffel-sky')} cx="50%" cy="40%" r="60%">
             <Stop offset="0" stopColor="#3A3F8F" />
             <Stop offset="1" stopColor="#141633" />
           </RadialGradient>
         </Defs>
-        <Circle cx={50} cy={50} r={46} fill="url(#g-eiffel-sky)" stroke="#E0A24A" strokeWidth={2.5} />
+        <Circle cx={50} cy={50} r={46} fill={`url(#${g('g-eiffel-sky')})`} stroke="#E0A24A" strokeWidth={2.5} />
         <Circle cx={76} cy={24} r={6} fill="#FFF3C2" />
         <Circle cx={79} cy={22} r={5} fill="#272B6A" />
         <Ellipse cx={50} cy={93} rx={30} ry={4} fill="#0B0C22" opacity={0.6} />
@@ -792,7 +719,7 @@ function Eiffel({ s, t }: { s: number; t: T }) {
       <Group s={s} style={tower}>
         <Part s={s} box={[18, 4, 64, 92]}>
           <Defs>
-            <LinearGradient id="g-eiffel-iron" x1="0" y1="0" x2="1" y2="0">
+            <LinearGradient id={g('g-eiffel-iron')} x1="0" y1="0" x2="1" y2="0">
               <Stop offset="0" stopColor="#B86B2E" />
               <Stop offset="0.5" stopColor="#F2B45A" />
               <Stop offset="1" stopColor="#A85E26" />
@@ -800,15 +727,15 @@ function Eiffel({ s, t }: { s: number; t: T }) {
           </Defs>
           <Line x1={50} y1={6} x2={50} y2={16} stroke={IRON} strokeWidth={2.4} strokeLinecap="round" />
           {/* haut */}
-          <Path d="M47 16 L53 16 L56 40 L44 40Z" fill="url(#g-eiffel-iron)" stroke={IRON} strokeWidth={2} strokeLinejoin="round" />
+          <Path d="M47 16 L53 16 L56 40 L44 40Z" fill={`url(#${g('g-eiffel-iron')})`} stroke={IRON} strokeWidth={2} strokeLinejoin="round" />
           <Path d="M48 22 L52 28 M52 22 L48 28 M47 30 L53 36 M53 30 L47 36" stroke={IRON} strokeWidth={1} />
           <Rect x={41} y={39} width={18} height={4} rx={1} fill="#F2B45A" stroke={IRON} strokeWidth={1.8} />
           {/* milieu */}
-          <Path d="M44 43 L56 43 L61 63 L39 63Z" fill="url(#g-eiffel-iron)" stroke={IRON} strokeWidth={2} strokeLinejoin="round" />
+          <Path d="M44 43 L56 43 L61 63 L39 63Z" fill={`url(#${g('g-eiffel-iron')})`} stroke={IRON} strokeWidth={2} strokeLinejoin="round" />
           <Path d="M45 47 L59 60 M55 47 L41 60" stroke={IRON} strokeWidth={1.1} />
           <Rect x={35} y={62} width={30} height={5} rx={1.2} fill="#F2B45A" stroke={IRON} strokeWidth={1.8} />
           {/* pieds et arche */}
-          <Path d="M38 67 L62 67 L76 94 L64 94 Q50 74 36 94 L24 94Z" fill="url(#g-eiffel-iron)" stroke={IRON} strokeWidth={2} strokeLinejoin="round" />
+          <Path d="M38 67 L62 67 L76 94 L64 94 Q50 74 36 94 L24 94Z" fill={`url(#${g('g-eiffel-iron')})`} stroke={IRON} strokeWidth={2} strokeLinejoin="round" />
           <Path d="M40 71 L30 90 M60 71 L70 90 M44 70 L34 86 M56 70 L66 86" stroke={IRON} strokeWidth={1.1} />
           {/* petits yeux tout contents */}
           <Path d="M45 53 Q47 50.5 49 53 M51 53 Q53 50.5 55 53" stroke={IRON} strokeWidth={1.8} fill="none" strokeLinecap="round" />
@@ -996,7 +923,7 @@ function Unknown({ s }: { s: number; t: T }) {
   );
 }
 
-const ART: Record<string, (p: { s: number; t: T }) => ReactNode> = {
+export const ART: Record<string, (p: { s: number; t: T }) => ReactNode> = {
   lol: Lol,
   cry: Cry,
   angry: Angry,
@@ -1011,6 +938,8 @@ const ART: Record<string, (p: { s: number; t: T }) => ReactNode> = {
   eiffel: Eiffel,
   dog: Dog,
   cat: Cat,
+  ...MORE_ART,
+  ...WORLD_ART,
 };
 
 /**
@@ -1032,13 +961,13 @@ export function EmoteArt({ id, size, animated = true, playKey = 0 }: { id: strin
     return () => cancelAnimation(t);
   }, [t, animated, id, duration, playKey]);
   const Art = ART[id] ?? Unknown;
+  // dégradés SVG à part pour chaque emote affichée (voir GradientSuffix)
+  const suffix = `-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
     <View pointerEvents="none" style={{ width: size, height: size }}>
-      <Art s={s} t={t} />
+      <GradientSuffix.Provider value={suffix}>
+        <Art s={s} t={t} />
+      </GradientSuffix.Provider>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  glass: { position: 'absolute', overflow: 'hidden' },
-});

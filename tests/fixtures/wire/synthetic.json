@@ -48,6 +48,9 @@
     "tradeEmote": { "t": "emote", "id": "cat" },
     "piocheEmote": { "t": "emote", "id": "dog" },
     "emoteUnknownId": { "t": "emote", "id": "moonwalk", "loop": 3 },
-    "emoteExtraFields": { "t": "emote", "id": "angry", "loud": true, "skin": "or" }
+    "emoteExtraFields": { "t": "emote", "id": "angry", "loud": true, "skin": "or" },
+    "battleEmoteWorld": { "t": "emote", "id": "portrait" },
+    "tradeEmoteCar": { "t": "emote", "id": "car" },
+    "piocheEmoteShop": { "t": "emote", "id": "balloon" }
   }
 }

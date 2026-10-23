@@ -178,7 +178,7 @@ export default function PiocheFish() {
   const emotesLive = role === 'asker' && emotePhases.includes(phase);
   return (
     <Screen edges={['top', 'bottom']}>
-      <Header title="Pioche amicale" right={emotesLive ? <EmoteButton /> : undefined} />
+      <Header title="Pioche amicale" />
       <FishingScene
         key={round}
         stage={stage}
@@ -190,7 +190,8 @@ export default function PiocheFish() {
         onCaught={() => router.replace({ pathname: '/open', params: tuto ? { paul: '1' } : { friend: '1' } })}
         pointAt={tuto && stage === 'choose' && friends[0] ? { code: friends[0].code, text: `Touche ${friends[0].name} pour piocher dans sa galerie` } : undefined}
       />
-      <View style={styles.panel}>
+      <View style={[styles.panel, emotesLive && styles.panelRow]}>
+        <View style={{ flex: 1 }}>
         {tuto ? (
           <View style={styles.row}>
             <Ionicons name="gift" size={16} color={colors.gold} />
@@ -240,11 +241,13 @@ export default function PiocheFish() {
             {`Il te faut un tirage, ou ${FRIEND_DRAW_PRICE} pièces s’il ne t’en reste plus. Tes pubs du jour sont déjà regardées.`}
           </AppText>
         )}
+        </View>
+        {/* emotes : en bas à droite, sous le pouce */}
+        {emotesLive ? <EmoteButton /> : null}
       </View>
       <EmoteOverlay
         enabled={emotesLive}
         send={(id) => usePioche.getState().sendEmote(id)}
-        panel={{ top: insets.top + 54, right: 10 }}
         theirs={{ top: insets.top + 58, left: 18 }}
         mine={{ bottom: insets.bottom + 120, right: 18 }}
       />
@@ -254,5 +257,6 @@ export default function PiocheFish() {
 
 const styles = StyleSheet.create({
   panel: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, backgroundColor: colors.bg },
+  panelRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingRight: 14 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });

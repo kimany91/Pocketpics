@@ -2,16 +2,49 @@
  * Emotes : des petites têtes animées qu'on envoie pendant un combat, un échange
  * ou une Pioche amicale (les deux joueurs la voient et l'entendent).
  *
- *  - 10 émotions : 4 de départ, les autres s'achètent avec des pièces (écran des quêtes) ;
- *  - 4 emotes « photo » : jamais en vente, débloquées en tirant une carte dont
- *    la photo est reconnue (selfie, monument, chien, chat).
+ *  - 13 émotions : 4 de départ, les autres s'achètent avec des pièces
+ *    (Profil → Emotes) ;
+ *  - 5 emotes « photo » : jamais en vente, débloquées en tirant une carte dont
+ *    la photo est reconnue (selfie, monument, chien, chat, voiture) ;
+ *  - 7 emotes de l'aventure : jamais en vente, débloquées en finissant un
+ *    monde du mode solo (Plage, Ferme, Port, Montagne, Tempête, Néon, et le
+ *    Grand Portrait).
  * On en équipe 5 au plus : ce sont elles qui sont proposées pendant une partie.
  *
  * Pur (testable sous Node).
  */
+import { ARENAS } from '../battle/arenas';
+import { lastLevel } from '../battle/levels';
+
 
 /** Les emotes que cette version connaît (un id inconnu, d'une version plus récente, est ignoré). */
-export const EMOTE_IDS = ['lol', 'cry', 'angry', 'puke', 'disgust', 'scared', 'shock', 'sleep', 'love', 'cool', 'selfie', 'eiffel', 'dog', 'cat'] as const;
+export const EMOTE_IDS = [
+  'lol',
+  'cry',
+  'angry',
+  'puke',
+  'disgust',
+  'scared',
+  'shock',
+  'cold',
+  'sleep',
+  'hot',
+  'love',
+  'balloon',
+  'cool',
+  'selfie',
+  'eiffel',
+  'dog',
+  'cat',
+  'car',
+  'beach',
+  'cow',
+  'boat',
+  'bear',
+  'storm',
+  'robot',
+  'portrait',
+] as const;
 export type EmoteId = (typeof EMOTE_IDS)[number];
 
 /** Ce que reconnaît une carte, de quoi débloquer une emote « photo ». */
@@ -20,6 +53,14 @@ export interface PackRule {
   groups?: string[];
   /** Labels précis (leur première phrase anglaise, voir `labelId`). */
   labels?: string[];
+  /** Consigne affichée tant qu'elle est verrouillée. */
+  hint: string;
+}
+
+/** Monde de l'aventure à finir pour débloquer une emote. */
+export interface SoloRule {
+  /** `id` du monde (src/battle/arenas.ts), qui ne change jamais. */
+  world: number;
   /** Consigne affichée tant qu'elle est verrouillée. */
   hint: string;
 }
@@ -38,6 +79,8 @@ export interface EmoteDef {
   starter?: true;
   /** Emote « photo » : débloquée par une carte tirée. */
   pack?: PackRule;
+  /** Emote de l'aventure : débloquée en finissant un monde. */
+  solo?: SoloRule;
 }
 
 export const EMOTES: readonly EmoteDef[] = [
@@ -48,8 +91,11 @@ export const EMOTES: readonly EmoteDef[] = [
   { id: 'disgust', name: 'Dégoûté', feeling: 'tire la langue, écœuré', color: '#B7C94A', price: 150 },
   { id: 'scared', name: 'Trouille', feeling: 'tremble de peur', color: '#7FA8FF', price: 200 },
   { id: 'shock', name: 'Choqué', feeling: 'en reste bouche bée', color: '#FFE45C', price: 250 },
+  { id: 'cold', name: 'Gelé', feeling: 'meurt de froid, claque des dents', color: '#8FD8FF', price: 250 },
   { id: 'sleep', name: 'Dodo', feeling: 's’ennuie à mourir', color: '#9C8CFF', price: 300 },
+  { id: 'hot', name: 'En feu', feeling: 'a trop chaud, prend feu', color: '#FF6A2B', price: 350 },
   { id: 'love', name: 'Amoureux', feeling: 'a des cœurs dans les yeux', color: '#FF6FA8', price: 400 },
+  { id: 'balloon', name: 'Ballon', feeling: 'gonfle, gonfle… et explose', color: '#FF8FD0', price: 450 },
   { id: 'cool', name: 'Trop fort', feeling: 'met ses lunettes de star', color: '#3DD6C6', price: 500 },
   {
     id: 'selfie',
@@ -69,6 +115,28 @@ export const EMOTES: readonly EmoteDef[] = [
   },
   { id: 'dog', name: 'Léchouille', feeling: 'te lèche l’écran', color: '#C98A4B', price: null, pack: { groups: ['dog'], hint: 'Tire une carte chien' } },
   { id: 'cat', name: 'Miaou', feeling: 'fait le chat', color: '#FF8C42', price: null, pack: { groups: ['cat'], hint: 'Tire une carte chat' } },
+  {
+    id: 'car',
+    name: 'Tut tut',
+    feeling: 'klaxonne et rebondit',
+    color: '#FF5A4E',
+    price: null,
+    pack: { groups: ['car', 'sports_car'], labels: ['a toy car'], hint: 'Tire une carte voiture' },
+  },
+  { id: 'beach', name: 'Noix de coco', feeling: 'fait coucou sous son palmier', color: '#3FC9E8', price: null, solo: { world: 2, hint: 'Termine le monde de la Plage' } },
+  { id: 'cow', name: 'Meuh', feeling: 'broute tranquille', color: '#7CC95A', price: null, solo: { world: 13, hint: 'Termine le monde de la Ferme' } },
+  { id: 'boat', name: 'Ohé !', feeling: 'tangue sur les vagues', color: '#3D8BFF', price: null, solo: { world: 5, hint: 'Termine le monde du Port' } },
+  { id: 'bear', name: 'Ours polaire', feeling: 'rugit dans la neige', color: '#BFE4FF', price: null, solo: { world: 6, hint: 'Termine le monde de la Montagne' } },
+  { id: 'storm', name: 'Orage', feeling: 'gronde et lance un éclair', color: '#8A7CFF', price: null, solo: { world: 8, hint: 'Termine le monde de la Tempête' } },
+  { id: 'robot', name: 'Bug', feeling: 'grésille, crépite… et s’éteint', color: '#3DF2E0', price: null, solo: { world: 19, hint: 'Termine le monde Néon' } },
+  {
+    id: 'portrait',
+    name: 'Grand Portrait',
+    feeling: 'jaillit de son cadre en hurlant',
+    color: '#B98CFF',
+    price: null,
+    solo: { world: 21, hint: 'Bats le Grand Portrait, à la fin de la Galerie' },
+  },
 ];
 
 /** Emotes équipées au plus (proposées pendant une partie). */
@@ -85,12 +153,14 @@ export const getEmote = (id: string): EmoteDef | null => BY_ID.get(id) ?? null;
 
 /* ------------------------------ Sauvegarde ------------------------------ */
 
-/** Une emote débloquée par une carte, pas encore fêtée à l'écran. */
+/** Une emote débloquée (par une carte, ou un monde de l'aventure), pas encore fêtée à l'écran. */
 export interface EmoteUnlock {
   id: string;
-  /** La carte qui l'a débloquée, et son nom à ce moment-là. */
+  /** La carte qui l'a débloquée, et son nom à ce moment-là (`''` et `null` pour un monde). */
   cardId: string;
   cardName: string | null;
+  /** Débloquée en finissant ce monde de l'aventure (`id` du monde). */
+  world?: number;
 }
 
 export interface EmoteState {
@@ -123,12 +193,20 @@ export function migrateEmotes(raw: unknown): EmoteState {
     if (!u || typeof u !== 'object') continue;
     const x = u as Record<string, unknown>;
     if (!isEmoteId(x.id) || unseen.some((y) => y.id === x.id)) continue;
-    unseen.push({ id: x.id, cardId: typeof x.cardId === 'string' ? x.cardId : '', cardName: typeof x.cardName === 'string' ? x.cardName.slice(0, 28) : null });
+    const one: EmoteUnlock = { id: x.id, cardId: typeof x.cardId === 'string' ? x.cardId : '', cardName: typeof x.cardName === 'string' ? x.cardName.slice(0, 28) : null };
+    if (typeof x.world === 'number' && Number.isInteger(x.world)) one.world = x.world;
+    unseen.push(one);
   }
   return { ...r, owned, equipped, unseen: unseen.slice(0, EMOTES.length) };
 }
 
 /* ------------------------------ Boutique ------------------------------ */
+
+/** Comment on obtient une emote (boutique, carte tirée, monde de l'aventure). */
+export type EmoteSource = 'starter' | 'shop' | 'pack' | 'solo';
+export const emoteSource = (def: EmoteDef): EmoteSource => (def.starter ? 'starter' : def.pack ? 'pack' : def.solo ? 'solo' : 'shop');
+/** Consigne d'une emote pas encore à soi qui ne s'achète pas (`null` : elle s'achète). */
+export const lockHint = (def: EmoteDef): string | null => def.pack?.hint ?? def.solo?.hint ?? null;
 
 export type BuyResult = { ok: true; state: EmoteState; coins: number } | { ok: false; why: 'unknown' | 'owned' | 'not-for-sale' | 'coins' };
 
@@ -200,9 +278,68 @@ export function unlockFromCards(state: EmoteState, cards: readonly SeenOnCard[])
     }
   }
   if (unlocked.length === 0) return { state, unlocked };
+  return { state: grant(state, unlocked), unlocked };
+}
+
+/** Ajoute des emotes débloquées : possédées, équipées s'il reste une place, et à fêter. */
+function grant(state: EmoteState, unlocked: EmoteUnlock[]): EmoteState {
   const equipped = [...state.equipped];
   for (const u of unlocked) if (equipped.length < MAX_EQUIPPED) equipped.push(u.id);
-  return { state: { ...state, owned: [...state.owned, ...unlocked.map((u) => u.id)], equipped, unseen: [...state.unseen, ...unlocked] }, unlocked };
+  return { ...state, owned: [...state.owned, ...unlocked.map((u) => u.id)], equipped, unseen: [...state.unseen, ...unlocked] };
+}
+
+/** Pendant l'ouverture d'un paquet : où en est la révélation. */
+export interface RevealProgress {
+  /** Cartes du paquet, dans l'ordre de la révélation. */
+  cardIds: readonly string[];
+  /** Cartes déjà retournées (0 → toutes). */
+  revealed: number;
+  /** Une carte est en train de se retourner (suspense, éclats) : on attend. */
+  busy: boolean;
+}
+
+/**
+ * L'emote à fêter tout de suite pendant la révélation d'un paquet : celle d'une
+ * carte déjà retournée, dès que plus rien ne bouge. Une reconnaissance arrivée
+ * après coup (la carte est déjà passée) s'affiche donc entre deux cartes.
+ * `null` : rien à fêter maintenant (la carte n'est pas encore retournée, ou
+ * l'emote vient d'ailleurs : elle attendra le récapitulatif).
+ */
+export function unlockDuringReveal(unseen: readonly EmoteUnlock[], p: RevealProgress): EmoteUnlock | null {
+  if (p.busy) return null;
+  for (const u of unseen) {
+    if (!isEmoteId(u.id) || !u.cardId) continue;
+    const i = p.cardIds.indexOf(u.cardId);
+    if (i >= 0 && i < p.revealed) return u;
+  }
+  return null;
+}
+
+/* ------------------------- Déblocage par l'aventure ------------------------- */
+
+/** Le monde (son `id`) est-il fini : son dernier niveau (le boss) est-il gagné ? */
+export function worldDone(soloStars: readonly number[], worldId: number): boolean {
+  const arena = ARENAS.find((a) => a.id === worldId);
+  if (!arena) return false;
+  return (soloStars[lastLevel(arena.n) - 1] ?? 0) > 0;
+}
+
+/** Les emotes de l'aventure que ces étoiles débloquent (mondes finis). */
+export const emotesForSolo = (soloStars: readonly number[]): EmoteId[] => EMOTES.filter((e) => e.solo && worldDone(soloStars, e.solo.world)).map((e) => e.id);
+
+/**
+ * Emotes débloquées par les mondes finis, une seule fois chacune (à chaque
+ * victoire, et au démarrage pour les mondes déjà finis avant la mise à jour).
+ * Rend l'état inchangé (même objet) si rien de neuf.
+ */
+export function unlockFromSolo(state: EmoteState, soloStars: readonly number[]): { state: EmoteState; unlocked: EmoteUnlock[] } {
+  const unlocked: EmoteUnlock[] = [];
+  for (const id of emotesForSolo(soloStars)) {
+    if (state.owned.includes(id)) continue;
+    unlocked.push({ id, cardId: '', cardName: null, world: getEmote(id)?.solo?.world });
+  }
+  if (unlocked.length === 0) return { state, unlocked };
+  return { state: grant(state, unlocked), unlocked };
 }
 
 /** L'animation de déblocage de cette emote a été vue. */
@@ -260,6 +397,14 @@ const REPLIES: Partial<Record<EmoteId, EmoteId[]>> = {
   sleep: ['angry', 'shock'],
   love: ['love', 'disgust'],
   cool: ['angry', 'shock', 'disgust'],
+  cold: ['lol', 'shock'],
+  hot: ['shock', 'cool'],
+  balloon: ['lol', 'shock'],
+  car: ['lol', 'cool'],
+  bear: ['scared', 'shock'],
+  storm: ['scared', 'cry'],
+  robot: ['lol', 'shock'],
+  portrait: ['scared', 'shock'],
 };
 /** Emotes dont un bot dispose (les 4 de départ et quelques autres). */
 const BOT_EMOTES: EmoteId[] = ['lol', 'cry', 'angry', 'puke', 'cool', 'shock', 'scared', 'disgust'];

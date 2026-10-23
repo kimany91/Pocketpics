@@ -54,9 +54,19 @@ interface Props {
   onDone(): void;
   /** Une carte vient d'être retournée (Pioche amicale : l'ami la voit en direct). */
   onReveal?(index: number): void;
+  /**
+   * Où en est la révélation : cartes déjà retournées, et `busy` tant qu'une
+   * carte se joue (on la touche, elle se retourne, ses éclats retombent). Sert
+   * à fêter une emote débloquée juste après sa carte.
+   */
+  onProgress?(revealed: number, busy: boolean): void;
 }
 
-export function RevealStack({ cards, firsts, onDone, onReveal }: Props) {
+/** Temps laissé aux éclats d'une carte retournée avant qu'autre chose s'affiche. */
+const SETTLE_MS = 1000;
+const SETTLE_BIG_MS = 1600;
+
+export function RevealStack({ cards, firsts, onDone, onReveal, onProgress }: Props) {
   const { width: sw, height: sh } = useWindowDimensions();
   const cardW = revealCardWidth(sw, sh);
   const [index, setIndex] = useState(0);
@@ -73,7 +83,18 @@ export function RevealStack({ cards, firsts, onDone, onReveal }: Props) {
   const lastUp = useRef(0);
   const cardRef = useRef<RevealCardHandle>(null);
   const chromaTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(chromaTimer.current), []);
+  const settleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(
+    () => () => {
+      clearTimeout(chromaTimer.current);
+      clearTimeout(settleTimer.current);
+    },
+    [],
+  );
+  /** La carte se retourne (suspense compris). */
+  const [flipping, setFlipping] = useState(false);
+  /** Les éclats de cette carte sont retombés. */
+  const [settledAt, setSettledAt] = useState(-1);
 
   // Carte qui débloque une rareté jamais obtenue : seulement sa première apparition dans le paquet.
   const firstIndexes = useMemo(() => {
@@ -130,6 +151,7 @@ export function RevealStack({ cards, firsts, onDone, onReveal }: Props) {
   };
 
   const onRevealStart = (suspense: number) => {
+    setFlipping(true);
     if (suspense > 0) {
       glow.value = withTiming(1, { duration: suspense, easing: Easing.in(Easing.quad) });
       if (hype >= 5) {
@@ -141,6 +163,10 @@ export function RevealStack({ cards, firsts, onDone, onReveal }: Props) {
 
   const onRevealed = () => {
     setRevealedAt(index);
+    setFlipping(false);
+    clearTimeout(settleTimer.current);
+    const at = index;
+    settleTimer.current = setTimeout(() => setSettledAt(at), hype >= 5 ? SETTLE_BIG_MS : SETTLE_MS);
     onReveal?.(index);
     setFx((n) => n + 1);
     setSeen((s) => [...s.slice(0, index), card.rarity]);
@@ -171,6 +197,14 @@ export function RevealStack({ cards, firsts, onDone, onReveal }: Props) {
     if (index + 1 >= cards.length) onDone();
     else setIndex(index + 1);
   };
+
+  // où en est la révélation (pour fêter une emote débloquée entre deux cartes)
+  const revealedCount = revealed ? index + 1 : index;
+  const busy = flipping || (revealed ? settledAt !== index : level > 0);
+  useEffect(() => {
+    onProgress?.(revealedCount, busy);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealedCount, busy]);
 
   const dimStyle = useAnimatedStyle(() => ({ opacity: dim.value }));
   const tintStyle = useAnimatedStyle(() => ({ opacity: tint.value }));
