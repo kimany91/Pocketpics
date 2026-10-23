@@ -55,7 +55,7 @@ export default function BattleTab() {
   const divineUnlocked = useGame((s) => s.save?.divineUnlocked ?? false);
   const current = Math.min(TOTAL_LEVELS, cleared + 1);
   const level = getLevel(current);
-  /** Le Volcan est battu : la Divine attend au sanctuaire avant la suite. */
+  /** La Tempête est battue : la Divine attend au sanctuaire avant la suite. */
   const gated = cleared >= DIVINE_GATE && !divineUnlocked && cleared < TOTAL_LEVELS;
   const panelW = width - 32;
   const myRank = rankOf(rank ? shownMmr(rank) : 0);

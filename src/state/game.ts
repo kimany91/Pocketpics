@@ -86,7 +86,7 @@ interface GameStore {
   renameAttack(id: string, slot: 0 | 1, name: string): void;
   /** Note une victoire au niveau `n` de l'aventure (débloque le suivant), garde les meilleures étoiles et verse les pièces. */
   winLevel(n: number, stars: number): SoloReward | null;
-  /** Sanctuaire de l'aventure (après le Volcan) : débloque la Divine dans les paquets et la suite de l'aventure. */
+  /** Sanctuaire de l'aventure (après la Tempête) : débloque la Divine dans les paquets et la suite de l'aventure. */
   unlockDivine(): boolean;
   /** Après la victoire contre le Grand Portrait : crée l'unique carte Galaxy du joueur (à partir d'une nouvelle photo). */
   claimGalaxy(): Promise<Card | null>;

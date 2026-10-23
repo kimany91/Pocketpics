@@ -245,7 +245,7 @@ Six rangs, chacun en trois divisions : **Papier**, **Bronze**, **Argent**, **Tit
 
 La table des raretés ci-dessous donne les chances **de base** de chaque carte. Trois mécaniques s'y ajoutent, avec un état rangé dans la sauvegarde (`luck`).
 
-- **Divine à débloquer** : tant que la Divine n'a pas été débloquée au sanctuaire de l'aventure (après le Volcan), aucune Divine ne sort des paquets : une Divine tirée devient une Ultra Légendaire. La Galaxy ne sort jamais d'un paquet.
+- **Divine à débloquer** : tant que la Divine n'a pas été débloquée au sanctuaire de l'aventure (après la Tempête), aucune Divine ne sort des paquets : une Divine tirée devient une Ultra Légendaire. La Galaxy ne sort jamais d'un paquet.
 - **Paquets de départ** : dans une nouvelle partie, le 1er et le 2e paquet se terminent par une **Super Rare**, le 3e par une **Épique** (exactement). Les autres cartes de ces paquets restent en dessous (Rare au plus dans les deux premiers, Super Rare au plus dans le 3e), pour que la belle carte soit révélée en dernier. Ça ne se produit qu'une fois, et « Effacer ma partie de test » (navigateur) relance une partie neuve, donc ces paquets aussi.
 - **Malchance** : après 20 cartes sans Épique ou mieux, la chance d'en avoir une monte de 2,5 points par carte. Elle est garantie à la 40e carte. Même principe pour Légendaire ou mieux : la chance monte après 180 cartes, et la Légendaire est garantie à la 350e. Le compteur repart à zéro dès que la carte sort.
 - **Paquets brillants** : 1 paquet sur 20 environ (garanti au plus tard au 30e) est doré et contient une carte Super Rare ou mieux. Le sachet doré et l'annonce apparaissent avant de déchirer.

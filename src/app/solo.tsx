@@ -1,7 +1,7 @@
 /**
  * Aventure solo : la carte des 21 mondes. On touche un niveau débloqué pour
  * voir l'adversaire, ses cartes et ce qu'il rapporte, puis « Jouer ». Après
- * le Volcan, on débloque d'abord la Divine au sanctuaire (cérémonie).
+ * la Tempête, on débloque d'abord la Divine au sanctuaire (cérémonie).
  */
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -78,7 +78,7 @@ export default function SoloScreen() {
   const [focusKey, setFocusKey] = useState(0);
   const totalStars = stars.reduce((a, b) => a + b, 0);
   const current = Math.min(TOTAL_LEVELS, cleared + 1);
-  /** Le Volcan est battu, la Divine attend au sanctuaire. */
+  /** La Tempête est battue, la Divine attend au sanctuaire. */
   const gated = cleared >= DIVINE_GATE && !divineUnlocked;
   /** Tuto : premier combat guidé. */
   const tuto = useTutoStep() === 'battle';
@@ -255,7 +255,7 @@ function LevelSheet({
   best: number;
   done: boolean;
   locked: boolean;
-  /** Après le Volcan : la Divine n'est pas encore débloquée au sanctuaire. */
+  /** Après la Tempête : la Divine n'est pas encore débloquée au sanctuaire. */
   divineLocked: boolean;
   onClose(): void;
   bottom: number;

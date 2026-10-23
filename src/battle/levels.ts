@@ -51,6 +51,8 @@ export function worldOf(n: number): number {
  */
 export const DIVINE_GATE = lastLevel(ARENAS.findIndex((a) => a.id === 8) + 1);
 export const needsDivine = (n: number) => n > DIVINE_GATE;
+/** Nom du monde qu'il faut finir pour atteindre le sanctuaire (« La Tempête ») : tiré des mondes, pas écrit en dur. */
+export const DIVINE_GATE_PLACE = ARENAS[worldOf(DIVINE_GATE) - 1].place;
 
 export interface Level {
   /** 1 → TOTAL_LEVELS */

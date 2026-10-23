@@ -1,10 +1,10 @@
 /**
- * Le sanctuaire de la Divine, entre le Volcan et la Tempête : une bande de
+ * Le sanctuaire de la Divine, entre la Tempête et l'Archipel : une bande de
  * vide presque noir, quelques étoiles, un pont de pierre et de lumière qui la
  * traverse, et au milieu du pont, debout, la grande carte Divine.
  *
  * Trois états :
- *  - pas encore atteint (Volcan pas battu) : la carte est éteinte, cadenas ;
+ *  - pas encore atteint (Tempête pas battue) : la carte est éteinte, cadenas ;
  *  - atteint : la carte respire et brille, le repère du joueur l'attend, « Touche la carte » ;
  *  - débloquée : la carte rayonne, avec sa plaque « Débloquée ».
  */
@@ -15,6 +15,7 @@ import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, wi
 import Svg, { Circle, Ellipse, G, Line, Path, Rect } from 'react-native-svg';
 
 import * as BotArt from '../../battle/botArt';
+import { DIVINE_GATE_PLACE } from '../../battle/levels';
 import { CARD_RATIO, fonts } from '../../theme';
 import { haptic } from '../../utils/haptics';
 import { AppText } from '../AppText';
@@ -28,6 +29,9 @@ import { OUTLINE as OL, SANCTUARY_VOID } from './worlds';
 export const sanctuaryArt = (): number | undefined => (BotArt as { SANCTUARY_ART?: number }).SANCTUARY_ART ?? BotArt.botArt('bot:10:2');
 
 export const SANCTUARY_CARD = { id: 'sanctuary-divine', rarity: 'divine', name: 'La Divine' };
+
+/** Le monde à battre, dans une phrase : « la Tempête » (d'après « La Tempête », le nom du monde). */
+const gateSentence = DIVINE_GATE_PLACE.charAt(0).toLowerCase() + DIVINE_GATE_PLACE.slice(1);
 /** Largeur de la carte debout sur le pont. */
 export const SANCTUARY_CARD_W = 156;
 
@@ -204,7 +208,7 @@ function Caption({ x, y, width, state }: { x: number; y: number; width: number; 
       {state === 'far' ? (
         <View style={styles.capDark}>
           <Ionicons name="lock-closed" size={13} color="#C9C1DE" />
-          <AppText style={styles.capDarkText}>Bats le Volcan pour l’atteindre</AppText>
+          <AppText style={styles.capDarkText}>Bats {gateSentence} pour l’atteindre</AppText>
         </View>
       ) : state === 'ready' ? (
         <View style={styles.capGold}>

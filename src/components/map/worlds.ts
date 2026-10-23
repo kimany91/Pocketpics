@@ -198,7 +198,7 @@ export const WORLD_LOOKS: WorldLook[] = [
   { ground: '#150D2E', speck: '#3A2A6E', road: '#A3122C', roadEdge: '#E8B43A', roadLine: '#F7D46B', roadStyle: 'carpet', node: '#6A2FC2', hero: 'grandFrame', texture: 'sparkle', straight: true, decor: [['frame', 2], ['pillar', 2], ['pedestal', 2], ['stanchion', 1]] },
 ];
 
-/** Le vide du sanctuaire de la Divine, entre le Volcan et la Tempête. */
+/** Le vide du sanctuaire de la Divine, entre la Tempête et l'Archipel. */
 export const SANCTUARY_VOID = '#07051A';
 
 /** Hauteur du ciel noir en haut du dernier monde (la Lune), horizon compris. */

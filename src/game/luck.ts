@@ -10,7 +10,7 @@
  *  - Paquets brillants : de temps en temps, un paquet doré contient une carte
  *    Super Rare ou mieux. On le voit avant de l'ouvrir.
  *  - Divine : impossible à tirer tant qu'elle n'est pas débloquée au sanctuaire
- *    de l'aventure (après le Volcan) ; une Divine tirée devient alors une Ultra
+ *    de l'aventure (après la Tempête) ; une Divine tirée devient alors une Ultra
  *    Légendaire. La Galaxy, elle, ne sort jamais d'un paquet.
  *
  * Tout est pur (aucun accès disque) : l'état est rangé dans la sauvegarde.

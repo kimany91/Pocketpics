@@ -4,8 +4,8 @@
  * de chaque monde, et placement des décors à l'écart de la route.
  *
  * Les mondes n'ont pas tous la même taille (`worldSize`) : le dernier, la
- * Galerie, a 30 niveaux alignés sur une route toute droite. Après la Tempête
- * et la Tempête, la route traverse le sanctuaire de la Divine : une bande de
+ * Galerie, a 30 niveaux alignés sur une route toute droite. Juste après la
+ * Tempête, la route traverse le sanctuaire de la Divine : une bande de
  * vide, franchie par un pont, avec la carte Divine au milieu.
  *
  * Repère : x de 0 à `width`, y de 0 (haut de la carte) à `height` (bas). Le
@@ -259,7 +259,7 @@ export function mapLayout(width: number): MapLayout {
   if (hit) return hit;
   const { pts: nodes, height } = nodePositions(width);
   const cx = width / 2;
-  // sanctuaire : au-dessus du Volcan, la route file droit au milieu, sur le pont
+  // sanctuaire : au-dessus de la Tempête, la route file droit au milieu, sur le pont
   const gateNode = nodes[DIVINE_GATE - 1];
   const sBottom = gateNode.y - GATE_PAD;
   const sTop = sBottom - SANCTUARY_H;
