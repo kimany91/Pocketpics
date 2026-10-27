@@ -35,6 +35,7 @@ export const galleryPhotoCount = (): number | null => null;
 export const canImportFolder = () => false;
 export const importWholeFolder = (): Promise<GalleryAccess> => requestGalleryAccess();
 export const isDesktopBrowser = () => false;
+export const importProgress = (): { done: number; total: number } | null => null;
 
 /**
  * Identifiants de toutes les photos (lecture rapide des métadonnées seulement).

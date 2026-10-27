@@ -8,7 +8,7 @@ import { StyleSheet, View } from 'react-native';
 import { Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { galleryPhotoCount, getGalleryAccess, onGalleryChange } from '../game/gallery';
+import { galleryPhotoCount, getGalleryAccess, importProgress, onGalleryChange } from '../game/gallery';
 import { colors } from '../theme';
 import { AppText } from './AppText';
 import { Button } from './Button';
@@ -26,9 +26,13 @@ interface Props {
 export function GalleryImportSheet({ open, onClose, onPick, onFolder, onDemo }: Props) {
   const insets = useSafeAreaInsets();
   const [count, setCount] = useState(0);
+  const [progress, setProgress] = useState(importProgress());
 
   useEffect(() => {
-    const refresh = () => setCount(galleryPhotoCount() ?? 0);
+    const refresh = () => {
+      setCount(galleryPhotoCount() ?? 0);
+      setProgress(importProgress());
+    };
     void getGalleryAccess().then(refresh);
     return onGalleryChange(refresh);
   }, []);
@@ -47,7 +51,11 @@ export function GalleryImportSheet({ open, onClose, onPick, onFolder, onDemo }: 
             : "PocketPics tire ses cartes au hasard dans tes photos. Ton navigateur ne donne pas accès à toute la galerie : sélectionne tout ce que tu veux mettre en jeu."}
         </AppText>
 
-        {count > 0 ? (
+        {progress ? (
+          <AppText variant="label" style={{ color: colors.gold }}>
+            {`Import des photos… ${progress.done} / ${progress.total} (tu peux déjà jouer)`}
+          </AppText>
+        ) : count > 0 ? (
           <AppText variant="label" style={{ color: colors.success }}>
             {`${count} photo${count > 1 ? 's' : ''} déjà dans ta galerie`}
           </AppText>
@@ -62,7 +70,7 @@ export function GalleryImportSheet({ open, onClose, onPick, onFolder, onDemo }: 
         <AppText variant="caption" style={{ textAlign: 'center', lineHeight: 19 }}>
           {onFolder
             ? 'Choisis le dossier qui contient tes photos (ex. Images). Toutes les images, sous-dossiers compris, entrent dans le jeu.'
-            : "Rien ne s'ouvre ? Copie des photos puis appuie sur Ctrl+V, ou glisse-les sur cette page."}
+            : 'Beaucoup de photos ? Glisse le doigt sur la grille pour en cocher plein d’un coup. Elles sont réduites une par une, sans bloquer le téléphone.'}
         </AppText>
 
         <View style={styles.row}>

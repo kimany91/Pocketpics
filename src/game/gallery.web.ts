@@ -60,18 +60,89 @@ export async function getGalleryAccess(): Promise<GalleryAccess> {
 
 const isImage = (f: File) => f.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i.test(f.name);
 
-function addFiles(files: File[]): number {
-  let added = 0;
-  for (const f of files) {
-    if (!isImage(f)) continue;
-    const id = `${f.name}-${f.size}-${f.lastModified}`;
-    if (picked.has(id)) continue;
-    picked.set(id, f);
-    void idbPut('gallery', id, f);
-    added++;
+/** Côté court gardé à l'import : celui de l'image d'une carte (au-delà, rien ne sert). */
+const STORED_SHORT_SIDE = 1080;
+
+/**
+ * Une photo importée, réduite avant d'être gardée : une photo d'iPhone pèse
+ * 3 à 5 Mo et 12 millions de pixels ; en garder 100 telles quelles (et toutes
+ * à la fois) fait planter Safari. Le nom du fichier est gardé (captures d'écran).
+ */
+async function shrink(f: File): Promise<File> {
+  let source: ImageBitmap | HTMLImageElement | null = null;
+  let url: string | null = null;
+  try {
+    try {
+      source = await createImageBitmap(f);
+    } catch {
+      url = URL.createObjectURL(f);
+      source = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Image illisible'));
+        img.src = url!;
+      });
+    }
+    const w = 'naturalWidth' in source ? source.naturalWidth : source.width;
+    const h = 'naturalHeight' in source ? source.naturalHeight : source.height;
+    if (!w || !h) return f;
+    const k = Math.min(1, STORED_SHORT_SIDE / Math.min(w, h));
+    if (k === 1 && f.size < 1.5e6) return f; // déjà petite
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(w * k);
+    canvas.height = Math.round(h * k);
+    canvas.getContext('2d')!.drawImage(source, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.88));
+    // libère la mémoire du canevas tout de suite (Safari la compte à part, et elle est limitée)
+    canvas.width = canvas.height = 0;
+    return blob ? new File([blob], f.name, { type: 'image/jpeg', lastModified: f.lastModified }) : f;
+  } finally {
+    if (source && 'close' in source) source.close();
+    if (url) URL.revokeObjectURL(url);
   }
-  if (added > 0) changeListeners.forEach((cb) => cb());
-  return added;
+}
+
+/** Import en cours : photos traitées sur le total (`null` : rien en cours). */
+let importing: { done: number; total: number } | null = null;
+let queue: Promise<void> = Promise.resolve();
+
+export const importProgress = () => importing;
+
+const notify = () => changeListeners.forEach((cb) => cb());
+
+/**
+ * Ajoute des photos une par une (réduites, puis gardées). Rend la main dès que
+ * la première est prête, pour que le jeu puisse déjà s'ouvrir ; les autres
+ * suivent en fond, sans bloquer le téléphone.
+ */
+function addFiles(files: File[]): Promise<void> {
+  const todo = files.filter((f) => isImage(f) && !picked.has(`${f.name}-${f.size}-${f.lastModified}`));
+  if (todo.length === 0) return Promise.resolve();
+  importing = { done: 0, total: (importing ? importing.total - importing.done : 0) + todo.length };
+  notify();
+  let first: () => void = () => {};
+  const firstReady = new Promise<void>((r) => (first = r));
+  queue = queue.then(async () => {
+    for (const f of todo) {
+      const id = `${f.name}-${f.size}-${f.lastModified}`;
+      try {
+        const small = await shrink(f);
+        picked.set(id, small);
+        await idbPut('gallery', id, small);
+      } catch {
+        // photo illisible : on passe
+      }
+      if (importing) importing = { ...importing, done: importing.done + 1 };
+      first();
+      // de l'air pour l'écran entre deux photos, et un compteur à jour de temps en temps
+      if ((importing?.done ?? 0) % 5 === 0) notify();
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    importing = null;
+    notify();
+    first();
+  });
+  return firstReady;
 }
 
 /**
@@ -83,7 +154,7 @@ export function requestGalleryAccess(source: GallerySource = 'photos'): Promise<
   const chosen = pickFiles(source);
   return (async () => {
     await ensureLoaded();
-    addFiles(await chosen);
+    await addFiles(await chosen);
     return accessNow();
   })();
 }
@@ -123,7 +194,7 @@ export async function importWholeFolder(): Promise<GalleryAccess> {
   if (dir) {
     const files: File[] = [];
     await readFolder(dir, files);
-    addFiles(files);
+    await addFiles(files);
   } else if (error?.name !== 'AbortError') {
     // Accès refusé (ex. dans une fenêtre intégrée) : on passe par l'import de dossier classique.
     return requestGalleryAccess('folder');
@@ -165,7 +236,7 @@ if (typeof window !== 'undefined') {
     const files = Array.from(e.clipboardData?.files ?? []);
     if (files.length > 0) {
       e.preventDefault();
-      addFiles(files);
+      void addFiles(files);
     }
   });
   window.addEventListener('dragover', (e) => e.preventDefault());
@@ -173,7 +244,7 @@ if (typeof window !== 'undefined') {
     const files = Array.from(e.dataTransfer?.files ?? []);
     if (files.length > 0) {
       e.preventDefault();
-      addFiles(files);
+      void addFiles(files);
     }
   });
 }
