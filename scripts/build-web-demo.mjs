@@ -19,6 +19,13 @@ import { basename, extname, join, resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const outDir = resolve(process.argv[2] ?? join(root, 'dist-demo'));
 const exportDir = join(outDir, 'web-export');
+/**
+ * Site hébergé (GitHub Pages) : dossier du site, par exemple « /Pocketpics ».
+ * Le jeu y garde ses vraies adresses (rechargement, écran d'accueil de l'iPhone),
+ * et la page devient une appli web complète (index.html, 404.html, manifeste, icône).
+ * Sans lui : la page unique de démo, sans en-tête, pour l'aperçu sur claude.ai.
+ */
+const siteBase = (process.env.POCKETPICS_BASE_URL ?? '').replace(/\/+$/, '');
 
 execSync(`npx expo export --platform web --output-dir "${exportDir}"`, {
   cwd: root,
@@ -27,7 +34,7 @@ execSync(`npx expo export --platform web --output-dir "${exportDir}"`, {
 });
 
 const html = readFileSync(join(exportDir, 'index.html'), 'utf8');
-const entry = html.match(/<script src="([^"]+entry-[^"]+\.js)"/)?.[1];
+const entry = html.match(/<script src="([^"]+entry-[^"]+\.js)"/)?.[1]?.slice(siteBase.length);
 if (!entry) throw new Error('Bundle introuvable dans index.html');
 let js = readFileSync(join(exportDir, entry), 'utf8');
 
@@ -43,7 +50,8 @@ rmSync(join(outDir, 'clip'), { recursive: true, force: true });
 mkdirSync(join(outDir, 'clip'), { recursive: true });
 rmSync(join(outDir, 'emote'), { recursive: true, force: true });
 mkdirSync(join(outDir, 'emote'), { recursive: true });
-js = js.replace(/"(\/assets\/[^"]+)"/g, (m, path) => {
+const assetRef = new RegExp(`"${siteBase.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(\\/assets\\/[^"]+)"`, 'g');
+js = js.replace(assetRef, (m, path) => {
   const file = join(exportDir, path);
   if (!existsSync(file)) return m;
   if (!keepFont(path)) return '"data:,"';
@@ -76,15 +84,43 @@ js = js.replace(/"(\/assets\/[^"]+)"/g, (m, path) => {
 // Empêche une fin de balise </script> prématurée.
 js = js.replace(/<\/script/gi, '<\\/script');
 
-const page = `<title>PocketPics</title>
-<meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Version navigateur de test de PocketPics">
-<style>
+const style = `<style>
   :root { --bg: #09090b; color-scheme: dark; }
-  html, body { height: 100%; background: var(--bg); }
+  html, body { height: 100%; margin: 0; background: var(--bg); }
   body { overflow: hidden; overscroll-behavior: none; }
   #root { display: flex; height: 100%; flex: 1; }
-</style>
+</style>`;
+const page = siteBase
+  ? `<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>PocketPics</title>
+<meta name="description" content="PocketPics : tes photos deviennent des cartes à collectionner">
+<meta name="theme-color" content="#09090B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PocketPics">
+<link rel="apple-touch-icon" href="${siteBase}/apple-touch-icon.png">
+<link rel="manifest" href="${siteBase}/manifest.webmanifest">
+${style}
+</head>
+<body>
+<div id="root"></div>
+<script>
+  // Musiques (music/) et modèle (clip/) sont à la racine du site, quelle que soit la page ouverte.
+  self.__ppBase = location.origin + ${JSON.stringify(`${siteBase}/`)};
+</script>
+<script>${js}</script>
+</body>
+</html>
+`
+  : `<title>PocketPics</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Version navigateur de test de PocketPics">
+${style}
 <div id="root"></div>
 <script>
   // Dossier de la page, retenu avant de changer l'adresse : musiques (music/) et modèle (clip/) sont à côté.
@@ -95,12 +131,31 @@ const page = `<title>PocketPics</title>
 <script>${js}</script>
 `;
 mkdirSync(outDir, { recursive: true });
-const target = join(outDir, 'pocketpics.html');
+const target = join(outDir, siteBase ? 'index.html' : 'pocketpics.html');
 writeFileSync(target, page);
+if (siteBase) {
+  // une page du jeu rechargée (…/collection) : l'hébergeur répond par 404.html, qui relance le jeu au bon écran
+  writeFileSync(join(outDir, '404.html'), page);
+  copyFileSync(join(root, 'assets/icon.png'), join(outDir, 'apple-touch-icon.png'));
+  const manifest = {
+    name: 'PocketPics',
+    short_name: 'PocketPics',
+    lang: 'fr',
+    start_url: `${siteBase}/`,
+    scope: `${siteBase}/`,
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: '#09090B',
+    theme_color: '#09090B',
+    icons: [{ src: `${siteBase}/apple-touch-icon.png`, sizes: '1024x1024', type: 'image/png', purpose: 'any' }],
+  };
+  writeFileSync(join(outDir, 'manifest.webmanifest'), JSON.stringify(manifest, null, 1));
+  rmSync(exportDir, { recursive: true, force: true });
+}
 // type de chaque fichier publié (le jeu lit les morceaux du modèle en octets bruts, quel que soit le type annoncé)
 const TYPE = { '.mp4': 'video/mp4', '.bin': 'application/octet-stream', '.wav': 'audio/wav' };
 const files = [...side].sort(([a], [b]) => a.localeCompare(b)).map(([path, bytes]) => ({ path, bytes, contentType: TYPE[extname(path)] ?? 'application/octet-stream' }));
-writeFileSync(join(outDir, 'files.json'), JSON.stringify({ page: { path: 'pocketpics.html', bytes: Buffer.byteLength(page) }, files }, null, 1));
+writeFileSync(join(outDir, 'files.json'), JSON.stringify({ page: { path: basename(target), bytes: Buffer.byteLength(page) }, files }, null, 1));
 const big = files.filter((f) => f.bytes > 15e6);
 if (big.length) throw new Error(`Fichiers trop lourds pour être publiés : ${big.map((f) => f.path).join(', ')}`);
 if (Buffer.byteLength(page) > 16e6) throw new Error('La page dépasse 16 Mo');

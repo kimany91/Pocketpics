@@ -1,0 +1,48 @@
+# Publie la version web sur GitHub Pages : https://kimany91.github.io/Pocketpics/
+# Rien à installer : sur iPhone, on l'ouvre dans Safari (et on peut l'ajouter
+# à l'écran d'accueil). Mêmes relais et même protocole que la V1 ANDROID.
+name: Site web
+
+on:
+  push:
+    branches: [claude/pocketpics-mobile-game-vrqwwq]
+    paths: ['src/**', 'assets/**', 'scripts/build-web-demo.mjs', 'app.json', 'app.config.js', 'package.json', 'package-lock.json', '.github/workflows/web.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Version web (dossier /Pocketpics)
+        env:
+          POCKETPICS_BASE_URL: /${{ github.event.repository.name }}
+        run: node scripts/build-web-demo.mjs site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
