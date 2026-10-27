@@ -26,7 +26,7 @@ import { PseudoStep } from '../../components/tuto/PseudoStep';
 import { Screen } from '../../components/Screen';
 import { TabHeader } from '../../components/TabHeader';
 import { useTutoStep } from '../../state/useTuto';
-import { GAME_VERSION, platformLabel } from '../../game/version';
+import { GAME_VERSION, RELEASE_NAME, platformLabel } from '../../game/version';
 import { inPhase1, phase2Todo } from '../../game/tutorial';
 import { useGame } from '../../state/game';
 import { useEntrance } from '../../theme/motion';
@@ -98,7 +98,7 @@ export default function ProfileTab() {
         <Section visit={visit} index={5} title="Statistiques">
           <ProfileStats />
           <AppText variant="caption" style={styles.version}>
-            {`PocketPics · version ${GAME_VERSION} · ${platformLabel()}`}
+            {RELEASE_NAME ? `PocketPics ${RELEASE_NAME} · version ${GAME_VERSION}` : `PocketPics · version ${GAME_VERSION} · ${platformLabel()}`}
           </AppText>
         </Section>
 

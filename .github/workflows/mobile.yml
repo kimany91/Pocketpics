@@ -1,0 +1,112 @@
+# Compile les versions à installer soi-même, sans store :
+#  - V1 ANDROID : un .apk à ouvrir sur le téléphone ;
+#  - V1 IOS : un .ipa non signé, que SideStore, AltStore ou Sideloadly signent
+#    avec l'identifiant Apple (gratuit) de celui qui l'installe.
+# Chaque fichier est publié dans une release GitHub (v1-android, v1-ios).
+# Lancement : onglet Actions › « Versions mobiles » › Run workflow.
+name: Versions mobiles
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Version à compiler
+        type: choice
+        options: [les-deux, android, ios]
+        default: les-deux
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mobile-${{ github.ref }}-${{ inputs.platform }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: V1 ANDROID (.apk)
+    if: inputs.platform != 'ios'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - name: Projet Android (expo prebuild)
+        run: npx expo prebuild --platform android --clean --no-install
+      - name: Compilation (release, signée avec la clé de debug du modèle)
+        working-directory: android
+        env:
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx6g
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a
+      - name: Renommer
+        run: cp android/app/build/outputs/apk/release/app-release.apk PocketPics-V1-ANDROID.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PocketPics-V1-ANDROID
+          path: PocketPics-V1-ANDROID.apk
+      - name: Release « V1 ANDROID »
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete v1-android --yes --cleanup-tag || true
+          gh release create v1-android PocketPics-V1-ANDROID.apk \
+            --target "$GITHUB_SHA" --title "V1 ANDROID" \
+            --notes "PocketPics V1 ANDROID. Ouvre PocketPics-V1-ANDROID.apk sur le téléphone (autorise l'installation d'applis inconnues), puis donne l'accès à toute la galerie. Joue avec la V1 IOS et la version web : amis, échanges, Pioche amicale, combats."
+
+  ios:
+    name: V1 IOS (.ipa non signé)
+    if: inputs.platform != 'android'
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Projet iOS (expo prebuild + pods)
+        run: npx expo prebuild --platform ios --clean
+      - name: Retirer le droit aux notifications à distance
+        # Un identifiant Apple gratuit ne peut pas signer « aps-environment ».
+        # Les notifications entre amis passent déjà par un projet EAS absent ici ;
+        # « Tes paquets sont prêts » (notification locale) reste.
+        run: |
+          for f in ios/*/*.entitlements; do
+            /usr/libexec/PlistBuddy -c "Delete :aps-environment" "$f" || true
+            cat "$f"
+          done
+      - name: Compilation (sans signature)
+        run: |
+          set -o pipefail
+          xcodebuild -workspace ios/PocketPics.xcworkspace -scheme PocketPics \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/PocketPics.xcarchive" archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            | tail -n 200
+      - name: Paquet .ipa
+        run: |
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$RUNNER_TEMP/PocketPics.xcarchive/Products/Applications/PocketPics.app" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/PocketPics-V1-IOS.ipa" Payload)
+          ls -lh PocketPics-V1-IOS.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PocketPics-V1-IOS
+          path: PocketPics-V1-IOS.ipa
+      - name: Release « V1 IOS »
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete v1-ios --yes --cleanup-tag || true
+          gh release create v1-ios PocketPics-V1-IOS.ipa \
+            --target "$GITHUB_SHA" --title "V1 IOS" \
+            --notes "PocketPics V1 IOS, sans App Store. Installe PocketPics-V1-IOS.ipa avec SideStore, AltStore ou Sideloadly et ton identifiant Apple gratuit (à renouveler tous les 7 jours), active le Mode développeur, puis choisis « Accès complet » aux photos. Joue avec la V1 ANDROID et la version web : amis, échanges, Pioche amicale, combats."

@@ -194,10 +194,6 @@ export function canImportFolder(): boolean {
   return typeof navigator !== 'undefined' && !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 }
 
-export async function openLimitedPicker() {
-  await requestGalleryAccess('photos');
-}
-
 const DEMO_COUNT = 400;
 export async function listPhotoIds() {
   await ensureLoaded();

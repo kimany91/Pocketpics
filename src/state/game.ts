@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { create } from 'zustand';
 
-import { CARDS_PER_PACK, MAX_STORED_DRAWS, computeDraws, consumeDraw, type DrawStatus } from '../game/draws';
+import { CARDS_PER_PACK, computeDraws, consumeDraw, type DrawStatus } from '../game/draws';
 import { setMusicVolume } from '../audio/music';
 import { setSfxVolume } from '../audio/sfx';
 import { ATTACK_NAME_MAX } from '../battle/stats';
@@ -178,7 +178,6 @@ interface GameStore {
 
   /* ---------------------------------- Tuto ---------------------------------- */
   /** Démo navigateur uniquement : remet la réserve de tirages au maximum. */
-  refillDrawsForDemo(): void;
   /** Passe à l'étape suivante si on est bien à `from` (sans effet sinon : on peut appeler deux fois). */
   advanceTuto(from: TutoStep): void;
   /** Tuto : ajoute Paul (sans réseau, il accepte tout de suite) et passe à la Pioche. */
@@ -942,11 +941,6 @@ export const useGame = create<GameStore>((set, get) => ({
     const next: SaveState = { ...save, emotes };
     persistState(next);
     set({ save: next });
-  },
-
-  refillDrawsForDemo() {
-    const save = get().save;
-    if (save) set({ save: { ...save, draws: { charges: MAX_STORED_DRAWS, anchor: Date.now() } } });
   },
 
   advanceTuto(from) {

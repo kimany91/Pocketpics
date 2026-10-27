@@ -299,7 +299,7 @@ npm start                     # puis ouvrir l'app de dev sur le téléphone
 
 Version navigateur de test (l'échange en ligne y fonctionne aussi, sauf dans une fenêtre qui bloque les WebSockets) : `npm run web`, ou `node scripts/build-web-demo.mjs` pour obtenir `dist-demo/pocketpics.html` (images et polices intégrées) et, à côté, le dossier `dist-demo/music/` des 20 musiques de combat (en `.mp4`, servi par tous les hébergeurs) : à héberger ensemble n'importe où (sans le dossier, le jeu marche mais sans musique).
 - **Fenêtre d'import** : à chaque arrivée sur la version navigateur, une fenêtre propose d'ajouter tes photos. Sur ordinateur (Chrome, Edge, Safari, Firefox), on importe un dossier entier, sous-dossiers compris, sans choisir les photos une par une. Sur téléphone, le navigateur ne donne pas accès à la galerie entière : on sélectionne les photos avec le sélecteur. Elle revient en rechargeant la page.
-- **Limite** : une page web ne peut pas lire la galerie seule. La version navigateur reste donc un test ; le jeu complet sur téléphone (`expo run`, ou build de développement EAS) lit toute la galerie automatiquement, sans choix.
+- **Limite** : une page web ne peut pas lire la galerie seule. La version navigateur reste donc un test ; le jeu complet sur téléphone (V1 ANDROID, V1 IOS, `expo run` ou build EAS) lit toute la galerie automatiquement, sans choix, et refuse un accès limité à quelques photos.
 - **Galerie** : un navigateur ne laisse aucun site lire la galerie tout seul. « Ouvrir ma galerie » ouvre le sélecteur de photos de l'appareil, où l'on peut tout sélectionner. Sur ordinateur, « Importer un dossier » ajoute un dossier entier. Des photos de démo générées sont aussi disponibles. Si le sélecteur est bloqué (fenêtre intégrée, webview), on peut aussi coller des photos (Ctrl+V) ou les glisser sur la page.
 - **Sauvegarde** : les photos importées, la collection et les tirages restent dans le navigateur (IndexedDB) d'une visite à l'autre. L'écran des taux d'obtention permet de tout effacer.
 
@@ -309,6 +309,17 @@ Vérifications :
 npm run typecheck   # TypeScript
 npm test            # tests de logique : raretés, recharge, codes d'échange, sauvegarde
 ```
+
+## V1 ANDROID et V1 IOS (sans store)
+
+Le workflow GitHub Actions « Versions mobiles » (`.github/workflows/mobile.yml`, onglet Actions › Run workflow) compile les deux versions et les publie dans les releases du dépôt :
+
+- **V1 ANDROID** (release `v1-android`) : `PocketPics-V1-ANDROID.apk`, à ouvrir sur le téléphone après avoir autorisé l'installation d'applis inconnues. L'APK est signé avec la clé de debug du modèle Expo : il s'installe par-dessus la version précédente, mais ne convient pas au Play Store.
+- **V1 IOS** (release `v1-ios`) : `PocketPics-V1-IOS.ipa`, non signé. Il s'installe sans App Store avec SideStore, AltStore ou Sideloadly et un identifiant Apple gratuit, qui le signent : il faut un ordinateur la première fois, le Mode développeur sur l'iPhone, et renouveler la signature tous les 7 jours (SideStore le fait seul une fois réglé). Un identifiant gratuit ne permet pas les notifications à distance : le droit `aps-environment` est retiré à la compilation. « Tes paquets sont prêts », une notification locale, fonctionne toujours. Avec un compte Apple Developer (99 $/an), TestFlight évite le renouvellement.
+
+**Toute la galerie, ou rien.** Sur Android comme sur iPhone, le système propose toujours de ne partager que quelques photos, et aucune app ne peut l'empêcher. Le jeu refuse cet accès limité : il n'ouvre aucun paquet et ne donne aucune photo à la Pioche amicale d'un ami. À la place, il affiche « Autoriser toute la galerie », qui ouvre les réglages (« Accès complet » sur iPhone, « Toujours tout autoriser » sur Android), et le jeu repart dès le retour dans l'app. Il ne propose jamais de sélection de photos. Sur iPhone, la proposition automatique « modifier la sélection » d'iOS est coupée (`preventAutomaticLimitedAccessAlert`).
+
+Les deux versions, la version web et les autres versions jouent ensemble : amis, échanges, Pioche amicale et combats passent par les mêmes relais et le même protocole (voir « Compatibilité entre versions »). Le profil et l'écran des taux affichent « PocketPics V1 ANDROID » ou « PocketPics V1 IOS ».
 
 ## Publier sur le Play Store / l'App Store
 

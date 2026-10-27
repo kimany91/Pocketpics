@@ -6,7 +6,6 @@ import {
   MediaType,
   Query,
   getPermissionsAsync,
-  presentPermissionsPicker,
   requestPermissionsAsync,
 } from 'expo-media-library';
 import { Platform } from 'react-native';
@@ -37,14 +36,13 @@ export const canImportFolder = () => false;
 export const importWholeFolder = (): Promise<GalleryAccess> => requestGalleryAccess();
 export const isDesktopBrowser = () => false;
 
-export async function openLimitedPicker() {
-  try {
-    await presentPermissionsPicker(['photo']);
-  } catch {}
-}
-
-/** Identifiants de toutes les photos (lecture rapide des métadonnées seulement). */
+/**
+ * Identifiants de toutes les photos (lecture rapide des métadonnées seulement).
+ * Toute la galerie ou rien : avec un accès limité à quelques photos, aucune
+ * n'est prise (ni pour un paquet, ni pour la Pioche amicale d'un ami).
+ */
 export async function listPhotoIds(): Promise<string[]> {
+  if ((await getGalleryAccess()) !== 'granted') return [];
   const metas = await new Query().eq(AssetField.MEDIA_TYPE, MediaType.IMAGE).exeForMetadata();
   return metas.map((m) => m.id);
 }

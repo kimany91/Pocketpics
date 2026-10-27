@@ -6,8 +6,12 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { inClaudeViewer } from '../trade/roomRelay';
-import { platformName, shortVersion } from './versionCore';
+import { platformName, releaseName, shortVersion } from './versionCore';
 
-export const GAME_VERSION = shortVersion(Constants.expoConfig?.version ?? '1.0.0');
+const RAW_VERSION = Constants.expoConfig?.version ?? '1.0.0';
+export const GAME_VERSION = shortVersion(RAW_VERSION);
+
+/** « V1 ANDROID » / « V1 IOS » sur téléphone, `null` dans un navigateur. */
+export const RELEASE_NAME = releaseName(Platform.OS, RAW_VERSION);
 
 export const platformLabel = () => platformName(Platform.OS, inClaudeViewer());

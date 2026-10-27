@@ -31,7 +31,7 @@ import { Screen } from '../../components/Screen';
 import { TutoArrow } from '../../components/tuto/TutoArrow';
 import { DRAW_INTERVAL_MS, MAX_STORED_DRAWS, formatCountdown } from '../../game/draws';
 import { DRAW_PRICE } from '../../game/economy';
-import { isDesktopBrowser, openLimitedPicker } from '../../game/gallery';
+import { isDesktopBrowser } from '../../game/gallery';
 import { RARITIES, getRarity } from '../../game/rarity';
 import { useGame } from '../../state/game';
 import { useDrawStatus } from '../../state/useDrawStatus';
@@ -48,7 +48,6 @@ export default function DrawScreen() {
   const soundVolume = useGame((s) => s.save?.soundVolume ?? DEFAULT_SOUND_VOLUME);
   const coins = useGame((s) => s.save?.coins ?? 0);
   const buyDraw = useGame((s) => s.buyDraw);
-  const refillDrawsForDemo = useGame((s) => s.refillDrawsForDemo);
   const [soundOpen, setSoundOpen] = useState(false);
   const { charges, available, nextAt, now } = useDrawStatus();
   const { access, request, pickDemo, importFolder } = useGalleryAccess();
@@ -61,7 +60,8 @@ export default function DrawScreen() {
   /** Hauteur de la zone du paquet : il y tient toujours, sans passer sous les quêtes. */
   const [stageH, setStageH] = useState(0);
   const packW = Math.min(width * 0.5, (height * 0.36) / PACK_RATIO, 240, stageH > 0 ? (stageH * 0.78) / PACK_RATIO : 240);
-  const canOpen = available > 0 && (access === 'granted' || access === 'limited');
+  // Toute la galerie ou rien : un accès limité à quelques photos ne suffit pas (Android et iPhone).
+  const canOpen = available > 0 && access === 'granted';
   const best = RARITIES[cards.reduce((m, c) => Math.max(m, getRarity(c.rarity).rank), -1)];
 
   const { visit, focused } = useEntrance();
@@ -173,8 +173,6 @@ export default function DrawScreen() {
             ) : null}
           </Animated.View>
         </Pressable>
-        {/* Version web de test seulement : recharge les tirages (jamais sur Android ni iOS) */}
-        {isWeb && (access === 'granted' || access === 'limited') ? <RefillFab onPress={refillDrawsForDemo} /> : null}
         {showPioche ? (
           <PiocheBadge
             active={focused}
@@ -206,6 +204,16 @@ export default function DrawScreen() {
           <Permission
             text="PocketPics a besoin de ta galerie pour créer tes cartes."
             action="Ouvrir les réglages"
+            onPress={() => Linking.openSettings()}
+          />
+        ) : access === 'limited' && !isWeb ? (
+          <Permission
+            text={
+              Platform.OS === 'ios'
+                ? 'PocketPics prend toute ta galerie, ou rien : pas de sélection. Dans Réglages › Photos, choisis « Accès complet ».'
+                : 'PocketPics prend toute ta galerie, ou rien : pas de sélection. Dans les réglages, choisis « Toujours tout autoriser » pour les photos.'
+            }
+            action="Autoriser toute la galerie"
             onPress={() => Linking.openSettings()}
           />
         ) : access === 'undetermined' && isWeb ? (
@@ -256,14 +264,6 @@ export default function DrawScreen() {
                 ) : null}
               </View>
             )}
-            {!isWeb && access === 'limited' ? (
-              <Pressable onPress={openLimitedPicker} style={styles.limited}>
-                <AppText variant="caption">Accès limité à certaines photos · </AppText>
-                <AppText variant="caption" style={{ color: colors.text }}>
-                  Modifier
-                </AppText>
-              </Pressable>
-            ) : null}
           </>
         )}
       </Rise>
@@ -323,24 +323,6 @@ function PiocheBadge({ active, count, style, onPress, hint }: { active: boolean;
       {/* en dessous : au-dessus, la bulle sortirait de l'écran */}
       {hint ? <TutoArrow text={hint} side="bottom" gap={4} ring={20} /> : null}
     </View>
-  );
-}
-
-/** Bouton flottant de la version web de test : remet des tirages pour essayer. */
-function RefillFab({ onPress }: { onPress(): void }) {
-  return (
-    <Pressable
-      onPress={() => {
-        haptic.light();
-        onPress();
-      }}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel="Recharger les tirages (test)"
-      style={({ pressed }) => [styles.fab, pressed && { transform: [{ scale: 0.92 }] }]}
-    >
-      <Ionicons name="refresh" size={18} color={colors.text} />
-    </Pressable>
   );
 }
 
@@ -469,7 +451,6 @@ const styles = StyleSheet.create({
   pipFill: { height: '100%', backgroundColor: 'rgba(247,201,72,0.35)' },
   timer: { textAlign: 'center', marginBottom: 14, fontFamily: fonts.medium, fontVariant: ['tabular-nums'] },
   limited: { flexDirection: 'row', justifyContent: 'center', marginTop: 10 },
-  fab: { position: 'absolute', left: 16, top: 6, alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.borderStrong, boxShadow: '0px 4px 14px rgba(0,0,0,0.5)' },
   buyBase: { height: 58, borderRadius: 18, backgroundColor: '#B8861E', paddingBottom: 4 },
   buy: {
     flex: 1,

@@ -63,7 +63,8 @@
           "savePhotosPermission": false,
           "granularPermissions": [
             "photo"
-          ]
+          ],
+          "preventAutomaticLimitedAccessAlert": true
         }
       ],
       [
@@ -75,8 +76,19 @@
         }
       ],
       "expo-updates",
-      ["expo-audio", { "microphonePermission": false, "recordAudioAndroid": false }],
-      ["expo-notifications", { "color": "#B99CFF" }],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#B99CFF"
+        }
+      ],
       [
         "react-native-google-mobile-ads",
         {

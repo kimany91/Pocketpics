@@ -11,3 +11,14 @@ export function platformName(os: string, viewer: boolean): string {
   if (os === 'ios') return 'Apple (iOS)';
   return viewer ? 'Web (lien)' : 'Web (index.html)';
 }
+
+/**
+ * Nom de la version installée sur téléphone : « V1 ANDROID », « V1 IOS » (le
+ * chiffre est le premier de la version). `null` dans un navigateur.
+ */
+export function releaseName(os: string, version: string): string | null {
+  const major = /^(\d+)/.exec(version)?.[1] ?? '1';
+  if (os === 'android') return `V${major} ANDROID`;
+  if (os === 'ios') return `V${major} IOS`;
+  return null;
+}

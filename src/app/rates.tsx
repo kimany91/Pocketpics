@@ -8,7 +8,7 @@ import { Rise } from '../components/Rise';
 import { CARDS_PER_PACK, MAX_STORED_DRAWS } from '../game/draws';
 import { PACK_RARITIES, RARITIES, formatChance } from '../game/rarity';
 import { useGame } from '../state/game';
-import { GAME_VERSION, platformLabel } from '../game/version';
+import { GAME_VERSION, RELEASE_NAME, platformLabel } from '../game/version';
 import { resetWebSave } from '../storage/disk';
 import { goBack } from '../utils/nav';
 import { colors } from '../theme';
@@ -50,7 +50,7 @@ export default function RatesScreen() {
         })}
         {Platform.OS === 'web' ? <WebReset /> : null}
         <View style={styles.version}>
-          <AppText variant="caption">{`PocketPics · version ${GAME_VERSION}`}</AppText>
+          <AppText variant="caption">{RELEASE_NAME ? `PocketPics ${RELEASE_NAME} · version ${GAME_VERSION}` : `PocketPics · version ${GAME_VERSION}`}</AppText>
           <AppText variant="caption">{platformLabel()}</AppText>
         </View>
       </ScrollView>
