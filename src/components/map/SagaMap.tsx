@@ -32,7 +32,7 @@ import { type MapLayout, ROAD_W, type WorldArea, mapLayout } from './mapLayout';
 import { PlayerPin } from './Pin';
 import { EmoteMarker, GalaxyMarker, type MapReward } from './Rewards';
 import { type Rect4, SanctuarySection, type SanctuaryState } from './Sanctuary';
-import { OUTLINE, SKY_H, WORLD_LOOKS } from './worlds';
+import { OUTLINE, SANCTUARY_VOID, SKY_H, WORLD_LOOKS } from './worlds';
 
 /** Portrait de l'adversaire du monde à la place w (illustration de sa meilleure carte, d'après l'id fixe du monde). */
 const portraitOf = (w: number) => botArt(portraitRef(ARENAS[w - 1]));
@@ -347,6 +347,11 @@ export function SagaMap({
     const near = (top: number, bottom: number, margin = 250) => bottom > y - margin && top < y + height + margin;
     const ids: string[] = layout.worlds.filter((a) => near(a.top, a.bottom)).map((a) => String(a.w));
     if (near(layout.sanctuary.top, layout.sanctuary.bottom)) ids.push('s');
+    // Mondes dessinés (« d<monde> ») : ceux à moins d'un écran et demi. Les autres ne sont
+    // qu'un fond de couleur : sur Android, chaque dessin de monde occupe une image d'une
+    // dizaine de Mo, et la carte entière (20 000 px) faisait planter l'app faute de mémoire.
+    for (const a of layout.worlds) if (near(a.top, a.bottom, height * 1.5)) ids.push(`d${a.w}`);
+    if (near(layout.sanctuary.top, layout.sanctuary.bottom, height * 1.5)) ids.push('ds');
     for (const m of emotes) {
       const r = layout.worlds[m.world - 1]?.reward;
       if (r && near(r.y - 40, r.y + 40, 80)) ids.push(`e${m.world}`);
@@ -383,10 +388,14 @@ export function SagaMap({
         if (next !== alive) setAlive(next);
       }}
     >
-      {layout.worlds.map((a) => (
-        <WorldSection key={a.w} area={a} layout={layout} alive={aliveSet.has(String(a.w))} />
-      ))}
-      <SanctuarySection
+      {layout.worlds.map((a) =>
+        aliveSet.has(`d${a.w}`) ? (
+          <WorldSection key={a.w} area={a} layout={layout} alive={aliveSet.has(String(a.w))} />
+        ) : (
+          <View key={a.w} style={[styles.abs, { left: 0, top: a.top, width: layout.width, height: a.bottom - a.top, backgroundColor: WORLD_LOOKS[a.w - 1].ground }]} pointerEvents="none" />
+        ),
+      )}
+      {aliveSet.has('ds') ? <SanctuarySection
         s={layout.sanctuary}
         width={width}
         nextGround={WORLD_LOOKS[worldOf(DIVINE_GATE + 1) - 1].ground}
@@ -394,7 +403,12 @@ export function SagaMap({
         state={sanctuaryState}
         playerInitial={playerInitial}
         onUnlock={onSanctuary}
-      />
+      /> : (
+        <View
+          style={[styles.abs, { left: 0, top: layout.sanctuary.top, width: layout.width, height: layout.sanctuary.bottom - layout.sanctuary.top, backgroundColor: SANCTUARY_VOID }]}
+          pointerEvents="none"
+        />
+      )}
       {layout.worlds.map((a) => (
         <WorldSign key={`s${a.w}`} area={a} />
       ))}
