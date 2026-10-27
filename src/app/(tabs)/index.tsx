@@ -19,6 +19,7 @@ import { AppText } from '../../components/AppText';
 import { Button, Glint } from '../../components/Button';
 import { CoinChip, CoinIcon } from '../../components/Coin';
 import { GalleryImportSheet } from '../../components/GalleryImportSheet';
+import { PhotoPickerOverlay } from '../../components/PhotoPickerOverlay';
 import { SoundSheet, volumeIcon } from '../../components/SoundSheet';
 import { DEFAULT_SOUND_VOLUME } from '../../storage/model';
 import { Glow, Twinkles } from '../../components/fx';
@@ -50,7 +51,7 @@ export default function DrawScreen() {
   const buyDraw = useGame((s) => s.buyDraw);
   const [soundOpen, setSoundOpen] = useState(false);
   const { charges, available, nextAt, now } = useDrawStatus();
-  const { access, request, pickDemo, importFolder } = useGalleryAccess();
+  const { access, request, pickDemo, importFolder, importFiles } = useGalleryAccess();
   const isWeb = Platform.OS === 'web';
   // Version navigateur : la fenêtre d'import s'ouvre à chaque arrivée sur le jeu.
   const [importOpen, setImportOpen] = useState(false);
@@ -221,7 +222,10 @@ export default function DrawScreen() {
             <AppText variant="caption" style={{ textAlign: 'center' }}>
               Ton navigateur ne laisse pas un site lire ta galerie seul : ouvre-la et sélectionne les photos à mettre en jeu (tu peux tout sélectionner). Elles restent mémorisées pour la prochaine fois. Tu peux aussi glisser des photos sur cette page ou les coller (Ctrl+V).
             </AppText>
-            <Button label="Ouvrir ma galerie" icon="images" size="lg" onPress={() => request('photos')} />
+            <View>
+              <Button label="Ouvrir ma galerie" icon="images" size="lg" onPress={() => request('photos')} />
+              <PhotoPickerOverlay label="Ouvrir ma galerie" onFiles={(files) => void importFiles(files)} />
+            </View>
             <View style={styles.limited}>
               <Pressable onPress={pickDemo} hitSlop={8}>
                 <AppText variant="caption" style={{ color: colors.text }}>
@@ -275,6 +279,7 @@ export default function DrawScreen() {
           onPick={() => request('photos')}
           onFolder={isDesktopBrowser() ? importFolder : undefined}
           onDemo={pickDemo}
+          onFiles={(files) => void importFiles(files)}
         />
       ) : null}
     </Screen>

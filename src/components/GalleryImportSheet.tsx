@@ -12,6 +12,7 @@ import { galleryPhotoCount, getGalleryAccess, importProgress, onGalleryChange } 
 import { colors } from '../theme';
 import { AppText } from './AppText';
 import { Button } from './Button';
+import { PhotoPickerOverlay } from './PhotoPickerOverlay';
 
 interface Props {
   open: boolean;
@@ -21,9 +22,11 @@ interface Props {
   /** Ordinateur : tout un dossier est importé d'un coup, sans choix de photo. */
   onFolder?: () => void;
   onDemo(): void;
+  /** Photos choisies en touchant directement le sélecteur posé sur le bouton (sûr sur iPhone). */
+  onFiles?: (files: File[]) => void;
 }
 
-export function GalleryImportSheet({ open, onClose, onPick, onFolder, onDemo }: Props) {
+export function GalleryImportSheet({ open, onClose, onPick, onFolder, onDemo, onFiles }: Props) {
   const insets = useSafeAreaInsets();
   const [count, setCount] = useState(0);
   const [progress, setProgress] = useState(importProgress());
@@ -64,7 +67,10 @@ export function GalleryImportSheet({ open, onClose, onPick, onFolder, onDemo }: 
         {onFolder ? (
           <Button label="Importer mon dossier de photos" icon="folder-open" size="lg" onPress={onFolder} />
         ) : (
-          <Button label="Choisir mes photos" icon="images" size="lg" onPress={onPick} />
+          <View>
+            <Button label="Choisir mes photos" icon="images" size="lg" onPress={onPick} />
+            {onFiles ? <PhotoPickerOverlay label="Choisir mes photos" onFiles={onFiles} /> : null}
+          </View>
         )}
 
         <AppText variant="caption" style={{ textAlign: 'center', lineHeight: 19 }}>

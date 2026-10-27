@@ -159,6 +159,17 @@ export function requestGalleryAccess(source: GallerySource = 'photos'): Promise<
   })();
 }
 
+/**
+ * Photos choisies directement dans un vrai sélecteur posé sur le bouton
+ * (`PhotoPickerOverlay`) : sur iPhone, Safari et Chrome n'ouvrent pas toujours
+ * un sélecteur déclenché par le code, mais toujours celui que le doigt touche.
+ */
+export async function importPickedFiles(files: File[]): Promise<GalleryAccess> {
+  await ensureLoaded();
+  await addFiles(files);
+  return accessNow();
+}
+
 /* Import de tout un dossier, sans choisir de photo une par une.
    Chrome/Edge : le dossier est lu en entier (sous-dossiers compris).
    Ailleurs : l'import de dossier du navigateur, sur ordinateur uniquement. */
@@ -210,7 +221,8 @@ function pickFiles(source: GallerySource): Promise<File[]> {
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = true;
-    input.style.display = 'none';
+    // invisible mais présent (Safari sur iPhone ignore parfois le clic sur un champ en display: none)
+    Object.assign(input.style, { position: 'fixed', left: '0', top: '0', width: '1px', height: '1px', opacity: '0', pointerEvents: 'none' });
     if (source === 'folder') input.setAttribute('webkitdirectory', '');
     else input.accept = 'image/*';
     let done = false;
@@ -221,8 +233,18 @@ function pickFiles(source: GallerySource): Promise<File[]> {
       input.remove();
       resolve(files);
     };
-    input.addEventListener('change', finish);
-    input.addEventListener('cancel', finish);
+    input.addEventListener('change', () => {
+      // choix arrivé après une annulation signalée trop tôt (iPhone) : les photos entrent quand même
+      if (done) void addFiles(Array.from(input.files ?? []));
+      finish();
+    });
+    input.addEventListener('cancel', () => {
+      if (done) return;
+      done = true;
+      resolve([]);
+      // on garde le champ un moment, au cas où le choix arrive quand même
+      setTimeout(() => input.remove(), 10 * 60_000);
+    });
     // Attaché au document : certains navigateurs ignorent le clic sur un input détaché.
     document.body.appendChild(input);
     input.click();

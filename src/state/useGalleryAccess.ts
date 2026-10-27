@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 
-import { type GalleryAccess, type GallerySource, chooseDemoPhotos, getGalleryAccess, importWholeFolder, onGalleryChange, requestGalleryAccess } from '../game/gallery';
+import {
+  type GalleryAccess,
+  type GallerySource,
+  chooseDemoPhotos,
+  getGalleryAccess,
+  importPickedFiles,
+  importWholeFolder,
+  onGalleryChange,
+  requestGalleryAccess,
+} from '../game/gallery';
 
 export function useGalleryAccess() {
   const [access, setAccess] = useState<GalleryAccess | null>(null);
@@ -36,5 +45,10 @@ export function useGalleryAccess() {
     setAccess(await chooseDemoPhotos());
   }, []);
 
-  return { access, request, refresh, pickDemo, importFolder };
+  /** Photos choisies dans le sélecteur posé sur le bouton (navigateur). */
+  const importFiles = useCallback(async (files: File[]) => {
+    setAccess(await importPickedFiles(files));
+  }, []);
+
+  return { access, request, refresh, pickDemo, importFolder, importFiles };
 }

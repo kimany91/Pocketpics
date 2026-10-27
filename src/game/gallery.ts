@@ -36,6 +36,7 @@ export const canImportFolder = () => false;
 export const importWholeFolder = (): Promise<GalleryAccess> => requestGalleryAccess();
 export const isDesktopBrowser = () => false;
 export const importProgress = (): { done: number; total: number } | null => null;
+export const importPickedFiles = (_files: Blob[]): Promise<GalleryAccess> => getGalleryAccess();
 
 /**
  * Identifiants de toutes les photos (lecture rapide des métadonnées seulement).
