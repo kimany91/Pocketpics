@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ReduceMotion, ReducedMotionConfig } from 'react-native-reanimated';
 
 import { initSfx } from '../audio/sfx';
 import { AppText } from '../components/AppText';
@@ -72,6 +73,9 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
+      {/* Le jeu reste animé même si l'appareil demande moins d'animations (« Réduire les
+          animations » sur Mac, iPhone, Android) : sinon tout est figé, paquets compris. */}
+      <ReducedMotionConfig mode={ReduceMotion.Never} />
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, ...PUSH }} screenLayout={Platform.OS === 'web' ? webSceneLayout : undefined}>
         <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
