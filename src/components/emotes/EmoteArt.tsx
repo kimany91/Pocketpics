@@ -11,6 +11,7 @@
 import { type ReactNode, useEffect, useId } from 'react';
 import { View } from 'react-native';
 import { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import { useLoopActive } from '../../theme/motion';
 import { Circle, Defs, Ellipse, Line, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { colors } from '../../theme';
@@ -956,16 +957,19 @@ export function EmoteArt({ id, size, animated = true, playKey = 0 }: { id: strin
   const s = size / 100;
   const t = useSharedValue(animated ? 0 : (POSE[id] ?? 0.5));
   const duration = emoteDuration(id);
+  const shown = useLoopActive();
   useEffect(() => {
     cancelAnimation(t);
     if (!animated) {
       t.value = POSE[id] ?? 0.5;
       return;
     }
+    // écran caché : l'emote s'arrête où elle est, et repart au retour
+    if (!shown) return;
     t.value = 0;
     t.value = withRepeat(withTiming(1, { duration, easing: Easing.linear }), -1, false);
     return () => cancelAnimation(t);
-  }, [t, animated, id, duration, playKey]);
+  }, [t, animated, shown, id, duration, playKey]);
   const Art = ART[id] ?? Unknown;
   // dégradés SVG à part pour chaque emote affichée (voir GradientSuffix)
   const suffix = `-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;

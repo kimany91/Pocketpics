@@ -40,7 +40,7 @@ import { useGalleryAccess } from '../../state/useGalleryAccess';
 import { useTutoStep } from '../../state/useTuto';
 import { isUnlocked } from '../../game/tutorial';
 import { colors, fonts } from '../../theme';
-import { springs, useEntrance } from '../../theme/motion';
+import { springs, useEntrance, useScreenFocus } from '../../theme/motion';
 import { haptic } from '../../utils/haptics';
 
 export default function DrawScreen() {
@@ -50,7 +50,8 @@ export default function DrawScreen() {
   const coins = useGame((s) => s.save?.coins ?? 0);
   const buyDraw = useGame((s) => s.buyDraw);
   const [soundOpen, setSoundOpen] = useState(false);
-  const { charges, available, nextAt, now } = useDrawStatus();
+  // le compte à rebours ne tourne que quand l'accueil est affiché
+  const { charges, available, nextAt, now } = useDrawStatus(1000, useScreenFocus());
   const { access, request, pickDemo, importFolder, importFiles } = useGalleryAccess();
   const isWeb = Platform.OS === 'web';
   // Version navigateur : la fenêtre d'import s'ouvre à chaque arrivée sur le jeu.

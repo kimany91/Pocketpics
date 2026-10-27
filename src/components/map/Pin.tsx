@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import { useLoopActive } from '../../theme/motion';
 
 import { fonts } from '../../theme';
 import { AppText } from '../AppText';
@@ -9,10 +10,13 @@ import { OUTLINE } from './worlds';
 
 export function PlayerPin({ initial }: { initial: string }) {
   const hop = useSharedValue(0);
+  const on = useLoopActive();
   useEffect(() => {
+    if (!on) return;
+    hop.value = 0;
     hop.value = withRepeat(withTiming(1, { duration: 520, easing: Easing.out(Easing.quad) }), -1, true);
     return () => cancelAnimation(hop);
-  }, [hop]);
+  }, [on, hop]);
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: -hop.value * 9 }] }));
   return (
     <Animated.View style={[styles.pin, style]} pointerEvents="none">

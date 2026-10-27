@@ -264,13 +264,16 @@ function WorldSign({ area }: { area: WorldArea }) {
   );
 }
 
-function Mascot({ area, defeated }: { area: WorldArea; defeated: boolean }) {
+/** `alive` : son monde est près de l'écran (sinon elle reste immobile). */
+function Mascot({ area, defeated, alive }: { area: WorldArea; defeated: boolean; alive: boolean }) {
   const level = getLevel(lastLevel(area.w));
   const bob = useSharedValue(0);
   useEffect(() => {
+    if (!alive) return;
+    bob.value = 0;
     bob.value = withRepeat(withTiming(1, { duration: 1500 + area.w * 70, easing: Easing.inOut(Easing.sin) }), -1, true);
     return () => cancelAnimation(bob);
-  }, [bob, area.w]);
+  }, [alive, bob, area.w]);
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: -bob.value * 5 }, { rotate: `${(bob.value - 0.5) * 6}deg` }] }));
   if (!level) return null;
   return (
@@ -409,11 +412,12 @@ export function SagaMap({
           pointerEvents="none"
         />
       )}
-      {layout.worlds.map((a) => (
-        <WorldSign key={`s${a.w}`} area={a} />
-      ))}
+      {/* panneaux et mascottes : seulement pour les mondes dessinés (les autres sont loin de l'écran) */}
+      {layout.worlds.map((a) => (aliveSet.has(`d${a.w}`) ? <WorldSign key={`s${a.w}`} area={a} /> : null))}
       {layout.worlds.map((a) =>
-        WORLD_LOOKS[a.w - 1].straight ? null : <Mascot key={`m${a.w}`} area={a} defeated={(stars[lastLevel(a.w) - 1] ?? 0) > 0} />,
+        WORLD_LOOKS[a.w - 1].straight || !aliveSet.has(`d${a.w}`) ? null : (
+          <Mascot key={`m${a.w}`} area={a} defeated={(stars[lastLevel(a.w) - 1] ?? 0) > 0} alive={aliveSet.has(String(a.w))} />
+        ),
       )}
       {/* récompenses : avant les niveaux, qui passent devant (et restent faciles à toucher) */}
       {emotes.map((m) => {

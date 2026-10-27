@@ -20,6 +20,7 @@ import { getRarity } from '../../game/rarity';
 import { usePhotoMark } from '../../state/game';
 import { cardImageUri, cardThumbUri } from '../../storage/disk';
 import { CARD_RATIO, fonts } from '../../theme';
+import { useLoopActive } from '../../theme/motion';
 import { Twinkles } from '../fx';
 import { Frame, Sweep } from './Frame';
 import { Foil } from './Foil';
@@ -218,11 +219,13 @@ const DIVINE_HOLO = ['rgba(255,236,170,0.95)', 'rgba(220,224,235,0.7)', 'rgba(25
 /** Pellicule holographique qui glisse lentement sur la photo. */
 function Holo({ colors, opacity, animated, width, height, duration = 4200 }: { colors: string[]; opacity: number; animated: boolean; width: number; height: number; duration?: number }) {
   const p = useSharedValue(0);
+  const on = useLoopActive(animated);
   useEffect(() => {
-    if (!animated) return;
+    if (!on) return;
+    p.value = 0;
     p.value = withRepeat(withTiming(1, { duration, easing: Easing.inOut(Easing.sin) }), -1, true);
     return () => cancelAnimation(p);
-  }, [animated, duration, p]);
+  }, [on, duration, p]);
   const style = useAnimatedStyle(() => ({
     transform: [{ translateX: interpolate(p.value, [0, 1], [-width * 0.5, 0]) }, { translateY: interpolate(p.value, [0, 1], [0, -height * 0.25]) }],
   }));

@@ -64,6 +64,16 @@ export function useScreenFocus() {
 }
 
 /**
+ * Une animation en boucle ne tourne que si l'écran qui la contient est affiché :
+ * les onglets cachés et l'écran sous une carte ouverte gardent leurs effets
+ * immobiles (rien ne se voit, mais des dizaines de boucles ralentissaient tout).
+ */
+export function useLoopActive(animated = true) {
+  const focused = useScreenFocus();
+  return animated && focused;
+}
+
+/**
  * Entrée de menu rejouée à chaque arrivée sur l'écran par les onglets. Au
  * retour d'un écran poussé par-dessus (solo, multijoueur…), on ne la rejoue
  * pas : le menu était juste en dessous, il réapparaît tel quel.

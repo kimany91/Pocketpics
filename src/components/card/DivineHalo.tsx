@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { Easing, type SharedValue, cancelAnimation, useAnimatedStyle, useDerivedValue, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 
+import { useLoopActive } from '../../theme/motion';
 import { Glow } from '../fx';
 
 /** Durée d'un tour complet des couleurs. */
@@ -24,14 +25,18 @@ function useWave(phase: SharedValue<number>, at: number) {
 export function DivineHalo({ width, height }: { width: number; height: number }) {
   const phase = useSharedValue(0);
   const breath = useSharedValue(0);
+  const on = useLoopActive();
   useEffect(() => {
+    if (!on) return;
+    phase.value = 0;
+    breath.value = 0;
     phase.value = withRepeat(withTiming(1, { duration: CYCLE, easing: Easing.linear }), -1, false);
     breath.value = withRepeat(withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.sin) }), -1, true);
     return () => {
       cancelAnimation(phase);
       cancelAnimation(breath);
     };
-  }, [phase, breath]);
+  }, [on, phase, breath]);
   const gold = useWave(phase, 0);
   const pink = useWave(phase, 0.25);
   const cyan = useWave(phase, 0.5);

@@ -27,6 +27,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { useLoopActive } from '../../theme/motion';
 
 import { botArt } from '../../battle/botArt';
 import { avatarAura } from '../../game/avatarAura';
@@ -111,11 +112,13 @@ export function Avatar({ photo, size, fallback }: { photo: AvatarPhoto | null; s
 /** Halo de la couleur de la rareté derrière la photo ; il respire doucement pour les plus rares. */
 function AuraGlow({ color, size, strength, pulse }: { color: string; size: number; strength: number; pulse: boolean }) {
   const o = useSharedValue(strength);
+  const on = useLoopActive(pulse);
   useEffect(() => {
-    if (!pulse) return;
+    if (!on) return;
+    o.value = strength;
     o.value = withRepeat(withSequence(withTiming(strength, { duration: 1300, easing: Easing.inOut(Easing.sin) }), withTiming(strength * 0.55, { duration: 1300, easing: Easing.inOut(Easing.sin) })), -1, false);
     return () => cancelAnimation(o);
-  }, [pulse, strength, o]);
+  }, [on, strength, o]);
   const g = size * (1.35 + strength * 0.6);
   return <Glow color={color} size={g} opacity={o} style={{ left: (size - g) / 2, top: (size - g) / 2 }} />;
 }
@@ -123,10 +126,14 @@ function AuraGlow({ color, size, strength, pulse }: { color: string; size: numbe
 /** Anneau aux couleurs du cadre de la rareté, qui tourne autour de la photo. */
 function SpinRing({ colors: c, size, width }: { colors: string[]; size: number; width: number }) {
   const rot = useSharedValue(0);
+  const on = useLoopActive();
   useEffect(() => {
-    rot.value = withRepeat(withTiming(360, { duration: 4200, easing: Easing.linear }), -1, false);
+    if (!on) return;
+    const from = rot.value % 360;
+    rot.value = from;
+    rot.value = withRepeat(withTiming(from + 360, { duration: 4200, easing: Easing.linear }), -1, false);
     return () => cancelAnimation(rot);
-  }, [rot]);
+  }, [on, rot]);
   const d = size + width * 2;
   const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot.value}deg` }] }));
   return (
@@ -139,10 +146,13 @@ function SpinRing({ colors: c, size, width }: { colors: string[]; size: number; 
 /** Divine et Galaxy : un reflet traverse la photo depuis le côté, de temps en temps. */
 function Sheen({ size }: { size: number }) {
   const p = useSharedValue(0);
+  const on = useLoopActive();
   useEffect(() => {
+    if (!on) return;
+    p.value = 0;
     p.value = withDelay(500, withRepeat(withSequence(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.quad) }), withTiming(1, { duration: 1300 }), withTiming(0, { duration: 0 })), -1, false));
     return () => cancelAnimation(p);
-  }, [p]);
+  }, [on, p]);
   const band = size * 0.42;
   const style = useAnimatedStyle(() => ({ transform: [{ translateX: -band * 1.5 + p.value * (size + band * 2) }, { skewX: '-22deg' }] }));
   return (

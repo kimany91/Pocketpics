@@ -9,6 +9,7 @@ import { type Href, router } from 'expo-router';
 import { type ComponentProps, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { Easing, FadeInDown, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import { useLoopActive } from '../../theme/motion';
 
 import { playSfx } from '../../audio/sfx';
 import type { QuestDef, QuestStatus, Reward } from '../../game/quests';
@@ -93,15 +94,16 @@ export function QuestRow({ status, index }: { status: QuestStatus; index: number
   const [sparks, setSparks] = useState(0);
   const pop = useSharedValue(0);
   const pulse = useSharedValue(0);
+  const pulsing = useLoopActive(ready);
   useEffect(() => {
-    if (!ready) {
+    if (!pulsing) {
       cancelAnimation(pulse);
       pulse.value = 0;
       return;
     }
     pulse.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }), -1, true);
     return () => cancelAnimation(pulse);
-  }, [ready, pulse]);
+  }, [pulsing, pulse]);
   const press = useSharedValue(0);
   const rowStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + pop.value * 0.03 - press.value * 0.02 }] }));
   const link = questLink(def);

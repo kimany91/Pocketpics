@@ -21,6 +21,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { useLoopActive } from '../theme/motion';
+
 const glowTex = require('../../assets/fx/glow.png');
 const sparkleTex = require('../../assets/fx/sparkle.png');
 const raysTex = require('../../assets/fx/rays.png');
@@ -64,10 +66,14 @@ export function Rays({
 }) {
   const rot = useSharedValue(0);
   const op = useSharedValue(0);
+  const on = useLoopActive(visible);
   useEffect(() => {
-    rot.value = withRepeat(withTiming(360, { duration, easing: Easing.linear }), -1, false);
+    if (!on) return;
+    const from = rot.value % 360;
+    rot.value = from;
+    rot.value = withRepeat(withTiming(from + 360, { duration, easing: Easing.linear }), -1, false);
     return () => cancelAnimation(rot);
-  }, [duration, rot]);
+  }, [on, duration, rot]);
   useEffect(() => {
     op.value = withTiming(visible ? 1 : 0, { duration: visible ? 700 : 350 });
   }, [visible, op]);
@@ -225,13 +231,16 @@ export function Twinkles({
 
 function Twinkle({ x, y, size, delay, color }: { x: number; y: number; size: number; delay: number; color: string }) {
   const p = useSharedValue(0);
+  const on = useLoopActive();
   useEffect(() => {
+    if (!on) return;
+    p.value = 0;
     p.value = withDelay(
       delay,
       withRepeat(withSequence(withTiming(1, { duration: 550, easing: Easing.out(Easing.quad) }), withTiming(0, { duration: 850 }), withTiming(0, { duration: 1000 })), -1, false),
     );
     return () => cancelAnimation(p);
-  }, [p, delay]);
+  }, [on, p, delay]);
   const style = useAnimatedStyle(() => ({ opacity: p.value, transform: [{ scale: 0.3 + p.value * 0.7 }, { rotate: `${p.value * 45}deg` }] }));
   return (
     <Animated.Image
@@ -282,10 +291,13 @@ export function Embers({
 
 function Ember({ x, drift, duration, delay, s, color, height }: { x: number; drift: number; duration: number; delay: number; s: number; color: string; height: number }) {
   const p = useSharedValue(0);
+  const on = useLoopActive();
   useEffect(() => {
+    if (!on) return;
+    p.value = 0;
     p.value = withDelay(delay, withRepeat(withTiming(1, { duration, easing: Easing.linear }), -1, false));
     return () => cancelAnimation(p);
-  }, [p, delay, duration]);
+  }, [on, p, delay, duration]);
   const style = useAnimatedStyle(() => {
     const t = p.value;
     return {

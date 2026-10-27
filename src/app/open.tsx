@@ -353,7 +353,8 @@ function Summary({
   paul?: boolean;
 }) {
   const { width } = useWindowDimensions();
-  const { available: charges } = useDrawStatus();
+  // seul le nombre compte ici : pas besoin de redessiner l’ouverture chaque seconde
+  const { available: charges } = useDrawStatus(15000);
   // Tuto : après le 1er paquet, flèche sur « Paquet suivant » ; après le 2e et chez Paul, « Continuer »
   const step = useTutoStep();
   const tutoNext = !paul && step === 'pack2' && charges > 0;

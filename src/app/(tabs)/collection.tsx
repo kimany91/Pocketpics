@@ -6,6 +6,7 @@ import {
   FlatList,
   type GestureResponderEvent,
   type LayoutChangeEvent,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -315,8 +316,11 @@ export default function CollectionScreen() {
             keyExtractor={(c) => c.id}
             contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 24, gap: GAP }}
             columnWrapperStyle={{ gap: GAP }}
-            initialNumToRender={18}
-            windowSize={7}
+            initialNumToRender={12}
+            maxToRenderPerBatch={8}
+            // moins de cartes montées hors de l'écran (chacune a ses effets) : défilement plus léger
+            windowSize={5}
+            removeClippedSubviews={Platform.OS === 'android'}
             onScroll={(e) => {
               scrollY.current = e.nativeEvent.contentOffset.y;
             }}

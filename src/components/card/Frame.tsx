@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import type { Rarity } from '../../game/rarity';
+import { useLoopActive } from '../../theme/motion';
 import { GalaxyFrame } from './Galaxy';
 
 const CHROMA = ['#FF6FA8', '#FFB86B', '#FFE66B', '#7CFFB2', '#6ED8FF', '#8C8CFF', '#D58CFF', '#FF6FA8'];
@@ -43,11 +44,15 @@ export function Frame({ rarity, width, height, animated }: { rarity: Rarity; wid
 /** Grand dégradé en rotation derrière la carte : donne un contour qui « tourne ». */
 function Spinning({ colors, width, height, animated, duration }: { colors: string[]; width: number; height: number; animated: boolean; duration: number }) {
   const rot = useSharedValue(25);
+  const on = useLoopActive(animated);
   useEffect(() => {
-    if (!animated) return;
-    rot.value = withRepeat(withTiming(385, { duration, easing: Easing.linear }), -1, false);
+    if (!on) return;
+    // reprise là où la boucle s'était arrêtée (écran caché), un tour complet à chaque fois
+    const from = rot.value % 360;
+    rot.value = from;
+    rot.value = withRepeat(withTiming(from + 360, { duration, easing: Easing.linear }), -1, false);
     return () => cancelAnimation(rot);
-  }, [animated, duration, rot]);
+  }, [on, duration, rot]);
   const d = Math.sqrt(width * width + height * height) * 1.05;
   const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${rot.value}deg` }] }));
   return (
@@ -60,10 +65,13 @@ function Spinning({ colors, width, height, animated, duration }: { colors: strin
 /** Reflet lumineux qui balaie la jauge dorée. */
 export function Sweep({ width, height, duration = 2600, intensity = 0.75 }: { width: number; height: number; duration?: number; intensity?: number }) {
   const p = useSharedValue(0);
+  const on = useLoopActive();
   useEffect(() => {
+    if (!on) return;
+    p.value = 0;
     p.value = withRepeat(withTiming(1, { duration, easing: Easing.inOut(Easing.quad) }), -1, false);
     return () => cancelAnimation(p);
-  }, [p, duration]);
+  }, [on, p, duration]);
   const band = width * 0.55;
   const style = useAnimatedStyle(() => ({
     transform: [{ translateX: -band * 1.5 + p.value * (width + band * 3) }, { rotate: '20deg' }],

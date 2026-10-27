@@ -49,6 +49,7 @@ import { cleanPseudo } from '../net/socialCore';
 import * as disk from '../storage/disk';
 import { MAX_PINNED } from '../storage/model';
 import type { Card, Friend, SaveState } from '../storage/model';
+import { currentPath, inBusyScreen } from './route';
 
 interface GameStore {
   ready: boolean;
@@ -292,7 +293,8 @@ export const useGame = create<GameStore>((set, get) => ({
       setMusicVolume(save.musicVolume);
       set({ ready: true, cards, save });
       // filtre de contenu adulte : le détecteur se prépare, puis les cartes pas encore vérifiées passent une à une
-      preloadNsfw();
+      // (un peu après le premier affichage, qui reste fluide ; un paquet ouvert avant le charge lui-même)
+      setTimeout(preloadNsfw, NSFW_PRELOAD_MS);
       setTimeout(() => void scanBacklog(), BACKLOG_DELAY_MS);
       // reconnaissance de la photo : le modèle se prépare un peu après, puis les cartes pas encore regardées
       // (tout de suite au début du tuto : les deux premiers paquets sont triés avec lui)
@@ -1046,10 +1048,27 @@ function rememberSkipped(e: unknown): never {
 
 /** Attente maximale du détecteur pendant l'ouverture d'un paquet (sinon : floutée, vérifiée juste après). */
 const PACK_SCAN_MS = 8000;
+/** Le détecteur se charge juste après le premier affichage. */
+const NSFW_PRELOAD_MS = 2500;
 /** Les anciennes cartes attendent un peu après le démarrage, pour ne pas le ralentir. */
 const BACKLOG_DELAY_MS = 4000;
-/** Pause entre deux anciennes cartes vérifiées en fond. */
-const BACKLOG_PAUSE_MS = 120;
+/**
+ * Pause entre deux anciennes cartes vérifiées en fond. Chaque vérification fait
+ * tourner un modèle d'image : enchaînées sans pause, elles occupaient le
+ * téléphone en continu (le jeu tombait à quelques images par seconde).
+ */
+const BACKLOG_PAUSE_MS = 2500;
+/** Les résultats des anciennes cartes s'appliquent par paquets : la collection ne se redessine pas à chaque carte. */
+const BACKLOG_FLUSH_MS = 5000;
+
+/**
+ * Le travail de fond (anciennes cartes) s'arrête pendant ce qui doit rester
+ * fluide : combat, ouverture de paquet, échange, pioche, carte de l'aventure.
+ */
+const backgroundPaused = () => inBusyScreen() || /^\/solo/.test(currentPath());
+async function whileBusy() {
+  while (backgroundPaused()) await new Promise((r) => setTimeout(r, 3000));
+}
 /** Le détecteur ne répond pas : on réessaie plus tard. */
 const BACKLOG_RETRY_MS = 30_000;
 /** Une carte dont la photo n'a pas pu être lue 3 fois est laissée pour cette session. */
@@ -1071,10 +1090,22 @@ function saveIndexSoon() {
 
 /** Note le résultat du détecteur sur une carte (la censure ne fait que s'ajouter). */
 function applyScan(id: string, censored: boolean) {
-  const cards = useGame.getState().cards.map((c) => (c.id === id ? withScan(c, censored) : c));
-  const card = cards.find((c) => c.id === id);
-  if (!card) return;
-  disk.updateCardSidecar(card);
+  applyScans(new Map([[id, censored]]));
+}
+
+/** Plusieurs résultats d'un coup : un seul nouvel état de la collection. */
+function applyScans(results: Map<string, boolean>) {
+  if (results.size === 0) return;
+  let touched = false;
+  const cards = useGame.getState().cards.map((c) => {
+    const censored = results.get(c.id);
+    if (censored === undefined) return c;
+    const card = withScan(c, censored);
+    disk.updateCardSidecar(card);
+    touched = true;
+    return card;
+  });
+  if (!touched) return;
   saveIndexSoon();
   useGame.setState({ cards });
 }
@@ -1090,9 +1121,16 @@ async function scanBacklog(): Promise<void> {
   if (backlogTimer) clearTimeout(backlogTimer);
   backlogTimer = null;
   let retry = false;
+  // anciennes cartes vérifiées, pas encore appliquées (voir BACKLOG_FLUSH_MS)
+  const held = new Map<string, boolean>();
+  let heldSince = 0;
+  const flush = () => {
+    applyScans(held);
+    held.clear();
+  };
   try {
     for (;;) {
-      const next = scanOrder(useGame.getState().cards).find((c) => (cardFails.get(c.id) ?? 0) < MAX_CARD_FAILS);
+      const next = scanOrder(useGame.getState().cards).find((c) => (cardFails.get(c.id) ?? 0) < MAX_CARD_FAILS && !held.has(c.id));
       if (!next) break;
       try {
         await nsfwReady();
@@ -1101,11 +1139,21 @@ async function scanBacklog(): Promise<void> {
         break;
       }
       const urgent = next.nsfwScan === 'pending';
+      if (!urgent) {
+        // les anciennes cartes attendent que l'écran soit calme, et les résultats sortent de temps en temps
+        if (held.size > 0 && (backgroundPaused() || Date.now() - heldSince > BACKLOG_FLUSH_MS)) flush();
+        await whileBusy();
+      }
       // carte reçue d'un autre joueur : sa miniature aussi vient de lui, elle est vérifiée à part
       const uris = new Set([disk.cardImageUri(next.id), ...(next.origin === 'draw' ? [] : [disk.cardThumbUri(next.id)])]);
       try {
         const verdicts = await Promise.all([...uris].map((u) => scanPhoto(u, urgent ? 'high' : 'low')));
-        applyScan(next.id, verdicts.some((v) => v));
+        const censored = verdicts.some((v) => v);
+        if (urgent) applyScan(next.id, censored);
+        else {
+          if (held.size === 0) heldSince = Date.now();
+          held.set(next.id, censored);
+        }
       } catch {
         cardFails.set(next.id, (cardFails.get(next.id) ?? 0) + 1);
         retry = true;
@@ -1113,6 +1161,7 @@ async function scanBacklog(): Promise<void> {
       if (!urgent) await new Promise((r) => setTimeout(r, BACKLOG_PAUSE_MS));
     }
   } finally {
+    flush();
     backlogRunning = false;
   }
   if (retry && !backlogTimer) backlogTimer = setTimeout(() => void scanBacklog(), BACKLOG_RETRY_MS);
@@ -1337,8 +1386,8 @@ async function recognizeBacklog(): Promise<void> {
       const next = recognitionOrder(useGame.getState().cards).find((c) => (recogFails.get(c.id) ?? 0) < MAX_CARD_FAILS && !lateIds.has(c.id));
       if (!next) break;
       const fresh = Date.now() - next.obtainedAt < RECOG_FRESH_MS;
-      if (!fresh && nsfwPending() > 0) {
-        await sleep(2000);
+      if (!fresh && (nsfwPending() > 0 || backgroundPaused())) {
+        await sleep(backgroundPaused() ? 3000 : 2000);
         continue;
       }
       try {

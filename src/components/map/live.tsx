@@ -11,7 +11,7 @@
  * Les animations ne touchent qu'aux transformations et à l'opacité.
  */
 import { useEffect, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   type SharedValue,
@@ -146,6 +146,12 @@ export const isLive = (k: DecorKind) => k in MOTION;
 const BOX = 120;
 const BASE = 100;
 
+/**
+ * Navigateur : chaque décor animé a son propre calque, déplacé tel quel par la
+ * carte graphique (sans lui, son dessin SVG était refait à chaque image).
+ */
+const LAYER = Platform.OS === 'web' ? ({ willChange: 'transform' } as object) : null;
+
 /** Petit hasard fixe par décor (phase, période). */
 const hash = (n: number) => {
   let x = (n * 2654435761) >>> 0;
@@ -190,7 +196,7 @@ function useFlicker(seed: number, off = 0.15) {
 /** Une petite image SVG placée en (x, y) : son repère local a (0, 0) au centre de la boîte. */
 function Part({ x, y, w, h, style, children, ox = w / 2, oy = h / 2 }: { x: number; y: number; w: number; h: number; style?: object; children: React.ReactNode; ox?: number; oy?: number }) {
   return (
-    <Animated.View pointerEvents="none" style={[styles.abs, { left: x - ox, top: y - oy, width: w, height: h }, style]}>
+    <Animated.View pointerEvents="none" style={[styles.abs, LAYER, { left: x - ox, top: y - oy, width: w, height: h }, style]}>
       <Svg width={w} height={h} viewBox={`${-ox} ${-oy} ${w} ${h}`}>
         {children}
       </Svg>
@@ -231,11 +237,12 @@ export function LookingEyes({ x, y, s, seed, lid }: { x: number; y: number; s: n
   const w = 7.2 * s;
   const h = 8.8 * s;
   const pupil = useAnimatedStyle(() => ({ transform: [{ translateX: look.value * 1.7 * s }] }));
-  const lidStyle = useAnimatedStyle(() => ({ height: blink.value * h }));
+  // paupière écrasée vers le haut (et non sa hauteur animée : pas de mise en page à chaque image)
+  const lidStyle = useAnimatedStyle(() => ({ transform: [{ translateY: (-h / 2) * (1 - blink.value) }, { scaleY: blink.value }] }));
   const eye = (dx: number) => (
     <View key={dx} style={[styles.abs, { left: x + dx * s - w / 2, top: y - h / 2, width: w, height: h, borderRadius: w, borderWidth: Math.max(1, 1.5 * s), borderColor: OL, backgroundColor: '#FFFFFF', overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }]}>
       <Animated.View style={[{ width: 3.6 * s, height: 3.6 * s, borderRadius: 4 * s, backgroundColor: OL, marginTop: 1 * s }, pupil]} />
-      <Animated.View style={[styles.abs, { left: 0, right: 0, top: 0, backgroundColor: lid }, lidStyle]} />
+      <Animated.View style={[styles.abs, { left: 0, right: 0, top: 0, height: h, backgroundColor: lid }, lidStyle]} />
     </View>
   );
   return (

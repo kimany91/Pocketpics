@@ -31,6 +31,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { fonts } from '../../theme';
+import { useLoopActive } from '../../theme/motion';
 import { AppText } from '../AppText';
 
 /** Spectre de la maison (le même que `Foil` et `Galaxy`). */
@@ -72,23 +73,26 @@ const SHEEN = [
  */
 function useDrive(tilt: SharedValue<number> | undefined, animated: boolean, duration: number, amplitude: number) {
   const local = useSharedValue(-amplitude);
+  const on = useLoopActive(animated);
   useEffect(() => {
-    if (tilt || !animated) return;
+    if (tilt || !on) return;
     local.value = -amplitude;
     local.value = withRepeat(withTiming(amplitude, { duration, easing: Easing.inOut(Easing.sin) }), -1, true);
     return () => cancelAnimation(local);
-  }, [tilt, animated, duration, amplitude, local]);
+  }, [tilt, on, duration, amplitude, local]);
   return tilt ?? local;
 }
 
 /** Boucle linéaire 0 → 1 (rotation du liseré). */
 function useSpin(duration: number, animated: boolean) {
   const p = useSharedValue(0);
+  const on = useLoopActive(animated);
   useEffect(() => {
-    if (!animated) return;
+    if (!on) return;
+    p.value = 0;
     p.value = withRepeat(withTiming(1, { duration, easing: Easing.linear }), -1, false);
     return () => cancelAnimation(p);
-  }, [p, duration, animated]);
+  }, [p, duration, on]);
   return p;
 }
 

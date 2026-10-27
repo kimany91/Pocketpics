@@ -26,6 +26,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, ClipPath, Defs, Ellipse, G, LinearGradient as SvgGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 
+import { useLoopActive } from '../../theme/motion';
 import { Glow } from '../fx';
 
 const galaxyTex = require('../../../assets/fx/galaxy.jpg');
@@ -41,10 +42,13 @@ const SPECTRUM = ['#FF3B6B', '#FF9F2E', '#FFF04A', '#4BFF8A', '#2EE6FF', '#3D7BF
 
 function useLoop(duration: number, reverse = false) {
   const p = useSharedValue(0);
+  const on = useLoopActive();
   useEffect(() => {
+    if (!on) return;
+    p.value = 0;
     p.value = withRepeat(withTiming(1, { duration, easing: Easing.linear }), -1, reverse);
     return () => cancelAnimation(p);
-  }, [p, duration, reverse]);
+  }, [on, p, duration, reverse]);
   return p;
 }
 
