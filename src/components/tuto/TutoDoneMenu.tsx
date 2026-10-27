@@ -55,7 +55,7 @@ export function TutoDoneMenu() {
       <Confetti width={width} height={height} colors={[colors.gold, '#FFFFFF', colors.success, '#B99CFF']} count={30} />
       {/* petit écran : le menu défile */}
       <ScrollView style={{ alignSelf: 'stretch' }} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Animated.View entering={ZoomIn.springify().damping(14)} style={styles.card}>
+        <Animated.View entering={ZoomIn.springify().damping(20)} style={styles.card}>
           <View style={styles.medalBox}>
             <View pointerEvents="none" style={{ position: 'absolute', left: -60, top: -60, opacity: 0.6 }}>
               <Glow color={colors.gold} size={190} />

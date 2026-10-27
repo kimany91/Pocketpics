@@ -51,8 +51,8 @@ export function TutoArrow({
   }, [bounce]);
   const down = side === 'top' || inline;
   // la flèche va et vient vers la cible ; la bulle suit un peu
-  const arrowStyle = useAnimatedStyle(() => ({ transform: [{ translateY: (down ? 1 : -1) * bounce.value * 9 }] }));
-  const bubbleStyle = useAnimatedStyle(() => ({ transform: [{ translateY: (down ? 1 : -1) * bounce.value * 3 }] }));
+  const arrowStyle = useAnimatedStyle(() => ({ transform: [{ translateY: (down ? 1 : -1) * bounce.value * 6 }] }));
+  const bubbleStyle = useAnimatedStyle(() => ({ transform: [{ translateY: (down ? 1 : -1) * bounce.value * 2 }] }));
 
   // décalage pour que la bulle ne sorte pas de l'écran
   const anchor = useRef<View>(null);
@@ -101,7 +101,7 @@ export function TutoArrow({
         pointerEvents="none"
         style={[styles.anchor, side === 'top' ? { bottom: '100%', paddingBottom: gap } : { top: '100%', paddingTop: gap }]}
       >
-        <Animated.View entering={ZoomIn.springify().damping(13).stiffness(200)} style={{ alignItems: 'center' }}>
+        <Animated.View entering={ZoomIn.springify().damping(20).stiffness(200)} style={{ alignItems: 'center' }}>
           {side === 'top' ? (
             <>
               {bubble}
@@ -136,7 +136,7 @@ function Ring({ radius }: { radius: number }) {
  */
 export function TutoBubble({ text, sub }: { text: string; sub?: string }) {
   return (
-    <Animated.View entering={ZoomIn.springify().damping(14)} pointerEvents="none" style={[styles.bubble, { alignSelf: 'stretch' }]}>
+    <Animated.View entering={ZoomIn.springify().damping(20)} pointerEvents="none" style={[styles.bubble, { alignSelf: 'stretch' }]}>
       <AppText style={styles.text}>{text}</AppText>
       {sub ? <AppText style={styles.sub}>{sub}</AppText> : null}
     </Animated.View>

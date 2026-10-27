@@ -24,12 +24,12 @@ import {
 export const springs = {
   /** Enfoncement d'un bouton : rapide, sans rebond. */
   press: { damping: 18, stiffness: 520, mass: 0.6 },
-  /** Relâchement : petit rebond franc. */
-  release: { damping: 11, stiffness: 320, mass: 0.7 },
-  /** Apparition d'un élément de menu. */
-  enter: { damping: 16, stiffness: 170, mass: 0.8 },
-  /** Petit « pop » (icône, pastille, chiffre). */
-  pop: { damping: 9, stiffness: 340, mass: 0.6 },
+  /** Relâchement : léger rebond. */
+  release: { damping: 16, stiffness: 320, mass: 0.7 },
+  /** Apparition d'un élément de menu (presque sans rebond). */
+  enter: { damping: 20, stiffness: 170, mass: 0.8 },
+  /** Petit « pop » (icône, pastille, chiffre) : un seul rebond, discret. */
+  pop: { damping: 15, stiffness: 300, mass: 0.6 },
   /** Panneau / fiche qui monte depuis le bas. */
   sheet: { damping: 20, stiffness: 210, mass: 0.9 },
   /** Indicateur d'onglet qui glisse. */

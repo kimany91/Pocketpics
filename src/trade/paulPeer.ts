@@ -9,13 +9,11 @@
  *  - il confirme quand tu confirmes ;
  *  - il « enregistre » ta carte (il l'accuse, sans la garder) et envoie la sienne.
  */
-import { Asset } from 'expo-asset';
-
 import { botArt } from '../battle/botArt';
+import { bundledImageBase64 } from '../game/bundledImage';
 import { botReply, readEmoteMessage } from '../game/emotes';
 import { makeCard } from '../game/pack';
 import { PAUL_NAME, paulHash, pickPaulArt } from '../game/paul';
-import { readUriBase64 } from '../storage/disk';
 import type { TradeLink } from './link';
 import { helloFields, peerRange } from '../net/compat';
 import { type OfferCard, type TradeMessage, type TransferCard, mirrorKey, offerKey, offerTag } from './protocol';
@@ -26,16 +24,14 @@ async function paulCard(): Promise<TransferCard | null> {
     const mod = botArt(ref);
     if (mod === undefined) continue;
     try {
-      const asset = Asset.fromModule(mod);
-      await asset.downloadAsync();
-      const image = await readUriBase64(asset.localUri ?? asset.uri);
-      if (!image) continue;
-      const card = makeCard({ hash: paulHash(ref), width: asset.width ?? 320, height: asset.height ?? 448, sourceId: null }, 'common', Date.now(), {
+      const img = await bundledImageBase64(mod);
+      if (!img) continue;
+      const card = makeCard({ hash: paulHash(ref), width: img.width, height: img.height, sourceId: null }, 'common', Date.now(), {
         origin: 'trade',
         giver: PAUL_NAME,
         chromatic: false,
       });
-      return { card, image, thumb: image };
+      return { card, image: img.base64, thumb: img.base64 };
     } catch (e) {
       console.warn('Carte de Paul illisible', ref, e);
     }

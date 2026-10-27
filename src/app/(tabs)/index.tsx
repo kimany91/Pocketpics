@@ -302,7 +302,7 @@ function PiocheBadge({ active, count, style, onPress, hint }: { active: boolean;
       cancelAnimation(ring);
     };
   }, [active, hop, ring]);
-  const hopStyle = useAnimatedStyle(() => ({ transform: [{ translateY: -hop.value * 7 }, { scale: 1 + hop.value * 0.12 }, { rotate: `${hop.value * 10}deg` }] }));
+  const hopStyle = useAnimatedStyle(() => ({ transform: [{ translateY: -hop.value * 4 }, { scale: 1 + hop.value * 0.06 }, { rotate: `${hop.value * 5}deg` }] }));
   const ringStyle = useAnimatedStyle(() => ({ opacity: 0.7 * (1 - ring.value), transform: [{ scale: 1 + ring.value * 0.9 }] }));
   return (
     <View style={[styles.piocheWrap, style]}>

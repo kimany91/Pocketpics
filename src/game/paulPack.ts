@@ -1,12 +1,10 @@
 /**
  * Les photos du paquet de Paul (tuto) : des illustrations de bots de
- * l'aventure, déjà dans l'app. On lit leur fichier pour en faire de vraies
+ * l'aventure, déjà dans l'app. On lit leur image pour en faire de vraies
  * cartes, comme une Pioche amicale.
  */
-import { Asset } from 'expo-asset';
-
 import { botArt } from '../battle/botArt';
-import { readUriBase64 } from '../storage/disk';
+import { bundledImageBase64 } from './bundledImage';
 import { pickPaulArt } from './paul';
 
 export interface PaulPhoto {
@@ -23,10 +21,8 @@ export async function loadPaulPhotos(count: number): Promise<PaulPhoto[]> {
     const mod = botArt(ref);
     if (mod === undefined) continue;
     try {
-      const asset = Asset.fromModule(mod);
-      await asset.downloadAsync();
-      const image = await readUriBase64(asset.localUri ?? asset.uri);
-      if (image) out.push({ ref, image, width: asset.width ?? 320, height: asset.height ?? 448 });
+      const img = await bundledImageBase64(mod);
+      if (img) out.push({ ref, image: img.base64, width: img.width, height: img.height });
     } catch (e) {
       console.warn('Photo de Paul illisible', ref, e);
     }
